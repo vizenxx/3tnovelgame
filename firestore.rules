@@ -1,0 +1,129 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: blueprints
+    // Document ID: auto-generated
+    // Fields:
+    //   - title: string (required)
+    //   - main_axis: string (required)
+    //   - characters: list (required)
+    //   - chapters: list (required)
+    //   - endings: list (required)
+    //   - branches: list (required)
+    //   - left_mainline_default: number (required)
+    //   - right_mainline_default: number (required)
+    //   - createdAt: string (required, date-time)
+    //   - userId: string (required)
+    //
+    // Collection: sessions
+    // Document ID: user.uid
+    // Fields:
+    //   - userId: string (required)
+    //   - blueprintId: string (optional)
+    //   - gameState: string (required)
+    //   - selectedThemes: list (optional)
+    //   - currentChapters: list (optional)
+    //   - interventionsLeft: number (optional)
+    //   - endingValue: number (optional)
+    //   - unlockedBranches: list (optional)
+    //   - intervenedChapters: list (optional)
+    //   - characterStatuses: map (optional)
+    //   - storyConclusion: string (optional)
+    //   - updatedAt: string (required, date-time)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    function uidUnchanged() {
+      return !('userId' in request.resource.data) ||
+        request.resource.data.userId == request.auth.uid;
+    }
+
+    function uidNotModified() {
+      return !('userId' in request.resource.data) ||
+        request.resource.data.userId == resource.data.userId;
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string &&
+        dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp;
+    }
+
+    function isValidBlueprint(data) {
+      return data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.main_axis is string && data.main_axis.size() > 0 && data.main_axis.size() < 2000 &&
+             data.characters is list && data.characters.size() <= 10 &&
+             data.chapters is list && data.chapters.size() <= 10 &&
+             data.endings is list && data.endings.size() <= 5 &&
+             data.branches is list && data.branches.size() <= 20 &&
+             data.left_mainline_default is number &&
+             data.right_mainline_default is number &&
+             (isValidDateString(data.createdAt) || isValidTimestamp(data.createdAt)) &&
+             data.userId is string;
+    }
+
+    function isValidSession(data) {
+      return data.userId is string &&
+             data.gameState is string &&
+             (isValidDateString(data.updatedAt) || isValidTimestamp(data.updatedAt)) &&
+             (!('selectedThemes' in data) || (data.selectedThemes is list && data.selectedThemes.size() <= 4)) &&
+             (!('interventionsLeft' in data) || (data.interventionsLeft is number)) &&
+             (!('endingValue' in data) || (data.endingValue is number)) &&
+             (!('intervenedChapters' in data) || (data.intervenedChapters is list && data.intervenedChapters.size() <= 10)) &&
+             (!('currentChapters' in data) || (data.currentChapters is list)) &&
+             (!('characterStatuses' in data) || (data.characterStatuses is map)) &&
+             (!('unlockedBranches' in data) || (data.unlockedBranches is list));
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /blueprints/{blueprintId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && uidUnchanged() && isValidBlueprint(request.resource.data);
+      allow update: if false; // Blueprints are immutable
+      allow delete: if isDocOwner();
+    }
+
+    match /sessions/{sessionId} {
+      allow read: if isOwner(sessionId);
+      allow create: if isOwner(sessionId) && isValidSession(request.resource.data);
+      allow update: if isOwner(sessionId) && isValidSession(request.resource.data);
+      allow delete: if isOwner(sessionId);
+    }
+
+    // Default deny
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}
