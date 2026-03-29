@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon } from 'lucide-react';
 import { auth, db } from './firebase';
 import { 
-  signInWithPopup, 
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider, 
   onAuthStateChanged, 
   signOut,
@@ -202,6 +203,7 @@ export default function App() {
   const [targetWordCount, setTargetWordCount] = useState(600);
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationStatus, setGenerationStatus] = useState("");
+  const [fleshingOutChapters, setFleshingOutChapters] = useState<Record<number, boolean>>({});
 
   // --- Helpers ---
   const withTimeout = async <T,>(promise: Promise<T>, ms: number): Promise<T> => {
@@ -346,12 +348,65 @@ export default function App() {
     return () => unsubscribe();
   }, [user, isAuthReady]);
 
+  // Firebase Redirect Result Listener
+  useEffect(() => {
+    getRedirectResult(auth).then((result) => {
+      if (result) {
+        setUser(result.user);
+      }
+    }).catch(err => console.error("Redirect Login Error:", err));
+  }, []);
+
+  // Lazy flesh out chapters
+  useEffect(() => {
+    if (gameState !== 'PLAYING' || isRewriting) return;
+    
+    // Find chapters that have index but no content (except current generation in progress)
+    const incompleteChapter = chapters.find(c => !c.text && c.summary);
+    if (incompleteChapter && !fleshingOutChapters[incompleteChapter.chapter_num]) {
+      fleshOutChapter(incompleteChapter.chapter_num);
+    }
+  }, [chapters, gameState, isRewriting]);
+
+  const fleshOutChapter = async (targetChapterNum: number) => {
+    setFleshingOutChapters(prev => ({ ...prev, [targetChapterNum]: true }));
+    try {
+      const response = await fetch('/api/generate-next-chapter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          blueprint,
+          currentChapters: chapters.filter(c => c.text),
+          targetChapterNum,
+          targetWordCount
+        })
+      });
+      if (!response.ok) throw new Error("Flesh out failed");
+      const newChapter = await response.json();
+      
+      const updatedChapters = chapters.map(c => c.chapter_num === targetChapterNum ? { ...c, text: newChapter.text } : c);
+      setChapters(updatedChapters);
+      
+      if (user) {
+        await updateDoc(doc(db, 'sessions', user.uid), {
+          currentChapters: updatedChapters,
+          updatedAt: new Date().toISOString()
+        });
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setFleshingOutChapters(prev => ({ ...prev, [targetChapterNum]: false }));
+    }
+  };
+
   const handleLogin = async () => {
     if (isLoggingIn) return;
     setIsLoggingIn(true);
     try {
       const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      // Use Redirect for better stability on deployed sites
+      await signInWithRedirect(auth, provider);
     } catch (error: any) {
       console.error(error);
       if (error.code === 'auth/popup-blocked') {
@@ -420,7 +475,7 @@ export default function App() {
     ]);
     
     try {
-      const response = await fetch('/.netlify/functions/generate-blueprint', {
+      const response = await fetch('/api/generate-blueprint', {
         method: 'POST',
         body: JSON.stringify({ selectedThemes, targetWordCount })
       });
@@ -489,7 +544,7 @@ export default function App() {
   const generateConclusion = async (storyChapters: Chapter[]) => {
     setIsGeneratingConclusion(true);
     try {
-      const response = await fetch('/.netlify/functions/generate-summary', {
+      const response = await fetch('/api/generate-summary', {
         method: 'POST',
         body: JSON.stringify({ storyChapters })
       });
@@ -522,7 +577,7 @@ export default function App() {
     try {
       setChapters(prev => prev.map(c => c.chapter_num >= chapterNum ? { ...c, text: '命运涟漪正在扩散，重写中...' } : c));
       
-      const response = await fetch('/.netlify/functions/intervene', {
+      const response = await fetch('/api/intervene', {
         method: 'POST',
         body: JSON.stringify({
           blueprint,
