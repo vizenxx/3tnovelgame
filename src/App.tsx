@@ -477,6 +477,7 @@ export default function App() {
     try {
       const response = await fetch('/api/generate-blueprint', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ selectedThemes, targetWordCount })
       });
       if (!response.ok) throw new Error(await response.text());
@@ -546,7 +547,8 @@ export default function App() {
     try {
       const response = await fetch('/api/generate-summary', {
         method: 'POST',
-        body: JSON.stringify({ storyChapters })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ blueprint, chapters, endingValue })
       });
       const data = await response.json();
       setStoryConclusion(data.text);
@@ -579,6 +581,7 @@ export default function App() {
       
       const response = await fetch('/api/intervene', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           blueprint,
           chapters,
