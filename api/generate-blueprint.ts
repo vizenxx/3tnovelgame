@@ -66,11 +66,16 @@ export default async function (req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { themes, targetWordCount } = req.body;
+    const { selectedThemes, targetWordCount } = req.body || {};
+    
+    if (!selectedThemes || !Array.isArray(selectedThemes)) {
+      return res.status(400).json({ error: '缺少选定的主题列表 (selectedThemes)' });
+    }
+
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY as string });
 
     const prompt = `你是一个互动小说世界构建师。
-      已知主题：${themes.join(', ')}。
+      已知主题：${selectedThemes.join(', ')}。
       
       任务：生成一个完整的首篇章（7章）的故事蓝图骨架。
       
