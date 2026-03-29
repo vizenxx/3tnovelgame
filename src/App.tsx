@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu } from 'lucide-react';
+import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon } from 'lucide-react';
 import { auth, db } from './firebase';
 import { 
   signInWithPopup, 
@@ -8,7 +8,7 @@ import {
   onAuthStateChanged, 
   signOut,
   signInAnonymously,
-  User
+  User as FirebaseUser
 } from 'firebase/auth';
 import { 
   doc, 
@@ -175,7 +175,7 @@ const LoadingOverlay = ({ progress, status, subtext }: { progress: number, statu
 );
 
 export default function App() {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<FirebaseUser | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [gameState, setGameState] = useState<GameState>('THEME_SELECTION');
@@ -194,6 +194,7 @@ export default function App() {
   const [storyConclusion, setStoryConclusion] = useState<string | null>(null);
   const [isGeneratingConclusion, setIsGeneratingConclusion] = useState(false);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
+  const [uiFeedback, setUiFeedback] = useState<{leftProgress: number, rightProgress: number, endingLabel: string}>({leftProgress: 0, rightProgress: 0, endingLabel: "均衡道"});
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [firestoreError, setFirestoreError] = useState<FirestoreErrorInfo | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -281,16 +282,9 @@ export default function App() {
   };
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setUser(user);
-        setIsAuthReady(true);
-      } else {
-        signInAnonymously(auth).catch(err => {
-          console.error("Anonymous sign-in failed:", err);
-          showError("无法初始化匿名会话，请刷新页面重试。");
-        });
-      }
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      setIsAuthReady(true);
     });
     return () => unsubscribe();
   }, []);
@@ -329,6 +323,11 @@ export default function App() {
         setIntervenedChapters(data.intervenedChapters || []);
         setCharacterStatuses(data.characterStatuses || {});
         setStoryConclusion(data.storyConclusion || null);
+        
+        if (data.uiFeedback) {
+          setUiFeedback(data.uiFeedback);
+        }
+
         setSessionId(user.uid);
         
         // If we have a blueprintId, fetch it
@@ -364,6 +363,19 @@ export default function App() {
       } else {
         showError("登录失败，请稍后重试。");
       }
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleGuestLogin = async () => {
+    if (isLoggingIn) return;
+    setIsLoggingIn(true);
+    try {
+      await signInAnonymously(auth);
+    } catch (error: any) {
+      console.error(error);
+      showError("游客登录失败，请检查网络或重试。");
     } finally {
       setIsLoggingIn(false);
     }
@@ -445,6 +457,11 @@ export default function App() {
           intervenedChapters: [],
           characterStatuses: initialStatuses,
           storyConclusion: null,
+          uiFeedback: {
+            leftProgress: 0,
+            rightProgress: 0,
+            endingLabel: "均衡道"
+          },
           updatedAt: new Date().toISOString()
         });
       } catch (error) {
@@ -534,6 +551,9 @@ export default function App() {
       
       setUnlockedBranches(newUnlockedBranches);
       setEndingValue(newEndingValue);
+      if (data.uiFeedback) {
+        setUiFeedback(data.uiFeedback);
+      }
       
       const updatedChapters = [...chapters];
       rewrittenChapters.forEach((rc: Chapter) => {
@@ -565,6 +585,7 @@ export default function App() {
             intervenedChapters: newIntervenedChapters,
             endingValue: newEndingValue,
             unlockedBranches: newUnlockedBranches,
+            uiFeedback: data.uiFeedback || uiFeedback,
             updatedAt: new Date().toISOString()
           });
         } catch (error) {
@@ -645,13 +666,18 @@ export default function App() {
       try {
         await updateDoc(doc(db, 'sessions', user.uid), {
           gameState: 'PLAYING',
-          chapters: blueprint.chapters,
+          currentChapters: blueprint.chapters,
           unlockedBranches: [],
           interventionsLeft: 3,
           intervenedChapters: [],
           characterStatuses: initialStatuses,
           storyConclusion: null,
           endingValue: 0,
+          uiFeedback: {
+            leftProgress: 0,
+            rightProgress: 0,
+            endingLabel: "均衡道"
+          },
           updatedAt: serverTimestamp()
         });
       } catch (e) {
@@ -679,13 +705,22 @@ export default function App() {
             </h1>
             <p className="text-zinc-400 text-lg">干涉因果，编织属于你的传奇故事。</p>
           </div>
-          <button
-            onClick={handleLogin}
-            className="w-full py-4 bg-white text-black hover:bg-zinc-200 rounded-xl font-bold text-xl transition-all flex items-center justify-center gap-3 shadow-[0_0_30px_rgba(255,255,255,0.1)]"
-          >
-            <LogIn className="w-6 h-6" />
-            使用 Google 登录
-          </button>
+          <div className="space-y-4">
+            <button
+              onClick={handleLogin}
+              className="w-full py-4 bg-white text-black hover:bg-zinc-200 rounded-xl font-bold text-xl transition-all flex items-center justify-center gap-3 shadow-[0_0_30px_rgba(255,255,255,0.1)] active:scale-95"
+            >
+              <LogIn className="w-6 h-6" />
+              使用 Google 登录
+            </button>
+            <button
+              onClick={handleGuestLogin}
+              className="w-full py-4 bg-zinc-900 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-xl font-medium transition-all flex items-center justify-center gap-3 border border-zinc-800 active:scale-95"
+            >
+              <UserIcon className="w-6 h-6" />
+              游客方式进入
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -721,7 +756,7 @@ export default function App() {
         <div className="absolute top-6 right-6 flex items-center gap-4">
           <div className="text-right">
             <div className="text-xs text-zinc-500">已登录</div>
-            <div className="text-sm font-medium text-zinc-300">{user.displayName}</div>
+            <div className="text-sm font-medium text-zinc-300">{user.isAnonymous ? "游客用户" : user.displayName}</div>
           </div>
           <button onClick={handleLogout} className="p-2 bg-zinc-900 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
             <LogOut className="w-5 h-5 text-zinc-400" />
@@ -844,8 +879,8 @@ export default function App() {
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-indigo-400 shrink-0">左倾</span>
               <div className="flex-1 h-2 bg-zinc-800 rounded-full overflow-hidden flex">
-                <div className="h-full bg-indigo-500" style={{ width: `${Math.min(100, Math.max(0, (endingValue / 25) * 100))}%` }} />
-                <div className="h-full bg-rose-500" style={{ width: `${Math.min(100, Math.max(0, (-endingValue / 25) * 100))}%` }} />
+                <div className="h-full bg-indigo-500" style={{ width: `${uiFeedback.leftProgress}%` }} />
+                <div className="h-full bg-rose-500" style={{ width: `${uiFeedback.rightProgress}%` }} />
               </div>
               <span className="text-[10px] text-rose-400 shrink-0">右倾</span>
             </div>
@@ -869,21 +904,48 @@ export default function App() {
                   <div className="space-y-1">
                     <div className="flex justify-between text-xs">
                       <span className="text-indigo-400">左结局倾向</span>
-                      <span className="text-indigo-200">{Math.min(100, Math.max(0, (endingValue / 25) * 100)).toFixed(0)}%</span>
+                      <span className="text-indigo-200">{uiFeedback.leftProgress.toFixed(0)}%</span>
                     </div>
                     <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
-                      <div className="h-full bg-indigo-500 transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, (endingValue / 25) * 100))}%` }} />
+                      <div className="h-full bg-indigo-500 transition-all duration-500" style={{ width: `${uiFeedback.leftProgress}%` }} />
                     </div>
                   </div>
                   <div className="space-y-1">
                     <div className="flex justify-between text-xs">
                       <span className="text-rose-400">右结局倾向</span>
-                      <span className="text-rose-200">{Math.min(100, Math.max(0, (-endingValue / 25) * 100)).toFixed(0)}%</span>
+                      <span className="text-rose-200">{uiFeedback.rightProgress.toFixed(0)}%</span>
                     </div>
                     <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
-                      <div className="h-full bg-rose-500 transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, (-endingValue / 25) * 100))}%` }} />
+                      <div className="h-full bg-rose-500 transition-all duration-500" style={{ width: `${uiFeedback.rightProgress}%` }} />
                     </div>
                   </div>
+                </div>
+
+                <div className="pt-2 grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => {
+                      if (confirm("确定要放弃当前的干涉，回到故事最初的状态吗？")) {
+                        restartSameStory();
+                      }
+                    }}
+                    disabled={isRewriting}
+                    className="py-2.5 bg-zinc-900 hover:bg-zinc-800 disabled:opacity-50 text-zinc-400 hover:text-white rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 border border-zinc-800"
+                  >
+                    <RefreshCcw className={`w-3.5 h-3.5 ${isRewriting ? 'animate-spin' : ''}`} />
+                    重新干涉
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (confirm("确定要彻底结束这个故事，重新选择主题开启全新篇章吗？")) {
+                        resetGame();
+                      }
+                    }}
+                    disabled={isRewriting}
+                    className="py-2.5 bg-zinc-900 hover:bg-zinc-800 disabled:opacity-50 text-zinc-400 hover:text-white rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 border border-zinc-800"
+                  >
+                    <Star className="w-3.5 h-3.5 text-amber-500" />
+                    全新故事
+                  </button>
                 </div>
               </div>
             </div>
@@ -1137,21 +1199,49 @@ export default function App() {
               >
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
                 
-                <h2 className="text-3xl font-bold text-white">命运已定</h2>
+                <div className="space-y-1 text-center">
+                  <h2 className="text-3xl font-bold text-white uppercase tracking-tighter">命运已定</h2>
+                  <div className={`text-lg font-black ${
+                    uiFeedback.endingLabel === '秩序律' ? 'text-indigo-400' : 
+                    uiFeedback.endingLabel === '混沌终' ? 'text-rose-500' : 
+                    'text-zinc-400'
+                  }`}>
+                    {`「 ${uiFeedback.endingLabel === '均衡道' ? '中立' : uiFeedback.endingLabel === '秩序律' ? '左' : '右'}之结局：${uiFeedback.endingLabel} 」`}
+                  </div>
+                </div>
                 
-                <div className="flex gap-4 w-full">
-                  <div className="flex-1 bg-zinc-950/50 rounded-xl p-4 border border-zinc-800">
-                    <div className="text-sm text-zinc-400 mb-1">解锁支线</div>
-                    <div className="text-2xl font-black text-indigo-400">
-                      {unlockedBranches.length} <span className="text-sm text-zinc-600">/ {blueprint.branches.length}</span>
+                <div className="w-full space-y-4">
+                  <div className="bg-zinc-950/50 rounded-2xl p-5 border border-zinc-800 space-y-4 shadow-inner">
+                    <div className="flex items-center gap-4">
+                      <div className="flex-1 space-y-1">
+                        <div className="flex justify-between text-[10px] font-bold">
+                          <span className="text-indigo-400">左倾</span>
+                          <span className="text-indigo-200">{uiFeedback.leftProgress.toFixed(0)}%</span>
+                        </div>
+                        <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                          <div className="h-full bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" style={{ width: `${uiFeedback.leftProgress}%` }} />
+                        </div>
+                      </div>
+                      <div className="flex-1 space-y-1 text-right">
+                        <div className="flex justify-between text-[10px] font-bold">
+                          <span className="text-rose-200">{uiFeedback.rightProgress.toFixed(0)}%</span>
+                          <span className="text-rose-400">右倾</span>
+                        </div>
+                        <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                          <div className="h-full bg-rose-500 ml-auto shadow-[0_0_10px_rgba(244,63,94,0.5)]" style={{ width: `${uiFeedback.rightProgress}%` }} />
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex-1 bg-zinc-950/50 rounded-xl p-4 border border-zinc-800">
-                    <div className="text-sm text-zinc-400 mb-1">最终结局</div>
-                    <div className="text-2xl font-black text-rose-400">
-                      {endingValue > 0 
-                        ? `左结局 (${Math.min(100, Math.max(0, (endingValue / 25) * 100)).toFixed(0)}%)` 
-                        : `右结局 (${Math.min(100, Math.max(0, (-endingValue / 25) * 100)).toFixed(0)}%)`}
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-zinc-950/50 rounded-xl p-3 border border-zinc-800 text-center">
+                      <div className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">支线解锁</div>
+                      <div className="text-xl font-bold text-indigo-400">{unlockedBranches.length} / {blueprint.branches.length}</div>
+                    </div>
+                    <div className="bg-zinc-950/50 rounded-xl p-3 border border-zinc-800 text-center">
+                      <div className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">干涉次数</div>
+                      <div className="text-xl font-bold text-zinc-300">{3 - interventionsLeft} / 3</div>
                     </div>
                   </div>
                 </div>
@@ -1204,6 +1294,23 @@ export default function App() {
             </div>
 
             <div className="space-y-8">
+              {/* Triggered Branches Section */}
+              {unlockedBranches.length > 0 && (
+                <div className="pb-8 border-b border-zinc-800">
+                  <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                    <Star className="w-5 h-5 text-yellow-500" />
+                    本次达成的命运支线
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {unlockedBranches.map(branch => (
+                      <div key={branch.id} className="p-4 bg-zinc-950 rounded-xl border border-indigo-500/20 shadow-[0_0_15px_rgba(99,102,241,0.05)]">
+                        <div className="font-bold text-indigo-300 mb-1">{branch.name}</div>
+                        <div className="text-sm text-zinc-500 leading-relaxed">{branch.desc}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               {chapters.map(c => (
                 <div key={c.chapter_num}>
                   <h3 className="text-sm font-bold text-indigo-400 mb-3">

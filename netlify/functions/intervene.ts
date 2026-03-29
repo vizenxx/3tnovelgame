@@ -163,6 +163,13 @@ export const handler: Handler = async (event) => {
       }
     });
 
+    // --- 3. UI Formatting (Keep logic hidden from frontend) ---
+    const leftProgress = Math.min(100, Math.max(0, (newEndingValue / 25) * 100));
+    const rightProgress = Math.min(100, Math.max(0, (-newEndingValue / 25) * 100));
+    let endingLabel = "均衡道";
+    if (newEndingValue > 5) endingLabel = "秩序律";
+    if (newEndingValue < -5) endingLabel = "混沌终";
+
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
@@ -170,7 +177,12 @@ export const handler: Handler = async (event) => {
         aiData: JSON.parse(response.text || '{}'),
         newEndingValue,
         newUnlockedBranches,
-        unlockedBranch: unlocked && !isAlreadyUnlocked ? unlocked : null
+        unlockedBranch: unlocked && !isAlreadyUnlocked ? unlocked : null,
+        uiFeedback: {
+          leftProgress,
+          rightProgress,
+          endingLabel
+        }
       })
     };
   } catch (error: any) {
