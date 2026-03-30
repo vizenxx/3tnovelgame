@@ -41,7 +41,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       不要包含任何图片 Prompt 或元注释。`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash-8b', 
+      model: 'gemini-3.1-flash-lite-preview', 
       contents: prompt,
       config: {
         responseMimeType: 'application/json',

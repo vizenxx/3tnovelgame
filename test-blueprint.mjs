@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type } from '@google/genai';
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import dotenv from 'dotenv';
+dotenv.config();
 
 const blueprintSchema = {
   type: Type.OBJECT,
@@ -60,22 +61,12 @@ const blueprintSchema = {
   required: ["main_axis", "characters", "chapters", "endings", "branches"]
 };
 
-export default async function (req: VercelRequest, res: VercelResponse) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method Not Allowed' });
-  }
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
+async function run() {
   try {
-    const { selectedThemes, targetWordCount } = req.body || {};
-    
-    if (!selectedThemes || !Array.isArray(selectedThemes)) {
-      return res.status(400).json({ error: '缺少选定的主题列表 (selectedThemes)' });
-    }
-
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY as string });
-
     const prompt = `你是一个互动小说世界构建师。
-      已知主题：${selectedThemes.join(', ')}。
+      已知主题：赛博朋克。
       
       任务：生成一个完整的首篇章（7章）的故事蓝图骨架。
       
@@ -86,10 +77,10 @@ export default async function (req: VercelRequest, res: VercelResponse) {
       4. 设定逻辑严密的 3 种第 7 章结局走向。
       5. 规划 6-10 个支线命运点（branches），左右各半。
       
-      请严格按 JSON 格式输出。不要包含元数据。字数设定参考值：${targetWordCount || 600}。`;
+      请严格按 JSON 格式输出。不要包含元数据。字数设定参考值：600。`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.1-flash-lite-preview', 
+      model: 'gemini-1.5-flash', 
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
@@ -97,12 +88,10 @@ export default async function (req: VercelRequest, res: VercelResponse) {
       }
     });
 
-    res.status(200).json(JSON.parse(response.text || '{}'));
-  } catch (error: any) {
-    console.error("API Error: ", error);
-    res.status(500).json({ 
-      error: error.message || '生成蓝图失败',
-      stack: error.stack || String(error)
-    });
+    console.log("SUCCESS!", response.text);
+  } catch (e) {
+    console.error("ERROR FULL:", e);
   }
 }
+
+run();

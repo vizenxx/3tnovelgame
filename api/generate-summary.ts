@@ -33,7 +33,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       请严格按 JSON 格式输出。不要包含元数据。`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash-8b', 
+      model: 'gemini-3.1-flash-lite-preview', 
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
