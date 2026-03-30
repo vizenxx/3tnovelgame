@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon } from 'lucide-react';
+import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy } from 'lucide-react';
 import { auth, db } from './firebase';
+import { createEmptyStory, createStoryBranch, deleteStoryBranch, deleteStoryCartridge, getStoryCartridge, listMyStories, listPublicStories, saveStoryMainlineBundle, saveStoryMeta, upsertStoryBranch } from './storyStore';
+import { isBranchUnlockedByHistory, tierToScore } from './storyCartridge';
 import { 
   signInWithRedirect,
+  signInWithPopup,
   getRedirectResult,
   GoogleAuthProvider, 
   onAuthStateChanged, 
@@ -24,7 +27,7 @@ import {
 } from 'firebase/firestore';
 
 // --- Types ---
-type GameState = 'THEME_SELECTION' | 'GENERATING_BLUEPRINT' | 'PLAYING' | 'SUMMARY';
+type GameState = 'STORY_SELECT' | 'AUTHORING' | 'THEME_SELECTION' | 'GENERATING_BLUEPRINT' | 'PLAYING' | 'SUMMARY';
 
 enum OperationType {
   CREATE = 'create',
@@ -64,6 +67,8 @@ interface Chapter {
   chapter_num: number;
   text: string;
   present_characters: string[];
+  title?: string;
+  summary?: string;
 }
 
 interface Ending {
@@ -93,6 +98,12 @@ interface Blueprint {
   chapters: Chapter[];
   endings: Ending[];
   branches: Branch[];
+  endingMode?: 'dual' | 'single';
+  endingNames?: { left?: string; right?: string };
+  authorAssets?: {
+    defaultChapters?: Record<number, { text: string; title?: string; summary?: string }>;
+    endingPrototypes?: { default?: string; left?: string; right?: string };
+  };
 }
 
 const THEMES = [
@@ -146,40 +157,253 @@ const GlobalError = ({ errorMsg }: { errorMsg: string | null }) => (
   </AnimatePresence>
 );
 
-const LoadingOverlay = ({ progress, status, subtext }: { progress: number, status: string, subtext?: string }) => (
-  <div className="fixed inset-0 z-[200] bg-zinc-950/90 backdrop-blur-md flex flex-col items-center justify-center p-8 text-center">
+const LoadingOverlay = ({ progress, status, subtext, variant = 'default' }: { progress: number, status: string, subtext?: string, variant?: 'default' | 'bless' | 'curse' }) => (
+  <div className={`fixed inset-0 z-[1000] backdrop-blur-xl flex flex-col items-center justify-center p-8 text-center transition-colors duration-700 ${
+    variant === 'bless' ? 'bg-emerald-950' : 
+    variant === 'curse' ? 'bg-rose-950' : 
+    'bg-zinc-950'
+  }`}>
     <motion.div 
-      animate={{ rotate: 360 }}
-      transition={{ repeat: Infinity, duration: 3, ease: "linear" }}
-      className="mb-8"
+      animate={{ rotate: 360, scale: [1, 1.1, 1] }}
+      transition={{ rotate: { repeat: Infinity, duration: 3, ease: "linear" }, scale: { repeat: Infinity, duration: 2 } }}
+      className="mb-8 relative"
     >
-      <RefreshCcw className="w-16 h-16 text-indigo-500" />
+      {variant === 'bless' ? (
+        <Zap className="w-20 h-20 text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.6)]" />
+      ) : variant === 'curse' ? (
+        <Skull className="w-20 h-20 text-rose-500 drop-shadow-[0_0_15px_rgba(244,63,94,0.6)]" />
+      ) : (
+        <RefreshCcw className="w-16 h-16 text-indigo-500" />
+      )}
     </motion.div>
     
-    <h2 className="text-2xl font-bold text-white mb-2 tracking-tight">{status}</h2>
-    {subtext && <p className="text-zinc-500 text-sm mb-8 max-w-md">{subtext}</p>}
+    <h2 className={`text-4xl font-black mb-2 tracking-tighter ${
+      variant === 'bless' ? 'text-emerald-400' : 
+      variant === 'curse' ? 'text-rose-500' : 
+      'text-white'
+    }`}>
+      {status}
+    </h2>
+    {subtext && <p className="text-zinc-500 text-sm mb-8 max-w-md italic">{subtext}</p>}
     
-    <div className="w-full max-w-md bg-zinc-900 h-2 rounded-full overflow-hidden mb-4 border border-zinc-800">
+    <div className="w-full max-w-md bg-zinc-900 h-3 rounded-full overflow-hidden mb-4 border border-zinc-800 shadow-inner">
       <motion.div 
-        className="h-full bg-gradient-to-r from-indigo-600 to-violet-500"
+        className={`h-full transition-all duration-500 ${
+          variant === 'bless' ? 'bg-gradient-to-r from-emerald-600 to-teal-400' : 
+          variant === 'curse' ? 'bg-gradient-to-r from-rose-700 to-orange-500' : 
+          'bg-gradient-to-r from-indigo-600 to-violet-500'
+        }`}
         initial={{ width: 0 }}
         animate={{ width: `${progress}%` }}
-        transition={{ duration: 0.5 }}
       />
     </div>
     
-    <div className="flex justify-between w-full max-w-md text-[10px] font-mono text-zinc-600 uppercase tracking-widest">
-      <span>正在编织因果</span>
+    <div className="flex justify-between w-full max-w-md text-[10px] font-mono text-zinc-600 uppercase tracking-[0.3em]">
+      <span>{variant === 'default' ? '正在编织因果' : '因果链条重塑中'}</span>
       <span>{Math.round(progress)}%</span>
     </div>
   </div>
 );
 
+const countChars = (text: string) => text?.trim()?.length || 0;
+
+function summaryEndingCategoryLabel(args: {
+  endingMode: 'dual' | 'single' | undefined;
+  endingNames: { left?: string; right?: string } | undefined;
+  endingLabel: string;
+}) {
+  const mode = args.endingMode ?? 'dual';
+  if (mode === 'single') return '默认结局';
+  const left = String(args.endingNames?.left || '左').trim().slice(0, 5) || '左';
+  const right = String(args.endingNames?.right || '右').trim().slice(0, 5) || '右';
+  if (args.endingLabel === '秩序律') return `${left}结局`;
+  if (args.endingLabel === '混沌终') return `${right}结局`;
+  return '默认结局';
+}
+
+const normalizeCharacters = (chars: Array<{ name: string; desc: string }>) => {
+  const trimmed = (chars || []).map(c => ({ name: (c.name || '').trim(), desc: (c.desc || '').trim() }));
+  return trimmed.map((c, idx) => ({ id: `c${idx + 1}`, name: c.name || `角色${idx + 1}`, desc: c.desc || '（待填写简介）' }));
+};
+
+const chapterOptions = [2, 3, 4, 5, 6] as const;
+
+function triggerPreview(args: {
+  triggerType: 'single' | 'count';
+  singleChapterNum: number;
+  singleCharId: string;
+  singleAction: 'bless' | 'curse';
+  countCharId: string;
+  countAction: 'bless' | 'curse';
+  minCount: number;
+  upToChapterNum: number;
+  characters: Array<{ id: string; name: string }>;
+}) {
+  const nameOf = (id: string) => args.characters.find(c => c.id === id)?.name || '（未选择角色）';
+  const actLabel = (a: 'bless' | 'curse') => (a === 'bless' ? '庇佑' : '磨难');
+  const chap = Math.max(2, Math.min(6, Number(args.upToChapterNum || 2)));
+  if (args.triggerType === 'single') {
+    const c = Math.max(2, Math.min(6, Number(args.singleChapterNum || 2)));
+    return `触发条件预览：第${c}章，对「${nameOf(args.singleCharId)}」施加「${actLabel(args.singleAction)}」时触发。`;
+  }
+  return `触发条件预览：在第${chap}章结算时，「${nameOf(args.countCharId)}」被「${actLabel(args.countAction)}」的累计次数 ≥ ${Math.max(1, Number(args.minCount || 1))} 则触发。`;
+}
+
+type ConditionForm = {
+  kind: 'single' | 'count';
+  singleChapterNum: number;
+  singleCharId: string;
+  singleAction: 'bless' | 'curse';
+  countCharId: string;
+  countAction: 'bless' | 'curse';
+  minCount: number;
+  upToChapterNum: number;
+};
+
+type ParsedImportCondition = {
+  type: 'single' | 'count';
+  single?: { chapterNum: number; charName: string; action: 'bless' | 'curse' };
+  count?: { upToChapterNum: number; charName: string; action: 'bless' | 'curse'; minCount: number };
+};
+
+type ParsedImportBranch = {
+  name: string;
+  side: 'left' | 'right';
+  tier: 'small' | 'medium' | 'large' | 'hidden';
+  hint: string;
+  sceneText: string;
+  common: boolean;
+  conditions: ParsedImportCondition[];
+};
+
+function pickLabeledText(block: string, labels: string[]): string {
+  for (const label of labels) {
+    const m = block.match(new RegExp(`${label}\\s*[：:]\\s*([^\\n]+)`));
+    if (m?.[1]) return m[1].trim();
+  }
+  return '';
+}
+
+function parseAction(raw: string): 'bless' | 'curse' {
+  return /curse|磨难/.test(raw) ? 'curse' : 'bless';
+}
+
+function parseSide(raw: string): 'left' | 'right' {
+  return /right|右/.test(raw) ? 'right' : 'left';
+}
+
+function parseTier(raw: string): 'small' | 'medium' | 'large' | 'hidden' {
+  if (/hidden|隐/.test(raw)) return 'hidden';
+  if (/large|大/.test(raw)) return 'large';
+  if (/medium|中/.test(raw)) return 'medium';
+  return 'small';
+}
+
+function parseConditionLine(line: string): ParsedImportCondition | null {
+  const text = line.trim();
+  if (!text) return null;
+  if (/single/i.test(text)) {
+    const chapterNum = Number((text.match(/chapter\s*=\s*([2-6])/i) || text.match(/第\s*([2-6])\s*章/) || [])[1] || 2);
+    const charName = ((text.match(/character\s*=\s*([^\|\n,，]+)/i) || text.match(/角色\s*[：:]\s*([^\|\n,，]+)/) || [])[1] || '').trim();
+    const action = parseAction((text.match(/action\s*=\s*([a-zA-Z\u4e00-\u9fa5]+)/i) || text.match(/(庇佑|磨难)/) || [])[1] || 'bless');
+    return { type: 'single', single: { chapterNum: Math.max(2, Math.min(6, chapterNum)), charName, action } };
+  }
+  if (/count/i.test(text) || /累计/.test(text)) {
+    const upToChapterNum = Number((text.match(/upToChapter\s*=\s*([2-6])/i) || text.match(/触发章节\s*[：:=]?\s*([2-6])/) || text.match(/第\s*([2-6])\s*章/) || [])[1] || 6);
+    const charName = ((text.match(/character\s*=\s*([^\|\n,，]+)/i) || text.match(/角色\s*[：:]\s*([^\|\n,，]+)/) || [])[1] || '').trim();
+    const action = parseAction((text.match(/action\s*=\s*([a-zA-Z\u4e00-\u9fa5]+)/i) || text.match(/(庇佑|磨难)/) || [])[1] || 'bless');
+    const minCount = Number((text.match(/minCount\s*=\s*(\d+)/i) || text.match(/累计次数\s*[>=：:]\s*(\d+)/) || text.match(/(\d+)\s*次/) || [])[1] || 1);
+    return { type: 'count', count: { upToChapterNum: Math.max(2, Math.min(6, upToChapterNum)), charName, action, minCount: Math.max(1, minCount) } };
+  }
+  return null;
+}
+
+function extractSection(text: string, start: RegExp, end?: RegExp): string {
+  const m = text.match(start);
+  if (!m || m.index === undefined) return '';
+  const from = m.index + m[0].length;
+  const rest = text.slice(from);
+  if (!end) return rest.trim();
+  const e = rest.search(end);
+  return (e === -1 ? rest : rest.slice(0, e)).trim();
+}
+
+function parseImportedAuthoringText(raw: string) {
+  const text = (raw || '').replace(/\r\n/g, '\n').trim();
+  const mainline = extractSection(text, /#\s*主线设置[\s\S]*?\n/i, /#\s*支线设置/i);
+  const branchesSection = extractSection(text, /#\s*支线设置[\s\S]*?\n/i);
+
+  const title = ((mainline.match(/##\s*标题[^\n]*\n([\s\S]*?)(?=\n##|\n###|$)/i) || [])[1] || '').trim().split('\n').find((s: string) => s.trim()) || '';
+  const mainAxis = ((mainline.match(/##\s*主轴[^\n]*\n([\s\S]*?)(?=\n##\s*主要角色|\n##|\n###|$)/i) || [])[1] || '').trim();
+
+  const characters: Array<{ name: string; desc: string }> = [];
+  const roleRegex = /###\s*角色\d+[^\n]*\n([\s\S]*?)(?=\n###\s*角色\d+|\n##\s*默认故事|\n##\s*结局|$)/g;
+  let roleMatch: RegExpExecArray | null;
+  while ((roleMatch = roleRegex.exec(mainline))) {
+    const block = roleMatch[1];
+    const name = pickLabeledText(block, ['姓名', '名字']) || block.split('\n').map(s => s.trim()).find(Boolean) || '';
+    const desc = pickLabeledText(block, ['角色简介', '简介']) || block.split('\n').slice(1).join(' ').trim();
+    if (name) characters.push({ name: name.trim(), desc: (desc || '（待填写简介）').trim() });
+  }
+
+  const chapters: Array<{ chapter_num: number; title: string; text: string }> = [];
+  const chapterRegex = /###\s*第\s*([1-6])\s*章[《「"]?([^\n》」"]*)[》」"]?\s*\n([\s\S]*?)(?=\n###\s*第\s*[1-6]\s*章|\n##\s*结局|$)/g;
+  let chapterMatch: RegExpExecArray | null;
+  while ((chapterMatch = chapterRegex.exec(mainline))) {
+    const n = Number(chapterMatch[1]);
+    const titleText = (chapterMatch[2] || `第${n}章`).trim() || `第${n}章`;
+    const body = chapterMatch[3].replace(/^\s*（正文）\s*$/gm, '').trim();
+    chapters.push({ chapter_num: n, title: titleText, text: body.slice(0, 1200) });
+  }
+
+  const defaultEnding = extractSection(mainline, /###\s*默认结局[^\n]*\n/i, /###\s*(左结局|右结局)/i).trim();
+  const leftEnding = extractSection(mainline, /###\s*左结局[^\n]*\n/i, /###\s*右结局/i).trim();
+  const rightEnding = extractSection(mainline, /###\s*右结局[^\n]*\n/i).trim();
+
+  const branches: ParsedImportBranch[] = [];
+  const branchRegex = /##\s*支线\d+[^\n]*\n([\s\S]*?)(?=\n##\s*支线\d+|$)/g;
+  let branchMatch: RegExpExecArray | null;
+  while ((branchMatch = branchRegex.exec(branchesSection))) {
+    const block = branchMatch[1];
+    const name = pickLabeledText(block, ['支线名']) || '未命名支线';
+    const side = parseSide(pickLabeledText(block, ['倾向']));
+    const tier = parseTier(pickLabeledText(block, ['影响']));
+    const hint = pickLabeledText(block, ['提示短句']) || `留意${name}`;
+    const common = /true|是|1/.test(pickLabeledText(block, ['通用支线']).toLowerCase());
+    const sceneText = extractSection(block, /-\s*支线情节\s*[：:]\s*/i, /\n-\s*(触发后剧情改变|支线名|倾向|影响|提示短句|通用支线|触发条件组)/i).trim().slice(0, 300);
+    const conditions: ParsedImportCondition[] = [];
+    const condMatches = block.match(/条件组\d+\s*[：:]\s*[^\n]+/g) || [];
+    for (const c of condMatches) {
+      const parsed = parseConditionLine(c);
+      if (parsed) conditions.push(parsed);
+    }
+    const fallbackCondition: ParsedImportCondition = { type: 'single', single: { chapterNum: 2, charName: '', action: 'bless' } };
+    branches.push({
+      name: name.trim(),
+      side,
+      tier,
+      hint: hint.trim(),
+      sceneText: sceneText || '',
+      common,
+      conditions: (conditions.length > 0 ? conditions : [fallbackCondition]).slice(0, 3),
+    });
+  }
+
+  return {
+    title,
+    mainAxis,
+    characters,
+    chapters,
+    endings: { default: defaultEnding.slice(0, 1200), left: leftEnding.slice(0, 1200), right: rightEnding.slice(0, 1200) },
+    branches,
+  };
+}
+
 export default function App() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [gameState, setGameState] = useState<GameState>('THEME_SELECTION');
+  const [gameState, setGameState] = useState<GameState>('STORY_SELECT');
   const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
   const [blueprint, setBlueprint] = useState<Blueprint | null>(null);
   const [chapters, setChapters] = useState<Chapter[]>([]);
@@ -195,17 +419,85 @@ export default function App() {
   const [storyConclusion, setStoryConclusion] = useState<string | null>(null);
   const [isGeneratingConclusion, setIsGeneratingConclusion] = useState(false);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
+  /** 总结页入口：三次干涉耗尽自动进入 vs 手动结束游玩 */
+  const [summaryEntrySource, setSummaryEntrySource] = useState<'auto_interventions' | 'manual' | null>(null);
   const [uiFeedback, setUiFeedback] = useState<{leftProgress: number, rightProgress: number, endingLabel: string}>({leftProgress: 0, rightProgress: 0, endingLabel: "均衡道"});
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [firestoreError, setFirestoreError] = useState<FirestoreErrorInfo | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [naturalChapters, setNaturalChapters] = useState<Chapter[]>([]);
+  const [confirmationModal, setConfirmationModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
   const [targetWordCount, setTargetWordCount] = useState(600);
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationStatus, setGenerationStatus] = useState("");
   const [fleshingOutChapters, setFleshingOutChapters] = useState<Record<number, boolean>>({});
 
+  // Cartridge platform state
+  const [activeStoryId, setActiveStoryId] = useState<string | null>(null);
+  const [publicStories, setPublicStories] = useState<any[]>([]);
+  const [myStories, setMyStories] = useState<any[]>([]);
+  const [storyImportCode, setStoryImportCode] = useState('');
+  const [isLoadingStories, setIsLoadingStories] = useState(false);
+  const [authoringStoryId, setAuthoringStoryId] = useState<string | null>(null);
+  const [authoringCartridge, setAuthoringCartridge] = useState<any | null>(null);
+  const [authoringSaving, setAuthoringSaving] = useState(false);
+  const [authoringImportText, setAuthoringImportText] = useState('');
+  const [authoringImportReplaceBranches, setAuthoringImportReplaceBranches] = useState(true);
+  const [authoringTab, setAuthoringTab] = useState<'mainline' | 'branches'>('mainline');
+  const [branchForm, setBranchForm] = useState({
+    id: '',
+    name: '',
+    side: 'left' as 'left' | 'right',
+    tier: 'small' as 'small' | 'medium' | 'large' | 'hidden',
+    triggerType: 'single' as 'single' | 'count',
+    singleChapterNum: 2,
+    singleCharId: '',
+    singleAction: 'bless' as 'bless' | 'curse',
+    countCharId: '',
+    countAction: 'bless' as 'bless' | 'curse',
+    minCount: 1,
+    upToChapterNum: 6,
+    hint: '',
+    sceneText: '',
+  });
+  const [branchConditions, setBranchConditions] = useState<ConditionForm[]>([
+    {
+      kind: 'single',
+      singleChapterNum: 2,
+      singleCharId: '',
+      singleAction: 'bless',
+      countCharId: '',
+      countAction: 'bless',
+      minCount: 1,
+      upToChapterNum: 6,
+    },
+  ]);
+  const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
+  const [expandedBranchId, setExpandedBranchId] = useState<string | null>(null);
+  const [interventionHistory, setInterventionHistory] = useState<Array<{ chapterNum: number; charId: string; action: 'bless' | 'curse' }>>([]);
+
   // --- Helpers ---
+  const fetchWithTimeout = async (url: string, init: RequestInit, ms: number) => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), ms);
+    try {
+      return await fetch(url, { ...init, signal: controller.signal });
+    } finally {
+      clearTimeout(timeout);
+    }
+  };
+
   const withTimeout = async <T,>(promise: Promise<T>, ms: number): Promise<T> => {
     const timeoutPromise = new Promise<never>((_, reject) => {
       setTimeout(() => reject(new Error("AI 响应超时，请重试。")), ms);
@@ -316,15 +608,23 @@ export default function App() {
     const unsubscribe = onSnapshot(sessionRef, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data();
-        setGameState(data.gameState);
+        const gs = data.gameState === 'THEME_SELECTION' ? 'STORY_SELECT' : data.gameState;
+        setGameState(gs);
+        if (data.gameState === 'THEME_SELECTION' && user) {
+          updateDoc(sessionRef, { gameState: 'STORY_SELECT', updatedAt: new Date().toISOString() }).catch(() => {});
+        }
         setSelectedThemes(data.selectedThemes || []);
         setChapters(data.currentChapters || []);
         setInterventionsLeft(data.interventionsLeft ?? 3);
         setEndingValue(data.endingValue || 0);
         setUnlockedBranches(data.unlockedBranches || []);
         setIntervenedChapters(data.intervenedChapters || []);
+        setNaturalChapters(data.naturalChapters || []);
+        setUnlockedBranches(data.unlockedBranches || []);
         setCharacterStatuses(data.characterStatuses || {});
         setStoryConclusion(data.storyConclusion || null);
+        setActiveStoryId(data.storyId || null);
+        setInterventionHistory(data.interventionHistory || []);
         
         if (data.uiFeedback) {
           setUiFeedback(data.uiFeedback);
@@ -338,6 +638,67 @@ export default function App() {
             if (bpSnap.exists()) {
               setBlueprint(bpSnap.data() as Blueprint);
             }
+          });
+        }
+        // Cartridge mode: load story cartridge and build blueprint if needed
+        if (data.storyId) {
+          getStoryCartridge(db as any, data.storyId).then((cartridge) => {
+            if (!cartridge) return;
+            const bp: Blueprint = {
+              title: cartridge.meta.title,
+              main_axis: cartridge.meta.main_axis,
+              left_mainline_default: 80,
+              right_mainline_default: 40,
+              endingMode: cartridge.meta.endingMode,
+              endingNames: cartridge.meta.endingNames,
+              characters: cartridge.meta.characters,
+              chapters: cartridge.chapters.map((c: any) => ({
+                chapter_num: c.chapter_num,
+                title: c.title,
+                summary: c.summary,
+                present_characters: c.present_characters,
+                text: c.text,
+              })),
+              endings: [
+                { type: 'normal', text: (cartridge.endings.find((e: any) => e.id === 'default')?.text || '') },
+                { type: 'good', text: (cartridge.endings.find((e: any) => e.id === 'left')?.text || '') },
+                { type: 'bad', text: (cartridge.endings.find((e: any) => e.id === 'right')?.text || '') },
+              ],
+              branches: cartridge.branches.map((b: any) => {
+                const score = tierToScore(b.tier);
+                // default condition mapping for UI; real unlock can use trigger/history
+                const cond = b.trigger?.type === 'single' ? b.trigger.single : { chapterNum: 2, charId: cartridge.meta.characters[0]?.id || 'c1', action: 'bless' as const };
+                return {
+                  id: b.id,
+                  name: b.name,
+                  score,
+                  side: b.side,
+                  condition_char: cond.charId,
+                  condition_action: cond.action,
+                  condition_chapter: cond.chapterNum,
+                  desc: b.desc,
+                  is_hidden: b.tier === 'hidden',
+                  hint: b.hint,
+                  trigger: b.trigger,
+                  triggerGroups: b.triggerGroups,
+                  tier: b.tier,
+                  inject: b.inject,
+                  sceneText: b.sceneText,
+                } as any;
+              }),
+              authorAssets: {
+                defaultChapters: cartridge.chapters.reduce((acc: any, c: any) => {
+                  acc[c.chapter_num] = { text: c.text || '', title: c.title || '', summary: c.summary || '' };
+                  return acc;
+                }, {}),
+                endingPrototypes: {
+                  default: cartridge.endings.find((e: any) => e.id === 'default')?.text || '',
+                  left: cartridge.endings.find((e: any) => e.id === 'left')?.text || '',
+                  right: cartridge.endings.find((e: any) => e.id === 'right')?.text || '',
+                }
+              }
+            };
+            setBlueprint(bp);
           });
         }
       }
@@ -369,32 +730,62 @@ export default function App() {
   }, [chapters, gameState, isRewriting, blueprint]);
 
   const fleshOutChapter = async (targetChapterNum: number) => {
+    // Check if we already have a natural version of this chapter
+    const naturalVersion = naturalChapters.find(c => c.chapter_num === targetChapterNum);
+    if (naturalVersion && naturalVersion.text) {
+      setChapters(prev => prev.map(c => c.chapter_num === targetChapterNum ? { ...c, text: naturalVersion.text } : c));
+      return;
+    }
+
     setFleshingOutChapters(prev => ({ ...prev, [targetChapterNum]: true }));
     try {
-      const response = await fetch('/api/generate-next-chapter', {
+      const response = await withRetry(() => fetchWithTimeout('/api/generate-next-chapter', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           blueprint,
-          currentChapters: chapters.filter(c => c.text),
+          chapters,
           targetChapterNum,
           targetWordCount
         })
-      });
+      }, 90000), 4, 3000);
       if (!response.ok) throw new Error("Flesh out failed");
       const newChapter = await response.json();
       
-      const updatedChapters = chapters.map(c => c.chapter_num === targetChapterNum ? { ...c, text: newChapter.text } : c);
+      const newText = newChapter.text;
+      if (!newText || typeof newText !== 'string' || newText.trim().length < 50) {
+        throw new Error("章节内容为空或过短");
+      }
+      const updatedChapters = chapters.map(c => c.chapter_num === targetChapterNum ? { ...c, text: newText } : c);
       setChapters(updatedChapters);
+
+      // Save to naturalChapters for persistence
+      const updatedNatural = [...naturalChapters];
+      const natIdx = updatedNatural.findIndex(c => c.chapter_num === targetChapterNum);
+      if (natIdx !== -1) {
+        updatedNatural[natIdx] = { ...updatedNatural[natIdx], text: newText };
+      } else {
+        // Find chapter metadata from blueprint if possible
+        const bpChapter = blueprint.chapters.find((bc: any) => bc.chapter_num === targetChapterNum);
+        updatedNatural.push({
+          chapter_num: targetChapterNum,
+          title: bpChapter?.title || `第${targetChapterNum}章`,
+          summary: bpChapter?.summary || '',
+          text: newText
+        });
+      }
+      setNaturalChapters(updatedNatural);
       
       if (user) {
         await updateDoc(doc(db, 'sessions', user.uid), {
           currentChapters: updatedChapters,
-          updatedAt: new Date().toISOString()
+          naturalChapters: updatedNatural,
+          updatedAt: serverTimestamp()
         });
       }
     } catch (error) {
       console.error(error);
+      showError(`第 ${targetChapterNum} 章生成失败，可稍后重试。`);
     } finally {
       setFleshingOutChapters(prev => ({ ...prev, [targetChapterNum]: false }));
     }
@@ -405,8 +796,8 @@ export default function App() {
     setIsLoggingIn(true);
     try {
       const provider = new GoogleAuthProvider();
-      // Use Redirect for better stability on deployed sites
-      await signInWithRedirect(auth, provider);
+      // Use Popup for better desktop experience
+      await signInWithPopup(auth, provider);
     } catch (error: any) {
       console.error(error);
       if (error.code === 'auth/popup-blocked') {
@@ -483,6 +874,31 @@ export default function App() {
       if (!response.ok) throw new Error(await response.text());
       const data = await response.json();
       
+      // NEW: Immediately flesh out Chapter 1 before entering game
+      setGenerationStatus("正在撰写序章内容...");
+      setGenerationProgress(85);
+      
+      const ch1Response = await withRetry(() => fetchWithTimeout('/api/generate-next-chapter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          blueprint: data,
+          currentChapters: [],
+          targetChapterNum: 1,
+          targetWordCount
+        })
+      }, 90000), 3, 2500);
+
+      if (!ch1Response.ok) throw new Error(await ch1Response.text());
+      const ch1Data = await ch1Response.json();
+      if (!ch1Data?.text || typeof ch1Data.text !== 'string' || ch1Data.text.trim().length < 50) {
+        throw new Error("第一章生成内容为空或过短");
+      }
+      const updatedChapters = data.chapters.map((c: any) =>
+        c.chapter_num === 1 ? { ...c, text: ch1Data.text } : c
+      );
+      data.chapters = updatedChapters;
+
       let bpRef;
       try {
         bpRef = await addDoc(collection(db, 'blueprints'), {
@@ -507,6 +923,7 @@ export default function App() {
           gameState: 'PLAYING',
           selectedThemes,
           currentChapters: data.chapters,
+          naturalChapters: data.chapters,
           interventionsLeft: 3,
           endingValue: 0,
           unlockedBranches: [],
@@ -527,6 +944,7 @@ export default function App() {
 
       setBlueprint(data);
       setChapters(data.chapters);
+      setNaturalChapters(data.chapters);
       setCharacterStatuses(initialStatuses);
       setInterventionsLeft(3);
       setEndingValue(0);
@@ -541,6 +959,257 @@ export default function App() {
       setGenerationProgress(100);
     }
   };
+
+  const refreshStories = async () => {
+    if (!user) return;
+    setIsLoadingStories(true);
+    try {
+      const [pub, mine] = await Promise.all([
+        listPublicStories(db as any, 30),
+        listMyStories(db as any, user.uid, 50),
+      ]);
+      setPublicStories(pub);
+      setMyStories(mine);
+    } catch (e) {
+      console.error(e);
+      showError('作品库加载失败。');
+    } finally {
+      setIsLoadingStories(false);
+    }
+  };
+
+  const startStoryPlay = async (storyId: string) => {
+    if (!user) return;
+    setIsLoadingStories(true);
+    try {
+      const cartridge = await getStoryCartridge(db as any, storyId);
+      if (!cartridge) throw new Error('story not found');
+
+      const bp: Blueprint = {
+        title: cartridge.meta.title,
+        main_axis: cartridge.meta.main_axis,
+        left_mainline_default: 80,
+        right_mainline_default: 40,
+        endingMode: cartridge.meta.endingMode,
+        endingNames: cartridge.meta.endingNames,
+        characters: cartridge.meta.characters,
+        chapters: cartridge.chapters.map((c: any) => ({
+          chapter_num: c.chapter_num,
+          title: c.title,
+          summary: c.summary,
+          present_characters: c.present_characters,
+          text: c.text,
+        })),
+        endings: [
+          { type: 'normal', text: (cartridge.endings.find((e: any) => e.id === 'default')?.text || '') },
+          { type: 'good', text: (cartridge.endings.find((e: any) => e.id === 'left')?.text || '') },
+          { type: 'bad', text: (cartridge.endings.find((e: any) => e.id === 'right')?.text || '') },
+        ],
+        branches: cartridge.branches.map((b: any) => {
+          const score = tierToScore(b.tier);
+          const cond = b.trigger?.type === 'single' ? b.trigger.single : { chapterNum: 2, charId: cartridge.meta.characters[0]?.id || 'c1', action: 'bless' as const };
+          return {
+            id: b.id,
+            name: b.name,
+            score,
+            side: b.side,
+            condition_char: cond.charId,
+            condition_action: cond.action,
+            condition_chapter: cond.chapterNum,
+            desc: b.desc,
+            is_hidden: b.tier === 'hidden',
+            hint: b.hint,
+            trigger: b.trigger,
+            triggerGroups: b.triggerGroups,
+            tier: b.tier,
+            inject: b.inject,
+            sceneText: b.sceneText,
+          } as any;
+        }),
+        authorAssets: {
+          defaultChapters: cartridge.chapters.reduce((acc: any, c: any) => {
+            acc[c.chapter_num] = { text: c.text || '', title: c.title || '', summary: c.summary || '' };
+            return acc;
+          }, {}),
+          endingPrototypes: {
+            default: cartridge.endings.find((e: any) => e.id === 'default')?.text || '',
+            left: cartridge.endings.find((e: any) => e.id === 'left')?.text || '',
+            right: cartridge.endings.find((e: any) => e.id === 'right')?.text || '',
+          }
+        }
+      };
+
+      const initialStatuses: Record<string, { status: string; isDead: boolean }> = {};
+      bp.characters.forEach(c => (initialStatuses[c.id] = { status: '存活', isDead: false }));
+
+      const initialHistory: Array<{ chapterNum: number; charId: string; action: 'bless' | 'curse' }> = [];
+      const initialUnlocked: Branch[] = [];
+
+      await setDoc(doc(db, 'sessions', user.uid), {
+        userId: user.uid,
+        storyId,
+        gameState: 'PLAYING',
+        selectedThemes: [],
+        currentChapters: bp.chapters,
+        naturalChapters: bp.chapters,
+        interventionsLeft: 3,
+        endingValue: 0,
+        unlockedBranches: initialUnlocked,
+        intervenedChapters: [],
+        interventionHistory: initialHistory,
+        characterStatuses: initialStatuses,
+        storyConclusion: null,
+        uiFeedback: {
+          leftProgress: 0,
+          rightProgress: 0,
+          endingLabel: "均衡道"
+        },
+        updatedAt: new Date().toISOString()
+      });
+
+      setBlueprint(bp);
+      setChapters(bp.chapters);
+      setNaturalChapters(bp.chapters);
+      setActiveStoryId(storyId);
+      setInterventionHistory(initialHistory);
+      setUnlockedBranches(initialUnlocked);
+      setIntervenedChapters([]);
+      setCharacterStatuses(initialStatuses);
+      setInterventionsLeft(3);
+      setEndingValue(0);
+      setShowSummaryModal(false);
+      setSummaryEntrySource(null);
+      setGameState('PLAYING');
+    } catch (e) {
+      console.error(e);
+      showError('导入作品失败。');
+      setGameState('STORY_SELECT');
+    } finally {
+      setIsLoadingStories(false);
+    }
+  };
+
+  const enterAuthoring = async () => {
+    setGameState('AUTHORING');
+    await refreshStories();
+  };
+
+  const runOneClickImport = async () => {
+    if (!authoringStoryId || !authoringCartridge) return;
+    const payload = parseImportedAuthoringText(authoringImportText);
+    if (!payload.title && payload.chapters.length === 0 && payload.branches.length === 0) {
+      showError('未识别到可导入内容，请确认使用范本格式。');
+      return;
+    }
+
+    const nextCharacters = (payload.characters.length > 0 ? payload.characters : (authoringCartridge.meta.characters || []))
+      .slice(0, 5)
+      .map((c) => ({ name: (c.name || '').trim(), desc: (c.desc || '').trim() || '（待填写简介）' }));
+    const normalizedChars = normalizeCharacters(nextCharacters.length > 0 ? nextCharacters : [{ name: '角色1', desc: '（待填写简介）' }]);
+    const charIdOfName = (name: string) => normalizedChars.find((c: any) => c.name === name)?.id || normalizedChars[0]?.id || 'c1';
+
+    const chapterByNum = new Map<number, any>((authoringCartridge.chapters || []).map((c: any) => [c.chapter_num, c]));
+    for (const c of payload.chapters) chapterByNum.set(c.chapter_num, { ...(chapterByNum.get(c.chapter_num) || {}), chapter_num: c.chapter_num, title: c.title || `第${c.chapter_num}章`, text: (c.text || '').slice(0, 1200) });
+    const finalChapters = [1, 2, 3, 4, 5, 6].map((n) => {
+      const old = chapterByNum.get(n) || {};
+      return {
+        chapter_num: n,
+        title: old.title || `第${n}章`,
+        summary: old.summary || '',
+        present_characters: normalizedChars.map((x: any) => x.id),
+        text: (old.text || '').slice(0, 1200),
+      };
+    });
+
+    const hasDual = Boolean(payload.endings.left || payload.endings.right);
+    const endingMode = hasDual ? 'dual' : (authoringCartridge.meta.endingMode || 'single');
+    const oldEndings = new Map<string, string>((authoringCartridge.endings || []).map((e: any) => [e.id, e.text || '']));
+    const finalEndings = [
+      { id: 'default', text: (payload.endings.default || oldEndings.get('default') || '').slice(0, 1200) },
+      { id: 'left', text: (payload.endings.left || oldEndings.get('left') || '').slice(0, 1200) },
+      { id: 'right', text: (payload.endings.right || oldEndings.get('right') || '').slice(0, 1200) },
+    ].filter((e) => endingMode === 'dual' ? true : e.id === 'default');
+
+    setAuthoringSaving(true);
+    try {
+      await saveStoryMainlineBundle(db as any, authoringStoryId, {
+        metaPatch: {
+          ...authoringCartridge.meta,
+          title: payload.title || authoringCartridge.meta.title || '',
+          main_axis: payload.mainAxis || authoringCartridge.meta.main_axis || '',
+          endingMode,
+          characters: normalizedChars,
+          defaults: { ...authoringCartridge.meta.defaults, targetWordCount: 1200 },
+        } as any,
+        chapters: finalChapters,
+        endings: finalEndings as any,
+      });
+
+      if (authoringImportReplaceBranches) {
+        const oldBranches = authoringCartridge.branches || [];
+        for (const b of oldBranches) {
+          await deleteStoryBranch(db as any, authoringStoryId, b.id);
+        }
+      }
+
+      for (const b of payload.branches) {
+        const defaultImportCond: ParsedImportCondition = { type: 'single', single: { chapterNum: 2, charName: normalizedChars[0]?.name || '', action: 'bless' } };
+        const triggerGroups = (b.conditions.length > 0 ? b.conditions : [defaultImportCond])
+          .slice(0, 3)
+          .map((cond: ParsedImportCondition) => cond.type === 'count'
+            ? {
+                type: 'count' as const,
+                count: {
+                  charId: charIdOfName(cond.count?.charName || ''),
+                  action: cond.count?.action || 'bless',
+                  minCount: Math.max(1, Number(cond.count?.minCount || 1)),
+                  upToChapterNum: Math.max(2, Math.min(6, Number(cond.count?.upToChapterNum || 6))),
+                },
+              }
+            : {
+                type: 'single' as const,
+                single: {
+                  chapterNum: Math.max(2, Math.min(6, Number(cond.single?.chapterNum || 2))),
+                  charId: charIdOfName(cond.single?.charName || ''),
+                  action: cond.single?.action || 'bless',
+                },
+              });
+        await createStoryBranch(db as any, authoringStoryId, {
+          side: b.side,
+          tier: b.tier,
+          name: b.name || '未命名支线',
+          hint: b.hint || `留意${b.name || '支线'}`,
+          desc: (b.sceneText || b.name || '').slice(0, 80),
+          common: Boolean(b.common),
+          trigger: triggerGroups[0],
+          triggerGroups,
+          inject: {
+            mustHappen: b.sceneText ? [b.sceneText.slice(0, 300)] : [],
+            mustReveal: [],
+            mustChange: [],
+          },
+          sceneText: (b.sceneText || '').slice(0, 300),
+        } as any);
+      }
+
+      const latest = await getStoryCartridge(db as any, authoringStoryId);
+      setAuthoringCartridge(latest);
+      await refreshStories();
+      showError(`导入完成：主线已填充，支线 ${payload.branches.length} 条${authoringImportReplaceBranches ? '（已覆盖旧支线）' : '（已追加）'}。`);
+    } catch (e: any) {
+      console.error(e);
+      showError(`一键导入失败：${e?.message || String(e)}`);
+    } finally {
+      setAuthoringSaving(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!user || !isAuthReady) return;
+    if (gameState === 'STORY_SELECT') {
+      refreshStories();
+    }
+  }, [user, isAuthReady, gameState]);
 
   const generateConclusion = async (storyChapters: Chapter[]) => {
     setIsGeneratingConclusion(true);
@@ -569,7 +1238,7 @@ export default function App() {
     setIsRewriting(true);
     
     const progressInterval = startProgressSimulation(30000, [
-      "命运之轮正在逆转...",
+      action === 'bless' ? "神迹降临，气运回升..." : "命运崩坏，厄运缠绕...",
       "因果律正在重组...",
       "蝴蝶效应正在扩散...",
       "时空涟漪正在平复...",
@@ -590,7 +1259,8 @@ export default function App() {
           action,
           currentEndingValue: endingValue,
           currentUnlockedBranches: unlockedBranches,
-          targetWordCount
+          targetWordCount,
+          interventionHistory
         })
       });
       if (!response.ok) throw new Error(await response.text());
@@ -603,8 +1273,11 @@ export default function App() {
       const newUnlockedBranches = data.newUnlockedBranches || unlockedBranches;
       const unlocked = data.unlockedBranch;
       
-      if (unlocked && !historicallyUnlockedBranches.find(b => b.id === unlocked.id)) {
-        setHistoricallyUnlockedBranches(prev => [...prev, unlocked]);
+      if (unlocked) {
+        showError(`【命运契机】已解锁支线：${unlocked.name}`);
+        if (!historicallyUnlockedBranches.find(b => b.id === unlocked.id)) {
+          setHistoricallyUnlockedBranches(prev => [...prev, unlocked]);
+        }
       }
       
       setUnlockedBranches(newUnlockedBranches);
@@ -613,14 +1286,36 @@ export default function App() {
         setUiFeedback(data.uiFeedback);
       }
       
-      const updatedChapters = [...chapters];
-      rewrittenChapters.forEach((rc: Chapter) => {
+      const updatedChapters = chapters.map(c => ({ ...c }));
+      rewrittenChapters.forEach((rc: any) => {
         const index = updatedChapters.findIndex(c => c.chapter_num === rc.chapter_num);
-        if (index !== -1) {
-          updatedChapters[index] = rc;
+        if (index === -1) return;
+        const existing = updatedChapters[index];
+        const isFuture = rc.chapter_num > chapterNum;
+        const hasNewText = typeof rc.text === 'string' && rc.text.trim().length > 0;
+        const merged = { ...existing, ...rc } as any;
+        merged.text = hasNewText ? rc.text : (isFuture ? '' : (existing.text || ''));
+        if (typeof rc.summary !== 'string' || !rc.summary.trim()) {
+          merged.summary = existing.summary || '';
         }
+        if (!Array.isArray(rc.present_characters) || rc.present_characters.length === 0) {
+          merged.present_characters = existing.present_characters;
+        }
+        updatedChapters[index] = merged;
       });
       setChapters(updatedChapters);
+
+      const nextNatural = naturalChapters.map(n => {
+        if (n.chapter_num === chapterNum) {
+          const ch = updatedChapters.find(c => c.chapter_num === chapterNum);
+          return ch ? { ...n, text: ch.text || '', summary: ch.summary ?? n.summary, title: ch.title ?? n.title } : n;
+        }
+        if (n.chapter_num > chapterNum) {
+          return { ...n, text: '' };
+        }
+        return n;
+      });
+      setNaturalChapters(nextNatural);
       
       let finalStatuses = characterStatuses;
       if (charUpdates.length > 0) {
@@ -633,14 +1328,17 @@ export default function App() {
       
       const newInterventionsLeft = interventionsLeft - 1;
       const newIntervenedChapters = [...intervenedChapters.filter(c => c < chapterNum), chapterNum];
+      const newHistory = [...interventionHistory, { chapterNum, charId, action }];
       
       if (user) {
         try {
           await updateDoc(doc(db, 'sessions', user.uid), {
             currentChapters: updatedChapters,
+            naturalChapters: nextNatural,
             characterStatuses: finalStatuses,
             interventionsLeft: newInterventionsLeft,
             intervenedChapters: newIntervenedChapters,
+            interventionHistory: newHistory,
             endingValue: newEndingValue,
             unlockedBranches: newUnlockedBranches,
             uiFeedback: data.uiFeedback || uiFeedback,
@@ -653,9 +1351,11 @@ export default function App() {
 
       setInterventionsLeft(newInterventionsLeft);
       setIntervenedChapters(newIntervenedChapters);
+      setInterventionHistory(newHistory);
       
       if (newInterventionsLeft === 0) {
         setTimeout(() => {
+          setSummaryEntrySource('auto_interventions');
           setGameState('SUMMARY');
           setShowSummaryModal(true);
           generateConclusion(updatedChapters);
@@ -674,24 +1374,15 @@ export default function App() {
   };
 
   const handleEndGame = () => {
+    setSummaryEntrySource('manual');
     setGameState('SUMMARY');
     setShowSummaryModal(true);
     generateConclusion(chapters);
   };
 
   const resetGame = async () => {
-    if (user) {
-      try {
-        await setDoc(doc(db, 'sessions', user.uid), {
-          userId: user.uid,
-          gameState: 'THEME_SELECTION',
-          updatedAt: new Date().toISOString()
-        });
-      } catch (e) {
-        handleFirestoreError(e, OperationType.WRITE, `sessions/${user.uid}`);
-      }
-    }
-    setGameState('THEME_SELECTION');
+    // Immediate local reset for responsiveness
+    setGameState('STORY_SELECT');
     setSelectedThemes([]);
     setBlueprint(null);
     setChapters([]);
@@ -703,28 +1394,62 @@ export default function App() {
     setStoryConclusion(null);
     setEndingValue(0);
     setShowSummaryModal(false);
+    setSummaryEntrySource(null);
+    setIsRewriting(false);
+    setGenerationProgress(100);
+    setErrorMsg(null);
+    setUiFeedback({
+      leftProgress: 0,
+      rightProgress: 0,
+      endingLabel: "均衡道"
+    });
+
+    if (user) {
+      try {
+        await setDoc(doc(db, 'sessions', user.uid), {
+          userId: user.uid,
+          gameState: 'STORY_SELECT',
+          updatedAt: serverTimestamp()
+        });
+      } catch (e) {
+        handleFirestoreError(e, OperationType.WRITE, `sessions/${user.uid}`);
+      }
+    }
   };
 
   const restartSameStory = async () => {
-    if (blueprint && user) {
-      setChapters(blueprint.chapters);
-      setUnlockedBranches([]);
-      setInterventionsLeft(3);
-      setIntervenedChapters([]);
-      const initialStatuses: Record<string, { status: string, isDead: boolean }> = {};
-      blueprint.characters.forEach(c => {
-        initialStatuses[c.id] = { status: '存活', isDead: false };
-      });
-      setCharacterStatuses(initialStatuses);
-      setStoryConclusion(null);
-      setEndingValue(0);
-      setGameState('PLAYING');
-      setShowSummaryModal(false);
+    if (!blueprint) return;
 
+    // Immediate local reset for responsiveness
+    setChapters(naturalChapters);
+    setUnlockedBranches([]);
+    setInterventionsLeft(3);
+    setIntervenedChapters([]);
+    setStoryConclusion(null);
+    setEndingValue(0);
+    setGameState('PLAYING');
+    setShowSummaryModal(false);
+    setSummaryEntrySource(null);
+    setIsRewriting(false);
+    setGenerationProgress(100);
+    setErrorMsg(null);
+    setUiFeedback({
+      leftProgress: 0,
+      rightProgress: 0,
+      endingLabel: "均衡道"
+    });
+
+    const initialStatuses: Record<string, { status: string, isDead: boolean }> = {};
+    blueprint.characters.forEach(c => {
+      initialStatuses[c.id] = { status: '存活', isDead: false };
+    });
+    setCharacterStatuses(initialStatuses);
+
+    if (user) {
       try {
         await updateDoc(doc(db, 'sessions', user.uid), {
           gameState: 'PLAYING',
-          currentChapters: blueprint.chapters,
+          currentChapters: naturalChapters,
           unlockedBranches: [],
           interventionsLeft: 3,
           intervenedChapters: [],
@@ -755,29 +1480,45 @@ export default function App() {
           <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-rose-500/10 blur-[120px] rounded-full" />
         </div>
 
-        <div className="max-w-md w-full text-center space-y-8">
-          <div className="space-y-4">
-            <h1 className="text-5xl font-bold tracking-tighter text-white flex items-center justify-center gap-4">
-              <Wand2 className="w-12 h-12 text-indigo-400" />
-              命运引擎
-            </h1>
-            <p className="text-zinc-400 text-lg">干涉因果，编织属于你的传奇故事。</p>
+        <div className="max-w-md w-full text-center space-y-12 relative z-10">
+          <div className="space-y-6">
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 1, ease: "easeOut" }}
+            >
+              <h1 className="text-6xl font-black tracking-tighter text-white flex flex-col items-center gap-4">
+                <Wand2 className="w-20 h-20 text-indigo-400 drop-shadow-[0_0_20px_rgba(129,140,248,0.5)]" />
+                <span>命运引擎</span>
+              </h1>
+            </motion.div>
+            <p className="text-zinc-400 text-xl font-light tracking-wide">编织丝线，逆转因果，见证你的史诗结局。</p>
           </div>
-          <div className="space-y-4">
-            <button
-              onClick={handleLogin}
-              className="w-full py-4 bg-white text-black hover:bg-zinc-200 rounded-xl font-bold text-xl transition-all flex items-center justify-center gap-3 shadow-[0_0_30px_rgba(255,255,255,0.1)] active:scale-95"
-            >
-              <LogIn className="w-6 h-6" />
-              使用 Google 登录
-            </button>
-            <button
-              onClick={handleGuestLogin}
-              className="w-full py-4 bg-zinc-900 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-xl font-medium transition-all flex items-center justify-center gap-3 border border-zinc-800 active:scale-95"
-            >
-              <UserIcon className="w-6 h-6" />
-              游客方式进入
-            </button>
+
+          <div className="space-y-6 pt-10 border-t border-zinc-900">
+            <p className="text-xs text-zinc-600 uppercase tracking-[0.4em] font-bold">请选择登入命运的方式</p>
+            <div className="grid grid-cols-1 gap-4">
+              <button
+                onClick={handleLogin}
+                className="group relative overflow-hidden py-4 bg-white text-black rounded-xl font-black text-xl transition-all active:scale-95 flex items-center justify-center gap-3 shadow-[0_0_30px_rgba(255,255,255,0.1)]"
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-indigo-100 to-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                <span className="relative z-10 flex items-center gap-3">
+                  <LogIn className="w-6 h-6" />
+                  使用 Google 登录
+                </span>
+              </button>
+              <button
+                onClick={handleGuestLogin}
+                className="py-4 bg-zinc-900/50 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900 rounded-xl font-bold transition-all flex items-center justify-center gap-3 border border-zinc-800 active:scale-95"
+              >
+                <UserIcon className="w-6 h-6" />
+                以游客身份继续
+              </button>
+            </div>
+            <p className="text-[10px] text-zinc-700 max-w-xs mx-auto leading-relaxed">
+              * 游客身份数据仅保留在当前设备。建议登录 Google 以同步多端进度。
+            </p>
           </div>
         </div>
       </div>
@@ -807,6 +1548,908 @@ export default function App() {
     );
   }
 
+  if (gameState === 'STORY_SELECT') {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center p-6 font-sans relative">
+        <GlobalError errorMsg={errorMsg} />
+        <div className="absolute top-6 right-6 flex items-center gap-4">
+          <div className="text-right">
+            <div className="text-xs text-zinc-500">已登录</div>
+            <div className="text-sm font-medium text-zinc-300">{user.isAnonymous ? "游客用户" : user.displayName}</div>
+          </div>
+          <button onClick={handleLogout} className="p-2 bg-zinc-900 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+            <LogOut className="w-5 h-5 text-zinc-400" />
+          </button>
+        </div>
+
+        <div className="max-w-4xl w-full space-y-8">
+          <div className="text-center space-y-3">
+            <h1 className="text-4xl font-black tracking-tighter text-white">作品库</h1>
+            <p className="text-zinc-400">像卡带一样导入作品，即刻游玩。</p>
+          </div>
+
+          <div className="flex flex-col md:flex-row gap-3 justify-center">
+            <button
+              onClick={() => { refreshStories(); }}
+              className="px-5 py-3 bg-zinc-900 hover:bg-zinc-800 rounded-xl border border-zinc-800 text-zinc-200 font-bold"
+            >
+              {isLoadingStories ? '加载中...' : '刷新作品库'}
+            </button>
+            <button
+              onClick={() => setGameState('THEME_SELECTION')}
+              className="px-5 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-white font-black"
+            >
+              快速生成（旧模式）
+            </button>
+            <button
+              onClick={enterAuthoring}
+              className="px-5 py-3 bg-white text-black hover:bg-zinc-200 rounded-xl font-black"
+            >
+              作者后台
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="font-bold text-white">公开作品</div>
+                <div className="text-xs text-zinc-500">点击即导入并开始游玩</div>
+              </div>
+              <div className="space-y-3">
+                {(publicStories || []).length === 0 ? (
+                  <div className="text-sm text-zinc-500">暂无公开作品。点击“刷新作品库”。</div>
+                ) : (
+                  publicStories.map((s: any) => (
+                    <button
+                      key={s.id}
+                      onClick={() => startStoryPlay(s.id)}
+                      className="w-full text-left p-4 rounded-xl bg-zinc-950/50 border border-zinc-800 hover:border-indigo-500/40 transition-colors"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="font-bold text-zinc-100">{s.title}</div>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {(s.tags || []).slice(0, 6).map((t: string) => (
+                          <span key={t} className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 border border-zinc-700">{t}</span>
+                        ))}
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 space-y-4">
+              <div className="font-bold text-white">分享码导入</div>
+              <div className="text-xs text-zinc-500">MVP：暂用 storyId 作为分享码（后续可升级成短码）。</div>
+              <input
+                value={storyImportCode}
+                onChange={(e) => setStoryImportCode(e.target.value)}
+                placeholder="输入分享ID（storyId）"
+                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 outline-none focus:border-indigo-500"
+              />
+              <button
+                onClick={() => storyImportCode.trim() && startStoryPlay(storyImportCode.trim())}
+                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-bold"
+              >
+                导入并游玩
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (gameState === 'AUTHORING') {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6 md:p-10 font-sans">
+        <GlobalError errorMsg={errorMsg} />
+        <div className="max-w-6xl mx-auto space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-xs text-zinc-500">作者后台</div>
+              <div className="text-2xl font-black text-white">作品编辑器</div>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setGameState('STORY_SELECT')} className="px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-sm">返回作品库</button>
+              <button
+                disabled={authoringSaving}
+                onClick={async () => {
+                  if (!user) return;
+                  setAuthoringSaving(true);
+                  try {
+                    const id = await createEmptyStory(db as any, { authorId: user.uid });
+                    await refreshStories();
+                    setAuthoringStoryId(id);
+                    const c = await getStoryCartridge(db as any, id);
+                    setAuthoringCartridge(c);
+                    showError('作品已创建。');
+                  } catch (e: any) {
+                    console.error(e);
+                    showError(`新建作品失败：${e?.message || String(e)}`);
+                  } finally {
+                    setAuthoringSaving(false);
+                  }
+                }}
+                className="px-4 py-2 bg-white text-black rounded-lg font-bold disabled:opacity-50"
+              >
+                {authoringSaving ? '创建中...' : '新建作品'}
+              </button>
+              <button
+                disabled={!authoringStoryId || authoringSaving}
+                onClick={async () => {
+                  if (!authoringStoryId) return;
+                  setAuthoringSaving(true);
+                  try {
+                    await deleteStoryCartridge(db as any, authoringStoryId);
+                    showError('作品已删除。');
+                    setAuthoringStoryId(null);
+                    setAuthoringCartridge(null);
+                    await refreshStories();
+                  } catch (e: any) {
+                    console.error(e);
+                    showError(`删除失败：${e?.message || String(e)}`);
+                  } finally {
+                    setAuthoringSaving(false);
+                  }
+                }}
+                className="px-4 py-2 bg-zinc-900 border border-rose-500/30 text-rose-300 rounded-lg text-sm disabled:opacity-50"
+              >
+                删除作品
+              </button>
+              <button onClick={refreshStories} className="px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-sm">{isLoadingStories ? '加载中...' : '刷新'}</button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div className="lg:col-span-4 bg-zinc-900/50 border border-zinc-800 rounded-2xl p-4 space-y-3">
+              <div className="font-bold text-white">我的作品</div>
+              {(myStories || []).length === 0 ? (
+                <div className="text-sm text-zinc-500">还没有作品。点击“新建作品”。</div>
+              ) : (
+                myStories.map((s: any) => (
+                  <button
+                    key={s.id}
+                    onClick={async () => {
+                      setAuthoringStoryId(s.id);
+                      const c = await getStoryCartridge(db as any, s.id);
+                      setAuthoringCartridge(c);
+                      setAuthoringTab('mainline');
+                    }}
+                    className={`w-full text-left p-3 rounded-xl border transition-colors ${authoringStoryId === s.id ? 'bg-indigo-950/30 border-indigo-500/40' : 'bg-zinc-950/50 border-zinc-800 hover:border-zinc-600'}`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="font-bold text-zinc-100 truncate">{s.title}</div>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full border ${s.visibility === 'public' ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' : 'bg-zinc-800 text-zinc-300 border-zinc-700'}`}>
+                        {s.visibility === 'public' ? '公开' : '私有'}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-[10px] text-zinc-500">分享ID：{s.id}</div>
+                  </button>
+                ))
+              )}
+            </div>
+
+            <div className="lg:col-span-8 bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 space-y-6">
+              {!authoringCartridge ? (
+                <div className="text-sm text-zinc-500">请选择左侧作品进行编辑。</div>
+              ) : (
+                <>
+                  <div className="bg-zinc-950/40 border border-zinc-800 rounded-xl p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="text-xs text-zinc-500">当前作品分享ID</div>
+                      <div className="text-sm font-mono text-zinc-200 break-all">{authoringStoryId || '（未选择作品）'}</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={async () => {
+                          if (!authoringStoryId) return;
+                          try {
+                            await navigator.clipboard.writeText(authoringStoryId);
+                            showError('分享ID已复制。');
+                          } catch {
+                            showError('复制失败，请手动复制。');
+                          }
+                        }}
+                        className="px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs flex items-center gap-1"
+                      >
+                        <Copy className="w-3.5 h-3.5" /> 复制ID
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setAuthoringTab('mainline')}
+                      className={`px-4 py-2 rounded-lg text-sm font-bold ${authoringTab === 'mainline' ? 'bg-white text-black' : 'bg-zinc-900 border border-zinc-800 text-zinc-300'}`}
+                    >
+                      Tab1 主线设置
+                    </button>
+                    <button
+                      onClick={() => setAuthoringTab('branches')}
+                      className={`px-4 py-2 rounded-lg text-sm font-bold ${authoringTab === 'branches' ? 'bg-white text-black' : 'bg-zinc-900 border border-zinc-800 text-zinc-300'}`}
+                    >
+                      Tab2 支线设置
+                    </button>
+                  </div>
+
+                  {authoringTab === 'mainline' && (
+                    <div className="space-y-6">
+                      <div className="space-y-3 bg-zinc-950/40 border border-zinc-800 rounded-2xl p-4">
+                        <div className="font-bold text-white">一键导入（粘贴 AI 全文）</div>
+                        <div className="text-xs text-zinc-500">支持按“主线设置 / 支线设置”范本格式自动解析并写入。导入后会自动保存到当前作品。</div>
+                        <textarea
+                          value={authoringImportText}
+                          onChange={(e) => setAuthoringImportText(e.target.value)}
+                          className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm min-h-[220px]"
+                          placeholder="把其他 AI 生成的完整文本粘贴到这里..."
+                        />
+                        <label className="flex items-center gap-2 text-xs text-zinc-400">
+                          <input
+                            type="checkbox"
+                            checked={authoringImportReplaceBranches}
+                            onChange={(e) => setAuthoringImportReplaceBranches(e.target.checked)}
+                          />
+                          导入时覆盖当前所有支线（不勾选则追加）
+                        </label>
+                        <button
+                          disabled={authoringSaving || !authoringImportText.trim()}
+                          onClick={runOneClickImport}
+                          className="px-4 py-2 bg-indigo-500 text-white rounded-lg font-bold disabled:opacity-50"
+                        >
+                          一键导入并自动填充
+                        </button>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="text-lg font-black text-white">主线设置</div>
+                        <div className="text-xs text-zinc-500">每章字数限制：1200 字（超出部分不会阻止输入，但建议控制）。</div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <label className="text-xs text-zinc-400 space-y-1">
+                            <div>作品公开状态</div>
+                            <select
+                              value={authoringCartridge.meta.visibility || 'private'}
+                              onChange={(e) => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, visibility: e.target.value } }))}
+                              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm"
+                            >
+                              <option value="private">私有（仅自己可见）</option>
+                              <option value="public">公开（出现在作品库）</option>
+                            </select>
+                          </label>
+                          <div className="text-xs text-zinc-500 flex items-end">切换后请点击“一键保存主线+结局”生效。</div>
+                        </div>
+                        <input
+                          value={authoringCartridge.meta.title || ''}
+                          onChange={(e) => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, title: e.target.value } }))}
+                          className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm outline-none focus:border-indigo-500"
+                          placeholder="作品标题"
+                        />
+                        <textarea
+                          value={authoringCartridge.meta.main_axis || ''}
+                          onChange={(e) => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, main_axis: e.target.value } }))}
+                          className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm outline-none focus:border-indigo-500 min-h-[80px]"
+                          placeholder="主轴/命题"
+                        />
+                        <button
+                          disabled={authoringSaving}
+                          onClick={async () => {
+                            if (!authoringStoryId) return;
+                            setAuthoringSaving(true);
+                            try {
+                              const normalizedChars = normalizeCharacters(authoringCartridge.meta.characters || []);
+                              const endingMode = authoringCartridge.meta.endingMode || 'dual';
+                              await saveStoryMainlineBundle(db as any, authoringStoryId, {
+                                metaPatch: {
+                                  ...authoringCartridge.meta,
+                                  characters: normalizedChars,
+                                  defaults: { ...authoringCartridge.meta.defaults, targetWordCount: 1200 },
+                                } as any,
+                                chapters: (authoringCartridge.chapters || []).filter((c: any) => c.chapter_num >= 1 && c.chapter_num <= 6).map((c: any) => ({
+                                  chapter_num: c.chapter_num,
+                                  title: c.title || `第${c.chapter_num}章`,
+                                  summary: c.summary || '',
+                                  present_characters: normalizedChars.map((x: any) => x.id),
+                                  text: (c.text || '').slice(0, 1200),
+                                })),
+                                endings: (authoringCartridge.endings || [])
+                                  .filter((e: any) => endingMode === 'dual' ? true : e.id === 'default')
+                                  .map((e: any) => ({ id: e.id, text: (e.text || '').slice(0, 1200) })),
+                              });
+                              showError('主线与结局已整体保存。');
+                              const c = await getStoryCartridge(db as any, authoringStoryId);
+                              setAuthoringCartridge(c);
+                              await refreshStories();
+                            } catch (e: any) {
+                              console.error(e);
+                              showError(`保存失败：${e?.message || String(e)}`);
+                            } finally {
+                              setAuthoringSaving(false);
+                            }
+                          }}
+                          className="px-4 py-2 bg-white text-black rounded-lg font-bold disabled:opacity-50"
+                        >
+                          一键保存主线+结局
+                        </button>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="font-bold text-white">结局模式与主线结局率（0-80）</div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <select
+                            value={authoringCartridge.meta.endingMode || 'dual'}
+                            onChange={(e) => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, endingMode: e.target.value } }))}
+                            className="px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm"
+                          >
+                            <option value="dual">双向结局创作（左/右）</option>
+                            <option value="single">单一结局创作（仅默认）</option>
+                          </select>
+                          <div className="text-xs text-zinc-500 flex items-center">
+                            双向模式下：用于决定左/右更易触发（0-80），并用于分配支线结局率。
+                          </div>
+                        </div>
+
+                        {(authoringCartridge.meta.endingMode || 'dual') === 'dual' && (
+                          <>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              <label className="text-xs text-zinc-400 space-y-1">
+                                <div>左结局主线结局率（0-80）</div>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={80}
+                                  value={authoringCartridge.meta.endingRates?.left ?? 40}
+                                  onChange={(e) => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, endingRates: { ...(prev.meta.endingRates || {}), left: Math.max(0, Math.min(80, Number(e.target.value) || 0)) } } }))}
+                                  className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm"
+                                />
+                              </label>
+                              <label className="text-xs text-zinc-400 space-y-1">
+                                <div>右结局主线结局率（0-80）</div>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={80}
+                                  value={authoringCartridge.meta.endingRates?.right ?? 40}
+                                  onChange={(e) => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, endingRates: { ...(prev.meta.endingRates || {}), right: Math.max(0, Math.min(80, Number(e.target.value) || 0)) } } }))}
+                                  className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm"
+                                />
+                              </label>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              <label className="text-xs text-zinc-400 space-y-1">
+                                <div>左结局展示名（玩家总结「XX结局」，≤5字）</div>
+                                <input
+                                  maxLength={5}
+                                  value={authoringCartridge.meta.endingNames?.left || ''}
+                                  onChange={(e) => setAuthoringCartridge((prev: any) => ({
+                                    ...prev,
+                                    meta: {
+                                      ...prev.meta,
+                                      endingNames: { ...(prev.meta.endingNames || {}), left: e.target.value.slice(0, 5) },
+                                    },
+                                  }))}
+                                  className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm"
+                                  placeholder="如：黎明"
+                                />
+                              </label>
+                              <label className="text-xs text-zinc-400 space-y-1">
+                                <div>右结局展示名（玩家总结「XX结局」，≤5字）</div>
+                                <input
+                                  maxLength={5}
+                                  value={authoringCartridge.meta.endingNames?.right || ''}
+                                  onChange={(e) => setAuthoringCartridge((prev: any) => ({
+                                    ...prev,
+                                    meta: {
+                                      ...prev.meta,
+                                      endingNames: { ...(prev.meta.endingNames || {}), right: e.target.value.slice(0, 5) },
+                                    },
+                                  }))}
+                                  className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm"
+                                  placeholder="如：永夜"
+                                />
+                              </label>
+                            </div>
+                          </>
+                        )}
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="font-bold text-white">主要角色（可干涉角色）</div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setAuthoringCartridge((prev: any) => {
+                              const current = prev.meta.characters || [];
+                              if (current.length <= 1) return prev;
+                              return { ...prev, meta: { ...prev.meta, characters: current.slice(0, current.length - 1) } };
+                            })}
+                            className="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs"
+                          >
+                            - 角色
+                          </button>
+                          <button
+                            onClick={() => setAuthoringCartridge((prev: any) => {
+                              const current = prev.meta.characters || [];
+                              if (current.length >= 5) return prev;
+                              return { ...prev, meta: { ...prev.meta, characters: [...current, { name: `角色${current.length + 1}`, desc: '（待填写简介）' }] } };
+                            })}
+                            className="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs"
+                          >
+                            + 角色
+                          </button>
+                          <div className="text-xs text-zinc-500">默认 3 人，可减到 1，加到 5。</div>
+                        </div>
+                        {(authoringCartridge.meta.characters || []).map((ch: any, idx: number) => (
+                          <div key={idx} className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <input
+                              value={ch.name || ''}
+                              onChange={(e) => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, characters: prev.meta.characters.map((x: any, i: number) => i === idx ? { ...x, name: e.target.value } : x) } }))}
+                              className="px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm"
+                              placeholder="角色名"
+                            />
+                            <input
+                              value={ch.desc || ''}
+                              onChange={(e) => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, characters: prev.meta.characters.map((x: any, i: number) => i === idx ? { ...x, desc: e.target.value } : x) } }))}
+                              className="px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm"
+                              placeholder="角色简介"
+                            />
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="font-bold text-white">默认故事（1-6章）</div>
+                        {(authoringCartridge.chapters || []).filter((c: any) => c.chapter_num >= 1 && c.chapter_num <= 6).map((ch: any) => (
+                          <div key={ch.chapter_num} className="bg-zinc-950/50 border border-zinc-800 rounded-xl p-4 space-y-2">
+                            <div className="font-bold text-zinc-200">第 {ch.chapter_num} 章</div>
+                            <input
+                              value={ch.title || ''}
+                              onChange={(e) => setAuthoringCartridge((prev: any) => ({ ...prev, chapters: prev.chapters.map((c: any) => c.chapter_num === ch.chapter_num ? { ...c, title: e.target.value } : c) }))}
+                              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm"
+                              placeholder="章节标题"
+                            />
+                            <textarea
+                              value={ch.text || ''}
+                              maxLength={1200}
+                              onChange={(e) => setAuthoringCartridge((prev: any) => ({ ...prev, chapters: prev.chapters.map((c: any) => c.chapter_num === ch.chapter_num ? { ...c, text: e.target.value } : c) }))}
+                              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm min-h-[120px]"
+                              placeholder="本章正文"
+                            />
+                            <div className="text-[10px] text-zinc-500">{countChars(ch.text || '')} / 1200</div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="font-bold text-white">结局设置（默认 / 左 / 右）</div>
+                        {(authoringCartridge.endings || [])
+                          .filter((ed: any) => (authoringCartridge.meta.endingMode || 'dual') === 'dual' ? true : ed.id === 'default')
+                          .map((ed: any) => (
+                          <div key={ed.id} className="bg-zinc-950/50 border border-zinc-800 rounded-xl p-4 space-y-2">
+                            <div className="font-bold text-zinc-200">{ed.id === 'default' ? '默认结局' : ed.id === 'left' ? '左结局' : '右结局'}</div>
+                            <textarea
+                              value={ed.text || ''}
+                              maxLength={1200}
+                              onChange={(e) => setAuthoringCartridge((prev: any) => ({ ...prev, endings: prev.endings.map((x: any) => x.id === ed.id ? { ...x, text: e.target.value } : x) }))}
+                              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm min-h-[120px]"
+                            />
+                            <div className="text-[10px] text-zinc-500">{countChars(ed.text || '')} / 1200</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {authoringTab === 'branches' && (
+                    <div className="space-y-5">
+                      <div className="text-lg font-black text-white">支线设置</div>
+                      <div className="text-xs text-zinc-500">每条支线情节限制 300 字。后台结构由系统自动映射，不展示 JSON。</div>
+                      <div className="bg-zinc-950/40 border border-zinc-800 rounded-2xl p-4 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div className="font-bold text-white">新建支线</div>
+                          <div className="text-xs text-zinc-500">ID 后台自动生成</div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <input value={branchForm.name} onChange={(e) => setBranchForm(prev => ({ ...prev, name: e.target.value }))} className="px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm" placeholder="支线名" />
+                          <label className="flex items-center gap-2 text-xs text-zinc-400 px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg">
+                            <input type="checkbox" checked={(branchForm as any).common || false} onChange={(e) => setBranchForm(prev => ({ ...(prev as any), common: e.target.checked }))} />
+                            通用（未来可跨故事复用）
+                          </label>
+                          <select value={branchForm.side} onChange={(e) => setBranchForm(prev => ({ ...prev, side: e.target.value as any }))} className="px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm">
+                            <option value="left">支线倾向：左</option>
+                            <option value="right">支线倾向：右</option>
+                          </select>
+                          <select value={branchForm.tier} onChange={(e) => setBranchForm(prev => ({ ...prev, tier: e.target.value as any }))} className="px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm">
+                            <option value="small">支线影响：小</option>
+                            <option value="medium">支线影响：中</option>
+                            <option value="large">支线影响：大</option>
+                            <option value="hidden">支线影响：隐</option>
+                          </select>
+                          <input value={branchForm.hint} onChange={(e) => setBranchForm(prev => ({ ...prev, hint: e.target.value }))} className="px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm" placeholder="提示短句（可选）" />
+                        </div>
+
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div className="text-sm text-zinc-300">触发条件（全部达成才触发，最多3组）</div>
+                            <button
+                              onClick={() => {
+                                if (branchConditions.length >= 3) return;
+                                setBranchConditions(prev => [...prev, {
+                                  kind: 'single',
+                                  singleChapterNum: 2,
+                                  singleCharId: '',
+                                  singleAction: 'bless',
+                                  countCharId: '',
+                                  countAction: 'bless',
+                                  minCount: 1,
+                                  upToChapterNum: 6,
+                                }]);
+                              }}
+                              className="px-2 py-1 bg-zinc-900 border border-zinc-800 rounded text-xs"
+                            >
+                              + 条件组
+                            </button>
+                          </div>
+                          {branchConditions.map((cond, idx) => (
+                            <div key={idx} className="bg-zinc-950/40 border border-zinc-800 rounded-xl p-3 space-y-3">
+                              <div className="flex items-center justify-between">
+                                <div className="text-xs text-zinc-500">条件组 {idx + 1}</div>
+                                {branchConditions.length > 1 && (
+                                  <button
+                                    onClick={() => setBranchConditions(prev => prev.filter((_, i) => i !== idx))}
+                                    className="text-xs px-2 py-1 bg-zinc-900 border border-zinc-800 rounded"
+                                  >
+                                    删除
+                                  </button>
+                                )}
+                              </div>
+                              <select
+                                value={cond.kind}
+                                onChange={(e) => setBranchConditions(prev => prev.map((c, i) => i === idx ? { ...c, kind: e.target.value as 'single' | 'count' } : c))}
+                                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm"
+                              >
+                                <option value="single">指定章节+角色+干涉</option>
+                                <option value="count">指定章节时累计次数达标</option>
+                              </select>
+                              {cond.kind === 'single' ? (
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                  <select value={cond.singleChapterNum} onChange={(e) => setBranchConditions(prev => prev.map((c, i) => i === idx ? { ...c, singleChapterNum: Number(e.target.value) } : c))} className="px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm">
+                                    {chapterOptions.map(n => <option key={n} value={n}>第{n}章</option>)}
+                                  </select>
+                                  <select value={cond.singleCharId} onChange={(e) => setBranchConditions(prev => prev.map((c, i) => i === idx ? { ...c, singleCharId: e.target.value } : c))} className="px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm">
+                                    <option value="">选择角色</option>
+                                    {normalizeCharacters(authoringCartridge.meta.characters || []).map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                  </select>
+                                  <select value={cond.singleAction} onChange={(e) => setBranchConditions(prev => prev.map((c, i) => i === idx ? { ...c, singleAction: e.target.value as 'bless' | 'curse' } : c))} className="px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm">
+                                    <option value="bless">庇佑</option>
+                                    <option value="curse">磨难</option>
+                                  </select>
+                                </div>
+                              ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                  <select value={cond.upToChapterNum} onChange={(e) => setBranchConditions(prev => prev.map((c, i) => i === idx ? { ...c, upToChapterNum: Number(e.target.value) } : c))} className="px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm">
+                                    {chapterOptions.map(n => <option key={n} value={n}>第{n}章结算</option>)}
+                                  </select>
+                                  <select value={cond.countCharId} onChange={(e) => setBranchConditions(prev => prev.map((c, i) => i === idx ? { ...c, countCharId: e.target.value } : c))} className="px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm">
+                                    <option value="">选择角色</option>
+                                    {normalizeCharacters(authoringCartridge.meta.characters || []).map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                  </select>
+                                  <select value={cond.countAction} onChange={(e) => setBranchConditions(prev => prev.map((c, i) => i === idx ? { ...c, countAction: e.target.value as 'bless' | 'curse' } : c))} className="px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm">
+                                    <option value="bless">庇佑累计</option>
+                                    <option value="curse">磨难累计</option>
+                                  </select>
+                                  <input type="number" min={1} value={cond.minCount} onChange={(e) => setBranchConditions(prev => prev.map((c, i) => i === idx ? { ...c, minCount: Math.max(1, Number(e.target.value) || 1) } : c))} className="px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm" placeholder="累计次数≥" />
+                                </div>
+                              )}
+                              <div className="text-xs text-indigo-300 bg-indigo-500/10 border border-indigo-500/20 rounded-lg px-3 py-2">
+                                {triggerPreview({
+                                  triggerType: cond.kind,
+                                  singleChapterNum: cond.singleChapterNum,
+                                  singleCharId: cond.singleCharId,
+                                  singleAction: cond.singleAction,
+                                  countCharId: cond.countCharId,
+                                  countAction: cond.countAction,
+                                  minCount: cond.minCount,
+                                  upToChapterNum: cond.upToChapterNum,
+                                  characters: normalizeCharacters(authoringCartridge.meta.characters || []),
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="text-sm text-zinc-300">支线情节（300字）</div>
+                          <textarea
+                            value={branchForm.sceneText}
+                            maxLength={300}
+                            onChange={(e) => setBranchForm(prev => ({ ...prev, sceneText: e.target.value.slice(0, 300) }))}
+                            className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm min-h-[120px]"
+                            placeholder="填写支线情节"
+                          />
+                          <div className="text-[10px] text-zinc-500">{countChars(branchForm.sceneText)} / 300</div>
+                        </div>
+
+                        <button
+                          onClick={async () => {
+                            if (!authoringStoryId || !branchForm.name) {
+                              showError('请填写支线名。');
+                              return;
+                            }
+                            const normalizedConditions = branchConditions.slice(0, 3).map((c) =>
+                              c.kind === 'single'
+                                ? {
+                                    type: 'single' as const,
+                                    single: {
+                                      chapterNum: Math.max(2, Math.min(6, c.singleChapterNum)),
+                                      charId: c.singleCharId,
+                                      action: c.singleAction,
+                                    },
+                                  }
+                                : {
+                                    type: 'count' as const,
+                                    count: {
+                                      charId: c.countCharId,
+                                      action: c.countAction,
+                                      minCount: Math.max(1, c.minCount),
+                                      upToChapterNum: Math.max(2, Math.min(6, c.upToChapterNum)),
+                                    },
+                                  }
+                            );
+                            const trigger = normalizedConditions[0];
+                            const branchDoc = {
+                              side: branchForm.side,
+                              tier: branchForm.tier,
+                              name: branchForm.name,
+                              hint: branchForm.hint || `留意${branchForm.name}`,
+                              desc: branchForm.sceneText.slice(0, 80) || branchForm.name,
+                              common: (branchForm as any).common || false,
+                              trigger,
+                              triggerGroups: normalizedConditions,
+                              inject: {
+                                mustHappen: branchForm.sceneText ? [branchForm.sceneText] : [],
+                                mustReveal: [],
+                                mustChange: [],
+                              },
+                              sceneText: branchForm.sceneText,
+                            };
+                            const newId = await createStoryBranch(db as any, authoringStoryId, branchDoc as any);
+                            showError('支线已创建。');
+                            const c = await getStoryCartridge(db as any, authoringStoryId);
+                            setAuthoringCartridge(c);
+                            setExpandedBranchId(newId);
+                            setSelectedBranchId(newId);
+                          }}
+                          className="px-4 py-2 bg-white text-black rounded-lg font-bold"
+                        >
+                          创建支线
+                        </button>
+                      </div>
+
+                      <div className="space-y-2">
+                        {(authoringCartridge.branches || []).map((b: any) => (
+                          <div
+                            key={b.id}
+                            className="bg-zinc-950/50 border border-zinc-800 rounded-xl"
+                          >
+                            <div className="p-3 flex items-center justify-between">
+                              <div className="font-bold text-zinc-200">{b.name} <span className="text-xs text-zinc-500">({b.side}/{b.tier})</span></div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => {
+                                    setExpandedBranchId(expandedBranchId === b.id ? null : b.id);
+                                    setSelectedBranchId(b.id);
+                                    const loadedConditions: ConditionForm[] = (b.triggerGroups && Array.isArray(b.triggerGroups) && b.triggerGroups.length > 0
+                                      ? b.triggerGroups
+                                      : [b.trigger || { type: 'single', single: { chapterNum: 2, charId: '', action: 'bless' } }])
+                                      .slice(0, 3)
+                                      .map((t: any) => t.type === 'count'
+                                        ? {
+                                            kind: 'count',
+                                            singleChapterNum: 2,
+                                            singleCharId: '',
+                                            singleAction: 'bless',
+                                            countCharId: t.count?.charId || '',
+                                            countAction: t.count?.action || 'bless',
+                                            minCount: t.count?.minCount || 1,
+                                            upToChapterNum: t.count?.upToChapterNum || 6,
+                                          }
+                                        : {
+                                            kind: 'single',
+                                            singleChapterNum: t.single?.chapterNum || 2,
+                                            singleCharId: t.single?.charId || '',
+                                            singleAction: t.single?.action || 'bless',
+                                            countCharId: '',
+                                            countAction: 'bless',
+                                            minCount: 1,
+                                            upToChapterNum: 6,
+                                          });
+                                    setBranchConditions(loadedConditions);
+                                    setBranchForm((prev: any) => ({
+                                      ...prev,
+                                      name: b.name || '',
+                                      side: b.side || 'left',
+                                      tier: b.tier || 'small',
+                                      hint: b.hint || '',
+                                      sceneText: b.sceneText || '',
+                                      common: Boolean(b.common),
+                                    }));
+                                  }}
+                                  className="p-2 bg-zinc-900 border border-zinc-800 rounded-lg"
+                                  title="展开/收起"
+                                >
+                                  {expandedBranchId === b.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    if (!authoringStoryId) return;
+                                    await deleteStoryBranch(db as any, authoringStoryId, b.id);
+                                    const c = await getStoryCartridge(db as any, authoringStoryId);
+                                    setAuthoringCartridge(c);
+                                    if (expandedBranchId === b.id) {
+                                      setExpandedBranchId(null);
+                                      setSelectedBranchId(null);
+                                    }
+                                    showError('支线已删除。');
+                                  }}
+                                  className="p-2 bg-zinc-900 border border-zinc-800 rounded-lg"
+                                  title="删除支线"
+                                >
+                                  <Trash2 className="w-4 h-4 text-rose-400" />
+                                </button>
+                              </div>
+                            </div>
+
+                            {expandedBranchId === b.id && (
+                              <div className="px-3 pb-3 space-y-3">
+                                <div className="text-xs text-zinc-500">在此展开编辑，确认或取消后自动收起。</div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                  <input value={branchForm.name} onChange={(e) => setBranchForm(prev => ({ ...prev, name: e.target.value }))} className="px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm" placeholder="支线名" />
+                                  <label className="flex items-center gap-2 text-xs text-zinc-400 px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg">
+                                    <input type="checkbox" checked={(branchForm as any).common || false} onChange={(e) => setBranchForm(prev => ({ ...(prev as any), common: e.target.checked }))} />
+                                    通用（未来可跨故事复用）
+                                  </label>
+                                  <select value={branchForm.side} onChange={(e) => setBranchForm(prev => ({ ...prev, side: e.target.value as any }))} className="px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm">
+                                    <option value="left">支线倾向：左</option>
+                                    <option value="right">支线倾向：右</option>
+                                  </select>
+                                  <select value={branchForm.tier} onChange={(e) => setBranchForm(prev => ({ ...prev, tier: e.target.value as any }))} className="px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm">
+                                    <option value="small">支线影响：小</option>
+                                    <option value="medium">支线影响：中</option>
+                                    <option value="large">支线影响：大</option>
+                                    <option value="hidden">支线影响：隐</option>
+                                  </select>
+                                  <input value={branchForm.hint} onChange={(e) => setBranchForm(prev => ({ ...prev, hint: e.target.value }))} className="px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm" placeholder="提示短句（可选）" />
+                                </div>
+                                <div className="space-y-3">
+                                  <div className="text-sm text-zinc-300">触发条件（全部达成才触发，最多3组）</div>
+                                  {branchConditions.map((cond, idx) => (
+                                    <div key={idx} className="bg-zinc-950/40 border border-zinc-800 rounded-xl p-3 space-y-3">
+                                      <div className="flex items-center justify-between">
+                                        <div className="text-xs text-zinc-500">条件组 {idx + 1}</div>
+                                        {branchConditions.length > 1 && (
+                                          <button onClick={() => setBranchConditions(prev => prev.filter((_, i) => i !== idx))} className="text-xs px-2 py-1 bg-zinc-900 border border-zinc-800 rounded">删除</button>
+                                        )}
+                                      </div>
+                                      <select value={cond.kind} onChange={(e) => setBranchConditions(prev => prev.map((c, i) => i === idx ? { ...c, kind: e.target.value as 'single' | 'count' } : c))} className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm">
+                                        <option value="single">指定章节+角色+干涉</option>
+                                        <option value="count">指定章节时累计次数达标</option>
+                                      </select>
+                                      {cond.kind === 'single' ? (
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                          <select value={cond.singleChapterNum} onChange={(e) => setBranchConditions(prev => prev.map((c, i) => i === idx ? { ...c, singleChapterNum: Number(e.target.value) } : c))} className="px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm">{chapterOptions.map(n => <option key={n} value={n}>第{n}章</option>)}</select>
+                                          <select value={cond.singleCharId} onChange={(e) => setBranchConditions(prev => prev.map((c, i) => i === idx ? { ...c, singleCharId: e.target.value } : c))} className="px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm"><option value="">选择角色</option>{normalizeCharacters(authoringCartridge.meta.characters || []).map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+                                          <select value={cond.singleAction} onChange={(e) => setBranchConditions(prev => prev.map((c, i) => i === idx ? { ...c, singleAction: e.target.value as 'bless' | 'curse' } : c))} className="px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm"><option value="bless">庇佑</option><option value="curse">磨难</option></select>
+                                        </div>
+                                      ) : (
+                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                          <select value={cond.upToChapterNum} onChange={(e) => setBranchConditions(prev => prev.map((c, i) => i === idx ? { ...c, upToChapterNum: Number(e.target.value) } : c))} className="px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm">{chapterOptions.map(n => <option key={n} value={n}>第{n}章结算</option>)}</select>
+                                          <select value={cond.countCharId} onChange={(e) => setBranchConditions(prev => prev.map((c, i) => i === idx ? { ...c, countCharId: e.target.value } : c))} className="px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm"><option value="">选择角色</option>{normalizeCharacters(authoringCartridge.meta.characters || []).map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+                                          <select value={cond.countAction} onChange={(e) => setBranchConditions(prev => prev.map((c, i) => i === idx ? { ...c, countAction: e.target.value as 'bless' | 'curse' } : c))} className="px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm"><option value="bless">庇佑累计</option><option value="curse">磨难累计</option></select>
+                                          <input type="number" min={1} value={cond.minCount} onChange={(e) => setBranchConditions(prev => prev.map((c, i) => i === idx ? { ...c, minCount: Math.max(1, Number(e.target.value) || 1) } : c))} className="px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm" placeholder="累计次数≥" />
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                  {branchConditions.length < 3 && (
+                                    <button onClick={() => setBranchConditions(prev => [...prev, { kind: 'single', singleChapterNum: 2, singleCharId: '', singleAction: 'bless', countCharId: '', countAction: 'bless', minCount: 1, upToChapterNum: 6 }])} className="px-2 py-1 bg-zinc-900 border border-zinc-800 rounded text-xs">+ 条件组</button>
+                                  )}
+                                  <div className="text-xs text-indigo-300 bg-indigo-500/10 border border-indigo-500/20 rounded-lg px-3 py-2">
+                                    {branchConditions.map((cond, idx) => (
+                                      <div key={idx}>{idx + 1}. {triggerPreview({ triggerType: cond.kind, singleChapterNum: cond.singleChapterNum, singleCharId: cond.singleCharId, singleAction: cond.singleAction, countCharId: cond.countCharId, countAction: cond.countAction, minCount: cond.minCount, upToChapterNum: cond.upToChapterNum, characters: normalizeCharacters(authoringCartridge.meta.characters || []) })}</div>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                  <div className="text-sm text-zinc-300">支线情节（300字）</div>
+                                  <textarea
+                                    value={branchForm.sceneText}
+                                    maxLength={300}
+                                    onChange={(e) => setBranchForm(prev => ({ ...prev, sceneText: e.target.value.slice(0, 300) }))}
+                                    className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm min-h-[110px]"
+                                  />
+                                  <div className="text-[10px] text-zinc-500">{countChars(branchForm.sceneText)} / 300</div>
+                                </div>
+
+                                <div className="flex gap-2 justify-end">
+                                  <button
+                                    onClick={() => {
+                                      setExpandedBranchId(null);
+                                      setSelectedBranchId(null);
+                                    }}
+                                    className="px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs flex items-center gap-2"
+                                  >
+                                    <X className="w-4 h-4" /> 取消
+                                  </button>
+                                  <button
+                                    onClick={async () => {
+                                      if (!authoringStoryId || !selectedBranchId) return;
+                                      const normalizedConditions = branchConditions.slice(0, 3).map((c) =>
+                                        c.kind === 'single'
+                                          ? {
+                                              type: 'single' as const,
+                                              single: {
+                                                chapterNum: Math.max(2, Math.min(6, c.singleChapterNum)),
+                                                charId: c.singleCharId,
+                                                action: c.singleAction,
+                                              },
+                                            }
+                                          : {
+                                              type: 'count' as const,
+                                              count: {
+                                                charId: c.countCharId,
+                                                action: c.countAction,
+                                                minCount: Math.max(1, c.minCount),
+                                                upToChapterNum: Math.max(2, Math.min(6, c.upToChapterNum)),
+                                              },
+                                            }
+                                      );
+                                      const trigger = normalizedConditions[0];
+                                      const patch = {
+                                        id: selectedBranchId,
+                                        side: branchForm.side,
+                                        tier: branchForm.tier,
+                                        name: branchForm.name,
+                                        hint: branchForm.hint || `留意${branchForm.name}`,
+                                        desc: branchForm.sceneText.slice(0, 80) || branchForm.name,
+                                        common: (branchForm as any).common || false,
+                                        trigger,
+                                        triggerGroups: normalizedConditions,
+                                        inject: {
+                                          mustHappen: branchForm.sceneText ? [branchForm.sceneText] : [],
+                                          mustReveal: [],
+                                          mustChange: [],
+                                        },
+                                        sceneText: branchForm.sceneText,
+                                      };
+                                      await upsertStoryBranch(db as any, authoringStoryId, selectedBranchId, patch as any);
+                                      const c = await getStoryCartridge(db as any, authoringStoryId);
+                                      setAuthoringCartridge(c);
+                                      showError('已更新支线。');
+                                      setExpandedBranchId(null);
+                                      setSelectedBranchId(null);
+                                    }}
+                                    className="px-3 py-2 bg-white text-black rounded-lg text-xs font-bold flex items-center gap-2"
+                                  >
+                                    <Check className="w-4 h-4" /> 确认
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (gameState === 'THEME_SELECTION') {
     return (
       <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center p-6 font-sans relative">
@@ -816,6 +2459,9 @@ export default function App() {
             <div className="text-xs text-zinc-500">已登录</div>
             <div className="text-sm font-medium text-zinc-300">{user.isAnonymous ? "游客用户" : user.displayName}</div>
           </div>
+          <button onClick={() => setGameState('STORY_SELECT')} className="px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-300 hover:border-zinc-600 transition-colors">
+            返回作品库
+          </button>
           <button onClick={handleLogout} className="p-2 bg-zinc-900 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
             <LogOut className="w-5 h-5 text-zinc-400" />
           </button>
@@ -898,12 +2544,13 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="z-[150]"
+              className="z-[1100]"
             >
               <LoadingOverlay 
                 progress={generationProgress} 
-                status={generationStatus} 
-                subtext="蝴蝶效应正在扩散，后续剧情正在被重新编织..."
+                status={interventionEffect === 'bless' ? "神迹降临" : interventionEffect === 'curse' ? "命运崩坏" : generationStatus} 
+                variant={interventionEffect || 'default'}
+                subtext={interventionEffect ? "世界线正在因你的意志而坍缩重构..." : "蝴蝶效应正在扩散，后续剧情正在被重新编织..."}
               />
             </motion.div>
           )}
@@ -918,6 +2565,49 @@ export default function App() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        <AnimatePresence>
+          {confirmationModal.isOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[400] flex items-center justify-center bg-black/90 backdrop-blur-xl p-4"
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 max-w-md w-full shadow-2xl space-y-6"
+              >
+                <div className="space-y-2">
+                  <h3 className="text-2xl font-bold text-white flex items-center gap-3">
+                    <AlertCircle className="w-6 h-6 text-amber-500" />
+                    {confirmationModal.title}
+                  </h3>
+                  <p className="text-zinc-400 leading-relaxed">
+                    {confirmationModal.message}
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <button
+                    onClick={() => setConfirmationModal(prev => ({ ...prev, isOpen: false }))}
+                    className="py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-medium transition-colors"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={confirmationModal.onConfirm}
+                    className="py-3 bg-white text-black hover:bg-zinc-200 rounded-xl font-bold transition-colors shadow-lg"
+                  >
+                    确认
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
           
           {/* Mobile Menu Button */}
@@ -945,7 +2635,7 @@ export default function App() {
           </div>
 
           {/* Left Sidebar: Status */}
-          <div className={`lg:col-span-4 space-y-6 ${isSidebarOpen ? 'fixed inset-0 z-[155] bg-zinc-950 p-6 overflow-y-auto' : 'hidden lg:block'}`}>
+          <div className={`lg:col-span-4 space-y-6 ${isSidebarOpen ? 'fixed inset-0 z-[210] bg-zinc-950 p-6 overflow-y-auto' : 'hidden lg:block relative z-[210]'}`}>
             <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
               <h2 className="text-2xl font-bold text-white mb-2">{blueprint.title}</h2>
               <div className="flex items-center gap-2 text-sm text-zinc-400 mb-6">
@@ -982,24 +2672,34 @@ export default function App() {
                 <div className="pt-2 grid grid-cols-2 gap-2">
                   <button
                     onClick={() => {
-                      if (confirm("确定要放弃当前的干涉，回到故事最初的状态吗？")) {
-                        restartSameStory();
-                      }
+                      setConfirmationModal({
+                        isOpen: true,
+                        title: '重新开始当前故事',
+                        message: '确定要放弃当前的干涉，回到故事最初的状态吗？',
+                        onConfirm: () => {
+                          restartSameStory();
+                          setConfirmationModal(prev => ({ ...prev, isOpen: false }));
+                        }
+                      });
                     }}
-                    disabled={isRewriting}
-                    className="py-2.5 bg-zinc-900 hover:bg-zinc-800 disabled:opacity-50 text-zinc-400 hover:text-white rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 border border-zinc-800"
+                    className="py-2.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 border border-zinc-800"
                   >
                     <RefreshCcw className={`w-3.5 h-3.5 ${isRewriting ? 'animate-spin' : ''}`} />
                     重新干涉
                   </button>
                   <button
                     onClick={() => {
-                      if (confirm("确定要彻底结束这个故事，重新选择主题开启全新篇章吗？")) {
-                        resetGame();
-                      }
+                      setConfirmationModal({
+                        isOpen: true,
+                        title: '开启全新故事',
+                        message: '确定要彻底结束这个故事，重新选择主题开启全新篇章吗？',
+                        onConfirm: () => {
+                          resetGame();
+                          setConfirmationModal(prev => ({ ...prev, isOpen: false }));
+                        }
+                      });
                     }}
-                    disabled={isRewriting}
-                    className="py-2.5 bg-zinc-900 hover:bg-zinc-800 disabled:opacity-50 text-zinc-400 hover:text-white rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 border border-zinc-800"
+                    className="py-2.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 border border-zinc-800"
                   >
                     <Star className="w-3.5 h-3.5 text-amber-500" />
                     全新故事
@@ -1162,13 +2862,21 @@ export default function App() {
                             });
                           }
                           return Array.from(uniqueChars.values()).map(char => {
-                            const branchForChar = blueprint.branches.find(b => b.condition_chapter === chapter.chapter_num && b.condition_char === char.id);
+                            const branchesForChar = blueprint.branches.filter(b => b.condition_chapter === chapter.chapter_num && b.condition_char === char.id);
                             return (
                               <div key={char.id} className="flex flex-col gap-2 p-3 bg-zinc-950 rounded-lg border border-zinc-800">
                                 <div>
                                   <div className="font-medium text-zinc-200">{char.name}</div>
-                                  {branchForChar && branchForChar.hint && (
-                                    <div className="text-xs text-zinc-500 mt-1">{branchForChar.hint}</div>
+                                  {branchesForChar.length > 0 && (
+                                    <div className="text-xs text-zinc-500 mt-1 space-y-1">
+                                      {branchesForChar
+                                        .map(b => b.hint)
+                                        .filter(Boolean)
+                                        .slice(0, 2)
+                                        .map((hint, idx) => (
+                                          <div key={idx}>{hint}</div>
+                                        ))}
+                                    </div>
                                   )}
                                 </div>
                                 <div className="flex gap-2">
@@ -1209,38 +2917,6 @@ export default function App() {
             </div>
           </div>
         </div>
-        
-        <AnimatePresence>
-          {interventionEffect && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className={`fixed inset-0 z-50 pointer-events-none flex items-center justify-center ${
-                interventionEffect === 'bless' ? 'bg-emerald-900/20' : 'bg-rose-900/20'
-              }`}
-            >
-              <motion.div
-                initial={{ scale: 0.9, opacity: 0, y: 20 }}
-                animate={{ scale: 1, opacity: 1, y: 0 }}
-                exit={{ scale: 1.1, opacity: 0, y: -20 }}
-                className={`text-4xl md:text-6xl font-black tracking-widest ${
-                  interventionEffect === 'bless' ? 'text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.8)]' : 'text-rose-500 drop-shadow-[0_0_15px_rgba(244,63,94,0.8)]'
-                }`}
-                style={{ textShadow: interventionEffect === 'curse' ? '2px 2px 0 #000, -2px -2px 0 #000' : 'none' }}
-              >
-                {interventionEffect === 'bless' ? '神迹降临，世界线变动...' : '命运崩坏，世界线变动...'}
-              </motion.div>
-              {interventionEffect === 'curse' && (
-                <motion.div
-                  animate={{ opacity: [0, 0.1, 0, 0.3, 0] }}
-                  transition={{ repeat: Infinity, duration: 0.2, ease: "linear" }}
-                  className="absolute inset-0 bg-red-500 mix-blend-overlay pointer-events-none"
-                />
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
     );
   }
@@ -1255,24 +2931,35 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
+              role="presentation"
               className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+              onClick={(e) => e.stopPropagation()}
             >
               <motion.div 
                 initial={{ scale: 0.9, y: 20 }}
                 animate={{ scale: 1, y: 0 }}
                 exit={{ scale: 0.9, y: 20 }}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="summary-modal-title"
+                onClick={(e) => e.stopPropagation()}
                 className="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 md:p-8 max-w-lg w-[calc(100%-2rem)] shadow-2xl flex flex-col items-center text-center space-y-6 relative overflow-hidden"
               >
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
                 
                 <div className="space-y-1 text-center">
-                  <h2 className="text-3xl font-bold text-white uppercase tracking-tighter">命运已定</h2>
+                  <h2 id="summary-modal-title" className="text-3xl font-bold text-white uppercase tracking-tighter">命运已定</h2>
+                  <div className="text-xs text-zinc-500 uppercase tracking-widest">结局类别</div>
                   <div className={`text-lg font-black ${
                     uiFeedback.endingLabel === '秩序律' ? 'text-indigo-400' : 
                     uiFeedback.endingLabel === '混沌终' ? 'text-rose-500' : 
                     'text-zinc-400'
                   }`}>
-                    {`「 ${uiFeedback.endingLabel === '均衡道' ? '中立' : uiFeedback.endingLabel === '秩序律' ? '左' : '右'}之结局：${uiFeedback.endingLabel} 」`}
+                    {summaryEndingCategoryLabel({
+                      endingMode: blueprint.endingMode,
+                      endingNames: blueprint.endingNames,
+                      endingLabel: uiFeedback.endingLabel,
+                    })}
                   </div>
                 </div>
                 
@@ -1341,10 +3028,61 @@ export default function App() {
           )}
         </AnimatePresence>
 
+        <AnimatePresence>
+          {confirmationModal.isOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[400] flex items-center justify-center bg-black/90 backdrop-blur-xl p-4"
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 max-w-md w-full shadow-2xl space-y-6"
+              >
+                <div className="space-y-2">
+                  <h3 className="text-2xl font-bold text-white flex items-center gap-3">
+                    <AlertCircle className="w-6 h-6 text-amber-500" />
+                    {confirmationModal.title}
+                  </h3>
+                  <p className="text-zinc-400 leading-relaxed">
+                    {confirmationModal.message}
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <button
+                    onClick={() => setConfirmationModal(prev => ({ ...prev, isOpen: false }))}
+                    className="py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-medium transition-colors"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={confirmationModal.onConfirm}
+                    className="py-3 bg-white text-black hover:bg-zinc-200 rounded-xl font-bold transition-colors shadow-lg"
+                  >
+                    确认
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <div className="max-w-3xl mx-auto space-y-8">
           <div className="text-center space-y-4">
             <h1 className="text-4xl font-bold text-white">{blueprint.title}</h1>
             <p className="text-zinc-400">命运已定，这是你创造的专属故事。</p>
+            {!showSummaryModal && (
+              <button
+                type="button"
+                onClick={() => setShowSummaryModal(true)}
+                className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold text-sm shadow-lg shadow-indigo-500/20"
+              >
+                查看命运总结
+              </button>
+            )}
           </div>
 
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-8 space-y-6">
@@ -1395,36 +3133,58 @@ export default function App() {
               ))}
             </div>
 
-            {/* Conclusion */}
-            <div className="mt-12 pt-8 border-t border-zinc-800 text-center">
-              {isGeneratingConclusion ? (
-                <div className="flex items-center justify-center gap-2 text-zinc-500">
-                  <RefreshCcw className="w-4 h-4 animate-spin" />
-                  <span>正在凝结命运的结语...</span>
-                </div>
-              ) : (
-                <motion.div 
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="text-xl md:text-2xl font-serif italic text-zinc-300"
-                >
-                  "{storyConclusion}"
-                </motion.div>
-              )}
-            </div>
+            {/* 结语：手动结束游玩时在档案页保留一份；三次干涉自动进入时仅在弹窗中展示，避免与「查看命运总结」重复 */}
+            {summaryEntrySource !== 'auto_interventions' && (
+              <div className="mt-12 pt-8 border-t border-zinc-800 text-center">
+                {isGeneratingConclusion ? (
+                  <div className="flex items-center justify-center gap-2 text-zinc-500">
+                    <RefreshCcw className="w-4 h-4 animate-spin" />
+                    <span>正在凝结命运的结语...</span>
+                  </div>
+                ) : (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-xl md:text-2xl font-serif italic text-zinc-300"
+                  >
+                    "{storyConclusion}"
+                  </motion.div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="flex justify-center pt-8 gap-4">
             <button
-              onClick={restartSameStory}
+              onClick={() => {
+                setConfirmationModal({
+                  isOpen: true,
+                  title: '再次挑战命运',
+                  message: '确定要放弃当前的干涉结果，回到故事最初的状态吗？',
+                  onConfirm: () => {
+                    restartSameStory();
+                    setConfirmationModal(prev => ({ ...prev, isOpen: false }));
+                  }
+                });
+              }}
               className="px-8 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
             >
               <RefreshCcw className="w-5 h-5" />
               重新干涉
             </button>
             <button
-              onClick={resetGame}
-              className="px-8 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+              onClick={() => {
+                setConfirmationModal({
+                  isOpen: true,
+                  title: '书写新传奇',
+                  message: '确定要彻底结束这段冒险，去开启全新的主题故事吗？',
+                  onConfirm: () => {
+                    resetGame();
+                    setConfirmationModal(prev => ({ ...prev, isOpen: false }));
+                  }
+                });
+              }}
+              className="px-8 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2 shadow-lg shadow-indigo-500/20"
             >
               <Star className="w-5 h-5" />
               全新故事

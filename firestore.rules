@@ -100,7 +100,28 @@ service cloud.firestore {
              (!('intervenedChapters' in data) || (data.intervenedChapters is list && data.intervenedChapters.size() <= 10)) &&
              (!('currentChapters' in data) || (data.currentChapters is list)) &&
              (!('characterStatuses' in data) || (data.characterStatuses is map)) &&
-             (!('unlockedBranches' in data) || (data.unlockedBranches is list));
+             (!('unlockedBranches' in data) || (data.unlockedBranches is list)) &&
+             (!('storyId' in data) || (data.storyId is string)) &&
+             (!('interventionHistory' in data) || (data.interventionHistory is list));
+    }
+
+    function isValidStoryMeta(data) {
+      return data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.main_axis is string && data.main_axis.size() > 0 && data.main_axis.size() < 5000 &&
+             data.tags is list && data.tags.size() <= 20 &&
+             data.authorId is string &&
+             data.visibility in ['public', 'unlisted', 'private'] &&
+             (isValidDateString(data.createdAt) || isValidTimestamp(data.createdAt)) &&
+             (isValidDateString(data.updatedAt) || isValidTimestamp(data.updatedAt)) &&
+             data.version is number &&
+             data.defaults is map &&
+             data.characters is list && data.characters.size() <= 10 &&
+             (!('endingMode' in data) || data.endingMode in ['dual', 'single']) &&
+             (!('endingNames' in data) || (
+               data.endingNames is map &&
+               (!('left' in data.endingNames) || (data.endingNames.left is string && data.endingNames.left.size() <= 5)) &&
+               (!('right' in data.endingNames) || (data.endingNames.right is string && data.endingNames.right.size() <= 5))
+             ));
     }
 
     // ===============================================================
@@ -119,6 +140,31 @@ service cloud.firestore {
       allow create: if isOwner(sessionId) && isValidSession(request.resource.data);
       allow update: if isOwner(sessionId) && isValidSession(request.resource.data);
       allow delete: if isOwner(sessionId);
+    }
+
+    // ===============================================================
+    // Stories ("Cartridges")
+    // ===============================================================
+    match /stories/{storyId} {
+      // TEMP/MVP: allow any authenticated user to read stories so the platform can run.
+      // Keep writes restricted to the story author.
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && uidUnchanged() && isValidStoryMeta(request.resource.data) && request.resource.data.authorId == request.auth.uid;
+      allow update: if isAuthenticated() && request.resource.data.authorId == request.auth.uid && isValidStoryMeta(request.resource.data);
+      allow delete: if isAuthenticated() && resource.data.authorId == request.auth.uid;
+
+      match /chapters/{chapterNum} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated() && get(/databases/$(database)/documents/stories/$(storyId)).data.authorId == request.auth.uid;
+      }
+      match /endings/{endingId} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated() && get(/databases/$(database)/documents/stories/$(storyId)).data.authorId == request.auth.uid;
+      }
+      match /branches/{branchId} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated() && get(/databases/$(database)/documents/stories/$(storyId)).data.authorId == request.auth.uid;
+      }
     }
 
     // Default deny
