@@ -359,14 +359,14 @@ export default function App() {
 
   // Lazy flesh out chapters
   useEffect(() => {
-    if (gameState !== 'PLAYING' || isRewriting) return;
+    if (!blueprint || gameState !== 'PLAYING' || isRewriting) return;
     
     // Find chapters that have index but no content (except current generation in progress)
     const incompleteChapter = chapters.find(c => !c.text && c.summary);
     if (incompleteChapter && !fleshingOutChapters[incompleteChapter.chapter_num]) {
       fleshOutChapter(incompleteChapter.chapter_num);
     }
-  }, [chapters, gameState, isRewriting]);
+  }, [chapters, gameState, isRewriting, blueprint]);
 
   const fleshOutChapter = async (targetChapterNum: number) => {
     setFleshingOutChapters(prev => ({ ...prev, [targetChapterNum]: true }));
@@ -1101,9 +1101,17 @@ export default function App() {
                 </div>
                 
                 <div className="text-zinc-300 leading-relaxed space-y-4">
-                  {chapter.text.split('\n').map((paragraph, idx) => (
-                    paragraph.trim() ? <p key={idx}>{renderParagraphWithHighlights(paragraph, blueprint.characters)}</p> : null
-                  ))}
+                  {chapter.text ? (
+                    chapter.text.split('\n').map((paragraph, idx) => (
+                      paragraph.trim() ? <p key={idx}>{renderParagraphWithHighlights(paragraph, blueprint.characters)}</p> : null
+                    ))
+                  ) : (
+                    <div className="flex flex-col items-center justify-center p-8 bg-zinc-950 rounded-lg border border-zinc-800">
+                      <RefreshCcw className="w-6 h-6 text-indigo-500 animate-spin mb-3" />
+                      <p className="text-zinc-400 font-medium mb-1">正在撰写本章内容...</p>
+                      <p className="text-xs text-zinc-600">剧情干要：{chapter.summary}</p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Intervention Button Logic */}
@@ -1375,9 +1383,13 @@ export default function App() {
                     第 {c.chapter_num} 章 {c.chapter_num === 7 && " (第一篇章结局)"}
                   </h3>
                   <div className="text-zinc-300 leading-relaxed space-y-4">
-                    {c.text.split('\n').map((paragraph, idx) => (
-                      paragraph.trim() ? <p key={idx}>{renderParagraphWithHighlights(paragraph, blueprint.characters)}</p> : null
-                    ))}
+                    {c.text ? (
+                      c.text.split('\n').map((paragraph, idx) => (
+                        paragraph.trim() ? <p key={idx}>{renderParagraphWithHighlights(paragraph, blueprint.characters)}</p> : null
+                      ))
+                    ) : (
+                      <p className="text-zinc-500 italic">内容缺失 ({c.summary})</p>
+                    )}
                   </div>
                 </div>
               ))}
