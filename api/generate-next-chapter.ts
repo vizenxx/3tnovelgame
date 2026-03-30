@@ -14,7 +14,7 @@ const chapterSchema = {
   required: ["chapter_num", "text", "present_characters"]
 };
 
-export default async function (req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
@@ -51,7 +51,10 @@ export default async function (req: VercelRequest, res: VercelResponse) {
 
     res.status(200).json(JSON.parse(response.text || '{}'));
   } catch (error: any) {
-    console.error(error);
-    res.status(500).json({ error: error.message || '生成章节失败' });
+    console.error("API Error: ", error);
+    res.status(500).json({ 
+      error: error.message || '生成章节失败',
+      stack: error.stack || String(error)
+    });
   }
 }
