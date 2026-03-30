@@ -427,6 +427,8 @@ export default function App() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [naturalChapters, setNaturalChapters] = useState<Chapter[]>([]);
+  // 用于“重新干涉”回滚到干涉前的初始剧情版本
+  const [initialNaturalChapters, setInitialNaturalChapters] = useState<Chapter[]>([]);
   /** 总结页/弹窗打开后，禁止未完成的章节生成回写 chapters，避免干扰总结 UI */
   const suppressChapterWritesRef = useRef(false);
   const [confirmationModal, setConfirmationModal] = useState<{
@@ -610,7 +612,11 @@ export default function App() {
     const unsubscribe = onSnapshot(sessionRef, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data();
-        const gs = data.gameState === 'THEME_SELECTION' ? 'STORY_SELECT' : data.gameState;
+        const gs = data.gameState === 'THEME_SELECTION'
+          ? 'STORY_SELECT'
+          : data.gameState === 'SUMMARY'
+            ? 'PLAYING'
+            : data.gameState;
         setGameState(gs);
         if (data.gameState === 'THEME_SELECTION' && user) {
           updateDoc(sessionRef, { gameState: 'STORY_SELECT', updatedAt: new Date().toISOString() }).catch(() => {});
@@ -732,8 +738,8 @@ export default function App() {
   }, [chapters, gameState, isRewriting, blueprint]);
 
   useEffect(() => {
-    suppressChapterWritesRef.current = gameState === 'SUMMARY';
-  }, [gameState]);
+    suppressChapterWritesRef.current = showSummaryModal || gameState === 'SUMMARY';
+  }, [gameState, showSummaryModal]);
 
   const fleshOutChapter = async (targetChapterNum: number) => {
     if (suppressChapterWritesRef.current) {
@@ -961,6 +967,16 @@ export default function App() {
       setBlueprint(data);
       setChapters(data.chapters);
       setNaturalChapters(data.chapters);
+      // 记录干涉前的“初始版本”，用于“重新干涉”回滚
+      setInitialNaturalChapters(
+        (data.chapters || []).map((c: any) => ({
+          ...c,
+          present_characters: Array.isArray(c.present_characters) ? [...c.present_characters] : [],
+          title: c.title || '',
+          summary: c.summary || '',
+          text: c.text || '',
+        }))
+      );
       setCharacterStatuses(initialStatuses);
       setInterventionsLeft(3);
       setEndingValue(0);
@@ -1086,6 +1102,16 @@ export default function App() {
       setBlueprint(bp);
       setChapters(bp.chapters);
       setNaturalChapters(bp.chapters);
+      // 记录干涉前的“初始版本”，用于“重新干涉”回滚
+      setInitialNaturalChapters(
+        (bp.chapters || []).map((c: any) => ({
+          ...c,
+          present_characters: Array.isArray(c.present_characters) ? [...c.present_characters] : [],
+          title: c.title || '',
+          summary: c.summary || '',
+          text: c.text || '',
+        }))
+      );
       setActiveStoryId(storyId);
       setInterventionHistory(initialHistory);
       setUnlockedBranches(initialUnlocked);
@@ -1365,7 +1391,6 @@ export default function App() {
             unlockedBranches: newUnlockedBranches,
             uiFeedback: data.uiFeedback || uiFeedback,
             updatedAt: new Date().toISOString(),
-            ...(enteringSummaryFromLastIntervention ? { gameState: 'SUMMARY' } : {}),
           });
         } catch (error) {
           handleFirestoreError(error, OperationType.UPDATE, `sessions/${user.uid}`);
@@ -1378,7 +1403,6 @@ export default function App() {
       
       if (newInterventionsLeft === 0) {
         setSummaryEntrySource('auto_interventions');
-        setGameState('SUMMARY');
         setShowSummaryModal(true);
         generateConclusion(updatedChapters);
       }
@@ -1398,12 +1422,11 @@ export default function App() {
     suppressChapterWritesRef.current = true;
     setFleshingOutChapters({});
     setSummaryEntrySource('manual');
-    setGameState('SUMMARY');
     setShowSummaryModal(true);
     generateConclusion(chapters);
     if (user) {
       updateDoc(doc(db, 'sessions', user.uid), {
-        gameState: 'SUMMARY',
+        gameState: 'PLAYING',
         updatedAt: new Date().toISOString(),
       }).catch(() => {});
     }
@@ -1449,8 +1472,11 @@ export default function App() {
   const restartSameStory = async () => {
     if (!blueprint) return;
 
+    const baseChapters = (initialNaturalChapters && initialNaturalChapters.length > 0) ? initialNaturalChapters : naturalChapters;
+
     // Immediate local reset for responsiveness
-    setChapters(naturalChapters);
+    setChapters(baseChapters);
+    setNaturalChapters(baseChapters);
     setUnlockedBranches([]);
     setInterventionsLeft(3);
     setIntervenedChapters([]);
@@ -1478,7 +1504,8 @@ export default function App() {
       try {
         await updateDoc(doc(db, 'sessions', user.uid), {
           gameState: 'PLAYING',
-          currentChapters: naturalChapters,
+          currentChapters: baseChapters,
+          naturalChapters: baseChapters,
           unlockedBranches: [],
           interventionsLeft: 3,
           intervenedChapters: [],
@@ -2566,7 +2593,7 @@ export default function App() {
 
   if (gameState === 'PLAYING' && blueprint) {
     return (
-      <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6 md:p-12 font-sans relative">
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6 md:p-12 font-sans relative pb-28">
         <AnimatePresence>
           {isRewriting && (
             <motion.div
@@ -2637,6 +2664,105 @@ export default function App() {
           )}
         </AnimatePresence>
 
+        {/* Summary modal (no separate SUMMARY page; always overlays on PLAYING) */}
+        <AnimatePresence>
+          {showSummaryModal && blueprint && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              role="presentation"
+              className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <motion.div
+                initial={{ scale: 0.9, y: 20 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ scale: 0.9, y: 20 }}
+                role="dialog"
+                aria-modal="true"
+                className="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-lg w-[calc(100%-2rem)] shadow-2xl flex flex-col items-center text-center space-y-6 relative overflow-hidden"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
+
+                <div className="space-y-1 text-center">
+                  <h2 className="text-3xl font-bold text-white uppercase tracking-tighter">命运已定</h2>
+                  <div className="text-xs text-zinc-500 uppercase tracking-widest">结局类别</div>
+                  <div className={`text-lg font-black ${
+                    uiFeedback.endingLabel === '秩序律' ? 'text-indigo-400' :
+                    uiFeedback.endingLabel === '混沌终' ? 'text-rose-500' :
+                    'text-zinc-400'
+                  }`}>
+                    {summaryEndingCategoryLabel({
+                      endingMode: blueprint.endingMode,
+                      endingNames: blueprint.endingNames,
+                      endingLabel: uiFeedback.endingLabel,
+                    })}
+                  </div>
+                </div>
+
+                <div className="w-full space-y-4">
+                  <div className="bg-zinc-950/50 rounded-2xl p-5 border border-zinc-800 space-y-4 shadow-inner">
+                    <div className="flex items-center gap-4">
+                      <div className="flex-1 space-y-1">
+                        <div className="flex justify-between text-[10px] font-bold">
+                          <span className="text-indigo-400">左倾</span>
+                          <span className="text-indigo-200">{uiFeedback.leftProgress.toFixed(0)}%</span>
+                        </div>
+                        <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                          <div className="h-full bg-indigo-500" style={{ width: `${uiFeedback.leftProgress}%` }} />
+                        </div>
+                      </div>
+                      <div className="flex-1 space-y-1 text-right">
+                        <div className="flex justify-between text-[10px] font-bold">
+                          <span className="text-rose-200">{uiFeedback.rightProgress.toFixed(0)}%</span>
+                          <span className="text-rose-400">右倾</span>
+                        </div>
+                        <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                          <div className="h-full bg-rose-500" style={{ width: `${uiFeedback.rightProgress}%` }} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-zinc-950/50 rounded-xl p-3 border border-zinc-800 text-center">
+                      <div className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">支线解锁</div>
+                      <div className="text-xl font-bold text-indigo-400">{unlockedBranches.length} / {blueprint.branches.length}</div>
+                    </div>
+                    <div className="bg-zinc-950/50 rounded-xl p-3 border border-zinc-800 text-center">
+                      <div className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">干涉次数</div>
+                      <div className="text-xl font-bold text-zinc-300">{3 - interventionsLeft} / 3</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="min-h-[80px] flex items-center justify-center w-full">
+                  {isGeneratingConclusion ? (
+                    <div className="flex flex-col items-center gap-3 text-zinc-500">
+                      <RefreshCcw className="w-6 h-6 animate-spin text-indigo-500" />
+                      <span className="text-sm">正在凝结命运的结语...</span>
+                    </div>
+                  ) : (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-xl font-serif italic text-zinc-200 leading-relaxed">
+                      "{storyConclusion}"
+                    </motion.div>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => setShowSummaryModal(false)}
+                  disabled={isGeneratingConclusion}
+                  className="w-full py-3 bg-white text-black hover:bg-zinc-200 disabled:opacity-50 disabled:hover:bg-white rounded-lg font-bold text-lg transition-colors"
+                >
+                  查看故事档案
+                </button>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
           
           {/* Mobile Menu Button */}
@@ -2647,21 +2773,7 @@ export default function App() {
             <Menu className="w-6 h-6 text-white" />
           </button>
 
-          {/* Mobile HUD */}
-          <div className="lg:hidden fixed bottom-4 left-4 right-4 z-[200] bg-zinc-900/90 backdrop-blur-md border border-zinc-700 rounded-xl p-3 shadow-xl space-y-2">
-            <div className="flex items-center justify-between text-xs text-zinc-400">
-              <span className="flex items-center gap-1"><Zap className="w-3 h-3 text-indigo-400" /> 干涉次数</span>
-              <span className="font-mono text-zinc-200">{interventionsLeft} / 3</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] text-indigo-400 shrink-0">左倾</span>
-              <div className="flex-1 h-2 bg-zinc-800 rounded-full overflow-hidden flex">
-                <div className="h-full bg-indigo-500" style={{ width: `${uiFeedback.leftProgress}%` }} />
-                <div className="h-full bg-rose-500" style={{ width: `${uiFeedback.rightProgress}%` }} />
-              </div>
-              <span className="text-[10px] text-rose-400 shrink-0">右倾</span>
-            </div>
-          </div>
+          {/* Sticky bottom controls replace Mobile HUD */}
 
           {/* Left Sidebar: Status */}
           <div className={`lg:col-span-4 space-y-6 ${isSidebarOpen ? 'fixed inset-0 z-[210] bg-zinc-950 p-6 overflow-y-auto' : 'hidden lg:block relative z-[210]'}`}>
@@ -2698,7 +2810,7 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="pt-2 grid grid-cols-2 gap-2">
+                <div className="hidden pt-2 grid grid-cols-2 gap-2">
                   <button
                     onClick={() => {
                       setConfirmationModal({
@@ -2935,14 +3047,99 @@ export default function App() {
               </div>
             ))}
 
-            <div className="pt-6 pb-12 flex justify-center">
-              <button
-                onClick={handleEndGame}
-                disabled={isRewriting}
-                className="px-8 py-3 bg-white text-black hover:bg-zinc-200 disabled:opacity-50 rounded-lg font-bold text-lg transition-colors shadow-[0_0_30px_rgba(255,255,255,0.2)]"
-              >
-                结束游玩 / 查看总结
-              </button>
+            {/* Sticky bottom controls */}
+            <div className="fixed bottom-0 left-0 right-0 z-[250] bg-zinc-950/90 backdrop-blur-md border-t border-zinc-800 px-4 py-3">
+              <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex flex-col">
+                    <div className="text-[10px] text-zinc-500 uppercase tracking-widest">干涉次数</div>
+                    <div className="font-mono text-indigo-200">{interventionsLeft} / 3</div>
+                  </div>
+                  <div className="hidden sm:flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-indigo-400">左倾</span>
+                      <div className="w-24 h-2 bg-zinc-800 rounded-full overflow-hidden flex">
+                        <div className="h-full bg-indigo-500" style={{ width: `${uiFeedback.leftProgress}%` }} />
+                        <div className="h-full bg-rose-500" style={{ width: `${uiFeedback.rightProgress}%` }} />
+                      </div>
+                    </div>
+                    <div className="text-[10px] text-rose-300">右倾 {uiFeedback.rightProgress.toFixed(0)}%</div>
+                  </div>
+                  <div className="sm:hidden w-24 h-2 bg-zinc-800 rounded-full overflow-hidden flex">
+                    <div className="h-full bg-indigo-500" style={{ width: `${uiFeedback.leftProgress}%` }} />
+                    <div className="h-full bg-rose-500" style={{ width: `${uiFeedback.rightProgress}%` }} />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setConfirmationModal({
+                        isOpen: true,
+                        title: '重新开始当前故事',
+                        message: '确定要放弃当前的干涉，回到故事最初的状态吗？',
+                        onConfirm: () => {
+                          restartSameStory();
+                          setConfirmationModal(prev => ({ ...prev, isOpen: false }));
+                        }
+                      });
+                    }}
+                    disabled={isRewriting}
+                    className="px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-200 disabled:opacity-50 flex items-center gap-2"
+                  >
+                    <RefreshCcw className={`w-4 h-4 ${isRewriting ? 'animate-spin' : ''}`} />
+                    <span className="hidden sm:inline text-sm font-medium">重新干涉</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setConfirmationModal({
+                        isOpen: true,
+                        title: '开启全新故事',
+                        message: '确定要彻底结束这个故事，重新选择主题开启全新篇章吗？',
+                        onConfirm: () => {
+                          resetGame();
+                          setConfirmationModal(prev => ({ ...prev, isOpen: false }));
+                        }
+                      });
+                    }}
+                    disabled={isRewriting}
+                    className="px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-200 disabled:opacity-50 flex items-center gap-2"
+                  >
+                    <Star className="w-4 h-4 text-amber-500" />
+                    <span className="hidden sm:inline text-sm font-medium">全新故事</span>
+                  </button>
+
+                  {interventionsLeft > 0 ? (
+                    <button
+                      onClick={handleEndGame}
+                      disabled={isRewriting}
+                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold disabled:opacity-50 flex items-center gap-2"
+                    >
+                      <BookOpen className="w-4 h-4" />
+                      <span className="hidden sm:inline">直接总结</span>
+                      <span className="sm:hidden">总结</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        suppressChapterWritesRef.current = true;
+                        setSummaryEntrySource('auto_interventions');
+                        setShowSummaryModal(true);
+                        if (!storyConclusion && !isGeneratingConclusion) {
+                          generateConclusion(chapters);
+                        }
+                      }}
+                      disabled={isRewriting}
+                      className="px-4 py-2 bg-white text-black hover:bg-zinc-200 rounded-lg font-bold disabled:opacity-50 flex items-center gap-2"
+                    >
+                      <Check className="w-4 h-4" />
+                      <span className="hidden sm:inline">查看命运总结</span>
+                      <span className="sm:hidden">查看</span>
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -2961,7 +3158,7 @@ export default function App() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               role="presentation"
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+              className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
               onClick={(e) => e.stopPropagation()}
             >
               <motion.div 
