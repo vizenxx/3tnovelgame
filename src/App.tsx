@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy } from 'lucide-react';
 import { auth, db } from './firebase';
@@ -427,6 +427,8 @@ export default function App() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [naturalChapters, setNaturalChapters] = useState<Chapter[]>([]);
+  /** 总结页/弹窗打开后，禁止未完成的章节生成回写 chapters，避免干扰总结 UI */
+  const suppressChapterWritesRef = useRef(false);
   const [confirmationModal, setConfirmationModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -720,7 +722,7 @@ export default function App() {
 
   // Lazy flesh out chapters
   useEffect(() => {
-    if (!blueprint || gameState !== 'PLAYING' || isRewriting) return;
+    if (!blueprint || gameState !== 'PLAYING' || isRewriting || suppressChapterWritesRef.current) return;
     
     // Find chapters that have index but no content (except current generation in progress)
     const incompleteChapter = chapters.find(c => !c.text && c.summary);
@@ -729,10 +731,19 @@ export default function App() {
     }
   }, [chapters, gameState, isRewriting, blueprint]);
 
+  useEffect(() => {
+    suppressChapterWritesRef.current = gameState === 'SUMMARY';
+  }, [gameState]);
+
   const fleshOutChapter = async (targetChapterNum: number) => {
+    if (suppressChapterWritesRef.current) {
+      setFleshingOutChapters(prev => ({ ...prev, [targetChapterNum]: false }));
+      return;
+    }
     // Check if we already have a natural version of this chapter
     const naturalVersion = naturalChapters.find(c => c.chapter_num === targetChapterNum);
     if (naturalVersion && naturalVersion.text) {
+      if (suppressChapterWritesRef.current) return;
       setChapters(prev => prev.map(c => c.chapter_num === targetChapterNum ? { ...c, text: naturalVersion.text } : c));
       return;
     }
@@ -756,6 +767,9 @@ export default function App() {
       if (!newText || typeof newText !== 'string' || newText.trim().length < 50) {
         throw new Error("章节内容为空或过短");
       }
+      if (suppressChapterWritesRef.current) {
+        return;
+      }
       const updatedChapters = chapters.map(c => c.chapter_num === targetChapterNum ? { ...c, text: newText } : c);
       setChapters(updatedChapters);
 
@@ -776,7 +790,7 @@ export default function App() {
       }
       setNaturalChapters(updatedNatural);
       
-      if (user) {
+      if (user && !suppressChapterWritesRef.current) {
         await updateDoc(doc(db, 'sessions', user.uid), {
           currentChapters: updatedChapters,
           naturalChapters: updatedNatural,
@@ -785,7 +799,9 @@ export default function App() {
       }
     } catch (error) {
       console.error(error);
-      showError(`第 ${targetChapterNum} 章生成失败，可稍后重试。`);
+      if (!suppressChapterWritesRef.current) {
+        showError(`第 ${targetChapterNum} 章生成失败，可稍后重试。`);
+      }
     } finally {
       setFleshingOutChapters(prev => ({ ...prev, [targetChapterNum]: false }));
     }
@@ -1330,6 +1346,12 @@ export default function App() {
       const newIntervenedChapters = [...intervenedChapters.filter(c => c < chapterNum), chapterNum];
       const newHistory = [...interventionHistory, { chapterNum, charId, action }];
       
+      const enteringSummaryFromLastIntervention = newInterventionsLeft === 0;
+      if (enteringSummaryFromLastIntervention) {
+        suppressChapterWritesRef.current = true;
+        setFleshingOutChapters({});
+      }
+
       if (user) {
         try {
           await updateDoc(doc(db, 'sessions', user.uid), {
@@ -1342,7 +1364,8 @@ export default function App() {
             endingValue: newEndingValue,
             unlockedBranches: newUnlockedBranches,
             uiFeedback: data.uiFeedback || uiFeedback,
-            updatedAt: new Date().toISOString()
+            updatedAt: new Date().toISOString(),
+            ...(enteringSummaryFromLastIntervention ? { gameState: 'SUMMARY' } : {}),
           });
         } catch (error) {
           handleFirestoreError(error, OperationType.UPDATE, `sessions/${user.uid}`);
@@ -1354,12 +1377,10 @@ export default function App() {
       setInterventionHistory(newHistory);
       
       if (newInterventionsLeft === 0) {
-        setTimeout(() => {
-          setSummaryEntrySource('auto_interventions');
-          setGameState('SUMMARY');
-          setShowSummaryModal(true);
-          generateConclusion(updatedChapters);
-        }, 2000);
+        setSummaryEntrySource('auto_interventions');
+        setGameState('SUMMARY');
+        setShowSummaryModal(true);
+        generateConclusion(updatedChapters);
       }
       
     } catch (error: any) {
@@ -1374,10 +1395,18 @@ export default function App() {
   };
 
   const handleEndGame = () => {
+    suppressChapterWritesRef.current = true;
+    setFleshingOutChapters({});
     setSummaryEntrySource('manual');
     setGameState('SUMMARY');
     setShowSummaryModal(true);
     generateConclusion(chapters);
+    if (user) {
+      updateDoc(doc(db, 'sessions', user.uid), {
+        gameState: 'SUMMARY',
+        updatedAt: new Date().toISOString(),
+      }).catch(() => {});
+    }
   };
 
   const resetGame = async () => {
