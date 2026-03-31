@@ -108,7 +108,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       currentEndingValue, 
       currentUnlockedBranches,
       targetWordCount,
-      interventionHistory
+      interventionHistory,
+      worldState
     } = req.body;
 
     const history: Array<{ chapterNum: number; charId: string; action: string }> = Array.isArray(interventionHistory) ? interventionHistory : [];
@@ -165,17 +166,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const evBefore = Number(currentEndingValue) || 0;
     const evAfter = newEndingValue;
     
+    // 直接前置剧情，作文风锚点
+    const prevChapterText = chapters.find((c: any) => c.chapter_num === chapterNum - 1)?.text || '';
+
+    // 构建 World State 上下文
+    let worldStatePrompt = '';
+    if (worldState && worldState.canonical) {
+      worldStatePrompt = `故事主轴（主题大方向参考）：${blueprint.main_axis || '（未提供）'}
+
+故事基准（硬约束，优先级最高，不可违背）：
+人物：${JSON.stringify(worldState.canonical.characters || [])}
+物件：${JSON.stringify(worldState.canonical.objects || [])}
+场景：${JSON.stringify(worldState.canonical.scenes || [])}
+核心规则：${(worldState.canonical.core_rules || []).join('；')}
+
+干涉偏移记录（软参考，当前权重 ${Math.round((worldState.deltaWeight || 0) * 100)}%）：
+${(worldState.deltas || []).map((d: any) => d.characters_changed?.map((c: any) => c.delta_description).join('；')).filter(Boolean).join('\n') || '无显著偏移。'}
+
+结尾方向引导：${worldState.endingDirection || 'neutral'}
+${worldState.endingDirection && worldState.endingDirection !== 'neutral' && endingProto ? `结局原型（用于高强度倾向时靠拢参考）：\n${(endingProto[worldState.endingDirection] || '').substring(0, 400)}` : ''}
+
+直接前文（第 ${chapterNum - 1} 章，文风锚点）：
+${prevChapterText.substring(0, 400)}`;
+    } else {
+      worldStatePrompt = `前置剧情摘要：${chapters.filter((c: any) => c.chapter_num < chapterNum).map((c: any) => `第${c.chapter_num}章：${c.text}`).join('\n\n')}`;
+    }
+    
     const prompt = `你是一个互动小说引擎。玩家在第 ${chapterNum} 章进行了命运干涉。
       
       角色ID对照表：${blueprint.characters.map((c: any) => `${c.name} (ID: ${c.id})`).join('\n')}
-      前置剧情摘要：${chapters.filter((c: any) => c.chapter_num < chapterNum).map((c: any) => `第${c.chapter_num}章：${c.text}`).join('\n\n')}
-      原定大纲：${chapters.map((c: any) => `第${c.chapter_num}章：${c.summary || c.text?.substring(0, 50)}`).join('\n')}
+      ${worldStatePrompt}
+      各章情节概况（大纲）：${chapters.map((c: any) => `第${c.chapter_num}章：${c.summary || c.text?.substring(0, 50)}`).join('\n')}
       干涉指令：玩家对角色【${charName}】施加了【${action === 'bless' ? '无形力量的庇佑' : '无形力量的磨难'}】。
       命运倾向值（干涉前→干涉后，范围约 -25 偏混沌 到 +25 偏秩序）：${evBefore} → ${evAfter}。数值越大越偏向「秩序/左结局」一侧，越小越偏向「混沌/右结局」一侧。请在后续各章 summary 中体现这一压力方向（与庇佑/磨难语义一致）。
       ${newlyUnlocked.length > 0 ? `本次新解锁支线：${newlyUnlocked.map((b: any) => b.name).join('、')}` : '未触发任何支线事件（只做局部涟漪）'}
       ${injected ? `支线注入包（必须落实到剧情中，优先级高于自由发挥）：\n${injected.map((x: any) => `- [${x.id}] ${x.name}\n  - mustHappen: ${(x.inject?.mustHappen || []).join('；')}\n  - mustReveal: ${(x.inject?.mustReveal || []).join('；')}\n  - mustChange: ${(x.inject?.mustChange || []).join('；')}\n  - sceneText: ${(x.sceneText || '').substring(0, 400)}`).join('\n')}` : ''}
-      ${endingProto ? `作者结局原型（用于高强度倾向时靠拢）：\n- default: ${(endingProto.default || '').substring(0, 800)}\n- left: ${(endingProto.left || '').substring(0, 800)}\n- right: ${(endingProto.right || '').substring(0, 800)}` : ''}
-      
+      ${(!worldState || !worldState.canonical) && endingProto ? `作者结局原型（用于高强度倾向时靠拢）：\n- default: ${(endingProto.default || '').substring(0, 800)}\n- left: ${(endingProto.left || '').substring(0, 800)}\n- right: ${(endingProto.right || '').substring(0, 800)}` : ''}
       要求：
       1. **第 ${chapterNum} 章**：核心重写。生成全新的、细腻的小说全文。字数：${targetWordCount || 600} 中文字。文笔需呼应干涉。
          - **分段强约束**：全文必须拆成 6-10 段；每段 2-4 句；段落间必须使用两个换行符 (\\n\\n)。不得出现“整章一段”。

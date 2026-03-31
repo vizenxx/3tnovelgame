@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy } from 'lucide-react';
+import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles } from 'lucide-react';
 import { auth, db } from './firebase';
 import { createEmptyStory, createStoryBranch, deleteStoryBranch, deleteStoryCartridge, getStoryCartridge, listMyStories, listPublicStories, saveStoryMainlineBundle, saveStoryMeta, upsertStoryBranch } from './storyStore';
 import { isBranchUnlockedByHistory, tierToScore } from './storyCartridge';
@@ -23,7 +23,8 @@ import {
   addDoc, 
   serverTimestamp,
   onSnapshot,
-  getDocFromServer
+  getDocFromServer,
+  deleteField
 } from 'firebase/firestore';
 
 // --- Types ---
@@ -157,21 +158,24 @@ const GlobalError = ({ errorMsg }: { errorMsg: string | null }) => (
   </AnimatePresence>
 );
 
-const LoadingOverlay = ({ progress, status, subtext, variant = 'default' }: { progress: number, status: string, subtext?: string, variant?: 'default' | 'bless' | 'curse' }) => (
+const LoadingOverlay = ({ progress, status, subtext, variant = 'default' }: { progress: number, status: string, subtext?: string, variant?: 'default' | 'bless' | 'curse' | 'ending' }) => (
   <div className={`fixed inset-0 z-[1000] backdrop-blur-xl flex flex-col items-center justify-center p-8 text-center transition-colors duration-700 ${
-    variant === 'bless' ? 'bg-emerald-950' : 
-    variant === 'curse' ? 'bg-rose-950' : 
-    'bg-zinc-950'
+    variant === 'bless' ? 'bg-emerald-950/90' : 
+    variant === 'curse' ? 'bg-rose-950/90' : 
+    variant === 'ending' ? 'bg-amber-950/90' :
+    'bg-zinc-950/90'
   }`}>
     <motion.div 
-      animate={{ rotate: 360, scale: [1, 1.1, 1] }}
-      transition={{ rotate: { repeat: Infinity, duration: 3, ease: "linear" }, scale: { repeat: Infinity, duration: 2 } }}
+      animate={{ rotate: variant === 'ending' ? 180 : 360, scale: [1, 1.1, 1] }}
+      transition={{ rotate: { repeat: Infinity, duration: variant === 'ending' ? 8 : 3, ease: 'linear' }, scale: { repeat: Infinity, duration: 2 } }}
       className="mb-8 relative"
     >
       {variant === 'bless' ? (
         <Zap className="w-20 h-20 text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.6)]" />
       ) : variant === 'curse' ? (
         <Skull className="w-20 h-20 text-rose-500 drop-shadow-[0_0_15px_rgba(244,63,94,0.6)]" />
+      ) : variant === 'ending' ? (
+        <Sparkles className="w-20 h-20 text-amber-400 drop-shadow-[0_0_20px_rgba(251,191,36,0.8)]" />
       ) : (
         <RefreshCcw className="w-16 h-16 text-indigo-500" />
       )}
@@ -180,17 +184,19 @@ const LoadingOverlay = ({ progress, status, subtext, variant = 'default' }: { pr
     <h2 className={`text-4xl font-black mb-2 tracking-tighter ${
       variant === 'bless' ? 'text-emerald-400' : 
       variant === 'curse' ? 'text-rose-500' : 
+      variant === 'ending' ? 'text-amber-400' :
       'text-white'
     }`}>
       {status}
     </h2>
-    {subtext && <p className="text-zinc-500 text-sm mb-8 max-w-md italic">{subtext}</p>}
+    {subtext && <p className="text-zinc-400 text-sm mb-8 max-w-md italic">{subtext}</p>}
     
     <div className="w-full max-w-md bg-zinc-900 h-3 rounded-full overflow-hidden mb-4 border border-zinc-800 shadow-inner">
       <motion.div 
         className={`h-full transition-all duration-500 ${
           variant === 'bless' ? 'bg-gradient-to-r from-emerald-600 to-teal-400' : 
           variant === 'curse' ? 'bg-gradient-to-r from-rose-700 to-orange-500' : 
+          variant === 'ending' ? 'bg-gradient-to-r from-amber-600 to-yellow-400' :
           'bg-gradient-to-r from-indigo-600 to-violet-500'
         }`}
         initial={{ width: 0 }}
@@ -198,8 +204,8 @@ const LoadingOverlay = ({ progress, status, subtext, variant = 'default' }: { pr
       />
     </div>
     
-    <div className="flex justify-between w-full max-w-md text-[10px] font-mono text-zinc-600 uppercase tracking-[0.3em]">
-      <span>{variant === 'default' ? '正在编织因果' : '因果链条重塑中'}</span>
+    <div className="flex justify-between w-full max-w-md text-[10px] font-mono text-zinc-500 uppercase tracking-[0.3em]">
+      <span>{variant === 'default' ? '正在编织因果' : variant === 'ending' ? '终局演绎中' : '因果链条重塑中'}</span>
       <span>{Math.round(progress)}%</span>
     </div>
   </div>
@@ -415,6 +421,7 @@ export default function App() {
   const [activeInterventionChapter, setActiveInterventionChapter] = useState<number | null>(null);
   const [isRewriting, setIsRewriting] = useState(false);
   const [interventionEffect, setInterventionEffect] = useState<'bless' | 'curse' | null>(null);
+  const [activeInterventionOverlay, setActiveInterventionOverlay] = useState<{ type: 'bless' | 'curse' | 'ending', targetChapter: number, statusRaw: string } | null>(null);
   const [characterStatuses, setCharacterStatuses] = useState<Record<string, { status: string, isDead: boolean }>>({});
   const [storyConclusion, setStoryConclusion] = useState<string | null>(null);
   const [isGeneratingConclusion, setIsGeneratingConclusion] = useState(false);
@@ -491,6 +498,10 @@ export default function App() {
   const [expandedBranchId, setExpandedBranchId] = useState<string | null>(null);
   const [interventionHistory, setInterventionHistory] = useState<Array<{ chapterNum: number; charId: string; action: 'bless' | 'curse' }>>([]);
 
+  // World State system
+  const [canonicalWorldState, setCanonicalWorldState] = useState<any>(null);
+  const [deltaWorldStateByChapter, setDeltaWorldStateByChapter] = useState<Record<string, any>>({});
+
   // --- Helpers ---
   const fetchWithTimeout = async (url: string, init: RequestInit, ms: number) => {
     const controller = new AbortController();
@@ -550,6 +561,23 @@ export default function App() {
     }, 200);
     
     return interval;
+  };
+
+  const buildWorldStateForPrompt = (upToChapter: number, currentEndingValue: number) => {
+    const canonical = canonicalWorldState;
+    const deltas = Object.entries(deltaWorldStateByChapter || {})
+      .filter(([n]) => parseInt(n) <= upToChapter)
+      .map(([, d]) => d);
+      
+    // Calculate relative delta weight based on ending value strength
+    const deltaWeight = Math.min(1, Math.abs(currentEndingValue) / 25);
+    
+    return {
+      canonical,
+      deltas,
+      deltaWeight,
+      endingDirection: currentEndingValue > 10 ? 'left' : currentEndingValue < -10 ? 'right' : 'neutral'
+    };
   };
 
   // --- Handlers ---
@@ -633,6 +661,8 @@ export default function App() {
         setStoryConclusion(data.storyConclusion || null);
         setActiveStoryId(data.storyId || null);
         setInterventionHistory(data.interventionHistory || []);
+        setCanonicalWorldState(data.canonicalWorldState || null);
+        setDeltaWorldStateByChapter(data.deltaWorldStateByChapter || {});
         
         if (data.uiFeedback) {
           setUiFeedback(data.uiFeedback);
@@ -741,11 +771,50 @@ export default function App() {
     if (!blueprint || gameState !== 'PLAYING' || isRewriting || suppressChapterWritesRef.current) return;
     
     // Find chapters that have index but no content (except current generation in progress)
-    const incompleteChapter = chapters.find(c => !c.text);
-    if (incompleteChapter && !fleshingOutChapters[incompleteChapter.chapter_num]) {
-      fleshOutChapter(incompleteChapter.chapter_num);
+    const incompleteChapter = chapters.find(c => !c.text || c.text === '命运涟漪正在扩散，重写中...');
+    // We only trigger flesh out if it's completely empty. If it's "命运涟漪正在扩散，重写中...", 
+    // it's considered empty for generation purposes, but we also ensure we don't start duplicate requests 
+    // via fleshingOutChapters state.
+    const chapToFlesh = chapters.find(c => !c.text || (typeof c.text === 'string' && c.text.trim().length < 50 && c.text !== '命运涟漪正在扩散，重写中...'));
+    if (chapToFlesh && !fleshingOutChapters[chapToFlesh.chapter_num]) {
+      fleshOutChapter(chapToFlesh.chapter_num);
     }
-  }, [chapters, gameState, isRewriting, blueprint]);
+  }, [chapters, gameState, isRewriting, blueprint, fleshingOutChapters]);
+
+  // Monitor chapter generation to clear the active intervention overlay
+  useEffect(() => {
+    if (!activeInterventionOverlay || !blueprint) return;
+
+    const overlay = activeInterventionOverlay;
+    // Helper to check if a specific chapter effectively finished generating
+    const isChapDone = (chapNum: number) => {
+      const c = chapters.find(ch => ch.chapter_num === chapNum);
+      return c && typeof c.text === 'string' && c.text.trim().length > 50 && c.text !== '命运涟漪正在扩散，重写中...';
+    };
+
+    const isAllDone = chapters.every(c => isChapDone(c.chapter_num));
+
+    if (overlay.type === 'ending') {
+      if (isAllDone && overlay.statusRaw !== '命运定格：命运箴言推演中...') {
+        // Change overlay text
+        setActiveInterventionOverlay(prev => prev ? { ...prev, statusRaw: '命运定格：命运箴言推演中...' } : null);
+        setSummaryEntrySource('auto_interventions');
+        generateConclusion(chapters).then(() => {
+          setActiveInterventionOverlay(null);
+          setShowSummaryModal(true);
+        });
+      }
+    } else {
+      // bless or curse
+      const targetDone = isChapDone(overlay.targetChapter);
+      const nextExists = blueprint.chapters.some((c: any) => c.chapter_num === overlay.targetChapter + 1);
+      const nextDone = isChapDone(overlay.targetChapter + 1);
+
+      if (targetDone && (!nextExists || nextDone || isAllDone)) {
+        setActiveInterventionOverlay(null);
+      }
+    }
+  }, [chapters, activeInterventionOverlay, blueprint]);
 
   useEffect(() => {
     suppressChapterWritesRef.current = showSummaryModal || gameState === 'SUMMARY';
@@ -781,7 +850,8 @@ export default function App() {
           blueprint,
           chapters,
           targetChapterNum,
-          targetWordCount
+          targetWordCount,
+          worldState: buildWorldStateForPrompt(targetChapterNum, endingValue)
         })
       }, 90000), 4, 3000);
       if (!response.ok) throw new Error("Flesh out failed");
@@ -813,7 +883,7 @@ export default function App() {
         });
       }
       setNaturalChapters(updatedNatural);
-      
+
       if (user && !suppressChapterWritesRef.current) {
         await updateDoc(doc(db, 'sessions', user.uid), {
           currentChapters: updatedChapters,
@@ -1001,6 +1071,25 @@ export default function App() {
       setUnlockedBranches([]);
       setIntervenedChapters([]);
       setGameState('PLAYING');
+
+      // Fire-and-forget: generate canonical world state for quick-generated stories
+      fetch('/api/digest-chapter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'canonical',
+          blueprint: data,
+          chapters: data.chapters,
+          endings: { default: '', left: '', right: '' },
+          branches: [],
+        })
+      }).then(r => r.json()).then(result => {
+        if (result?.canonicalWorldState && user) {
+          setCanonicalWorldState(result.canonicalWorldState);
+          updateDoc(doc(db, 'sessions', user.uid), { canonicalWorldState: result.canonicalWorldState }).catch(() => {});
+        }
+      }).catch(() => {});
+
     } catch (error: any) {
       showError("生成失败，请检查网络或重试。");
       setGameState('THEME_SELECTION');
@@ -1124,9 +1213,13 @@ export default function App() {
           rightProgress: 0,
           endingLabel: "均衡道"
         },
+        canonicalWorldState: (cartridge as any).canonicalWorldState || null,
+        deltaWorldStateByChapter: {},
         updatedAt: new Date().toISOString()
       });
 
+      setCanonicalWorldState((cartridge as any).canonicalWorldState || null);
+      setDeltaWorldStateByChapter({});
       setBlueprint(bp);
       setChapters(bp.chapters);
       setNaturalChapters(bp.chapters);
@@ -1277,6 +1370,34 @@ export default function App() {
       setAuthoringCartridge(latest);
       await refreshStories();
       showError(`导入完成：主线已填充，支线 ${payload.branches.length} 条${authoringImportReplaceBranches ? '（已覆盖旧支线）' : '（已追加）'}。`);
+
+      // Fire-and-forget: generate canonical world state for this authored story
+      fetch('/api/digest-chapter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'canonical',
+          blueprint: {
+            main_axis: payload.mainAxis || authoringCartridge.meta.main_axis || '',
+            characters: normalizedChars,
+          },
+          chapters: finalChapters,
+          endings: {
+            default: (payload.endings.default || '').slice(0, 800),
+            left: (payload.endings.left || '').slice(0, 800),
+            right: (payload.endings.right || '').slice(0, 800),
+          },
+          branches: payload.branches.map((b: any) => ({ name: b.name, side: b.side, desc: b.sceneText || b.name || '' })),
+        })
+      }).then(r => r.json()).then(result => {
+        if (result?.canonicalWorldState && authoringStoryId) {
+          import('./firebase').then(({ db: fbDb }) => {
+            import('firebase/firestore').then(({ updateDoc, doc: fbDoc }) => {
+              updateDoc(fbDoc(fbDb, 'stories', authoringStoryId), { canonicalWorldState: result.canonicalWorldState }).catch(() => {});
+            });
+          });
+        }
+      }).catch(() => {});
     } catch (e: any) {
       console.error(e);
       showError(`一键导入失败：${e?.message || String(e)}`);
@@ -1298,7 +1419,7 @@ export default function App() {
       const response = await fetch('/api/generate-summary', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ blueprint, chapters, endingValue })
+        body: JSON.stringify({ blueprint, chapters: storyChapters, endingValue })
       });
       const data = await response.json();
       setStoryConclusion(data.text);
@@ -1310,12 +1431,32 @@ export default function App() {
     }
   };
 
+  const handleInterveneRequest = (chapterNum: number, charId: string, action: 'bless' | 'curse') => {
+    const hasFutureInterventions = interventionHistory.some(h => h.chapterNum > chapterNum);
+    if (hasFutureInterventions) {
+      setConfirmationModal({
+        isOpen: true,
+        title: '历史覆盖警告',
+        message: '在此靠前章节干涉，会导致后续已干涉的全部记录作废（已触发支线保留）。注意：作废的干涉不返还次数！确定要逆转时空吗？',
+        onConfirm: async () => {
+          setConfirmationModal(prev => prev ? { ...prev, isOpen: false } : null);
+          return handleIntervene(chapterNum, charId, action);
+        }
+      });
+    } else {
+      handleIntervene(chapterNum, charId, action);
+    }
+  };
+
   const handleIntervene = async (chapterNum: number, charId: string, action: 'bless' | 'curse') => {
     if (interventionsLeft <= 0 || isRewriting) return;
     
     setActiveInterventionChapter(null);
     setInterventionEffect(action);
-    setTimeout(() => setInterventionEffect(null), 2500);
+    const overlayType = (interventionsLeft - 1 === 0) ? 'ending' : action;
+    const initialStatus = overlayType === 'bless' ? "神迹降临" : overlayType === 'curse' ? "命运崩坏" : "终局裁定";
+    setActiveInterventionOverlay({ type: overlayType, targetChapter: chapterNum, statusRaw: initialStatus });
+    
     setIsRewriting(true);
     
     const progressInterval = startProgressSimulation(30000, [
@@ -1341,7 +1482,8 @@ export default function App() {
           currentEndingValue: endingValue,
           currentUnlockedBranches: unlockedBranches,
           targetWordCount,
-          interventionHistory
+          interventionHistory: interventionHistory.filter(h => h.chapterNum <= chapterNum),
+          worldState: buildWorldStateForPrompt(chapterNum, endingValue)
         })
       });
       if (!response.ok) throw new Error(await response.text());
@@ -1409,42 +1551,78 @@ export default function App() {
       
       const newInterventionsLeft = interventionsLeft - 1;
       const newIntervenedChapters = [...intervenedChapters.filter(c => c < chapterNum), chapterNum];
-      const newHistory = [...interventionHistory, { chapterNum, charId, action }];
       
-      const enteringSummaryFromLastIntervention = newInterventionsLeft === 0;
-      if (enteringSummaryFromLastIntervention) {
-        suppressChapterWritesRef.current = true;
-        setFleshingOutChapters({});
-      }
+      // 核心业务验证：由于后次干涉位置比前次干涉位置靠前，作废之后章节的干涉记录
+      // 但对于同章节的连续多次干涉，需要全部保留
+      const newHistory = [
+        ...interventionHistory.filter(h => h.chapterNum <= chapterNum),
+        { chapterNum, charId, action }
+      ];
+      
+      const updatePayload: any = {
+        currentChapters: updatedChapters,
+        naturalChapters: nextNatural,
+        characterStatuses: finalStatuses,
+        interventionsLeft: newInterventionsLeft,
+        intervenedChapters: newIntervenedChapters,
+        interventionHistory: newHistory,
+        endingValue: newEndingValue,
+        unlockedBranches: newUnlockedBranches,
+        uiFeedback: data.uiFeedback || uiFeedback,
+        updatedAt: new Date().toISOString(),
+      };
 
+      // 清理后次干涉导致作废的 delta
+      const newDeltaState = { ...deltaWorldStateByChapter };
+      let deltaDeleted = false;
+      Object.keys(newDeltaState).forEach(k => {
+        if (parseInt(k) > chapterNum) {
+          delete newDeltaState[k];
+          updatePayload[`deltaWorldStateByChapter.${k}`] = deleteField();
+          deltaDeleted = true;
+        }
+      });
+      if (deltaDeleted) {
+        setDeltaWorldStateByChapter(newDeltaState);
+      }
+      
       if (user) {
         try {
-          await updateDoc(doc(db, 'sessions', user.uid), {
-            currentChapters: updatedChapters,
-            naturalChapters: nextNatural,
-            characterStatuses: finalStatuses,
-            interventionsLeft: newInterventionsLeft,
-            intervenedChapters: newIntervenedChapters,
-            interventionHistory: newHistory,
-            endingValue: newEndingValue,
-            unlockedBranches: newUnlockedBranches,
-            uiFeedback: data.uiFeedback || uiFeedback,
-            updatedAt: new Date().toISOString(),
-          });
+          await updateDoc(doc(db, 'sessions', user.uid), updatePayload);
         } catch (error) {
           handleFirestoreError(error, OperationType.UPDATE, `sessions/${user.uid}`);
         }
+      }
+
+      // Fire-and-forget: generate delta world state for this intervention
+      if (canonicalWorldState) {
+        const rewrittenChText = updatedChapters.find(c => c.chapter_num === chapterNum)?.text || '';
+        fetch('/api/digest-chapter', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mode: 'delta',
+            canonicalWorldState,
+            rewrittenChapter: { chapter_num: chapterNum, text: rewrittenChText },
+            endingValue: newEndingValue,
+            interventionAction: action,
+          })
+        }).then(r => r.json()).then(result => {
+          if (result?.deltaWorldState && user) {
+            const newDelta = { ...deltaWorldStateByChapter, [String(chapterNum)]: result.deltaWorldState };
+            setDeltaWorldStateByChapter(newDelta);
+            updateDoc(doc(db, 'sessions', user.uid), {
+              [`deltaWorldStateByChapter.${chapterNum}`]: result.deltaWorldState,
+            }).catch(() => {});
+          }
+        }).catch(() => {});
       }
 
       setInterventionsLeft(newInterventionsLeft);
       setIntervenedChapters(newIntervenedChapters);
       setInterventionHistory(newHistory);
       
-      if (newInterventionsLeft === 0) {
-        setSummaryEntrySource('auto_interventions');
-        setShowSummaryModal(true);
-        generateConclusion(updatedChapters);
-      }
+      // End of Intervention -> Background logic will automatically trigger to generate next blank Chapter.
       
     } catch (error: any) {
       showError("干涉失败，请重试。");
@@ -1462,7 +1640,9 @@ export default function App() {
     setFleshingOutChapters({});
     setSummaryEntrySource('manual');
     setShowSummaryModal(true);
-    generateConclusion(chapters);
+    if (!storyConclusion) {
+      generateConclusion(chapters);
+    }
     if (user) {
       updateDoc(doc(db, 'sessions', user.uid), {
         gameState: 'PLAYING',
@@ -1519,6 +1699,9 @@ export default function App() {
     setUnlockedBranches([]);
     setInterventionsLeft(3);
     setIntervenedChapters([]);
+    setInterventionHistory([]);
+    setDeltaWorldStateByChapter({});
+    setActiveInterventionOverlay(null);
     setStoryConclusion(null);
     setEndingValue(0);
     setGameState('PLAYING');
@@ -1548,6 +1731,8 @@ export default function App() {
           unlockedBranches: [],
           interventionsLeft: 3,
           intervenedChapters: [],
+          interventionHistory: [],
+          deltaWorldStateByChapter: {},
           characterStatuses: initialStatuses,
           storyConclusion: null,
           endingValue: 0,
@@ -2634,7 +2819,7 @@ export default function App() {
     return (
       <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6 md:p-12 font-sans relative pb-28">
         <AnimatePresence>
-          {isRewriting && (
+          {activeInterventionOverlay && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -2643,9 +2828,13 @@ export default function App() {
             >
               <LoadingOverlay 
                 progress={generationProgress} 
-                status={interventionEffect === 'bless' ? "神迹降临" : interventionEffect === 'curse' ? "命运崩坏" : generationStatus} 
-                variant={interventionEffect || 'default'}
-                subtext={interventionEffect ? "世界线正在因你的意志而坍缩重构..." : "蝴蝶效应正在扩散，后续剧情正在被重新编织..."}
+                status={activeInterventionOverlay.statusRaw} 
+                variant={activeInterventionOverlay.type}
+                subtext={
+                  activeInterventionOverlay.type === 'ending' 
+                    ? "历史的收束线已全部凝结，请静候终章回响..." 
+                    : "命运之轮高速旋转，正在推演新的可能..."
+                }
               />
             </motion.div>
           )}
@@ -3069,14 +3258,14 @@ export default function App() {
                                 </div>
                                 <div className="flex gap-2">
                                 <button
-                                  onClick={() => handleIntervene(chapter.chapter_num, char.id, 'bless')}
+                                  onClick={() => handleInterveneRequest(chapter.chapter_num, char.id, 'bless')}
                                   disabled={isRewriting}
                                   className="flex-1 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 disabled:opacity-50 text-emerald-400 border border-emerald-500/30 rounded text-xs font-medium flex items-center justify-center gap-1 transition-colors"
                                 >
                                   <Zap className="w-3 h-3" /> 庇佑
                                 </button>
                                 <button
-                                  onClick={() => handleIntervene(chapter.chapter_num, char.id, 'curse')}
+                                  onClick={() => handleInterveneRequest(chapter.chapter_num, char.id, 'curse')}
                                   disabled={isRewriting}
                                   className="flex-1 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 disabled:opacity-50 text-rose-400 border border-rose-500/30 rounded text-xs font-medium flex items-center justify-center gap-1 transition-colors"
                                 >

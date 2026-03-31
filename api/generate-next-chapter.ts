@@ -80,7 +80,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { blueprint, currentChapters, chapters: chaptersBody, targetChapterNum, targetWordCount } = req.body;
+    const { blueprint, currentChapters, chapters: chaptersBody, targetChapterNum, targetWordCount, worldState } = req.body;
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY as string });
 
     const allChapters: any[] = Array.isArray(chaptersBody) && chaptersBody.length
@@ -100,14 +100,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const defaultText = blueprint?.authorAssets?.defaultChapters?.[targetChapterNum]?.text;
     const endingProto = blueprint?.authorAssets?.endingPrototypes;
 
+    // 直接前置剧情，作文风锚点
+    const prevChapterText = allChapters.find((c: any) => c.chapter_num === targetChapterNum - 1)?.text || '';
+
+    // 构建 World State 上下文
+    let worldStatePrompt = '';
+    if (worldState && worldState.canonical) {
+      worldStatePrompt = `故事基准（硬约束，优先级最高，不可违背）：
+人物：${JSON.stringify(worldState.canonical.characters || [])}
+物件：${JSON.stringify(worldState.canonical.objects || [])}
+场景：${JSON.stringify(worldState.canonical.scenes || [])}
+核心规则：${(worldState.canonical.core_rules || []).join('；')}
+
+干涉偏移记录（软参考，当前权重 ${Math.round((worldState.deltaWeight || 0) * 100)}%）：
+${(worldState.deltas || []).map((d: any) => d.characters_changed?.map((c: any) => c.delta_description).join('；')).filter(Boolean).join('\n') || '无显著偏移。'}
+
+结尾方向引导：${worldState.endingDirection || 'neutral'}
+${worldState.endingDirection && worldState.endingDirection !== 'neutral' && endingProto ? `结局原型（用于高强度倾向时靠拢参考）：\n${(endingProto[worldState.endingDirection] || '').substring(0, 400)}` : ''}
+
+直接前文（第 ${targetChapterNum - 1} 章，文风锚点）：
+${prevChapterText.substring(0, 400)}`;
+    } else {
+      worldStatePrompt = `历史剧情回忆：${historyChapters.map((c: any) => `[${c.chapter_num}] ${c.text?.substring(0, 200)}...`).join('\n')}`;
+    }
+
     const prompt = `你是一个互动小说引擎的织梦者。
       小说大纲/主轴：${blueprint.main_axis}
       角色列表：${blueprint.characters.map((c: any) => `${c.id}:${c.name}(${c.desc})`).join('; ')}
-      历史剧情回忆：${historyChapters.map((c: any) => `[${c.chapter_num}] ${c.text?.substring(0, 200)}...`).join('\n')}
+      ${worldStatePrompt}
       当前章节大纲指引（优先使用「玩家会话中最新大纲」，已含命运干涉后的微调）：${outlineSummary}
       ${futureOutlines ? `后续章节走向备忘（已由系统在干涉后更新，续写时不得与之矛盾）：\n${futureOutlines}` : ''}
       ${defaultText ? `作者默认主线原文（第${targetChapterNum}章，作为最优先参考原型）：\n${String(defaultText).substring(0, 1200)}` : ''}
-      ${endingProto ? `作者结局原型（用于保持全书一致性，不必全文引用）：\n- default: ${(endingProto.default || '').substring(0, 400)}\n- left: ${(endingProto.left || '').substring(0, 400)}\n- right: ${(endingProto.right || '').substring(0, 400)}` : ''}
+      ${(!worldState || !worldState.canonical) && endingProto ? `作者结局原型（用于保持全书一致性，不必全文引用）：\n- default: ${(endingProto.default || '').substring(0, 400)}\n- left: ${(endingProto.left || '').substring(0, 400)}\n- right: ${(endingProto.right || '').substring(0, 400)}` : ''}
       
       任务：续写第 ${targetChapterNum} 章全文内容。
       
