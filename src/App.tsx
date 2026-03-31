@@ -660,13 +660,23 @@ export default function App() {
               endingMode: cartridge.meta.endingMode,
               endingNames: cartridge.meta.endingNames,
               characters: cartridge.meta.characters,
-              chapters: cartridge.chapters.map((c: any) => ({
-                chapter_num: c.chapter_num,
-                title: c.title,
-                summary: c.summary,
-                present_characters: c.present_characters,
-                text: c.text,
-              })),
+              chapters: (() => {
+                const baseChaps = cartridge.chapters.map((c: any) => ({
+                  chapter_num: c.chapter_num,
+                  title: c.title,
+                  summary: c.summary,
+                  present_characters: c.present_characters,
+                  text: c.text,
+                }));
+                // Authored story: fill chapter 7 text from default ending if chapter 7 has no text
+                const ch7 = baseChaps.find((c: any) => c.chapter_num === 7);
+                const defaultEndingText = (cartridge.endings.find((e: any) => e.id === 'default')?.text || '').trim();
+                if (ch7 && (!ch7.text || !ch7.text.trim()) && defaultEndingText) {
+                  ch7.text = defaultEndingText;
+                  ch7.title = ch7.title || '默认结局';
+                }
+                return baseChaps;
+              })(),
               endings: [
                 { type: 'normal', text: (cartridge.endings.find((e: any) => e.id === 'default')?.text || '') },
                 { type: 'good', text: (cartridge.endings.find((e: any) => e.id === 'left')?.text || '') },
@@ -731,7 +741,7 @@ export default function App() {
     if (!blueprint || gameState !== 'PLAYING' || isRewriting || suppressChapterWritesRef.current) return;
     
     // Find chapters that have index but no content (except current generation in progress)
-    const incompleteChapter = chapters.find(c => !c.text && c.summary);
+    const incompleteChapter = chapters.find(c => !c.text);
     if (incompleteChapter && !fleshingOutChapters[incompleteChapter.chapter_num]) {
       fleshOutChapter(incompleteChapter.chapter_num);
     }
@@ -751,6 +761,14 @@ export default function App() {
     if (naturalVersion && naturalVersion.text) {
       if (suppressChapterWritesRef.current) return;
       setChapters(prev => prev.map(c => c.chapter_num === targetChapterNum ? { ...c, text: naturalVersion.text } : c));
+      return;
+    }
+
+    // Fallback: check blueprint for pre-authored text (e.g. chapter 7 = default ending from authored stories)
+    const bpVersion = blueprint.chapters.find((bc: any) => bc.chapter_num === targetChapterNum);
+    if (bpVersion && bpVersion.text && bpVersion.text.trim().length > 0) {
+      if (suppressChapterWritesRef.current) return;
+      setChapters(prev => prev.map(c => c.chapter_num === targetChapterNum ? { ...c, text: bpVersion.text } : c));
       return;
     }
 
@@ -1025,13 +1043,23 @@ export default function App() {
         endingMode: cartridge.meta.endingMode,
         endingNames: cartridge.meta.endingNames,
         characters: cartridge.meta.characters,
-        chapters: cartridge.chapters.map((c: any) => ({
-          chapter_num: c.chapter_num,
-          title: c.title,
-          summary: c.summary,
-          present_characters: c.present_characters,
-          text: c.text,
-        })),
+        chapters: (() => {
+          const baseChaps = cartridge.chapters.map((c: any) => ({
+            chapter_num: c.chapter_num,
+            title: c.title,
+            summary: c.summary,
+            present_characters: c.present_characters,
+            text: c.text,
+          }));
+          // Authored story: fill chapter 7 text from default ending if chapter 7 has no text
+          const ch7 = baseChaps.find((c: any) => c.chapter_num === 7);
+          const defaultEndingText = (cartridge.endings.find((e: any) => e.id === 'default')?.text || '').trim();
+          if (ch7 && (!ch7.text || !ch7.text.trim()) && defaultEndingText) {
+            ch7.text = defaultEndingText;
+            ch7.title = ch7.title || '默认结局';
+          }
+          return baseChaps;
+        })(),
         endings: [
           { type: 'normal', text: (cartridge.endings.find((e: any) => e.id === 'default')?.text || '') },
           { type: 'good', text: (cartridge.endings.find((e: any) => e.id === 'left')?.text || '') },
@@ -1166,6 +1194,17 @@ export default function App() {
     const hasDual = Boolean(payload.endings.left || payload.endings.right);
     const endingMode = hasDual ? 'dual' : (authoringCartridge.meta.endingMode || 'single');
     const oldEndings = new Map<string, string>((authoringCartridge.endings || []).map((e: any) => [e.id, e.text || '']));
+    // Authored story: append chapter 7 from default ending if it has content
+    const ch7Text = (payload.endings.default || oldEndings.get('default') || '').trim();
+    if (ch7Text) {
+      finalChapters.push({
+        chapter_num: 7,
+        title: '默认结局',
+        summary: '',
+        present_characters: normalizedChars.map((x: any) => x.id),
+        text: ch7Text.slice(0, 1200),
+      });
+    }
     const finalEndings = [
       { id: 'default', text: (payload.endings.default || oldEndings.get('default') || '').slice(0, 1200) },
       { id: 'left', text: (payload.endings.left || oldEndings.get('left') || '').slice(0, 1200) },
