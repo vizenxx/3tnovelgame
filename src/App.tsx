@@ -2777,7 +2777,15 @@ export default function App() {
 
           {/* Left Sidebar: Status */}
           <div className={`lg:col-span-4 space-y-6 ${isSidebarOpen ? 'fixed inset-0 z-[210] bg-zinc-950 p-6 overflow-y-auto' : 'hidden lg:block relative z-[210]'}`}>
-            <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
+            {isSidebarOpen && (
+              <button 
+                onClick={() => setIsSidebarOpen(false)}
+                className="lg:hidden absolute top-4 right-4 p-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-zinc-400 hover:text-white transition-colors border border-zinc-700 z-[220]"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            )}
+            <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 mt-8 lg:mt-0">
               <h2 className="text-2xl font-bold text-white mb-2">{blueprint.title}</h2>
               <div className="flex items-center gap-2 text-sm text-zinc-400 mb-6">
                 <span className="px-2 py-1 bg-zinc-800 rounded-md">{selectedThemes.join(' · ')}</span>
