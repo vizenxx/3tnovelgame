@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles } from 'lucide-react';
 import { auth, db } from './firebase';
-import { createEmptyStory, createStoryBranch, deleteStoryBranch, deleteStoryCartridge, getStoryCartridge, listMyStories, listPublicStories, saveStoryMainlineBundle, saveStoryMeta, upsertStoryBranch } from './storyStore';
+import { createEmptyStory, adaptBlueprintToStory, createStoryBranch, deleteStoryBranch, deleteStoryCartridge, getStoryCartridge, listMyStories, listPublicStories, saveStoryMainlineBundle, saveStoryMeta, upsertStoryBranch } from './storyStore';
 import { isBranchUnlockedByHistory, tierToScore } from './storyCartridge';
 import { 
   signInWithRedirect,
@@ -861,15 +861,22 @@ export default function App() {
       if (!newText || typeof newText !== 'string' || newText.trim().length < 50) {
         throw new Error("章节内容为空或过短");
       }
-      if (suppressChapterWritesRef.current) {
+      if (suppressChapterWritesRef.current || !user) {
         return;
       }
-      const updatedChapters = chapters.map(c => c.chapter_num === targetChapterNum ? { ...c, text: newText } : c);
+
+      // To avoid stale closures overwriting handleIntervene changes, refetch from snapshot
+      const sessionDoc = await getDoc(doc(db, 'sessions', user.uid));
+      const sessionData = sessionDoc.exists() ? sessionDoc.data() : null;
+      const latestChapters = sessionData?.currentChapters || chapters;
+      const latestNatural = sessionData?.naturalChapters || naturalChapters;
+
+      const updatedChapters = latestChapters.map((c: any) => c.chapter_num === targetChapterNum ? { ...c, text: newText } : c);
       setChapters(updatedChapters);
 
       // Save to naturalChapters for persistence
-      const updatedNatural = [...naturalChapters];
-      const natIdx = updatedNatural.findIndex(c => c.chapter_num === targetChapterNum);
+      const updatedNatural = [...latestNatural];
+      const natIdx = updatedNatural.findIndex((c: any) => c.chapter_num === targetChapterNum);
       if (natIdx !== -1) {
         updatedNatural[natIdx] = { ...updatedNatural[natIdx], text: newText };
       } else {
@@ -884,13 +891,11 @@ export default function App() {
       }
       setNaturalChapters(updatedNatural);
 
-      if (user && !suppressChapterWritesRef.current) {
-        await updateDoc(doc(db, 'sessions', user.uid), {
-          currentChapters: updatedChapters,
-          naturalChapters: updatedNatural,
-          updatedAt: serverTimestamp()
-        });
-      }
+      await updateDoc(doc(db, 'sessions', user.uid), {
+        currentChapters: updatedChapters,
+        naturalChapters: updatedNatural,
+        updatedAt: serverTimestamp()
+      });
     } catch (error) {
       console.error(error);
       if (!suppressChapterWritesRef.current) {
@@ -1008,6 +1013,21 @@ export default function App() {
         c.chapter_num === 1 ? { ...c, text: ch1Data.text } : c
       );
       data.chapters = updatedChapters;
+
+      // 修复核心逻辑：将大模型生成的平面支线条件映射为系统严格的 trigger 格式
+      data.branches = (data.branches || []).map((b: any) => ({
+        ...b,
+        id: b.id || `b_${Math.random().toString(36).substring(2, 11)}`,
+        sceneText: b.sceneText || b.desc,
+        trigger: b.trigger || {
+          type: 'single',
+          single: {
+            chapterNum: b.condition_chapter || 2,
+            charId: b.condition_char || data.characters?.[0]?.id || 'c1',
+            action: b.condition_action === 'curse' ? 'curse' : 'bless'
+          }
+        }
+      }));
 
       let bpRef;
       try {
@@ -1255,6 +1275,24 @@ export default function App() {
   const enterAuthoring = async () => {
     setGameState('AUTHORING');
     await refreshStories();
+  };
+
+  const handleFastAdaptToAuthoring = async () => {
+    if (!user || !blueprint) return;
+    try {
+      setGenerationStatus("正在为您构建创作母盘...");
+      const storyId = await adaptBlueprintToStory(db as any, { authorId: user.uid, blueprint, chapters });
+      setAuthoringStoryId(storyId);
+      await refreshStories();
+      const st = (myStories || []).find((s) => s.id === storyId);
+      if (st) setAuthoringCartridge(st as any);
+      setGameState('AUTHORING');
+      setShowSummaryModal(false);
+    } catch (e) {
+      console.error(e);
+      showError('改编记录同步失败，请重试或检查网络。');
+      setGenerationStatus("");
+    }
   };
 
   const runOneClickImport = async () => {
@@ -1932,7 +1970,18 @@ export default function App() {
               <div className="text-2xl font-black text-white">作品编辑器</div>
             </div>
             <div className="flex gap-2">
-              <button onClick={() => setGameState('STORY_SELECT')} className="px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-sm">返回作品库</button>
+              <button 
+                onClick={() => {
+                  if (blueprint) {
+                    setGameState('PLAYING');
+                  } else {
+                    setGameState('STORY_SELECT');
+                  }
+                }} 
+                className="px-4 py-2 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 rounded-lg text-sm transition-colors"
+              >
+                {blueprint ? '返回游玩界面' : '返回作品库'}
+              </button>
               <button
                 disabled={authoringSaving}
                 onClick={async () => {
@@ -3346,6 +3395,17 @@ export default function App() {
                     <span className="hidden sm:inline text-sm font-medium">全新故事</span>
                   </button>
 
+                  <button
+                    onClick={handleFastAdaptToAuthoring}
+                    title="一键将本世界线导入私人创作空间，开启自由改编"
+                    disabled={isRewriting || isGeneratingConclusion}
+                    className="px-3 py-2 bg-indigo-900 border border-indigo-700 hover:bg-indigo-800 rounded-lg text-indigo-100 disabled:opacity-50 flex items-center gap-2 transition-colors"
+                  >
+                    <BookOpen className="w-4 h-4 text-indigo-300" />
+                    <span className="hidden lg:inline text-sm font-medium">一键改编为我的作品</span>
+                    <span className="hidden sm:inline lg:hidden text-sm font-medium">改编</span>
+                  </button>
+
                   {interventionsLeft > 0 ? (
                     <button
                       onClick={handleEndGame}
@@ -3478,13 +3538,23 @@ export default function App() {
                   )}
                 </div>
 
-                <button
-                  onClick={() => setShowSummaryModal(false)}
-                  disabled={isGeneratingConclusion}
-                  className="w-full py-3 mt-4 bg-white text-black hover:bg-zinc-200 disabled:opacity-50 disabled:hover:bg-white rounded-lg font-bold text-lg transition-colors"
-                >
-                  查看故事档案
-                </button>
+                <div className="w-full flex gap-3 mt-4">
+                  <button
+                    onClick={handleFastAdaptToAuthoring}
+                    disabled={isGeneratingConclusion}
+                    className="flex-1 py-3 bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50 rounded-lg font-bold text-lg transition-colors flex items-center justify-center gap-2"
+                  >
+                    <BookOpen className="w-5 h-5 text-indigo-200" />
+                    一键改编本故事
+                  </button>
+                  <button
+                    onClick={() => setShowSummaryModal(false)}
+                    disabled={isGeneratingConclusion}
+                    className="flex-1 py-3 bg-white text-black hover:bg-zinc-200 disabled:opacity-50 disabled:hover:bg-white rounded-lg font-bold text-lg transition-colors"
+                  >
+                    查看故事档案
+                  </button>
+                </div>
               </motion.div>
             </motion.div>
           )}

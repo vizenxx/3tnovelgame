@@ -19,6 +19,7 @@ import type { Firestore } from 'firebase/firestore';
 import type {
   StoryBranchDoc,
   StoryChapterDoc,
+  StoryCharacter,
   StoryEndingDoc,
   StoryMeta,
   Visibility,
@@ -128,6 +129,84 @@ export async function getStoryCartridge(db: Firestore, storyId: string) {
   const branches = branchesSnap.docs.map(d => ({ ...(d.data() as any), id: d.id })) as any as StoryBranchDoc[];
 
   return { storyId, meta, chapters, endings, branches };
+}
+
+export async function adaptBlueprintToStory(db: Firestore, args: { authorId: string; blueprint: any; chapters: any[]; conclusionText?: string }) {
+  const now = new Date().toISOString();
+  const bp = args.blueprint;
+
+  const normalizedChars: StoryCharacter[] = (bp.characters || []).slice(0, 5).map((c: any) => ({
+    id: c.id || `c${Math.random()}`,
+    name: (c.name || '').trim() || '角色',
+    desc: (c.desc || '').trim() || '（待填写简介）'
+  }));
+  if (normalizedChars.length === 0) {
+    normalizedChars.push({ id: 'c1', name: '角色一', desc: '（待填写简介）' });
+  }
+
+  const meta: Omit<StoryMeta, 'coverUrl'> = {
+    title: bp.title || '从蓝图改编的作品',
+    main_axis: bp.main_axis || '（无主轴记录）',
+    tags: [],
+    authorId: args.authorId,
+    visibility: 'private',
+    endingMode: 'dual',
+    endingRates: { left: bp.left_mainline_default || 40, right: bp.right_mainline_default || 40 },
+    endingNames: { left: '', right: '' },
+    createdAt: now,
+    updatedAt: now,
+    version: 1,
+    defaults: { targetWordCount: 800, paragraphs: { min: 6, max: 10 } },
+    characters: normalizedChars,
+  };
+
+  const ref = await addDoc(collection(db, 'stories'), {
+    ...meta,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  const batch = writeBatch(db);
+  const chapterByNum = new Map<number, any>(args.chapters.map(c => [c.chapter_num, c]));
+  const bpChapterByNum = new Map<number, any>((bp.chapters || []).map((c: any) => [c.chapter_num, c]));
+
+  for (let i = 1; i <= 7; i++) {
+    const activeChap = chapterByNum.get(i) || bpChapterByNum.get(i) || {};
+    const chapter: StoryChapterDoc = {
+      chapter_num: i,
+      title: activeChap.title || `第${i}章`,
+      summary: activeChap.summary || '',
+      present_characters: (activeChap.present_characters || []).filter((id: string) => normalizedChars.find(c => c.id === id)),
+      text: activeChap.text || '',
+    };
+    batch.set(doc(db, 'stories', ref.id, 'chapters', String(i)), chapter);
+  }
+
+  const defaultEnding: StoryEndingDoc = { id: 'default', chapter_num: 7, text: chapterByNum.get(7)?.text || args.conclusionText || bp.endings?.find((e: any) => e.type === 'normal')?.text || '' };
+  const leftEnding: StoryEndingDoc = { id: 'left', chapter_num: 7, text: bp.endings?.find((e: any) => e.type === 'good' || e.type === 'left')?.text || '' };
+  const rightEnding: StoryEndingDoc = { id: 'right', chapter_num: 7, text: bp.endings?.find((e: any) => e.type === 'bad' || e.type === 'right')?.text || '' };
+  batch.set(doc(db, 'stories', ref.id, 'endings', 'default'), defaultEnding);
+  batch.set(doc(db, 'stories', ref.id, 'endings', 'left'), leftEnding);
+  batch.set(doc(db, 'stories', ref.id, 'endings', 'right'), rightEnding);
+
+  for (const b of (bp.branches || [])) {
+    const branchDoc: Partial<StoryBranchDoc> = {
+      side: b.side === 'left' ? 'left' : 'right',
+      tier: b.score >= 5 ? 'hidden' : b.score >= 3 ? 'large' : b.score >= 2 ? 'medium' : 'small',
+      name: b.name || '未命名支线',
+      hint: b.hint || '',
+      desc: b.desc || b.sceneText || '',
+      common: false,
+      trigger: b.trigger || { type: 'single', single: { chapterNum: 2, charId: normalizedChars[0].id, action: 'bless' } },
+      triggerGroups: b.triggerGroups || (b.trigger ? [b.trigger] : []),
+      inject: b.inject || { mustHappen: [], mustReveal: [], mustChange: [] },
+      sceneText: b.sceneText || b.desc || '',
+    };
+    batch.set(doc(collection(db, 'stories', ref.id, 'branches')), branchDoc);
+  }
+
+  await batch.commit();
+  return ref.id;
 }
 
 export async function saveStoryMeta(db: Firestore, storyId: string, patch: Partial<StoryMeta>) {
