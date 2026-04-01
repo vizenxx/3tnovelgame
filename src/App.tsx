@@ -428,6 +428,7 @@ export default function App() {
   const [storyConclusion, setStoryConclusion] = useState<string | null>(null);
   const [isGeneratingConclusion, setIsGeneratingConclusion] = useState(false);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
+  const [pendingSummaryRequest, setPendingSummaryRequest] = useState<'manual' | null>(null);
   /** 总结页入口：三次干涉耗尽自动进入 vs 手动结束游玩 */
   const [summaryEntrySource, setSummaryEntrySource] = useState<'auto_interventions' | 'manual' | null>(null);
   const [uiFeedback, setUiFeedback] = useState<{leftProgress: number, rightProgress: number, endingLabel: string}>({leftProgress: 0, rightProgress: 0, endingLabel: "均衡道"});
@@ -562,6 +563,15 @@ export default function App() {
   const apiFetch = async (url: string, init: RequestInit = {}, ms = 30000) => {
     const headers = await getAuthHeaders(init.headers);
     return fetchWithTimeout(url, { ...init, headers }, ms);
+  };
+
+  const isChapterTextReady = (chapter: Chapter | undefined) => {
+    return Boolean(
+      chapter &&
+      typeof chapter.text === 'string' &&
+      chapter.text.trim().length > 50 &&
+      chapter.text !== '命运涟漪正在扩散，重写中...'
+    );
   };
 
   const startProgressSimulation = (durationMs: number, messages: string[]) => {
@@ -882,7 +892,7 @@ export default function App() {
     // Helper to check if a specific chapter effectively finished generating
     const isChapDone = (chapNum: number) => {
       const c = chapters.find(ch => ch.chapter_num === chapNum);
-      return c && typeof c.text === 'string' && c.text.trim().length > 50 && c.text !== '命运涟漪正在扩散，重写中...';
+      return isChapterTextReady(c);
     };
 
     const isAllDone = chapters.every(c => isChapDone(c.chapter_num));
@@ -912,6 +922,25 @@ export default function App() {
   useEffect(() => {
     suppressChapterWritesRef.current = showSummaryModal || gameState === 'SUMMARY';
   }, [gameState, showSummaryModal]);
+
+  useEffect(() => {
+    if (pendingSummaryRequest !== 'manual' || !blueprint || isRewriting || isGeneratingConclusion) return;
+
+    const hasPendingGeneration = Object.values(fleshingOutChapters).some(Boolean);
+    const allChaptersReady = chapters.length > 0 && chapters.every((chapter) => isChapterTextReady(chapter));
+    if (!allChaptersReady || hasPendingGeneration) return;
+
+    if (activeInterventionOverlay?.type === 'ending' && activeInterventionOverlay.statusRaw !== '命运定格：命运箴言推演中...') {
+      setActiveInterventionOverlay(prev => prev ? { ...prev, statusRaw: '命运定格：命运箴言推演中...' } : null);
+    }
+
+    setPendingSummaryRequest(null);
+    setSummaryEntrySource('manual');
+    generateConclusion(chapters).then(() => {
+      setActiveInterventionOverlay(null);
+      setShowSummaryModal(true);
+    });
+  }, [pendingSummaryRequest, blueprint, isRewriting, isGeneratingConclusion, fleshingOutChapters, chapters, activeInterventionOverlay]);
 
   const fleshOutChapter = async (targetChapterNum: number) => {
     if (suppressChapterWritesRef.current) {
@@ -1764,12 +1793,22 @@ export default function App() {
   };
 
   const handleEndGame = () => {
-    suppressChapterWritesRef.current = true;
-    setFleshingOutChapters({});
-    setSummaryEntrySource('manual');
-    setShowSummaryModal(true);
-    if (!storyConclusion) {
-      generateConclusion(chapters);
+    const unfinishedChapter = chapters.find(ch => !isChapterTextReady(ch));
+    if (unfinishedChapter || Object.values(fleshingOutChapters).some(Boolean) || isRewriting) {
+      setPendingSummaryRequest('manual');
+      setSummaryEntrySource('manual');
+      setActiveInterventionOverlay({
+        type: 'ending',
+        targetChapter: unfinishedChapter?.chapter_num || chapters[chapters.length - 1]?.chapter_num || 7,
+        statusRaw: '终局裁定：正在补全未竟章节...',
+      });
+    } else {
+      suppressChapterWritesRef.current = true;
+      setSummaryEntrySource('manual');
+      setShowSummaryModal(true);
+      if (!storyConclusion) {
+        generateConclusion(chapters);
+      }
     }
     if (user) {
       updateDoc(doc(db, 'sessions', user.uid), {
@@ -1830,6 +1869,7 @@ export default function App() {
     setInterventionHistory([]);
     setDeltaWorldStateByChapter({});
     setActiveInterventionOverlay(null);
+    setPendingSummaryRequest(null);
     setStoryConclusion(null);
     setEndingValue(0);
     setGameState('PLAYING');
