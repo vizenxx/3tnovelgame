@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './_auth';
 
 function ensureParagraphing(raw: string, opts?: { minParas?: number; maxParas?: number }) {
   const minParas = opts?.minParas ?? 6;
@@ -8,53 +9,46 @@ function ensureParagraphing(raw: string, opts?: { minParas?: number; maxParas?: 
   if (!text) return text;
 
   text = text.replace(/\n{3,}/g, '\n\n');
-
-  const hasParaBreaks = text.includes('\n\n');
-  if (!hasParaBreaks) {
+  if (!text.includes('\n\n')) {
     const sentences = text
       .split(/(?<=[。！？!?…])\s*/g)
-      .map(s => s.trim())
+      .map((sentence) => sentence.trim())
       .filter(Boolean);
-
     const targetParas = Math.min(maxParas, Math.max(minParas, Math.ceil((sentences.length || 1) / 3)));
+    const perChunk = Math.max(1, Math.ceil(sentences.length / targetParas));
     const chunks: string[] = [];
-    const per = Math.max(1, Math.ceil(sentences.length / targetParas));
-    for (let i = 0; i < sentences.length; i += per) {
-      chunks.push(sentences.slice(i, i + per).join(''));
+    for (let index = 0; index < sentences.length; index += perChunk) {
+      chunks.push(sentences.slice(index, index + perChunk).join(''));
     }
     text = chunks.join('\n\n');
   }
 
-  let paras = text.split(/\n{2,}/g).map(p => p.trim()).filter(Boolean);
-  if (paras.length < minParas) {
+  let paragraphs = text.split(/\n{2,}/g).map((paragraph) => paragraph.trim()).filter(Boolean);
+  if (paragraphs.length < minParas) {
     const expanded: string[] = [];
-    for (const p of paras) {
+    for (const paragraph of paragraphs) {
       if (expanded.length >= minParas) {
-        expanded.push(p);
-        continue;
-      }
-      if (p.length > 220) {
-        const mid = Math.floor(p.length / 2);
-        const left = p.slice(0, mid).replace(/\s+$/g, '');
-        const right = p.slice(mid).replace(/^\s+/g, '');
-        expanded.push(left, right);
+        expanded.push(paragraph);
+      } else if (paragraph.length > 220) {
+        const midpoint = Math.floor(paragraph.length / 2);
+        expanded.push(paragraph.slice(0, midpoint).trim(), paragraph.slice(midpoint).trim());
       } else {
-        expanded.push(p);
+        expanded.push(paragraph);
       }
     }
-    paras = expanded.map(p => p.trim()).filter(Boolean);
+    paragraphs = expanded.filter(Boolean);
   }
 
-  if (paras.length > maxParas) {
+  if (paragraphs.length > maxParas) {
     const merged: string[] = [];
-    const per = Math.ceil(paras.length / maxParas);
-    for (let i = 0; i < paras.length; i += per) {
-      merged.push(paras.slice(i, i + per).join('\n'));
+    const perChunk = Math.ceil(paragraphs.length / maxParas);
+    for (let index = 0; index < paragraphs.length; index += perChunk) {
+      merged.push(paragraphs.slice(index, index + perChunk).join('\n'));
     }
-    paras = merged;
+    paragraphs = merged;
   }
 
-  return paras.join('\n\n').trim();
+  return paragraphs.join('\n\n').trim();
 }
 
 const rewriteSchema = {
@@ -66,195 +60,200 @@ const rewriteSchema = {
         type: Type.OBJECT,
         properties: {
           chapter_num: { type: Type.INTEGER },
-          text: { type: Type.STRING, description: "重写后的章节内容（仅当前干涉的那一章需要全文，后续章节请留空）" },
-          summary: { type: Type.STRING, description: "本章节的最新剧情大纲（由于蝴蝶效应，请重写未来各章的走向，20-40字）" },
-          present_characters: { 
-            type: Type.ARRAY, 
+          text: { type: Type.STRING, description: '重写后的章节内容（仅当前干涉章节需要全文）' },
+          summary: { type: Type.STRING, description: '本章节的最新剧情大纲（20-40字）' },
+          present_characters: {
+            type: Type.ARRAY,
             items: { type: Type.STRING },
-            description: "本章出场的角色ID列表"
-          }
+            description: '本章出场的角色ID列表',
+          },
         },
-        required: ["chapter_num", "summary", "present_characters"]
-      }
+        required: ['chapter_num', 'summary', 'present_characters'],
+      },
     },
     character_updates: {
       type: Type.ARRAY,
       items: {
         type: Type.OBJECT,
         properties: {
-          id: { type: Type.STRING, description: "角色ID" },
-          status: { type: Type.STRING, description: "如：存活、重伤、死亡、黑化、失踪等" },
-          is_dead: { type: Type.BOOLEAN, description: "是否已死亡" }
+          id: { type: Type.STRING, description: '角色ID' },
+          status: { type: Type.STRING, description: '如：存活、重伤、死亡、黑化、失踪等' },
+          is_dead: { type: Type.BOOLEAN, description: '是否已死亡' },
         },
-        required: ["id", "status", "is_dead"]
-      }
-    }
+        required: ['id', 'status', 'is_dead'],
+      },
+    },
   },
-  required: ["chapters", "character_updates"]
+  required: ['chapters', 'character_updates'],
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method Not Allowed' });
+    return sendMethodNotAllowed(res);
   }
 
   try {
-    const { 
-      blueprint, 
-      chapters, 
-      chapterNum, 
-      charId, 
-      action, 
-      currentEndingValue, 
+    const user = await requireFirebaseAuth(req, res);
+    if (!user) return;
+
+    const {
+      blueprint,
+      chapters,
+      chapterNum,
+      charId,
+      action,
+      currentEndingValue,
       currentUnlockedBranches,
       targetWordCount,
       interventionHistory,
-      worldState
-    } = req.body;
+      worldState,
+    } = req.body || {};
 
+    const safeChapterNum = Math.min(6, Math.max(1, Number(chapterNum) || 1));
+    const safeTargetWordCount = Math.min(1200, Math.max(400, Number(targetWordCount) || 600));
+    const safeCurrentUnlockedBranches = Array.isArray(currentUnlockedBranches) ? currentUnlockedBranches : [];
     const history: Array<{ chapterNum: number; charId: string; action: string }> = Array.isArray(interventionHistory) ? interventionHistory : [];
 
-    const justTriggeredHistory = [...history, { chapterNum, charId, action }];
-    const evalTrigger = (t: any, fullHistory: Array<{ chapterNum: number; charId: string; action: string }>) => {
-      if (t?.type === 'single' && t.single) {
-        const s = t.single;
-        if (typeof s.chapterNum === 'number' && (s.chapterNum < 2 || s.chapterNum > 6)) return false;
-        return fullHistory.some(h => h.chapterNum === s.chapterNum && h.charId === s.charId && h.action === s.action);
+    if (!blueprint || !Array.isArray(blueprint.characters) || !Array.isArray(blueprint.branches) || !Array.isArray(chapters)) {
+      return res.status(400).json({ error: '干涉请求参数不合法。' });
+    }
+    if (action !== 'bless' && action !== 'curse') {
+      return res.status(400).json({ error: '干涉动作不合法。' });
+    }
+
+    const justTriggeredHistory = [...history, { chapterNum: safeChapterNum, charId, action }];
+    const evalTrigger = (trigger: any, fullHistory: Array<{ chapterNum: number; charId: string; action: string }>) => {
+      if (trigger?.type === 'single' && trigger.single) {
+        const single = trigger.single;
+        if (typeof single.chapterNum === 'number' && (single.chapterNum < 2 || single.chapterNum > 6)) return false;
+        return fullHistory.some((item) => item.chapterNum === single.chapterNum && item.charId === single.charId && item.action === single.action);
       }
-      if (t?.type === 'count' && t.count) {
-        const c = t.count;
-        if (typeof c.upToChapterNum === 'number' && (c.upToChapterNum < 2 || c.upToChapterNum > 6)) return false;
-        const relevant = fullHistory.filter(h => h.charId === c.charId && h.action === c.action);
-        const sliced = typeof c.upToChapterNum === 'number' ? relevant.filter(h => h.chapterNum <= c.upToChapterNum) : relevant;
-        return sliced.length >= c.minCount;
+      if (trigger?.type === 'count' && trigger.count) {
+        const count = trigger.count;
+        if (typeof count.upToChapterNum === 'number' && (count.upToChapterNum < 2 || count.upToChapterNum > 6)) return false;
+        const relevant = fullHistory.filter((item) => item.charId === count.charId && item.action === count.action);
+        const sliced = typeof count.upToChapterNum === 'number' ? relevant.filter((item) => item.chapterNum <= count.upToChapterNum) : relevant;
+        return sliced.length >= count.minCount;
       }
       return false;
     };
-    const isTriggered = (b: any) => {
-      const groups = Array.isArray(b?.triggerGroups) && b.triggerGroups.length > 0 ? b.triggerGroups.slice(0, 3) : [b?.trigger];
-      return groups.every((g: any) => evalTrigger(g, justTriggeredHistory));
+    const isTriggered = (branch: any) => {
+      const groups = Array.isArray(branch?.triggerGroups) && branch.triggerGroups.length > 0 ? branch.triggerGroups.slice(0, 3) : [branch?.trigger];
+      return groups.every((group: any) => evalTrigger(group, justTriggeredHistory));
     };
 
-    const unlocked = blueprint.branches.find((b: any) => isTriggered(b));
-    const countTriggered = blueprint.branches.filter((b: any) => isTriggered(b));
+    const countTriggered = blueprint.branches.filter((branch: any) => isTriggered(branch));
+    const unlocked = countTriggered[0];
+    const newlyUnlocked = countTriggered.filter((branch: any) => !safeCurrentUnlockedBranches.some((existing: any) => existing.id === branch.id));
+    const newUnlockedBranches = [...safeCurrentUnlockedBranches, ...newlyUnlocked];
 
-    const isAlreadyUnlocked = currentUnlockedBranches.find((b: any) => b.id === unlocked?.id);
-    const newlyUnlocked = [
-      ...(unlocked && !isAlreadyUnlocked ? [unlocked] : []),
-      ...countTriggered.filter((b: any) => !currentUnlockedBranches.some((x: any) => x.id === b.id))
-    ];
-    const newUnlockedBranches = [...currentUnlockedBranches, ...newlyUnlocked];
+    const leftBranches = blueprint.branches.filter((branch: any) => branch.side === 'left');
+    const rightBranches = blueprint.branches.filter((branch: any) => branch.side === 'right');
+    const leftTotalWeight = leftBranches.reduce((sum: number, branch: any) => sum + branch.score, 0);
+    const rightTotalWeight = rightBranches.reduce((sum: number, branch: any) => sum + branch.score, 0);
 
-    const leftSublines = blueprint.branches.filter((b: any) => b.side === 'left') || [];
-    const rightSublines = blueprint.branches.filter((b: any) => b.side === 'right') || [];
-    const leftTotalWeight = leftSublines.reduce((acc: number, b: any) => acc + b.score, 0);
-    const rightTotalWeight = rightSublines.reduce((acc: number, b: any) => acc + b.score, 0);
-    
     let directEVChange = 0;
-    for (const b of newlyUnlocked) {
-      if (b.side === 'left') {
-        directEVChange += (b.score / (leftTotalWeight || 1)) * 10;
-      } else if (b.side === 'right') {
-        directEVChange += -(b.score / (rightTotalWeight || 1)) * 10;
+    for (const branch of newlyUnlocked) {
+      if (branch.side === 'left') {
+        directEVChange += (branch.score / (leftTotalWeight || 1)) * 10;
+      } else if (branch.side === 'right') {
+        directEVChange -= (branch.score / (rightTotalWeight || 1)) * 10;
       }
     }
 
-    const newEndingValue = Math.max(-25, Math.min(25, currentEndingValue + directEVChange));
-    const charName = blueprint.characters.find((c: any) => c.id === charId)?.name;
+    const newEndingValue = Math.max(-25, Math.min(25, (Number(currentEndingValue) || 0) + directEVChange));
+    const charName = blueprint.characters.find((character: any) => character.id === charId)?.name || '未知角色';
     const endingProto = blueprint?.authorAssets?.endingPrototypes;
-    const injected = newlyUnlocked.length > 0 ? newlyUnlocked.map((b: any) => ({ id: b.id, name: b.name, inject: b.inject, sceneText: b.sceneText, side: b.side })) : null;
-    const evBefore = Number(currentEndingValue) || 0;
-    const evAfter = newEndingValue;
-    
-    // 直接前置剧情，作文风锚点
-    const prevChapterText = chapters.find((c: any) => c.chapter_num === chapterNum - 1)?.text || '';
+    const injected = newlyUnlocked.length > 0
+      ? newlyUnlocked.map((branch: any) => ({ id: branch.id, name: branch.name, inject: branch.inject, sceneText: branch.sceneText, side: branch.side }))
+      : null;
+    const prevChapterText = chapters.find((chapter: any) => chapter.chapter_num === safeChapterNum - 1)?.text || '';
 
-    // 构建 World State 上下文
     let worldStatePrompt = '';
     if (worldState && worldState.canonical) {
-      worldStatePrompt = `故事主轴（主题大方向参考）：${blueprint.main_axis || '（未提供）'}
+      worldStatePrompt = `故事主轴：${blueprint.main_axis || '（未提供）'}
 
-故事基准（硬约束，优先级最高，不可违背）：
+故事基准（硬约束，不可违背）：
 人物：${JSON.stringify(worldState.canonical.characters || [])}
 物件：${JSON.stringify(worldState.canonical.objects || [])}
 场景：${JSON.stringify(worldState.canonical.scenes || [])}
 核心规则：${(worldState.canonical.core_rules || []).join('；')}
 
 干涉偏移记录（软参考，当前权重 ${Math.round((worldState.deltaWeight || 0) * 100)}%）：
-${(worldState.deltas || []).map((d: any) => d.characters_changed?.map((c: any) => c.delta_description).join('；')).filter(Boolean).join('\n') || '无显著偏移。'}
+${(worldState.deltas || []).map((delta: any) => delta.characters_changed?.map((item: any) => item.delta_description).join('；')).filter(Boolean).join('\n') || '无显著偏移。'}
 
 结尾方向引导：${worldState.endingDirection || 'neutral'}
-${worldState.endingDirection && worldState.endingDirection !== 'neutral' && endingProto ? `结局原型（用于高强度倾向时靠拢参考）：\n${(endingProto[worldState.endingDirection] || '').substring(0, 400)}` : ''}
+${worldState.endingDirection && worldState.endingDirection !== 'neutral' && endingProto ? `结局原型：\n${String(endingProto[worldState.endingDirection] || '').substring(0, 400)}` : ''}
 
-直接前文（第 ${chapterNum - 1} 章，文风锚点）：
-${prevChapterText.substring(0, 400)}`;
+直接前文（第 ${safeChapterNum - 1} 章，文风锚点）：
+${String(prevChapterText).substring(0, 400)}`;
     } else {
-      worldStatePrompt = `前置剧情摘要：${chapters.filter((c: any) => c.chapter_num < chapterNum).map((c: any) => `第${c.chapter_num}章：${c.text}`).join('\n\n')}`;
+      worldStatePrompt = `前置剧情摘要：${chapters.filter((chapter: any) => chapter.chapter_num < safeChapterNum).map((chapter: any) => `第${chapter.chapter_num}章：${chapter.text}`).join('\n\n')}`;
     }
-    
-    const prompt = `你是一个互动小说引擎。玩家在第 ${chapterNum} 章进行了命运干涉。
-      
-      角色ID对照表：${blueprint.characters.map((c: any) => `${c.name} (ID: ${c.id})`).join('\n')}
-      ${worldStatePrompt}
-      各章情节概况（大纲）：${chapters.map((c: any) => `第${c.chapter_num}章：${c.summary || c.text?.substring(0, 50)}`).join('\n')}
-      干涉指令：玩家对角色【${charName}】施加了【${action === 'bless' ? '无形力量的庇佑' : '无形力量的磨难'}】。
-      命运倾向值（干涉前→干涉后，范围约 -25 偏混沌 到 +25 偏秩序）：${evBefore} → ${evAfter}。数值越大越偏向「秩序/左结局」一侧，越小越偏向「混沌/右结局」一侧。请在后续各章 summary 中体现这一压力方向（与庇佑/磨难语义一致）。
-      ${newlyUnlocked.length > 0 ? `本次新解锁支线：${newlyUnlocked.map((b: any) => b.name).join('、')}` : '未触发任何支线事件（只做局部涟漪）'}
-      ${injected ? `支线注入包（必须落实到剧情中，优先级高于自由发挥）：\n${injected.map((x: any) => `- [${x.id}] ${x.name}\n  - mustHappen: ${(x.inject?.mustHappen || []).join('；')}\n  - mustReveal: ${(x.inject?.mustReveal || []).join('；')}\n  - mustChange: ${(x.inject?.mustChange || []).join('；')}\n  - sceneText: ${(x.sceneText || '').substring(0, 400)}`).join('\n')}` : ''}
-      ${(!worldState || !worldState.canonical) && endingProto ? `作者结局原型（用于高强度倾向时靠拢）：\n- default: ${(endingProto.default || '').substring(0, 800)}\n- left: ${(endingProto.left || '').substring(0, 800)}\n- right: ${(endingProto.right || '').substring(0, 800)}` : ''}
-      要求：
-      1. **第 ${chapterNum} 章**：核心重写。生成全新的、细腻的小说全文。字数：${targetWordCount || 600} 中文字。文笔需呼应干涉。
-         - **分段强约束**：全文必须拆成 6-10 段；每段 2-4 句；段落间必须使用两个换行符 (\\n\\n)。不得出现“整章一段”。
-         - **段落逻辑**：每段只推进 1 个明确的叙事单位（场景/冲突/信息/抉择/后果之一），段落之间要有因果递进。
-      2. **涟漪强度规则**：
-         - 若未触发支线：第 ${chapterNum} 章必须写出可感知的因果变化；第 ${chapterNum + 1} 到 7 章的 summary 仍须**逐章重写**为 20-40 字新要点，至少体现「庇佑→更顺/更亮/更稳」或「磨难→更险/更暗/更乱」之一缕走向，**禁止**原样复制旧 summary。
-         - 若触发支线：必须将支线注入包落地，并让后续 summary 明显向对应侧的结局原型与当前倾向值 ${evAfter} 靠拢。
-      3. **第 ${chapterNum + 1} 到 7 章**：只需在 \`summary\` 字段给出新要点（20-40字），\`text\` 字段留空或省略（不要写正文）。
-      4. **极度重要：剧情高亮**：玩家的干涉必须在第 ${chapterNum} 章产生具体的、可感知的连锁反应。所有因干涉直接或间接导致的情节变化（哪怕只有一句话），必须严密地包裹在 <mark> ... </mark> 标签中。
-      
-      请严格按 JSON 输出。不要包含任何元数据。`;
+
+    const prompt = `你是一个互动小说引擎。玩家在第 ${safeChapterNum} 章进行了命运干涉。
+
+角色ID对照表：
+${blueprint.characters.map((character: any) => `${character.name} (ID: ${character.id})`).join('\n')}
+
+${worldStatePrompt}
+
+各章情节概况（大纲）：
+${chapters.map((chapter: any) => `第${chapter.chapter_num}章：${chapter.summary || String(chapter.text || '').substring(0, 50)}`).join('\n')}
+
+干涉指令：玩家对角色【${charName}】施加了【${action === 'bless' ? '庇佑' : '磨难'}】。
+命运倾向值（干涉前→干涉后）：${Number(currentEndingValue) || 0} → ${newEndingValue}。数值越大越偏向秩序/左结局，越小越偏向混沌/右结局。
+${newlyUnlocked.length > 0 ? `本次新解锁支线：${newlyUnlocked.map((branch: any) => branch.name).join('、')}` : '本次未触发支线事件，只能做局部涟漪。'}
+${injected ? `支线注入包（必须落地）：\n${injected.map((item: any) => `- [${item.id}] ${item.name}\n  - mustHappen: ${(item.inject?.mustHappen || []).join('；')}\n  - mustReveal: ${(item.inject?.mustReveal || []).join('；')}\n  - mustChange: ${(item.inject?.mustChange || []).join('；')}\n  - sceneText: ${String(item.sceneText || '').substring(0, 400)}`).join('\n')}` : ''}
+${(!worldState || !worldState.canonical) && endingProto ? `作者结局原型：\n- default: ${String(endingProto.default || '').substring(0, 800)}\n- left: ${String(endingProto.left || '').substring(0, 800)}\n- right: ${String(endingProto.right || '').substring(0, 800)}` : ''}
+
+要求：
+1. 第 ${safeChapterNum} 章必须重写成完整正文，字数约 ${safeTargetWordCount} 字。
+2. 全文必须拆成 6-10 段，每段 2-4 句，段落之间用两个换行符。
+3. 第 ${safeChapterNum + 1} 到 7 章只写 summary，不写正文。
+4. 所有因本次干涉直接或间接导致的变化，都必须用 <mark>...</mark> 包起来。
+5. 即使未触发支线，也必须让本章和后续大纲出现可感知偏移，不能复制旧 summary。
+
+请严格按 JSON 输出，不要包含元数据。`;
 
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY as string });
     const response = await ai.models.generateContent({
-      model: 'gemini-3.1-flash-lite-preview', 
+      model: 'gemini-3.1-flash-lite-preview',
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
         responseSchema: rewriteSchema,
-      }
+      },
     });
 
     const aiData = JSON.parse(response.text || '{}');
-    if (aiData?.chapters?.length) {
-      aiData.chapters = aiData.chapters.map((c: any) => {
-        if (c?.chapter_num === chapterNum && typeof c.text === 'string') {
-          return { ...c, text: ensureParagraphing(c.text, { minParas: 6, maxParas: 10 }) };
+    if (Array.isArray(aiData?.chapters)) {
+      aiData.chapters = aiData.chapters.map((chapter: any) => {
+        if (chapter?.chapter_num === safeChapterNum && typeof chapter.text === 'string') {
+          return { ...chapter, text: ensureParagraphing(chapter.text, { minParas: 6, maxParas: 10 }) };
         }
-        return c;
+        return chapter;
       });
     }
+
     const leftProgress = Math.min(100, Math.max(0, (newEndingValue / 25) * 100));
     const rightProgress = Math.min(100, Math.max(0, (-newEndingValue / 25) * 100));
-    let endingLabel = "均衡道";
-    if (newEndingValue > 5) endingLabel = "秩序律";
-    if (newEndingValue < -5) endingLabel = "混沌终";
+    let endingLabel = '均衡道';
+    if (newEndingValue > 5) endingLabel = '秩序律';
+    if (newEndingValue < -5) endingLabel = '混沌终';
 
-    res.status(200).json({
+    return res.status(200).json({
       aiData,
       newEndingValue,
       newUnlockedBranches,
-      unlockedBranch: unlocked && !isAlreadyUnlocked ? unlocked : null,
+      unlockedBranch: unlocked && !safeCurrentUnlockedBranches.some((branch: any) => branch.id === unlocked.id) ? unlocked : null,
       uiFeedback: {
         leftProgress,
         rightProgress,
-        endingLabel
-      }
+        endingLabel,
+      },
     });
-  } catch (error: any) {
-    console.error("API Error: ", error);
-    res.status(500).json({ 
-      error: error.message || '干涉处理失败',
-      stack: error.stack || String(error)
-    });
+  } catch (error) {
+    return sendInternalError(res, '干涉处理失败', error);
   }
 }

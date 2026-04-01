@@ -54,6 +54,18 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == resource.data.userId;
     }
 
+    function isStoryOwnerData(data) {
+      return isAuthenticated() && data.authorId == request.auth.uid;
+    }
+
+    function canReadStoryData(data) {
+      return isAuthenticated() && (
+        data.visibility == 'public' ||
+        data.visibility == 'unlisted' ||
+        data.authorId == request.auth.uid
+      );
+    }
+
     function uidUnchanged() {
       return !('userId' in request.resource.data) ||
         request.resource.data.userId == request.auth.uid;
@@ -146,23 +158,21 @@ service cloud.firestore {
     // Stories ("Cartridges")
     // ===============================================================
     match /stories/{storyId} {
-      // TEMP/MVP: allow any authenticated user to read stories so the platform can run.
-      // Keep writes restricted to the story author.
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && uidUnchanged() && isValidStoryMeta(request.resource.data) && request.resource.data.authorId == request.auth.uid;
-      allow update: if isAuthenticated() && request.resource.data.authorId == request.auth.uid && isValidStoryMeta(request.resource.data);
+      allow read: if canReadStoryData(resource.data);
+      allow create: if isAuthenticated() && uidUnchanged() && isValidStoryMeta(request.resource.data) && isStoryOwnerData(request.resource.data);
+      allow update: if isAuthenticated() && isStoryOwnerData(request.resource.data) && resource.data.authorId == request.auth.uid && isValidStoryMeta(request.resource.data);
       allow delete: if isAuthenticated() && resource.data.authorId == request.auth.uid;
 
       match /chapters/{chapterNum} {
-        allow read: if isAuthenticated();
+        allow read: if canReadStoryData(get(/databases/$(database)/documents/stories/$(storyId)).data);
         allow write: if isAuthenticated() && get(/databases/$(database)/documents/stories/$(storyId)).data.authorId == request.auth.uid;
       }
       match /endings/{endingId} {
-        allow read: if isAuthenticated();
+        allow read: if canReadStoryData(get(/databases/$(database)/documents/stories/$(storyId)).data);
         allow write: if isAuthenticated() && get(/databases/$(database)/documents/stories/$(storyId)).data.authorId == request.auth.uid;
       }
       match /branches/{branchId} {
-        allow read: if isAuthenticated();
+        allow read: if canReadStoryData(get(/databases/$(database)/documents/stories/$(storyId)).data);
         allow write: if isAuthenticated() && get(/databases/$(database)/documents/stories/$(storyId)).data.authorId == request.auth.uid;
       }
     }

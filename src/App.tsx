@@ -150,6 +150,8 @@ const GlobalError = ({ errorMsg }: { errorMsg: string | null }) => (
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -20 }}
+        role="alert"
+        aria-live="assertive"
         className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] bg-rose-500 text-white px-6 py-3 rounded-lg shadow-lg font-medium"
       >
         {errorMsg}
@@ -533,6 +535,35 @@ export default function App() {
     }
   };
 
+  const readErrorMessage = async (response: Response) => {
+    try {
+      const data = await response.json();
+      return data?.error || `请求失败（${response.status}）`;
+    } catch {
+      return await response.text() || `请求失败（${response.status}）`;
+    }
+  };
+
+  const getAuthHeaders = async (headers?: HeadersInit) => {
+    if (!user) {
+      throw new Error('请先登录后再继续。');
+    }
+
+    const merged = new Headers(headers || {});
+    if (!merged.has('Content-Type')) {
+      merged.set('Content-Type', 'application/json');
+    }
+
+    const idToken = await user.getIdToken();
+    merged.set('Authorization', `Bearer ${idToken}`);
+    return merged;
+  };
+
+  const apiFetch = async (url: string, init: RequestInit = {}, ms = 30000) => {
+    const headers = await getAuthHeaders(init.headers);
+    return fetchWithTimeout(url, { ...init, headers }, ms);
+  };
+
   const startProgressSimulation = (durationMs: number, messages: string[]) => {
     setGenerationProgress(0);
     setGenerationStatus(messages[0]);
@@ -766,6 +797,68 @@ export default function App() {
     }).catch(err => console.error("Redirect Login Error:", err));
   }, []);
 
+  useEffect(() => {
+    const closeActiveModal = confirmationModal.isOpen
+      ? () => setConfirmationModal(prev => ({ ...prev, isOpen: false }))
+      : showSummaryModal
+        ? () => setShowSummaryModal(false)
+        : null;
+
+    if (!closeActiveModal) return;
+
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const modalRoot = document.querySelector<HTMLElement>('[data-modal-root="true"]');
+    const focusables = modalRoot
+      ? Array.from(modalRoot.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'))
+          .filter((element) => !element.hasAttribute('disabled') && element.getAttribute('aria-hidden') !== 'true')
+      : [];
+
+    const frame = window.requestAnimationFrame(() => {
+      (focusables[0] || modalRoot)?.focus();
+    });
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeActiveModal();
+        return;
+      }
+
+      if (event.key !== 'Tab' || !modalRoot) return;
+      const currentFocusables = Array.from(modalRoot.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'))
+        .filter((element) => !element.hasAttribute('disabled') && element.getAttribute('aria-hidden') !== 'true');
+
+      if (currentFocusables.length === 0) {
+        event.preventDefault();
+        modalRoot.focus();
+        return;
+      }
+
+      const first = currentFocusables[0];
+      const last = currentFocusables[currentFocusables.length - 1];
+      const active = document.activeElement;
+
+      if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      previousFocus?.focus();
+    };
+  }, [confirmationModal.isOpen, showSummaryModal]);
+
   // Lazy flesh out chapters
   useEffect(() => {
     if (!blueprint || gameState !== 'PLAYING' || isRewriting || suppressChapterWritesRef.current) return;
@@ -843,9 +936,8 @@ export default function App() {
 
     setFleshingOutChapters(prev => ({ ...prev, [targetChapterNum]: true }));
     try {
-      const response = await withRetry(() => fetchWithTimeout('/api/generate-next-chapter', {
+      const response = await withRetry(() => apiFetch('/api/generate-next-chapter', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           blueprint,
           chapters,
@@ -981,21 +1073,19 @@ export default function App() {
     ]);
     
     try {
-      const response = await fetch('/api/generate-blueprint', {
+      const response = await apiFetch('/api/generate-blueprint', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ selectedThemes, targetWordCount })
       });
-      if (!response.ok) throw new Error(await response.text());
+      if (!response.ok) throw new Error(await readErrorMessage(response));
       const data = await response.json();
       
       // NEW: Immediately flesh out Chapter 1 before entering game
       setGenerationStatus("正在撰写序章内容...");
       setGenerationProgress(85);
       
-      const ch1Response = await withRetry(() => fetchWithTimeout('/api/generate-next-chapter', {
+      const ch1Response = await withRetry(() => apiFetch('/api/generate-next-chapter', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           blueprint: data,
           currentChapters: [],
@@ -1004,7 +1094,7 @@ export default function App() {
         })
       }, 90000), 3, 2500);
 
-      if (!ch1Response.ok) throw new Error(await ch1Response.text());
+      if (!ch1Response.ok) throw new Error(await readErrorMessage(ch1Response));
       const ch1Data = await ch1Response.json();
       if (!ch1Data?.text || typeof ch1Data.text !== 'string' || ch1Data.text.trim().length < 50) {
         throw new Error("第一章生成内容为空或过短");
@@ -1093,9 +1183,8 @@ export default function App() {
       setGameState('PLAYING');
 
       // Fire-and-forget: generate canonical world state for quick-generated stories
-      fetch('/api/digest-chapter', {
+      apiFetch('/api/digest-chapter', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           mode: 'canonical',
           blueprint: data,
@@ -1263,9 +1352,13 @@ export default function App() {
       setShowSummaryModal(false);
       setSummaryEntrySource(null);
       setGameState('PLAYING');
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      showError('导入作品失败。');
+      if (e?.code === 'permission-denied' || String(e?.message || '').includes('permission')) {
+        showError('该作品无权访问，可能是私有作品或分享 ID 无效。');
+      } else {
+        showError('导入作品失败。');
+      }
       setGameState('STORY_SELECT');
     } finally {
       setIsLoadingStories(false);
@@ -1410,9 +1503,8 @@ export default function App() {
       showError(`导入完成：主线已填充，支线 ${payload.branches.length} 条${authoringImportReplaceBranches ? '（已覆盖旧支线）' : '（已追加）'}。`);
 
       // Fire-and-forget: generate canonical world state for this authored story
-      fetch('/api/digest-chapter', {
+      apiFetch('/api/digest-chapter', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           mode: 'canonical',
           blueprint: {
@@ -1454,11 +1546,11 @@ export default function App() {
   const generateConclusion = async (storyChapters: Chapter[]) => {
     setIsGeneratingConclusion(true);
     try {
-      const response = await fetch('/api/generate-summary', {
+      const response = await apiFetch('/api/generate-summary', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ blueprint, chapters: storyChapters, endingValue })
       });
+      if (!response.ok) throw new Error(await readErrorMessage(response));
       const data = await response.json();
       setStoryConclusion(data.text);
     } catch (e) {
@@ -1508,9 +1600,8 @@ export default function App() {
     try {
       setChapters(prev => prev.map(c => c.chapter_num >= chapterNum ? { ...c, text: '命运涟漪正在扩散，重写中...' } : c));
       
-      const response = await fetch('/api/intervene', {
+      const response = await apiFetch('/api/intervene', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           blueprint,
           chapters,
@@ -1524,7 +1615,7 @@ export default function App() {
           worldState: buildWorldStateForPrompt(chapterNum, endingValue)
         })
       });
-      if (!response.ok) throw new Error(await response.text());
+      if (!response.ok) throw new Error(await readErrorMessage(response));
       const data = await response.json();
       
       const responseData = data.aiData || {};
@@ -1635,9 +1726,8 @@ export default function App() {
       // Fire-and-forget: generate delta world state for this intervention
       if (canonicalWorldState) {
         const rewrittenChText = updatedChapters.find(c => c.chapter_num === chapterNum)?.text || '';
-        fetch('/api/digest-chapter', {
+        apiFetch('/api/digest-chapter', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             mode: 'delta',
             canonicalWorldState,
@@ -1875,7 +1965,7 @@ export default function App() {
             <div className="text-xs text-zinc-500">已登录</div>
             <div className="text-sm font-medium text-zinc-300">{user.isAnonymous ? "游客用户" : user.displayName}</div>
           </div>
-          <button onClick={handleLogout} className="p-2 bg-zinc-900 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+          <button aria-label="退出登录" onClick={handleLogout} className="p-2 bg-zinc-900 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
             <LogOut className="w-5 h-5 text-zinc-400" />
           </button>
         </div>
@@ -1939,11 +2029,12 @@ export default function App() {
 
             <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 space-y-4">
               <div className="font-bold text-white">分享码导入</div>
-              <div className="text-xs text-zinc-500">MVP：暂用 storyId 作为分享码（后续可升级成短码）。</div>
+              <div className="text-xs text-zinc-500">MVP：暂用 storyId 作为分享码。仅公开或未列出的作品可被导入。</div>
               <input
                 value={storyImportCode}
                 onChange={(e) => setStoryImportCode(e.target.value)}
                 placeholder="输入分享ID（storyId）"
+                aria-label="输入分享故事 ID"
                 className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm text-zinc-200 outline-none focus:border-indigo-500"
               />
               <button
@@ -2050,8 +2141,8 @@ export default function App() {
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="font-bold text-zinc-100 truncate">{s.title}</div>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full border ${s.visibility === 'public' ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' : 'bg-zinc-800 text-zinc-300 border-zinc-700'}`}>
-                        {s.visibility === 'public' ? '公开' : '私有'}
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full border ${s.visibility === 'public' ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' : s.visibility === 'unlisted' ? 'bg-amber-500/10 text-amber-300 border-amber-500/30' : 'bg-zinc-800 text-zinc-300 border-zinc-700'}`}>
+                        {s.visibility === 'public' ? '公开' : s.visibility === 'unlisted' ? '未列出' : '私有'}
                       </span>
                     </div>
                     <div className="mt-1 text-[10px] text-zinc-500">分享ID：{s.id}</div>
@@ -2143,6 +2234,7 @@ export default function App() {
                               className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm"
                             >
                               <option value="private">私有（仅自己可见）</option>
+                              <option value="unlisted">未列出（知道分享 ID 才可访问）</option>
                               <option value="public">公开（出现在作品库）</option>
                             </select>
                           </label>
@@ -2603,6 +2695,7 @@ export default function App() {
                                       common: Boolean(b.common),
                                     }));
                                   }}
+                                  aria-label={expandedBranchId === b.id ? `收起支线 ${b.name}` : `展开支线 ${b.name}`}
                                   className="p-2 bg-zinc-900 border border-zinc-800 rounded-lg"
                                   title="展开/收起"
                                 >
@@ -2620,6 +2713,7 @@ export default function App() {
                                     }
                                     showError('支线已删除。');
                                   }}
+                                  aria-label={`删除支线 ${b.name}`}
                                   className="p-2 bg-zinc-900 border border-zinc-800 rounded-lg"
                                   title="删除支线"
                                 >
@@ -2791,7 +2885,7 @@ export default function App() {
           <button onClick={() => setGameState('STORY_SELECT')} className="px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-300 hover:border-zinc-600 transition-colors">
             返回作品库
           </button>
-          <button onClick={handleLogout} className="p-2 bg-zinc-900 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+          <button aria-label="退出登录" onClick={handleLogout} className="p-2 bg-zinc-900 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
             <LogOut className="w-5 h-5 text-zinc-400" />
           </button>
         </div>
@@ -2833,6 +2927,7 @@ export default function App() {
                 step="100"
                 value={targetWordCount}
                 onChange={(e) => setTargetWordCount(parseInt(e.target.value))}
+                aria-label="设置每章目标字数"
                 className="w-full h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
               />
               <div className="flex justify-between text-[10px] text-zinc-600 uppercase tracking-widest">
@@ -2944,13 +3039,13 @@ export default function App() {
         {/* Summary modal (no separate SUMMARY page; always overlays on PLAYING) */}
         <AnimatePresence>
           {showSummaryModal && blueprint && (
-            <motion.div
+            <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               role="presentation"
               className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
-              onClick={(e) => e.stopPropagation()}
+              onClick={() => setShowSummaryModal(false)}
             >
               <motion.div
                 initial={{ scale: 0.9, y: 20 }}
@@ -2958,6 +3053,8 @@ export default function App() {
                 exit={{ scale: 0.9, y: 20 }}
                 role="dialog"
                 aria-modal="true"
+                data-modal-root="true"
+                tabIndex={-1}
                 className="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-lg w-[calc(100%-2rem)] shadow-2xl flex flex-col items-center text-center space-y-6 relative overflow-hidden"
                 onClick={(e) => e.stopPropagation()}
               >
@@ -3045,6 +3142,8 @@ export default function App() {
           {/* Mobile Menu Button */}
           <button 
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            aria-label={isSidebarOpen ? "收起侧边栏" : "打开侧边栏"}
+            aria-expanded={isSidebarOpen}
             className="lg:hidden fixed top-4 right-4 z-[160] p-2 bg-zinc-800 rounded-lg border border-zinc-700"
           >
             <Menu className="w-6 h-6 text-white" />
@@ -3057,6 +3156,7 @@ export default function App() {
             {isSidebarOpen && (
               <button 
                 onClick={() => setIsSidebarOpen(false)}
+                aria-label="关闭侧边栏"
                 className="lg:hidden absolute top-4 right-4 p-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-zinc-400 hover:text-white transition-colors border border-zinc-700 z-[220]"
               >
                 <X className="w-6 h-6" />
@@ -3455,7 +3555,7 @@ export default function App() {
               exit={{ opacity: 0 }}
               role="presentation"
               className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
-              onClick={(e) => e.stopPropagation()}
+              onClick={() => setShowSummaryModal(false)}
             >
               <motion.div 
                 initial={{ scale: 0.9, y: 20 }}
@@ -3464,6 +3564,8 @@ export default function App() {
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="summary-modal-title"
+                data-modal-root="true"
+                tabIndex={-1}
                 onClick={(e) => e.stopPropagation()}
                 className="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 md:p-8 max-w-lg w-[calc(100%-2rem)] shadow-2xl flex flex-col items-center text-center space-y-6 relative overflow-hidden"
               >
@@ -3567,11 +3669,18 @@ export default function App() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="fixed inset-0 z-[400] flex items-center justify-center bg-black/90 backdrop-blur-xl p-4"
+              role="presentation"
+              onClick={() => setConfirmationModal(prev => ({ ...prev, isOpen: false }))}
             >
               <motion.div
                 initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.95, opacity: 0 }}
+                role="dialog"
+                aria-modal="true"
+                data-modal-root="true"
+                tabIndex={-1}
+                onClick={(e) => e.stopPropagation()}
                 className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 max-w-md w-full shadow-2xl space-y-6"
               >
                 <div className="space-y-2">
