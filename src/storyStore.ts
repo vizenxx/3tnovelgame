@@ -31,6 +31,7 @@ export type StoryListItem = {
   tags: string[];
   visibility: Visibility;
   authorId: string;
+  popularity?: number;
   updatedAt: string | any;
   createdAt: string | any;
   version: number;
@@ -58,14 +59,15 @@ export async function listMyStories(db: Firestore, authorId: string, pageSize = 
   return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as StoryListItem[];
 }
 
-export async function createEmptyStory(db: Firestore, args: { authorId: string; title?: string }) {
+export async function createEmptyStory(db: Firestore, args: { authorId: string; title?: string; tags?: string[] }) {
   const now = new Date().toISOString();
   const meta: Omit<StoryMeta, 'coverUrl'> = {
     title: args.title || '未命名作品',
     main_axis: '（请填写本作主轴/命题/世界观核心）',
-    tags: [],
+    tags: args.tags || [],
     authorId: args.authorId,
     visibility: 'private',
+    popularity: 0,
     endingMode: 'dual',
     endingRates: { left: 40, right: 40 },
     endingNames: { left: '', right: '' },
@@ -97,9 +99,9 @@ export async function createEmptyStory(db: Firestore, args: { authorId: string; 
     };
     batch.set(doc(db, 'stories', ref.id, 'chapters', String(i)), chapter);
   }
-  const defaultEnding: StoryEndingDoc = { id: 'default', chapter_num: 7, text: '' };
-  const leftEnding: StoryEndingDoc = { id: 'left', chapter_num: 7, text: '' };
-  const rightEnding: StoryEndingDoc = { id: 'right', chapter_num: 7, text: '' };
+  const defaultEnding: StoryEndingDoc = { id: 'default', chapter_num: 7, title: '第七章', text: '' };
+  const leftEnding: StoryEndingDoc = { id: 'left', chapter_num: 7, title: '左结局', text: '' };
+  const rightEnding: StoryEndingDoc = { id: 'right', chapter_num: 7, title: '右结局', text: '' };
   batch.set(doc(db, 'stories', ref.id, 'endings', 'default'), defaultEnding);
   batch.set(doc(db, 'stories', ref.id, 'endings', 'left'), leftEnding);
   batch.set(doc(db, 'stories', ref.id, 'endings', 'right'), rightEnding);
@@ -131,7 +133,7 @@ export async function getStoryCartridge(db: Firestore, storyId: string) {
   return { storyId, meta, chapters, endings, branches };
 }
 
-export async function adaptBlueprintToStory(db: Firestore, args: { authorId: string; blueprint: any; chapters: any[]; conclusionText?: string }) {
+export async function adaptBlueprintToStory(db: Firestore, args: { authorId: string; blueprint: any; chapters: any[]; conclusionText?: string; tags?: string[] }) {
   const now = new Date().toISOString();
   const bp = args.blueprint;
 
@@ -147,9 +149,10 @@ export async function adaptBlueprintToStory(db: Firestore, args: { authorId: str
   const meta: Omit<StoryMeta, 'coverUrl'> = {
     title: bp.title || '从蓝图改编的作品',
     main_axis: bp.main_axis || '（无主轴记录）',
-    tags: [],
+    tags: args.tags || bp.tags || [],
     authorId: args.authorId,
     visibility: 'private',
+    popularity: 0,
     endingMode: 'dual',
     endingRates: { left: bp.left_mainline_default || 40, right: bp.right_mainline_default || 40 },
     endingNames: { left: '', right: '' },
@@ -182,9 +185,24 @@ export async function adaptBlueprintToStory(db: Firestore, args: { authorId: str
     batch.set(doc(db, 'stories', ref.id, 'chapters', String(i)), chapter);
   }
 
-  const defaultEnding: StoryEndingDoc = { id: 'default', chapter_num: 7, text: chapterByNum.get(7)?.text || args.conclusionText || bp.endings?.find((e: any) => e.type === 'normal')?.text || '' };
-  const leftEnding: StoryEndingDoc = { id: 'left', chapter_num: 7, text: bp.endings?.find((e: any) => e.type === 'good' || e.type === 'left')?.text || '' };
-  const rightEnding: StoryEndingDoc = { id: 'right', chapter_num: 7, text: bp.endings?.find((e: any) => e.type === 'bad' || e.type === 'right')?.text || '' };
+  const defaultEnding: StoryEndingDoc = {
+    id: 'default',
+    chapter_num: 7,
+    title: chapterByNum.get(7)?.title || bp.endings?.find((e: any) => e.type === 'normal')?.title || '第七章',
+    text: chapterByNum.get(7)?.text || args.conclusionText || bp.endings?.find((e: any) => e.type === 'normal')?.text || ''
+  };
+  const leftEnding: StoryEndingDoc = {
+    id: 'left',
+    chapter_num: 7,
+    title: bp.endings?.find((e: any) => e.type === 'good' || e.type === 'left')?.title || '左结局',
+    text: bp.endings?.find((e: any) => e.type === 'good' || e.type === 'left')?.text || ''
+  };
+  const rightEnding: StoryEndingDoc = {
+    id: 'right',
+    chapter_num: 7,
+    title: bp.endings?.find((e: any) => e.type === 'bad' || e.type === 'right')?.title || '右结局',
+    text: bp.endings?.find((e: any) => e.type === 'bad' || e.type === 'right')?.text || ''
+  };
   batch.set(doc(db, 'stories', ref.id, 'endings', 'default'), defaultEnding);
   batch.set(doc(db, 'stories', ref.id, 'endings', 'left'), leftEnding);
   batch.set(doc(db, 'stories', ref.id, 'endings', 'right'), rightEnding);
@@ -226,14 +244,14 @@ export async function saveStoryChapter(db: Firestore, storyId: string, chapterNu
 }
 
 export async function saveStoryEnding(db: Firestore, storyId: string, id: 'default' | 'left' | 'right', patch: Partial<StoryEndingDoc>) {
-  await setDoc(doc(db, 'stories', storyId, 'endings', id), { id, chapter_num: 7, ...patch } as any, { merge: true });
+  await setDoc(doc(db, 'stories', storyId, 'endings', id), { id, chapter_num: 7, title: patch.title || '', ...patch } as any, { merge: true });
   await updateDoc(doc(db, 'stories', storyId), { updatedAt: new Date().toISOString(), updatedAtServer: serverTimestamp() } as any);
 }
 
 export async function saveStoryMainlineBundle(db: Firestore, storyId: string, args: {
   metaPatch: Partial<StoryMeta>;
   chapters: Array<Pick<StoryChapterDoc, 'chapter_num' | 'title' | 'summary' | 'present_characters' | 'text'>>;
-  endings: Array<Pick<StoryEndingDoc, 'id' | 'text'>>;
+  endings: Array<Pick<StoryEndingDoc, 'id' | 'title' | 'text'>>;
 }) {
   const batch = writeBatch(db);
   batch.update(doc(db, 'stories', storyId), {
@@ -246,7 +264,7 @@ export async function saveStoryMainlineBundle(db: Firestore, storyId: string, ar
     batch.set(doc(db, 'stories', storyId, 'chapters', String(ch.chapter_num)), ch as any, { merge: true });
   }
   for (const ed of args.endings) {
-    batch.set(doc(db, 'stories', storyId, 'endings', ed.id), { id: ed.id, chapter_num: 7, text: ed.text } as any, { merge: true });
+    batch.set(doc(db, 'stories', storyId, 'endings', ed.id), { id: ed.id, chapter_num: 7, title: ed.title || '', text: ed.text } as any, { merge: true });
   }
 
   await batch.commit();
@@ -281,4 +299,3 @@ export async function deleteStoryCartridge(db: Firestore, storyId: string) {
   batch.delete(doc(db, 'stories', storyId));
   await batch.commit();
 }
-

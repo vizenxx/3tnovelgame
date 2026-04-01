@@ -21,6 +21,7 @@ import {
   updateDoc, 
   collection, 
   addDoc, 
+  increment,
   serverTimestamp,
   onSnapshot,
   getDocFromServer,
@@ -74,6 +75,7 @@ interface Chapter {
 
 interface Ending {
   type: 'good' | 'normal' | 'bad';
+  title?: string;
   text: string;
 }
 
@@ -93,6 +95,7 @@ interface Branch {
 interface Blueprint {
   title: string;
   main_axis: string;
+  tags?: string[];
   left_mainline_default: number; // e.g., 80
   right_mainline_default: number; // e.g., 40
   characters: Character[];
@@ -112,6 +115,34 @@ const THEMES = [
   "校园", "恋爱", "悬疑", "推理", "星际", "科幻", "武侠", "江湖",
   "现代", "都市", "恐怖", "战争"
 ];
+
+const DISPLAY_TAG_LIMIT = 3;
+
+const stripBookTitle = (value: string) => String(value || '').replace(/[《》]/g, '').trim();
+const formatBookTitle = (value: string) => `《${stripBookTitle(value) || '未命名作品'}》`;
+const limitFiveChars = (value: string) => Array.from(String(value || '').trim()).slice(0, 5).join('');
+const normalizeTagList = (tags: string[] = []) => {
+  const seen = new Set<string>();
+  return tags
+    .map((tag) => String(tag || '').trim())
+    .filter(Boolean)
+    .filter((tag) => {
+      if (seen.has(tag)) return false;
+      seen.add(tag);
+      return true;
+    })
+    .slice(0, 20);
+};
+const parseTagInput = (value: string) => normalizeTagList(String(value || '').split('，'));
+const formatStoryHeading = (chapter: Pick<Chapter, 'chapter_num' | 'title'>) => {
+  const title = String(chapter.title || '').trim();
+  return title ? `第${chapter.chapter_num}章：${title}` : `第${chapter.chapter_num}章`;
+};
+const endingIdToLabel = (id: 'default' | 'left' | 'right') => {
+  if (id === 'left') return '左结局';
+  if (id === 'right') return '右结局';
+  return '默认结局';
+};
 
 const renderParagraphWithHighlights = (text: string, characters: Character[] = []) => {
   const parts = text.split(/(<mark>.*?<\/mark>)/g);
@@ -228,6 +259,10 @@ function summaryEndingCategoryLabel(args: {
   if (args.endingLabel === '混沌终') return `${right}结局`;
   return '默认结局';
 }
+
+const buildStoryPopularityPayload = () => ({
+  popularity: increment(1),
+});
 
 const normalizeCharacters = (chars: Array<{ name: string; desc: string }>) => {
   const trimmed = (chars || []).map(c => ({ name: (c.name || '').trim(), desc: (c.desc || '').trim() }));
@@ -462,6 +497,7 @@ export default function App() {
   const [publicStories, setPublicStories] = useState<any[]>([]);
   const [myStories, setMyStories] = useState<any[]>([]);
   const [storyImportCode, setStoryImportCode] = useState('');
+  const [authoringCustomTagsInput, setAuthoringCustomTagsInput] = useState('');
   const [isLoadingStories, setIsLoadingStories] = useState(false);
   const [authoringStoryId, setAuthoringStoryId] = useState<string | null>(null);
   const [authoringCartridge, setAuthoringCartridge] = useState<any | null>(null);
@@ -497,6 +533,7 @@ export default function App() {
       upToChapterNum: 6,
     },
   ]);
+  const popularityCountedRef = useRef(false);
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
   const [expandedBranchId, setExpandedBranchId] = useState<string | null>(null);
   const [interventionHistory, setInterventionHistory] = useState<Array<{ chapterNum: number; charId: string; action: 'bless' | 'curse' }>>([]);
@@ -539,6 +576,11 @@ export default function App() {
   const readErrorMessage = async (response: Response) => {
     try {
       const data = await response.json();
+      data.tags = normalizeTagList(selectedThemes);
+      data.endings = (data.endings || []).map((ending: any, index: number) => ({
+        ...ending,
+        title: ending?.title || (index === 0 ? '第七章' : index === 1 ? '左结局' : '右结局'),
+      }));
       return data?.error || `请求失败（${response.status}）`;
     } catch {
       return await response.text() || `请求失败（${response.status}）`;
@@ -741,18 +783,20 @@ export default function App() {
                 }));
                 // Authored story: fill chapter 7 text from default ending if chapter 7 has no text
                 const ch7 = baseChaps.find((c: any) => c.chapter_num === 7);
-                const defaultEndingText = (cartridge.endings.find((e: any) => e.id === 'default')?.text || '').trim();
+                const defaultEnding = cartridge.endings.find((e: any) => e.id === 'default');
+                const defaultEndingText = (defaultEnding?.text || '').trim();
                 if (ch7 && (!ch7.text || !ch7.text.trim()) && defaultEndingText) {
                   ch7.text = defaultEndingText;
-                  ch7.title = ch7.title || '默认结局';
+                  ch7.title = ch7.title || defaultEnding?.title || '第七章';
                 }
                 return baseChaps;
               })(),
               endings: [
-                { type: 'normal', text: (cartridge.endings.find((e: any) => e.id === 'default')?.text || '') },
-                { type: 'good', text: (cartridge.endings.find((e: any) => e.id === 'left')?.text || '') },
-                { type: 'bad', text: (cartridge.endings.find((e: any) => e.id === 'right')?.text || '') },
+                { type: 'normal', title: (cartridge.endings.find((e: any) => e.id === 'default')?.title || '第七章'), text: (cartridge.endings.find((e: any) => e.id === 'default')?.text || '') },
+                { type: 'good', title: (cartridge.endings.find((e: any) => e.id === 'left')?.title || '左结局'), text: (cartridge.endings.find((e: any) => e.id === 'left')?.text || '') },
+                { type: 'bad', title: (cartridge.endings.find((e: any) => e.id === 'right')?.title || '右结局'), text: (cartridge.endings.find((e: any) => e.id === 'right')?.text || '') },
               ],
+              tags: cartridge.meta.tags || [],
               branches: cartridge.branches.map((b: any) => {
                 const score = tierToScore(b.tier);
                 // default condition mapping for UI; real unlock can use trigger/history
@@ -806,6 +850,10 @@ export default function App() {
       }
     }).catch(err => console.error("Redirect Login Error:", err));
   }, []);
+
+  useEffect(() => {
+    setAuthoringCustomTagsInput((authoringCartridge?.meta?.tags || []).join('，'));
+  }, [authoringCartridge?.storyId, authoringCartridge?.meta?.tags]);
 
   useEffect(() => {
     const closeActiveModal = confirmationModal.isOpen
@@ -1087,6 +1135,53 @@ export default function App() {
     }
   };
 
+  const toggleAuthoringTag = (tag: string) => {
+    setAuthoringCartridge((prev: any) => {
+      if (!prev) return prev;
+      const tags = normalizeTagList(prev.meta?.tags || []);
+      const nextTags = tags.includes(tag) ? tags.filter((item) => item !== tag) : normalizeTagList([...tags, tag]);
+      return { ...prev, meta: { ...prev.meta, tags: nextTags } };
+    });
+  };
+
+  const commitAuthoringCustomTags = (value: string) => {
+    const parsedTags = parseTagInput(value);
+    setAuthoringCustomTagsInput(parsedTags.join('，'));
+    setAuthoringCartridge((prev: any) => {
+      if (!prev) return prev;
+      return { ...prev, meta: { ...prev.meta, tags: parsedTags } };
+    });
+  };
+
+  const updateAuthoringEndingName = (
+    side: 'left' | 'right',
+    value: string,
+    options?: { composing?: boolean }
+  ) => {
+    const nextValue = options?.composing ? value : limitFiveChars(value);
+    setAuthoringCartridge((prev: any) => ({
+      ...prev,
+      meta: {
+        ...prev.meta,
+        endingNames: { ...(prev.meta.endingNames || {}), [side]: nextValue },
+      },
+    }));
+  };
+
+  const incrementStoryPopularityIfEligible = async (storyId: string | null, currentPopularity?: number) => {
+    if (!storyId || popularityCountedRef.current) return;
+    popularityCountedRef.current = true;
+    try {
+      await updateDoc(doc(db, 'stories', storyId), buildStoryPopularityPayload());
+      setPublicStories((prev) => prev.map((story: any) => story.id === storyId ? { ...story, popularity: (story.popularity || 0) + 1 } : story));
+      setMyStories((prev) => prev.map((story: any) => story.id === storyId ? { ...story, popularity: (story.popularity || 0) + 1 } : story));
+      setAuthoringCartridge((prev: any) => prev && prev.storyId === storyId ? { ...prev, meta: { ...prev.meta, popularity: (prev.meta?.popularity || 0) + 1 } } : prev);
+    } catch (error) {
+      popularityCountedRef.current = false;
+      console.error(error);
+    }
+  };
+
   const handleGenerateBlueprint = async () => {
     if (selectedThemes.length < 1 || selectedThemes.length > 4) return;
     setGameState('GENERATING_BLUEPRINT');
@@ -1205,6 +1300,8 @@ export default function App() {
         }))
       );
       setCharacterStatuses(initialStatuses);
+      popularityCountedRef.current = false;
+      setActiveStoryId(null);
       setInterventionsLeft(3);
       setEndingValue(0);
       setUnlockedBranches([]);
@@ -1280,18 +1377,20 @@ export default function App() {
           }));
           // Authored story: fill chapter 7 text from default ending if chapter 7 has no text
           const ch7 = baseChaps.find((c: any) => c.chapter_num === 7);
-          const defaultEndingText = (cartridge.endings.find((e: any) => e.id === 'default')?.text || '').trim();
+          const defaultEnding = cartridge.endings.find((e: any) => e.id === 'default');
+          const defaultEndingText = (defaultEnding?.text || '').trim();
           if (ch7 && (!ch7.text || !ch7.text.trim()) && defaultEndingText) {
             ch7.text = defaultEndingText;
-            ch7.title = ch7.title || '默认结局';
+            ch7.title = ch7.title || defaultEnding?.title || '第七章';
           }
           return baseChaps;
         })(),
         endings: [
-          { type: 'normal', text: (cartridge.endings.find((e: any) => e.id === 'default')?.text || '') },
-          { type: 'good', text: (cartridge.endings.find((e: any) => e.id === 'left')?.text || '') },
-          { type: 'bad', text: (cartridge.endings.find((e: any) => e.id === 'right')?.text || '') },
+          { type: 'normal', title: (cartridge.endings.find((e: any) => e.id === 'default')?.title || '第七章'), text: (cartridge.endings.find((e: any) => e.id === 'default')?.text || '') },
+          { type: 'good', title: (cartridge.endings.find((e: any) => e.id === 'left')?.title || '左结局'), text: (cartridge.endings.find((e: any) => e.id === 'left')?.text || '') },
+          { type: 'bad', title: (cartridge.endings.find((e: any) => e.id === 'right')?.title || '右结局'), text: (cartridge.endings.find((e: any) => e.id === 'right')?.text || '') },
         ],
+        tags: cartridge.meta.tags || [],
         branches: cartridge.branches.map((b: any) => {
           const score = tierToScore(b.tier);
           const cond = b.trigger?.type === 'single' ? b.trigger.single : { chapterNum: 2, charId: cartridge.meta.characters[0]?.id || 'c1', action: 'bless' as const };
@@ -1336,7 +1435,7 @@ export default function App() {
         userId: user.uid,
         storyId,
         gameState: 'PLAYING',
-        selectedThemes: [],
+        selectedThemes: cartridge.meta.tags || [],
         currentChapters: bp.chapters,
         naturalChapters: bp.chapters,
         interventionsLeft: 3,
@@ -1359,6 +1458,7 @@ export default function App() {
       setCanonicalWorldState((cartridge as any).canonicalWorldState || null);
       setDeltaWorldStateByChapter({});
       setBlueprint(bp);
+      setSelectedThemes(cartridge.meta.tags || []);
       setChapters(bp.chapters);
       setNaturalChapters(bp.chapters);
       // 记录干涉前的“初始版本”，用于“重新干涉”回滚
@@ -1372,6 +1472,7 @@ export default function App() {
         }))
       );
       setActiveStoryId(storyId);
+      popularityCountedRef.current = false;
       setInterventionHistory(initialHistory);
       setUnlockedBranches(initialUnlocked);
       setIntervenedChapters([]);
@@ -1403,7 +1504,12 @@ export default function App() {
     if (!user || !blueprint) return;
     try {
       setGenerationStatus("正在为您构建创作母盘...");
-      const storyId = await adaptBlueprintToStory(db as any, { authorId: user.uid, blueprint, chapters });
+      const storyId = await adaptBlueprintToStory(db as any, {
+        authorId: user.uid,
+        blueprint,
+        chapters,
+        tags: normalizeTagList((blueprint.tags && blueprint.tags.length > 0 ? blueprint.tags : selectedThemes) || []),
+      });
       setAuthoringStoryId(storyId);
       await refreshStories();
       const st = (myStories || []).find((s) => s.id === storyId);
@@ -1446,22 +1552,25 @@ export default function App() {
 
     const hasDual = Boolean(payload.endings.left || payload.endings.right);
     const endingMode = hasDual ? 'dual' : (authoringCartridge.meta.endingMode || 'single');
-    const oldEndings = new Map<string, string>((authoringCartridge.endings || []).map((e: any) => [e.id, e.text || '']));
+    const oldEndings = new Map<string, any>((authoringCartridge.endings || []).map((e: any) => [e.id, e]));
     // Authored story: append chapter 7 from default ending if it has content
-    const ch7Text = (payload.endings.default || oldEndings.get('default') || '').trim();
+    const defaultEndingTitle = oldEndings.get('default')?.title || '第七章';
+    const leftEndingTitle = oldEndings.get('left')?.title || '左结局';
+    const rightEndingTitle = oldEndings.get('right')?.title || '右结局';
+    const ch7Text = (payload.endings.default || oldEndings.get('default')?.text || '').trim();
     if (ch7Text) {
       finalChapters.push({
         chapter_num: 7,
-        title: '默认结局',
+        title: defaultEndingTitle,
         summary: '',
         present_characters: normalizedChars.map((x: any) => x.id),
         text: ch7Text.slice(0, 1200),
       });
     }
     const finalEndings = [
-      { id: 'default', text: (payload.endings.default || oldEndings.get('default') || '').slice(0, 1200) },
-      { id: 'left', text: (payload.endings.left || oldEndings.get('left') || '').slice(0, 1200) },
-      { id: 'right', text: (payload.endings.right || oldEndings.get('right') || '').slice(0, 1200) },
+      { id: 'default', title: defaultEndingTitle, text: (payload.endings.default || oldEndings.get('default')?.text || '').slice(0, 1200) },
+      { id: 'left', title: leftEndingTitle, text: (payload.endings.left || oldEndings.get('left')?.text || '').slice(0, 1200) },
+      { id: 'right', title: rightEndingTitle, text: (payload.endings.right || oldEndings.get('right')?.text || '').slice(0, 1200) },
     ].filter((e) => endingMode === 'dual' ? true : e.id === 'default');
 
     setAuthoringSaving(true);
@@ -1469,8 +1578,9 @@ export default function App() {
       await saveStoryMainlineBundle(db as any, authoringStoryId, {
         metaPatch: {
           ...authoringCartridge.meta,
-          title: payload.title || authoringCartridge.meta.title || '',
+          title: stripBookTitle(payload.title || authoringCartridge.meta.title || ''),
           main_axis: payload.mainAxis || authoringCartridge.meta.main_axis || '',
+          tags: parseTagInput(authoringCustomTagsInput || (authoringCartridge.meta.tags || []).join('，')),
           endingMode,
           characters: normalizedChars,
           defaults: { ...authoringCartridge.meta.defaults, targetWordCount: 1200 },
@@ -1778,6 +1888,9 @@ export default function App() {
       setInterventionsLeft(newInterventionsLeft);
       setIntervenedChapters(newIntervenedChapters);
       setInterventionHistory(newHistory);
+      if (newInterventionsLeft === 0) {
+        await incrementStoryPopularityIfEligible(activeStoryId, (publicStories.find((story: any) => story.id === activeStoryId)?.popularity ?? myStories.find((story: any) => story.id === activeStoryId)?.popularity ?? authoringCartridge?.meta?.popularity ?? 0));
+      }
       
       // End of Intervention -> Background logic will automatically trigger to generate next blank Chapter.
       
@@ -1821,6 +1934,7 @@ export default function App() {
   const resetGame = async () => {
     // Immediate local reset for responsiveness
     setGameState('STORY_SELECT');
+    popularityCountedRef.current = false;
     setSelectedThemes([]);
     setBlueprint(null);
     setChapters([]);
@@ -1862,6 +1976,7 @@ export default function App() {
 
     // Immediate local reset for responsiveness
     setChapters(baseChapters);
+    popularityCountedRef.current = false;
     setNaturalChapters(baseChapters);
     setUnlockedBranches([]);
     setInterventionsLeft(3);
@@ -2027,7 +2142,7 @@ export default function App() {
               onClick={() => setGameState('THEME_SELECTION')}
               className="px-5 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-white font-black"
             >
-              快速生成（旧模式）
+              快速生成新故事
             </button>
             <button
               onClick={enterAuthoring}
@@ -2053,11 +2168,12 @@ export default function App() {
                       onClick={() => startStoryPlay(s.id)}
                       className="w-full text-left p-4 rounded-xl bg-zinc-950/50 border border-zinc-800 hover:border-indigo-500/40 transition-colors"
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="font-bold text-zinc-100">{s.title}</div>
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="font-bold text-zinc-100">{formatBookTitle(s.title)}</div>
+                        <div className="text-xs text-zinc-500 whitespace-nowrap">人气 {s.popularity || 0}</div>
                       </div>
                       <div className="mt-2 flex flex-wrap gap-2">
-                        {(s.tags || []).slice(0, 6).map((t: string) => (
+                        {(s.tags || []).slice(0, DISPLAY_TAG_LIMIT).map((t: string) => (
                           <span key={t} className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 border border-zinc-700">{t}</span>
                         ))}
                       </div>
@@ -2119,7 +2235,7 @@ export default function App() {
                   if (!user) return;
                   setAuthoringSaving(true);
                   try {
-                    const id = await createEmptyStory(db as any, { authorId: user.uid });
+                    const id = await createEmptyStory(db as any, { authorId: user.uid, tags: [] });
                     await refreshStories();
                     setAuthoringStoryId(id);
                     const c = await getStoryCartridge(db as any, id);
@@ -2180,10 +2296,18 @@ export default function App() {
                     className={`w-full text-left p-3 rounded-xl border transition-colors ${authoringStoryId === s.id ? 'bg-indigo-950/30 border-indigo-500/40' : 'bg-zinc-950/50 border-zinc-800 hover:border-zinc-600'}`}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <div className="font-bold text-zinc-100 truncate">{s.title}</div>
+                      <div className="font-bold text-zinc-100 truncate">{formatBookTitle(s.title)}</div>
                       <span className={`text-[10px] px-2 py-0.5 rounded-full border ${s.visibility === 'public' ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' : s.visibility === 'unlisted' ? 'bg-amber-500/10 text-amber-300 border-amber-500/30' : 'bg-zinc-800 text-zinc-300 border-zinc-700'}`}>
                         {s.visibility === 'public' ? '公开' : s.visibility === 'unlisted' ? '未列出' : '私有'}
                       </span>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-3">
+                      <div className="flex flex-wrap gap-2 min-w-0">
+                        {(s.tags || []).slice(0, DISPLAY_TAG_LIMIT).map((tag: string) => (
+                          <span key={tag} className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-900 text-zinc-300 border border-zinc-700">{tag}</span>
+                        ))}
+                      </div>
+                      <div className="text-[10px] text-zinc-500 whitespace-nowrap">人气 {s.popularity || 0}</div>
                     </div>
                     <div className="mt-1 text-[10px] text-zinc-500">分享ID：{s.id}</div>
                   </button>
@@ -2280,18 +2404,48 @@ export default function App() {
                           </label>
                           <div className="text-xs text-zinc-500 flex items-end">切换后请点击“一键保存主线+结局”生效。</div>
                         </div>
-                        <input
-                          value={authoringCartridge.meta.title || ''}
-                          onChange={(e) => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, title: e.target.value } }))}
-                          className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm outline-none focus:border-indigo-500"
-                          placeholder="作品标题"
-                        />
+                        <div className="flex items-center rounded-lg border border-zinc-800 bg-zinc-950 px-3 focus-within:border-indigo-500">
+                          <span className="text-zinc-500">《</span>
+                          <input
+                            value={stripBookTitle(authoringCartridge.meta.title || '')}
+                            onChange={(e) => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, title: stripBookTitle(e.target.value) } }))}
+                            className="w-full bg-transparent px-2 py-2 text-sm outline-none"
+                            placeholder="作品标题"
+                          />
+                          <span className="text-zinc-500">》</span>
+                        </div>
                         <textarea
                           value={authoringCartridge.meta.main_axis || ''}
                           onChange={(e) => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, main_axis: e.target.value } }))}
                           className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm outline-none focus:border-indigo-500 min-h-[80px]"
                           placeholder="主轴/命题"
                         />
+                        <div className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
+                          <div className="font-bold text-white">作品主题</div>
+                          <div className="text-xs text-zinc-500">可点选推荐标签，也可手写补充。多个标签请用中文逗号“，”分隔。</div>
+                          <div className="flex flex-wrap gap-2">
+                            {THEMES.map((theme) => {
+                              const active = (authoringCartridge.meta.tags || []).includes(theme);
+                              return (
+                                <button
+                                  key={theme}
+                                  type="button"
+                                  onClick={() => toggleAuthoringTag(theme)}
+                                  className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${active ? 'bg-indigo-500/20 border-indigo-400 text-indigo-200' : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'}`}
+                                >
+                                  {theme}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <input
+                            value={authoringCustomTagsInput}
+                            onChange={(e) => setAuthoringCustomTagsInput(e.target.value)}
+                            onBlur={(e) => commitAuthoringCustomTags(e.target.value)}
+                            className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm outline-none focus:border-indigo-500"
+                            placeholder="手写主题，例如：群像，成长，悬疑"
+                          />
+                        </div>
                         <button
                           disabled={authoringSaving}
                           onClick={async () => {
@@ -2300,9 +2454,12 @@ export default function App() {
                             try {
                               const normalizedChars = normalizeCharacters(authoringCartridge.meta.characters || []);
                               const endingMode = authoringCartridge.meta.endingMode || 'dual';
+                              const normalizedTags = parseTagInput(authoringCustomTagsInput || (authoringCartridge.meta.tags || []).join('，'));
                               await saveStoryMainlineBundle(db as any, authoringStoryId, {
                                 metaPatch: {
                                   ...authoringCartridge.meta,
+                                  title: stripBookTitle(authoringCartridge.meta.title || ''),
+                                  tags: normalizedTags,
                                   characters: normalizedChars,
                                   defaults: { ...authoringCartridge.meta.defaults, targetWordCount: 1200 },
                                 } as any,
@@ -2315,8 +2472,9 @@ export default function App() {
                                 })),
                                 endings: (authoringCartridge.endings || [])
                                   .filter((e: any) => endingMode === 'dual' ? true : e.id === 'default')
-                                  .map((e: any) => ({ id: e.id, text: (e.text || '').slice(0, 1200) })),
+                                  .map((e: any) => ({ id: e.id, title: e.title || endingIdToLabel(e.id), text: (e.text || '').slice(0, 1200) })),
                               });
+                              setAuthoringCustomTagsInput(normalizedTags.join('，'));
                               showError('主线与结局已整体保存。');
                               const c = await getStoryCartridge(db as any, authoringStoryId);
                               setAuthoringCartridge(c);
@@ -2380,15 +2538,10 @@ export default function App() {
                               <label className="text-xs text-zinc-400 space-y-1">
                                 <div>左结局展示名（玩家总结「XX结局」，≤5字）</div>
                                 <input
-                                  maxLength={5}
                                   value={authoringCartridge.meta.endingNames?.left || ''}
-                                  onChange={(e) => setAuthoringCartridge((prev: any) => ({
-                                    ...prev,
-                                    meta: {
-                                      ...prev.meta,
-                                      endingNames: { ...(prev.meta.endingNames || {}), left: e.target.value.slice(0, 5) },
-                                    },
-                                  }))}
+                                  onChange={(e) => updateAuthoringEndingName('left', e.target.value, { composing: (e.nativeEvent as any).isComposing })}
+                                  onCompositionEnd={(e) => updateAuthoringEndingName('left', e.currentTarget.value)}
+                                  onBlur={(e) => updateAuthoringEndingName('left', e.target.value)}
                                   className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm"
                                   placeholder="如：黎明"
                                 />
@@ -2396,15 +2549,10 @@ export default function App() {
                               <label className="text-xs text-zinc-400 space-y-1">
                                 <div>右结局展示名（玩家总结「XX结局」，≤5字）</div>
                                 <input
-                                  maxLength={5}
                                   value={authoringCartridge.meta.endingNames?.right || ''}
-                                  onChange={(e) => setAuthoringCartridge((prev: any) => ({
-                                    ...prev,
-                                    meta: {
-                                      ...prev.meta,
-                                      endingNames: { ...(prev.meta.endingNames || {}), right: e.target.value.slice(0, 5) },
-                                    },
-                                  }))}
+                                  onChange={(e) => updateAuthoringEndingName('right', e.target.value, { composing: (e.nativeEvent as any).isComposing })}
+                                  onCompositionEnd={(e) => updateAuthoringEndingName('right', e.currentTarget.value)}
+                                  onBlur={(e) => updateAuthoringEndingName('right', e.target.value)}
                                   className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm"
                                   placeholder="如：永夜"
                                 />
@@ -2461,7 +2609,7 @@ export default function App() {
                         <div className="font-bold text-white">默认故事（1-6章）</div>
                         {(authoringCartridge.chapters || []).filter((c: any) => c.chapter_num >= 1 && c.chapter_num <= 6).map((ch: any) => (
                           <div key={ch.chapter_num} className="bg-zinc-950/50 border border-zinc-800 rounded-xl p-4 space-y-2">
-                            <div className="font-bold text-zinc-200">第 {ch.chapter_num} 章</div>
+                            <div className="font-bold text-zinc-200">{formatStoryHeading(ch)}</div>
                             <input
                               value={ch.title || ''}
                               onChange={(e) => setAuthoringCartridge((prev: any) => ({ ...prev, chapters: prev.chapters.map((c: any) => c.chapter_num === ch.chapter_num ? { ...c, title: e.target.value } : c) }))}
@@ -2486,7 +2634,13 @@ export default function App() {
                           .filter((ed: any) => (authoringCartridge.meta.endingMode || 'dual') === 'dual' ? true : ed.id === 'default')
                           .map((ed: any) => (
                           <div key={ed.id} className="bg-zinc-950/50 border border-zinc-800 rounded-xl p-4 space-y-2">
-                            <div className="font-bold text-zinc-200">{ed.id === 'default' ? '默认结局' : ed.id === 'left' ? '左结局' : '右结局'}</div>
+                            <div className="font-bold text-zinc-200">{endingIdToLabel(ed.id)}</div>
+                            <input
+                              value={ed.title || ''}
+                              onChange={(e) => setAuthoringCartridge((prev: any) => ({ ...prev, endings: prev.endings.map((x: any) => x.id === ed.id ? { ...x, title: e.target.value } : x) }))}
+                              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-sm"
+                              placeholder={ed.id === 'default' ? '第七章标题' : `${endingIdToLabel(ed.id)}标题`}
+                            />
                             <textarea
                               value={ed.text || ''}
                               maxLength={1200}
@@ -3357,7 +3511,7 @@ export default function App() {
               <div key={chapter.chapter_num} className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 relative overflow-hidden">
                 <div className="flex justify-between items-center mb-4">
                   <h3 className="text-lg font-medium text-zinc-300">
-                    第 {chapter.chapter_num} 章 {chapter.chapter_num === 7 && " (第一篇章结局)"}
+                    {formatStoryHeading(chapter)}
                   </h3>
                   {intervenedChapters.includes(chapter.chapter_num) && !activeInterventionChapter && (
                     <span className="text-xs font-medium px-2 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-md flex items-center gap-1">
@@ -3799,7 +3953,7 @@ export default function App() {
               {chapters.map(c => (
                 <div key={c.chapter_num}>
                   <h3 className="text-sm font-bold text-indigo-400 mb-3">
-                    第 {c.chapter_num} 章 {c.chapter_num === 7 && " (第一篇章结局)"}
+                    {formatStoryHeading(c)}
                   </h3>
                   <div className="text-zinc-300 leading-relaxed space-y-4">
                     {c.text ? (

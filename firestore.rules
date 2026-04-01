@@ -66,6 +66,10 @@ service cloud.firestore {
       );
     }
 
+    function storyPopularity(data) {
+      return (('popularity' in data) && data.popularity is number) ? data.popularity : 0;
+    }
+
     function uidUnchanged() {
       return !('userId' in request.resource.data) ||
         request.resource.data.userId == request.auth.uid;
@@ -123,6 +127,7 @@ service cloud.firestore {
              data.tags is list && data.tags.size() <= 20 &&
              data.authorId is string &&
              data.visibility in ['public', 'unlisted', 'private'] &&
+             (!('popularity' in data) || data.popularity is number) &&
              (isValidDateString(data.createdAt) || isValidTimestamp(data.createdAt)) &&
              (isValidDateString(data.updatedAt) || isValidTimestamp(data.updatedAt)) &&
              data.version is number &&
@@ -160,7 +165,27 @@ service cloud.firestore {
     match /stories/{storyId} {
       allow read: if canReadStoryData(resource.data);
       allow create: if isAuthenticated() && uidUnchanged() && isValidStoryMeta(request.resource.data) && isStoryOwnerData(request.resource.data);
-      allow update: if isAuthenticated() && isStoryOwnerData(request.resource.data) && resource.data.authorId == request.auth.uid && isValidStoryMeta(request.resource.data);
+      allow update: if (
+        isAuthenticated() &&
+        isStoryOwnerData(request.resource.data) &&
+        resource.data.authorId == request.auth.uid &&
+        isValidStoryMeta(request.resource.data)
+      ) || (
+        canReadStoryData(resource.data) &&
+        request.resource.data.authorId == resource.data.authorId &&
+        request.resource.data.title == resource.data.title &&
+        request.resource.data.main_axis == resource.data.main_axis &&
+        request.resource.data.tags == resource.data.tags &&
+        request.resource.data.visibility == resource.data.visibility &&
+        request.resource.data.version == resource.data.version &&
+        request.resource.data.defaults == resource.data.defaults &&
+        request.resource.data.characters == resource.data.characters &&
+        request.resource.data.endingMode == resource.data.endingMode &&
+        request.resource.data.endingRates == resource.data.endingRates &&
+        request.resource.data.endingNames == resource.data.endingNames &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.popularity == (storyPopularity(resource.data) + 1)
+      );
       allow delete: if isAuthenticated() && resource.data.authorId == request.auth.uid;
 
       match /chapters/{chapterNum} {

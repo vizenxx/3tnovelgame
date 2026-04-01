@@ -17,6 +17,7 @@ export interface StoryMeta {
   coverUrl?: string;
   authorId: string;
   visibility: Visibility;
+  popularity?: number;
   endingMode?: EndingMode; // default: dual
   endingRates?: { left: number; right: number }; // 0-80, only meaningful in dual mode
   /** 玩家总结界面展示用，各≤5字；双向模式下对应左/右倾向结局的「XX结局」 */
@@ -42,6 +43,7 @@ export interface StoryChapterDoc {
 export interface StoryEndingDoc {
   id: 'default' | 'left' | 'right';
   chapter_num: 7;
+  title?: string;
   text: string;
   keyNodes?: string[];
 }
@@ -148,4 +150,3 @@ export function isBranchUnlockedByHistory(args: {
     return sliced.length >= c.minCount;
   });
 }
-
