@@ -9,3 +9,13 @@ coverage/
 
 # Local Netlify folder
 .netlify
+
+# API Configs and Secrets
+firebase-applet-config.json
+
+# Scratch and test files
+test-*.js
+test-*.mjs
+local-dev.mjs
+refactor.cjs
+imagen-models.txt
