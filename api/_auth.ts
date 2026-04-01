@@ -1,10 +1,12 @@
 import { OAuth2Client } from 'google-auth-library';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import firebaseConfig from '../firebase-applet-config.json';
 
-const FIREBASE_PROJECT_ID = firebaseConfig.projectId;
-const FIREBASE_ISSUER = `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`;
-const FIREBASE_CERT_URL = 'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
+const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID;
+const FIREBASE_ISSUER = FIREBASE_PROJECT_ID
+  ? `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`
+  : '';
+const FIREBASE_CERT_URL =
+  'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
 
 const oauthClient = new OAuth2Client();
 
@@ -64,7 +66,7 @@ async function getFirebaseCerts() {
 
 export async function verifyFirebaseToken(idToken: string) {
   if (!FIREBASE_PROJECT_ID) {
-    throw new Error('Missing Firebase projectId in firebase-applet-config.json');
+    throw new Error('Missing FIREBASE_PROJECT_ID environment variable.');
   }
 
   const certs = await getFirebaseCerts();
@@ -110,7 +112,11 @@ export function sendMethodNotAllowed(res: VercelResponse) {
   return res.status(405).json({ error: 'Method Not Allowed' });
 }
 
-export function sendInternalError(res: VercelResponse, message: string, error: unknown) {
+export function sendInternalError(
+  res: VercelResponse,
+  message: string,
+  error: unknown
+) {
   console.error(message, error);
   return res.status(500).json({ error: message });
 }
