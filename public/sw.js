@@ -29,6 +29,24 @@ self.addEventListener('fetch', (event) => {
 
   if (requestUrl.origin !== self.location.origin) return;
   if (requestUrl.pathname.startsWith('/@vite/') || requestUrl.pathname.startsWith('/src/')) return;
+  if (requestUrl.pathname.startsWith('/__/auth/')) return;
+
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          const responseClone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
+          return networkResponse;
+        })
+        .catch(() => {
+          return caches.match(event.request).then((cachedResponse) => {
+            return cachedResponse || caches.match('/');
+          });
+        })
+    );
+    return;
+  }
 
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
@@ -36,22 +54,15 @@ self.addEventListener('fetch', (event) => {
 
       return fetch(event.request)
         .then((networkResponse) => {
-          const shouldCache =
-            event.request.mode === 'navigate' ||
-            STATIC_CACHE_PATTERNS.some((pattern) => pattern.test(requestUrl.pathname));
+          const shouldCache = STATIC_CACHE_PATTERNS.some((pattern) => pattern.test(requestUrl.pathname));
 
-          if (!shouldCache) {
-            return networkResponse;
+          if (shouldCache) {
+            const responseClone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
           }
-
-          const responseClone = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
           return networkResponse;
         })
         .catch(() => {
-          if (event.request.mode === 'navigate') {
-            return caches.match('/');
-          }
           return new Response('', { status: 504, statusText: 'Offline' });
         });
     })
