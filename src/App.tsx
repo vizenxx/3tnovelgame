@@ -2949,13 +2949,15 @@ export default function App() {
                   </div>
 
                   {/* Guide: Already have Google account → open in browser to link */}
-                  <button
-                    onClick={() => window.open(window.location.href, '_blank')}
+                  <a
+                    href={window.location.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="py-3 text-zinc-400 hover:text-white bg-zinc-900/50 hover:bg-zinc-800 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 border border-zinc-800 active:scale-95"
                   >
                     <LogIn className="w-4 h-4 text-zinc-500" />
-                    已有 Google 账号？在浏览器中登录并绑定密码
-                  </button>
+                    绑定已有 Google 账号
+                  </a>
 
                   {/* Guest */}
                   <button
