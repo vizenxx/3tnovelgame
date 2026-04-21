@@ -118,5 +118,6 @@ export function sendInternalError(
   error: unknown
 ) {
   console.error(message, error);
-  return res.status(500).json({ error: message });
+  const detail = error instanceof Error ? error.stack || error.message : String(error);
+  return res.status(500).json({ error: message, detail });
 }
