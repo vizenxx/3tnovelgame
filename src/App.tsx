@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles } from 'lucide-react';
+import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2 } from 'lucide-react';
 import { auth, db, firebaseInitError } from './firebase';
 import { createEmptyStory, adaptBlueprintToStory, createStoryBranch, deleteStoryBranch, deleteStoryCartridge, getStoryCartridge, listMyStories, listPublicStories, saveStoryMainlineBundle, saveStoryMeta, upsertStoryBranch } from './storyStore';
 import { isBranchUnlockedByHistory, tierToScore } from './storyCartridge';
@@ -2652,6 +2652,28 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
+      {/* Global Action Loading Overlay */}
+      <AnimatePresence>
+        {(isLoggingIn || isLoadingStories || authoringSaving) && (
+          <div className="fixed inset-0 z-[10000] flex flex-col items-center justify-center bg-black/60 backdrop-blur-[2px] safe-top safe-bottom">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="flex flex-col items-center justify-center space-y-5"
+            >
+              <div className="relative flex items-center justify-center h-16 w-16">
+                <div className="absolute inset-0 border-t-2 border-indigo-500 rounded-full animate-spin"></div>
+                <div className="absolute inset-2 border-r-2 border-rose-500 rounded-full animate-[spin_1.5s_linear_infinite_reverse]"></div>
+                <Loader2 className="w-6 h-6 text-white animate-pulse" />
+              </div>
+              <span className="text-white/90 font-bold tracking-widest text-sm bg-black/40 px-4 py-2 rounded-full backdrop-blur-sm border border-white/5 shadow-2xl">
+                {isLoggingIn ? "连结命运中..." : isLoadingStories ? "提取档案中..." : authoringSaving ? "保存世界线中..." : "请稍候..."}
+              </span>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </>
   );
 
@@ -2693,7 +2715,8 @@ export default function App() {
             <div className="grid grid-cols-1 gap-4">
               <button
                 onClick={handleLogin}
-                className="group relative overflow-hidden py-3.5 sm:py-4 bg-white text-black rounded-xl font-black text-base sm:text-xl transition-all active:scale-95 flex items-center justify-center gap-3 shadow-[0_0_30px_rgba(255,255,255,0.1)]"
+                disabled={isLoggingIn}
+                className="group relative overflow-hidden py-3.5 sm:py-4 bg-white text-black rounded-xl font-black text-base sm:text-xl transition-all active:scale-95 flex items-center justify-center gap-3 shadow-[0_0_30px_rgba(255,255,255,0.1)] disabled:opacity-70 disabled:pointer-events-none"
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-indigo-100 to-white opacity-0 group-hover:opacity-100 transition-opacity" />
                 <span className="relative z-10 flex items-center gap-3">
@@ -2703,7 +2726,8 @@ export default function App() {
               </button>
               <button
                 onClick={handleGuestLogin}
-                className="py-3.5 sm:py-4 bg-zinc-900/50 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900 rounded-xl font-bold text-sm sm:text-base transition-all flex items-center justify-center gap-3 border border-zinc-800 active:scale-95"
+                disabled={isLoggingIn}
+                className="py-3.5 sm:py-4 bg-zinc-900/50 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900 rounded-xl font-bold text-sm sm:text-base transition-all flex items-center justify-center gap-3 border border-zinc-800 active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
               >
                 <UserIcon className="w-5 h-5 sm:w-6 sm:h-6" />
                 以游客身份继续
