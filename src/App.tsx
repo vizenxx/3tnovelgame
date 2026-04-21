@@ -2907,69 +2907,136 @@ export default function App() {
             />
 
             <div className="grid grid-cols-1 gap-3">
-              {/* Google Login */}
-              <button
-                onClick={handleLogin}
-                disabled={isLoggingIn}
-                className="group relative overflow-hidden py-3.5 sm:py-4 bg-white text-black rounded-xl font-black text-base sm:text-xl transition-all active:scale-95 flex items-center justify-center gap-3 shadow-[0_0_30px_rgba(255,255,255,0.1)] disabled:opacity-70 disabled:pointer-events-none"
-              >
-                <div className="absolute inset-0 bg-gradient-to-r from-indigo-100 to-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                <span className="relative z-10 flex items-center gap-3">
-                  <LogIn className="w-5 h-5 sm:w-6 sm:h-6" />
-                  Google 同步登录
-                </span>
-              </button>
+              {/* iOS PWA: Google login would fail, so show email+password first and guide instead */}
+              {isStandaloneMode ? (
+                <>
+                  {/* Email+Password - Primary for iOS PWA */}
+                  <div className="flex flex-col rounded-xl border border-indigo-700/50 overflow-hidden bg-indigo-950/30">
+                    <button
+                      onClick={() => setShowPasswordLogin(!showPasswordLogin)}
+                      className="py-3.5 text-indigo-200 hover:text-white hover:bg-indigo-900/40 font-bold text-sm transition-all flex items-center justify-center gap-2 active:bg-indigo-900"
+                    >
+                      <Mail className="w-5 h-5 text-indigo-400" />
+                      {showPasswordLogin ? "收起" : "邮箱+密码登录"}
+                    </button>
+                    <AnimatePresence>
+                      {showPasswordLogin && (
+                        <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                          <div className="px-4 pb-4 pt-2 space-y-3">
+                            <div className="flex gap-2 text-xs">
+                              <button onClick={() => setPwMode('login')} className={`flex-1 py-1.5 rounded-lg font-bold transition-colors ${pwMode==='login' ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}>登录</button>
+                              <button onClick={() => setPwMode('register')} className={`flex-1 py-1.5 rounded-lg font-bold transition-colors ${pwMode==='register' ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}>注册新账号</button>
+                            </div>
+                            <input type="email" placeholder="邮箱地址" value={pwEmail} onChange={e => setPwEmail(e.target.value)}
+                              className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
+                            <input type="password" placeholder="密码（至少6位）" value={pwPassword} onChange={e => setPwPassword(e.target.value)}
+                              className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
+                            {pwMode === 'register' && (
+                              <input type="password" placeholder="确认密码" value={pwConfirm} onChange={e => setPwConfirm(e.target.value)}
+                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
+                            )}
+                            <button
+                              onClick={pwMode === 'login' ? handlePasswordLogin : handlePasswordRegister}
+                              disabled={isLoggingIn}
+                              className="w-full bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white py-2.5 rounded-lg font-bold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                              {isLoggingIn ? <Loader2 className="w-4 h-4 animate-spin" /> : (pwMode === 'login' ? '登录' : '注册')}
+                            </button>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
 
-              {/* Email + Password */}
-              <div className="flex flex-col rounded-xl border border-zinc-800 overflow-hidden bg-zinc-900/50">
-                <button
-                  onClick={() => { setShowPasswordLogin(!showPasswordLogin); setShowEmailLogin(false); }}
-                  className="py-3 sm:py-3.5 text-zinc-300 hover:text-white hover:bg-zinc-800 font-bold text-sm sm:text-base transition-all flex items-center justify-center gap-2 active:bg-zinc-700"
-                >
-                  <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-400" />
-                  {showPasswordLogin ? "收起" : "邮箱+密码登录 (iOS 推荐 ✅)"}
-                </button>
-                <AnimatePresence>
-                  {showPasswordLogin && (
-                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                      <div className="px-4 pb-4 pt-2 space-y-3">
-                        <div className="flex gap-2 text-xs">
-                          <button onClick={() => setPwMode('login')} className={`flex-1 py-1.5 rounded-lg font-bold transition-colors ${pwMode==='login' ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}>登录</button>
-                          <button onClick={() => setPwMode('register')} className={`flex-1 py-1.5 rounded-lg font-bold transition-colors ${pwMode==='register' ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}>注册新账号</button>
-                        </div>
-                        <input type="email" placeholder="邮箱地址" value={pwEmail} onChange={e => setPwEmail(e.target.value)}
-                          className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
-                        <input type="password" placeholder="密码（至少6位）" value={pwPassword} onChange={e => setPwPassword(e.target.value)}
-                          className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
-                        {pwMode === 'register' && (
-                          <input type="password" placeholder="确认密码" value={pwConfirm} onChange={e => setPwConfirm(e.target.value)}
-                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
-                        )}
-                        <button
-                          onClick={pwMode === 'login' ? handlePasswordLogin : handlePasswordRegister}
-                          disabled={isLoggingIn}
-                          className="w-full bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white py-2.5 rounded-lg font-bold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                        >
-                          {isLoggingIn ? <Loader2 className="w-4 h-4 animate-spin" /> : (pwMode === 'login' ? '登录' : '注册')}
-                        </button>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
+                  {/* Guide: Already have Google account → open in browser to link */}
+                  <button
+                    onClick={() => window.open(window.location.href, '_blank')}
+                    className="py-3 text-zinc-400 hover:text-white bg-zinc-900/50 hover:bg-zinc-800 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 border border-zinc-800 active:scale-95"
+                  >
+                    <LogIn className="w-4 h-4 text-zinc-500" />
+                    已有 Google 账号？在浏览器中登录并绑定密码
+                  </button>
 
-              {/* Guest */}
-              <button
-                onClick={handleGuestLogin}
-                disabled={isLoggingIn}
-                className="py-3 sm:py-3.5 bg-zinc-950/50 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 border border-zinc-800/50 active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
-              >
-                <UserIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-                以游客身份继续
-              </button>
+                  {/* Guest */}
+                  <button
+                    onClick={handleGuestLogin}
+                    disabled={isLoggingIn}
+                    className="py-2.5 bg-zinc-950/50 text-zinc-600 hover:text-zinc-400 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 border border-zinc-800/50 active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+                  >
+                    <UserIcon className="w-4 h-4" />
+                    以游客身份继续（数据不同步）
+                  </button>
+                </>
+              ) : (
+                <>
+                  {/* Non-PWA: Google login works normally */}
+                  <button
+                    onClick={handleLogin}
+                    disabled={isLoggingIn}
+                    className="group relative overflow-hidden py-3.5 sm:py-4 bg-white text-black rounded-xl font-black text-base sm:text-xl transition-all active:scale-95 flex items-center justify-center gap-3 shadow-[0_0_30px_rgba(255,255,255,0.1)] disabled:opacity-70 disabled:pointer-events-none"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-indigo-100 to-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <span className="relative z-10 flex items-center gap-3">
+                      <LogIn className="w-5 h-5 sm:w-6 sm:h-6" />
+                      Google 同步登录
+                    </span>
+                  </button>
+
+                  {/* Email + Password - alternative */}
+                  <div className="flex flex-col rounded-xl border border-zinc-800 overflow-hidden bg-zinc-900/50">
+                    <button
+                      onClick={() => setShowPasswordLogin(!showPasswordLogin)}
+                      className="py-3 sm:py-3.5 text-zinc-300 hover:text-white hover:bg-zinc-800 font-bold text-sm sm:text-base transition-all flex items-center justify-center gap-2 active:bg-zinc-700"
+                    >
+                      <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-400" />
+                      {showPasswordLogin ? "收起" : "邮箱+密码登录"}
+                    </button>
+                    <AnimatePresence>
+                      {showPasswordLogin && (
+                        <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                          <div className="px-4 pb-4 pt-2 space-y-3">
+                            <div className="flex gap-2 text-xs">
+                              <button onClick={() => setPwMode('login')} className={`flex-1 py-1.5 rounded-lg font-bold transition-colors ${pwMode==='login' ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}>登录</button>
+                              <button onClick={() => setPwMode('register')} className={`flex-1 py-1.5 rounded-lg font-bold transition-colors ${pwMode==='register' ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}>注册新账号</button>
+                            </div>
+                            <input type="email" placeholder="邮箱地址" value={pwEmail} onChange={e => setPwEmail(e.target.value)}
+                              className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
+                            <input type="password" placeholder="密码（至少6位）" value={pwPassword} onChange={e => setPwPassword(e.target.value)}
+                              className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
+                            {pwMode === 'register' && (
+                              <input type="password" placeholder="确认密码" value={pwConfirm} onChange={e => setPwConfirm(e.target.value)}
+                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
+                            )}
+                            <button
+                              onClick={pwMode === 'login' ? handlePasswordLogin : handlePasswordRegister}
+                              disabled={isLoggingIn}
+                              className="w-full bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white py-2.5 rounded-lg font-bold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                              {isLoggingIn ? <Loader2 className="w-4 h-4 animate-spin" /> : (pwMode === 'login' ? '登录' : '注册')}
+                            </button>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  {/* Guest */}
+                  <button
+                    onClick={handleGuestLogin}
+                    disabled={isLoggingIn}
+                    className="py-3 sm:py-3.5 bg-zinc-950/50 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 border border-zinc-800/50 active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+                  >
+                    <UserIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                    以游客身份继续
+                  </button>
+                </>
+              )}
             </div>
             <p className="text-[10px] text-zinc-700 max-w-[18rem] mx-auto leading-relaxed">
-              * 游客身份数据仅保留在当前设备。邮箱+密码可同步多端进度（包括iOS桌面版）。
+              {isStandaloneMode
+                ? "* iOS \u6850\u9762\u7248\u8bf7\u4f7f\u7528\u90ae\u7bb1+\u5bc6\u7801\u767b\u5f55\u4ee5\u540c\u6b65\u6570\u636e\u3002\u9996\u6b21\u4f7f\u7528Google\u8d26\u53f7\uff0c\u8bf7\u5148\u70b9\u51fb\u3010\u5728\u6d4f\u89c8\u5668\u4e2d\u767b\u5f55\u5e76\u7ed1\u5b9a\u5bc6\u7801\u3011\u3002"
+                : "* 游客身份数据仅保留在当前设备。邮箱+密码或 Google 可同步多端进度。"
+              }
             </p>
           </div>
         </div>
