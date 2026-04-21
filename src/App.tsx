@@ -8,13 +8,17 @@ import {
   signInWithRedirect,
   signInWithPopup,
   getRedirectResult,
-  GoogleAuthProvider, 
+  GoogleAuthProvider,
+  EmailAuthProvider,
   onAuthStateChanged, 
   signOut,
   signInAnonymously,
   sendSignInLinkToEmail,
   isSignInWithEmailLink,
   signInWithEmailLink,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  linkWithCredential,
   User as FirebaseUser
 } from 'firebase/auth';
 import { 
@@ -637,10 +641,23 @@ export default function App() {
   const [pwaUpdateInfo, setPwaUpdateInfo] = useState<PwaUpdateInfo | null>(null);
   const [isApplyingPwaUpdate, setIsApplyingPwaUpdate] = useState(false);
 
-  // Email login state
+  // Email magic link state
   const [showEmailLogin, setShowEmailLogin] = useState(false);
   const [emailInput, setEmailInput] = useState("");
   const [isSendingEmail, setIsSendingEmail] = useState(false);
+
+  // Email+Password login state
+  const [showPasswordLogin, setShowPasswordLogin] = useState(false);
+  const [pwEmail, setPwEmail] = useState("");
+  const [pwPassword, setPwPassword] = useState("");
+  const [pwConfirm, setPwConfirm] = useState("");
+  const [pwMode, setPwMode] = useState<'login' | 'register'>('login');
+
+  // Account linking state
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [linkPassword, setLinkPassword] = useState("");
+  const [linkPasswordConfirm, setLinkPasswordConfirm] = useState("");
+  const [isLinking, setIsLinking] = useState(false);
 
   // Cartridge platform state
   const [activeStoryId, setActiveStoryId] = useState<string | null>(null);
@@ -1409,6 +1426,75 @@ export default function App() {
       showError(`发送失败 [${code}]：${msg}`);
     } finally {
       setIsSendingEmail(false);
+    }
+  };
+
+  const handlePasswordLogin = async () => {
+    if (!auth || isLoggingIn) return;
+    if (!pwEmail || !pwPassword) { showError("\u8bf7\u586b\u5199\u90ae\u7bb1\u548c\u5bc6\u7801\u3002"); return; }
+    setIsLoggingIn(true);
+    try {
+      await signInWithEmailAndPassword(auth, pwEmail, pwPassword);
+    } catch (error: any) {
+      console.error(error);
+      if ((['auth/invalid-credential','auth/wrong-password','auth/user-not-found'] as string[]).includes(error.code)) {
+        showError("\u90ae\u7bb1\u6216\u5bc6\u7801\u9519\u8bef\uff0c\u8bf7\u91cd\u8bd5\u3002");
+      } else {
+        showError(`\u767b\u5f55\u5931\u8d25 [${error.code}]`);
+      }
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handlePasswordRegister = async () => {
+    if (!auth || isLoggingIn) return;
+    if (!pwEmail || !pwPassword) { showError("\u8bf7\u586b\u5199\u90ae\u7bb1\u548c\u5bc6\u7801\u3002"); return; }
+    if (pwPassword !== pwConfirm) { showError("\u4e24\u6b21\u8f93\u5165\u7684\u5bc6\u7801\u4e0d\u4e00\u81f4\uff01"); return; }
+    if (pwPassword.length < 6) { showError("\u5bc6\u7801\u81f3\u5c11\u9700\u8981 6 \u4f4d\u3002"); return; }
+    setIsLoggingIn(true);
+    try {
+      await createUserWithEmailAndPassword(auth, pwEmail, pwPassword);
+    } catch (error: any) {
+      console.error(error);
+      if (error.code === 'auth/email-already-in-use') {
+        showError("\u8be5\u90ae\u7bb1\u5df2\u6ce8\u518c\uff0c\u8bf7\u76f4\u63a5\u767b\u5f55\u3002");
+        setPwMode('login');
+      } else {
+        showError(`\u6ce8\u518c\u5931\u8d25 [${error.code}]`);
+      }
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleLinkPassword = async () => {
+    if (!auth?.currentUser || isLinking) return;
+    if (!linkPassword) { showError("\u8bf7\u8f93\u5165\u5bc6\u7801\u3002"); return; }
+    if (linkPassword !== linkPasswordConfirm) { showError("\u4e24\u6b21\u5bc6\u7801\u4e0d\u4e00\u81f4\uff01"); return; }
+    if (linkPassword.length < 6) { showError("\u5bc6\u7801\u81f3\u5c11\u9700\u8981 6 \u4f4d\u3002"); return; }
+    const email = auth.currentUser.email;
+    if (!email) { showError("\u5f53\u524d\u8d26\u6237\u6ca1\u6709\u90ae\u7bb1\uff0c\u65e0\u6cd5\u7ed1\u5b9a\u5bc6\u7801\u3002"); return; }
+    setIsLinking(true);
+    try {
+      const credential = EmailAuthProvider.credential(email, linkPassword);
+      await linkWithCredential(auth.currentUser, credential);
+      setShowLinkModal(false);
+      setLinkPassword("");
+      setLinkPasswordConfirm("");
+      showError("\u2705 \u7ed1\u5b9a\u6210\u529f\uff01\u4eca\u540e\u5728 iOS PWA \u53ef\u7528\u6b64\u90ae\u7bb1+\u5bc6\u7801\u767b\u5f55\u540c\u4e00\u8d26\u6237\u3002");
+    } catch (error: any) {
+      console.error(error);
+      if (error.code === 'auth/provider-already-linked') {
+        showError("\u8be5\u8d26\u6237\u5df2\u7ed1\u5b9a\u5bc6\u7801\u767b\u5f55\uff0c\u53ef\u76f4\u63a5\u5728iOS\u4f7f\u7528\u90ae\u7bb1+\u5bc6\u7801\u767b\u5f55\u3002");
+        setShowLinkModal(false);
+      } else if (error.code === 'auth/requires-recent-login') {
+        showError("\u64cd\u4f5c\u9700\u8981\u91cd\u65b0\u9a8c\u8bc1\uff0c\u8bf7\u9000\u51fa\u540e\u91cd\u65b0\u767b\u5f55 Google\uff0c\u518d\u6765\u7ed1\u5b9a\u5bc6\u7801\u3002");
+      } else {
+        showError(`\u7ed1\u5b9a\u5931\u8d25 [${error.code}]`);
+      }
+    } finally {
+      setIsLinking(false);
     }
   };
 
@@ -2753,6 +2839,35 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
+      {/* Link Password Modal */}
+      <AnimatePresence>
+        {showLinkModal && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-sm rounded-2xl bg-zinc-900 border border-zinc-700 shadow-2xl overflow-hidden"
+            >
+              <div className="p-6 space-y-4">
+                <div>
+                  <h3 className="text-lg font-bold text-white">绑定 iOS 密码登录</h3>
+                  <p className="text-xs text-zinc-500 mt-1">为你的账户（{auth?.currentUser?.email}）设置一个密码，之后即可在 iOS PWA 用邮箱+密码登录同一账户数据。</p>
+                </div>
+                <input type="password" placeholder="设置密码（至少6位）" value={linkPassword} onChange={e => setLinkPassword(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
+                <input type="password" placeholder="确认密码" value={linkPasswordConfirm} onChange={e => setLinkPasswordConfirm(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
+                <div className="flex gap-3 pt-1">
+                  <button onClick={() => { setShowLinkModal(false); setLinkPassword(""); setLinkPasswordConfirm(""); }}
+                    className="flex-1 py-2.5 rounded-xl bg-zinc-800 text-zinc-300 font-bold text-sm hover:bg-zinc-700 transition-colors">取消</button>
+                  <button onClick={handleLinkPassword} disabled={isLinking}
+                    className="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-500 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                    {isLinking ? <Loader2 className="w-4 h-4 animate-spin" /> : "确认绑定"}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </>
   );
 
@@ -2791,7 +2906,8 @@ export default function App() {
               onInstall={handleInstallApp}
             />
 
-            <div className="grid grid-cols-1 gap-4">
+            <div className="grid grid-cols-1 gap-3">
+              {/* Google Login */}
               <button
                 onClick={handleLogin}
                 disabled={isLoggingIn}
@@ -2804,57 +2920,56 @@ export default function App() {
                 </span>
               </button>
 
+              {/* Email + Password */}
               <div className="flex flex-col rounded-xl border border-zinc-800 overflow-hidden bg-zinc-900/50">
                 <button
-                  onClick={() => setShowEmailLogin(!showEmailLogin)}
-                  className="py-3 sm:py-3.5 text-zinc-300 hover:text-white hover:bg-zinc-800 font-bold text-sm sm:text-base transition-all flex items-center justify-center gap-2 relative z-10 active:bg-zinc-700"
+                  onClick={() => { setShowPasswordLogin(!showPasswordLogin); setShowEmailLogin(false); }}
+                  className="py-3 sm:py-3.5 text-zinc-300 hover:text-white hover:bg-zinc-800 font-bold text-sm sm:text-base transition-all flex items-center justify-center gap-2 active:bg-zinc-700"
                 >
                   <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-400" />
-                  {showEmailLogin ? "收起邮箱登录" : "使用邮箱免密登录 (推荐 iOS 同步)"}
+                  {showPasswordLogin ? "收起" : "邮箱+密码登录 (iOS 推荐 ✅)"}
                 </button>
                 <AnimatePresence>
-                  {showEmailLogin && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: "auto", opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      className="overflow-hidden"
-                    >
-                      <div className="px-4 pb-4 pt-1 space-y-3">
-                        <p className="text-[11px] text-zinc-500 font-medium">只要输入邮箱，我们会发一封包含魔法链接的邮件，点击它的瞬间就会在这里自动解锁登入。</p>
-                        <div className="flex gap-2">
-                          <input
-                            type="email"
-                            placeholder="your@email.com"
-                            value={emailInput}
-                            onChange={(e) => setEmailInput(e.target.value)}
-                            className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
-                          />
-                          <button
-                            onClick={handleEmailLinkLogin}
-                            disabled={isSendingEmail || !emailInput}
-                            className="bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white px-4 rounded-lg font-bold text-sm transition-colors disabled:opacity-50 flex items-center"
-                          >
-                            {isSendingEmail ? <Loader2 className="w-4 h-4 animate-spin" /> : "发送"}
-                          </button>
+                  {showPasswordLogin && (
+                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                      <div className="px-4 pb-4 pt-2 space-y-3">
+                        <div className="flex gap-2 text-xs">
+                          <button onClick={() => setPwMode('login')} className={`flex-1 py-1.5 rounded-lg font-bold transition-colors ${pwMode==='login' ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}>登录</button>
+                          <button onClick={() => setPwMode('register')} className={`flex-1 py-1.5 rounded-lg font-bold transition-colors ${pwMode==='register' ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}>注册新账号</button>
                         </div>
+                        <input type="email" placeholder="邮箱地址" value={pwEmail} onChange={e => setPwEmail(e.target.value)}
+                          className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
+                        <input type="password" placeholder="密码（至少6位）" value={pwPassword} onChange={e => setPwPassword(e.target.value)}
+                          className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
+                        {pwMode === 'register' && (
+                          <input type="password" placeholder="确认密码" value={pwConfirm} onChange={e => setPwConfirm(e.target.value)}
+                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
+                        )}
+                        <button
+                          onClick={pwMode === 'login' ? handlePasswordLogin : handlePasswordRegister}
+                          disabled={isLoggingIn}
+                          className="w-full bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white py-2.5 rounded-lg font-bold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                        >
+                          {isLoggingIn ? <Loader2 className="w-4 h-4 animate-spin" /> : (pwMode === 'login' ? '登录' : '注册')}
+                        </button>
                       </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
               </div>
 
+              {/* Guest */}
               <button
                 onClick={handleGuestLogin}
                 disabled={isLoggingIn}
-                className="py-3 sm:py-3.5 mt-2 bg-zinc-950/50 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 border border-zinc-800/50 active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+                className="py-3 sm:py-3.5 bg-zinc-950/50 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 border border-zinc-800/50 active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
               >
                 <UserIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                 以游客身份继续
               </button>
             </div>
             <p className="text-[10px] text-zinc-700 max-w-[18rem] mx-auto leading-relaxed">
-              * 游客身份数据仅保留在当前设备。建议登录 Google 以同步多端进度。
+              * 游客身份数据仅保留在当前设备。邮箱+密码可同步多端进度（包括iOS桌面版）。
             </p>
           </div>
         </div>
@@ -2907,11 +3022,20 @@ export default function App() {
       <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center p-4 sm:p-6 font-sans relative safe-top safe-bottom">
         {pwaUpdateModal}
         <GlobalError errorMsg={errorMsg} />
-        <div className="absolute left-4 right-4 top-4 sm:left-auto sm:right-6 sm:top-6 flex items-center justify-between gap-3">
-          <div className="text-left sm:text-right min-w-0">
+        <div className="absolute left-4 right-4 top-4 sm:left-auto sm:right-6 sm:top-6 flex items-center justify-end gap-2">
+          <div className="text-right min-w-0 mr-1">
             <div className="text-xs text-zinc-500">已登录</div>
-            <div className="text-sm font-medium text-zinc-300 truncate">{user.isAnonymous ? "游客用户" : user.displayName}</div>
+            <div className="text-sm font-medium text-zinc-300 truncate max-w-[120px]">{user.isAnonymous ? "游客用户" : (user.displayName || user.email)}</div>
           </div>
+          {!user.isAnonymous && auth?.currentUser?.providerData?.some(p => p.providerId === 'google.com') && (
+            <button
+              onClick={() => setShowLinkModal(true)}
+              title="绑定邮箱密码，实现iOS PWA同步"
+              className="p-2 bg-zinc-900 border border-indigo-800/60 rounded-lg hover:border-indigo-500 transition-colors"
+            >
+              <Mail className="w-4 h-4 text-indigo-400" />
+            </button>
+          )}
           <button aria-label="退出登录" onClick={handleLogout} className="p-2 bg-zinc-900 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
             <LogOut className="w-5 h-5 text-zinc-400" />
           </button>
