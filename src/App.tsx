@@ -658,6 +658,8 @@ export default function App() {
   const [linkPassword, setLinkPassword] = useState("");
   const [linkPasswordConfirm, setLinkPasswordConfirm] = useState("");
   const [isLinking, setIsLinking] = useState(false);
+  const [showSafariGuide, setShowSafariGuide] = useState(false);
+
 
   // Cartridge platform state
   const [activeStoryId, setActiveStoryId] = useState<string | null>(null);
@@ -2868,6 +2870,42 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
+      {/* Safari Guide Modal */}
+      <AnimatePresence>
+        {showSafariGuide && (
+          <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setShowSafariGuide(false)}>
+            <motion.div
+              initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }}
+              onClick={e => e.stopPropagation()}
+              className="w-full max-w-sm rounded-2xl bg-zinc-900 border border-zinc-700 shadow-2xl overflow-hidden"
+            >
+              <div className="p-6 space-y-5">
+                <div>
+                  <h3 className="text-base font-bold text-white">绑定 Google 账号 — 操作步骤</h3>
+                  <p className="text-xs text-zinc-500 mt-1">iOS 限制无法在此直接开启浏览器，请按以下步骤操作：</p>
+                </div>
+                <ol className="space-y-3 text-sm text-zinc-300">
+                  <li className="flex gap-3"><span className="w-6 h-6 rounded-full bg-indigo-600 text-white text-xs font-bold flex-shrink-0 flex items-center justify-center">1</span><span>长按下方链接 → 选择<strong className="text-white">「在 Safari 中打开」</strong></span></li>
+                  <li className="flex gap-3"><span className="w-6 h-6 rounded-full bg-indigo-600 text-white text-xs font-bold flex-shrink-0 flex items-center justify-center">2</span><span>在 Safari 里点击 <strong className="text-white">「Google 同步登录」</strong>完成授权</span></li>
+                  <li className="flex gap-3"><span className="w-6 h-6 rounded-full bg-indigo-600 text-white text-xs font-bold flex-shrink-0 flex items-center justify-center">3</span><span>登录后点右上角 <strong className="text-white">📨 信封图标</strong> 设置一个密码</span></li>
+                  <li className="flex gap-3"><span className="w-6 h-6 rounded-full bg-indigo-600 text-white text-xs font-bold flex-shrink-0 flex items-center justify-center">4</span><span>回到桌面 App，用 <strong className="text-white">邮箱+密码</strong> 登录即可同步数据</span></li>
+                </ol>
+                <div className="bg-zinc-950 rounded-xl px-4 py-3 flex items-center gap-3 border border-zinc-800">
+                  <span className="text-xs text-zinc-400 truncate flex-1 font-mono">{window.location.origin}</span>
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(window.location.origin); showError('链接已复制 ✅'); }}
+                    className="text-xs text-indigo-400 font-bold whitespace-nowrap hover:text-indigo-300 transition-colors"
+                  >复制链接</button>
+                </div>
+                <button
+                  onClick={() => setShowSafariGuide(false)}
+                  className="w-full py-3 rounded-xl bg-zinc-800 text-zinc-300 font-bold text-sm hover:bg-zinc-700 transition-colors"
+                >知道了</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </>
   );
 
@@ -2948,16 +2986,14 @@ export default function App() {
                     </AnimatePresence>
                   </div>
 
-                  {/* Guide: Already have Google account → open in browser to link */}
-                  <a
-                    href={window.location.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  {/* Guide: Already have Google account → show Safari instructions */}
+                  <button
+                    onClick={() => setShowSafariGuide(true)}
                     className="py-3 text-zinc-400 hover:text-white bg-zinc-900/50 hover:bg-zinc-800 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 border border-zinc-800 active:scale-95"
                   >
                     <LogIn className="w-4 h-4 text-zinc-500" />
                     绑定已有 Google 账号
-                  </a>
+                  </button>
 
                   {/* Guest */}
                   <button
