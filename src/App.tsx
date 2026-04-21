@@ -2919,6 +2919,7 @@ export default function App() {
     return (
       <div className="min-h-[100dvh] bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center px-4 py-6 sm:p-6 font-sans relative overflow-hidden safe-top safe-bottom">
         {pwaUpdateModal}
+        <GlobalError errorMsg={errorMsg} />
         {/* Background effects */}
         <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
           <div className="absolute top-[-10%] left-[-10%] w-[55%] h-[30%] sm:w-[40%] sm:h-[40%] bg-indigo-500/10 blur-[90px] sm:blur-[120px] rounded-full" />
