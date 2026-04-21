@@ -1,6 +1,7 @@
 export function getGeminiApiKey() {
   const rawValue = process.env.GEMINI_API_KEY || process.env.API_KEY || '';
   const apiKeys = rawValue
+    .replace(/['"]/g, '') // Strip all single and double quotes
     .split(',')
     .map((value) => value.trim())
     .filter(Boolean);
