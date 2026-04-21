@@ -1383,6 +1383,10 @@ export default function App() {
 
   const handleEmailLinkLogin = async () => {
     if (isSendingEmail) return;
+    if (!auth) {
+      showError("Firebase 未初始化，请刷新页面。");
+      return;
+    }
     if (!emailInput || !emailInput.includes('@')) {
       showError("请先输入有效的邮箱地址！");
       return;
@@ -1399,8 +1403,10 @@ export default function App() {
       setShowEmailLogin(false);
       setEmailInput("");
     } catch (error: any) {
-      console.error(error);
-      showError("发送邮件失败，可能是Firebase Auth中未启用密码无感登录，或者是超频限制。");
+      console.error("Email Link Error:", error);
+      const code = error?.code || 'unknown';
+      const msg = error?.message || '';
+      showError(`发送失败 [${code}]：${msg}`);
     } finally {
       setIsSendingEmail(false);
     }
