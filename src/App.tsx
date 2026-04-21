@@ -211,7 +211,12 @@ const InstallAppBanner = ({
   isStandalone: boolean;
   onInstall: () => void;
 }) => {
-  if (!canInstall || isStandalone) return null;
+  const isIos = /iPad|iPhone|iPod/.test(window.navigator.userAgent) ||
+    (window.navigator.platform === 'MacIntel' && window.navigator.maxTouchPoints > 1);
+
+  if (isStandalone) return null;
+  // Show if native install is available OR if it's iOS (we can show tutorial)
+  if (!canInstall && !isIos) return null;
 
   return (
     <div className="w-full rounded-2xl border border-indigo-500/30 bg-indigo-500/10 p-4 backdrop-blur-sm">
@@ -624,6 +629,7 @@ export default function App() {
   const [generationStatus, setGenerationStatus] = useState("");
   const [fleshingOutChapters, setFleshingOutChapters] = useState<Record<number, boolean>>({});
   const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
+  const [showIosInstallModal, setShowIosInstallModal] = useState<boolean>(false);
   const [isStandaloneMode, setIsStandaloneMode] = useState(false);
   const [pwaUpdateInfo, setPwaUpdateInfo] = useState<PwaUpdateInfo | null>(null);
   const [isApplyingPwaUpdate, setIsApplyingPwaUpdate] = useState(false);
@@ -1291,6 +1297,15 @@ export default function App() {
     setIsLoggingIn(true);
     try {
       const provider = new GoogleAuthProvider();
+      const isIos = /iPad|iPhone|iPod/.test(window.navigator.userAgent) ||
+        (window.navigator.platform === 'MacIntel' && window.navigator.maxTouchPoints > 1);
+
+      if (isIos) {
+        // iOS Safari blocks 3rd party cookies heavily which breaks signInWithRedirect. Force popup.
+        await signInWithPopup(auth, provider);
+        return;
+      }
+
       const prefersRedirect = window.matchMedia('(max-width: 768px), (pointer: coarse)').matches;
       if (prefersRedirect) {
         await signInWithRedirect(auth, provider);
@@ -1299,16 +1314,12 @@ export default function App() {
       await signInWithPopup(auth, provider);
     } catch (error: any) {
       console.error(error);
-      if (error.code === 'auth/popup-blocked') {
+      if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user') {
         const provider = new GoogleAuthProvider();
         await signInWithRedirect(auth, provider);
         return;
       } else if (error.code === 'auth/cancelled-popup-request') {
         console.log("Previous login request was still pending.");
-      } else if (error.code === 'auth/popup-closed-by-user') {
-        const provider = new GoogleAuthProvider();
-        await signInWithRedirect(auth, provider);
-        return;
       } else {
         showError("登录失败，请稍后重试。");
       }
@@ -1396,6 +1407,14 @@ export default function App() {
   };
 
   const handleInstallApp = async () => {
+    const isIos = /iPad|iPhone|iPod/.test(window.navigator.userAgent) ||
+      (window.navigator.platform === 'MacIntel' && window.navigator.maxTouchPoints > 1);
+
+    if (isIos) {
+      setShowIosInstallModal(true);
+      return;
+    }
+
     if (!installPromptEvent) return;
     try {
       await installPromptEvent.prompt();
@@ -2591,15 +2610,49 @@ export default function App() {
   ) : null;
 
   const pwaUpdateModal = (
-    <PwaUpdateModal
-      updateInfo={isStandaloneMode ? pwaUpdateInfo : null}
-      isApplying={isApplyingPwaUpdate}
-      onClose={() => {
-        if (isApplyingPwaUpdate) return;
-        setPwaUpdateInfo(null);
-      }}
-      onUpdate={handleApplyPwaUpdate}
-    />
+    <>
+      <PwaUpdateModal
+        updateInfo={isStandaloneMode ? pwaUpdateInfo : null}
+        isApplying={isApplyingPwaUpdate}
+        onClose={() => {
+          if (isApplyingPwaUpdate) return;
+          setPwaUpdateInfo(null);
+        }}
+        onUpdate={handleApplyPwaUpdate}
+      />
+      <AnimatePresence>
+        {showIosInstallModal && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm safe-top safe-bottom">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-sm rounded-2xl bg-zinc-900 border border-zinc-800 shadow-2xl overflow-hidden"
+            >
+              <div className="p-6 text-center space-y-4">
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 mb-2">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-indigo-400"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+                </div>
+                <h3 className="text-xl font-bold text-white">添加到主屏幕</h3>
+                <p className="text-sm leading-relaxed text-zinc-400">
+                  点击底部工具栏的 <strong className="text-white">分享图标</strong>
+                  <br />
+                  然后选择 <strong className="text-white">「添加到主屏幕」</strong>
+                </p>
+                <div className="pt-2">
+                  <button
+                    onClick={() => setShowIosInstallModal(false)}
+                    className="w-full rounded-xl bg-indigo-600 py-3 font-bold text-white transition-colors hover:bg-indigo-500 active:bg-indigo-400"
+                  >
+                    我知道了
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </>
   );
 
   // --- Renderers ---
