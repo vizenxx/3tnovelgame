@@ -1,6 +1,7 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './_auth';
+import { getGeminiApiKey } from './_gemini';
 
 function ensureParagraphing(raw: string, opts?: { minParas?: number; maxParas?: number }) {
   const minParas = opts?.minParas ?? 6;
@@ -216,7 +217,7 @@ ${(!worldState || !worldState.canonical) && endingProto ? `作者结局原型：
 
 请严格按 JSON 输出，不要包含元数据。`;
 
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY as string });
+    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
     const response = await ai.models.generateContent({
       model: 'gemini-3.1-flash-lite-preview',
       contents: prompt,

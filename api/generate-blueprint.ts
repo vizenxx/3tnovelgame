@@ -1,6 +1,7 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './_auth';
+import { getGeminiApiKey } from './_gemini';
 
 const blueprintSchema = {
   type: Type.OBJECT,
@@ -95,7 +96,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const safeTargetWordCount = Math.min(1200, Math.max(600, Number(targetWordCount) || 600));
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY as string });
+    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
 
     const prompt = `你是一个互动小说世界构建师。
 已知主题：${selectedThemes.join(', ')}。

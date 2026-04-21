@@ -1,6 +1,7 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './_auth';
+import { getGeminiApiKey } from './_gemini';
 
 const canonicalSchema = {
   type: Type.OBJECT,
@@ -122,7 +123,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       interventionAction,
     } = req.body || {};
 
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY as string });
+    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
 
     if (mode === 'canonical') {
       if (!Array.isArray(chapters) || !blueprint) {

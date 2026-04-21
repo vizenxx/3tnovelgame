@@ -1,6 +1,7 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './_auth';
+import { getGeminiApiKey } from './_gemini';
 
 const summarySchema = {
   type: Type.OBJECT,
@@ -25,7 +26,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const safeChapters = chapters.slice(0, 7);
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY as string });
+    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
 
     const prompt = `你是一个互动小说编年史家。
 小说主轴：${blueprint.main_axis}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles } from 'lucide-react';
-import { auth, db } from './firebase';
+import { auth, db, firebaseInitError } from './firebase';
 import { createEmptyStory, adaptBlueprintToStory, createStoryBranch, deleteStoryBranch, deleteStoryCartridge, getStoryCartridge, listMyStories, listPublicStories, saveStoryMainlineBundle, saveStoryMeta, upsertStoryBranch } from './storyStore';
 import { isBranchUnlockedByHistory, tierToScore } from './storyCartridge';
 import { 
@@ -77,6 +77,17 @@ interface Ending {
   type: 'good' | 'normal' | 'bad';
   title?: string;
   text: string;
+}
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+}
+
+interface PwaUpdateInfo {
+  latestVersion: string;
+  latestBuildId: string;
+  isIos: boolean;
 }
 
 interface Branch {
@@ -190,6 +201,124 @@ const GlobalError = ({ errorMsg }: { errorMsg: string | null }) => (
     )}
   </AnimatePresence>
 );
+
+const InstallAppBanner = ({
+  canInstall,
+  isStandalone,
+  onInstall,
+}: {
+  canInstall: boolean;
+  isStandalone: boolean;
+  onInstall: () => void;
+}) => {
+  if (!canInstall || isStandalone) return null;
+
+  return (
+    <div className="w-full rounded-2xl border border-indigo-500/30 bg-indigo-500/10 p-4 backdrop-blur-sm">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-1">
+          <div className="text-sm font-bold text-indigo-100">安装到手机桌面</div>
+          <div className="text-xs leading-relaxed text-indigo-200/80">
+            安装后可像原生应用一样从桌面直接打开，加载也会更稳定。
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onInstall}
+          className="shrink-0 rounded-xl bg-white px-4 py-2 text-sm font-bold text-black transition-colors hover:bg-zinc-200"
+        >
+          立即安装
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const PwaUpdateModal = ({
+  updateInfo,
+  isApplying,
+  onClose,
+  onUpdate,
+}: {
+  updateInfo: PwaUpdateInfo | null;
+  isApplying: boolean;
+  onClose: () => void;
+  onUpdate: () => void;
+}) => {
+  if (!updateInfo) return null;
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[3600] bg-black/80 backdrop-blur-sm p-4 flex items-center justify-center"
+      >
+        <motion.div
+          initial={{ opacity: 0, scale: 0.96, y: 16 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.96, y: 16 }}
+          className="w-full max-w-md rounded-3xl border border-zinc-800 bg-zinc-950 p-6 space-y-5 shadow-2xl"
+        >
+          <div className="space-y-2">
+            <div className="text-xs uppercase tracking-[0.35em] text-zinc-500">版本更新</div>
+            <h3 className="text-2xl font-black text-white">发现新版 App</h3>
+            <p className="text-sm leading-relaxed text-zinc-400">
+              当前安装的 PWA 不是最新版。最新版本为 {updateInfo.latestVersion}，建议现在升级后再继续使用。
+            </p>
+          </div>
+
+          {updateInfo.isIos ? (
+            <div className="space-y-3 text-sm text-zinc-300">
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 space-y-2">
+                <div>1. 点击下方“打开更新页”</div>
+                <div>2. 在 Safari 中重新打开本站并等待页面加载完成</div>
+                <div>3. 回到主屏幕重新进入 App；如果仍未更新，再从 Safari 重新“添加到主屏幕”</div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <a
+                  href="/"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-center"
+                >
+                  打开更新页
+                </a>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="py-3 rounded-2xl border border-zinc-700 bg-zinc-900 text-zinc-200 font-bold"
+                >
+                  稍后再说
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={isApplying}
+                className="py-3 rounded-2xl border border-zinc-700 bg-zinc-900 text-zinc-200 font-bold disabled:opacity-50"
+              >
+                稍后再说
+              </button>
+              <button
+                type="button"
+                onClick={onUpdate}
+                disabled={isApplying}
+                className="py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold disabled:opacity-50"
+              >
+                {isApplying ? '升级中...' : '立即升级'}
+              </button>
+            </div>
+          )}
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+};
 
 const LoadingOverlay = ({ progress, status, subtext, variant = 'default' }: { progress: number, status: string, subtext?: string, variant?: 'default' | 'bless' | 'curse' | 'ending' }) => (
   <div className={`fixed inset-0 z-[1000] backdrop-blur-xl flex flex-col items-center justify-center p-8 text-center transition-colors duration-700 ${
@@ -471,6 +600,9 @@ export default function App() {
   const [firestoreError, setFirestoreError] = useState<FirestoreErrorInfo | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
+  const [isStoryInfoOpen, setIsStoryInfoOpen] = useState(false);
+  const [isTallNarrowViewport, setIsTallNarrowViewport] = useState(false);
   const [naturalChapters, setNaturalChapters] = useState<Chapter[]>([]);
   // 用于“重新干涉”回滚到干涉前的初始剧情版本
   const [initialNaturalChapters, setInitialNaturalChapters] = useState<Chapter[]>([]);
@@ -491,6 +623,10 @@ export default function App() {
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationStatus, setGenerationStatus] = useState("");
   const [fleshingOutChapters, setFleshingOutChapters] = useState<Record<number, boolean>>({});
+  const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
+  const [isStandaloneMode, setIsStandaloneMode] = useState(false);
+  const [pwaUpdateInfo, setPwaUpdateInfo] = useState<PwaUpdateInfo | null>(null);
+  const [isApplyingPwaUpdate, setIsApplyingPwaUpdate] = useState(false);
 
   // Cartridge platform state
   const [activeStoryId, setActiveStoryId] = useState<string | null>(null);
@@ -670,12 +806,12 @@ export default function App() {
     const errInfo: FirestoreErrorInfo = {
       error: error instanceof Error ? error.message : String(error),
       authInfo: {
-        userId: auth.currentUser?.uid,
-        email: auth.currentUser?.email,
-        emailVerified: auth.currentUser?.emailVerified,
-        isAnonymous: auth.currentUser?.isAnonymous,
-        tenantId: auth.currentUser?.tenantId,
-        providerInfo: auth.currentUser?.providerData.map(provider => ({
+        userId: auth?.currentUser?.uid,
+        email: auth?.currentUser?.email,
+        emailVerified: auth?.currentUser?.emailVerified,
+        isAnonymous: auth?.currentUser?.isAnonymous,
+        tenantId: auth?.currentUser?.tenantId,
+        providerInfo: auth?.currentUser?.providerData.map(provider => ({
           providerId: provider.providerId,
           displayName: provider.displayName,
           email: provider.email,
@@ -691,6 +827,10 @@ export default function App() {
   };
 
   useEffect(() => {
+    if (!auth) {
+      setIsAuthReady(true);
+      return;
+    }
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
       setIsAuthReady(true);
@@ -699,7 +839,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !db) return;
 
     // Test connection
     const testConnection = async () => {
@@ -717,7 +857,7 @@ export default function App() {
 
   // Sync session from Firestore
   useEffect(() => {
-    if (!user || !isAuthReady) return;
+    if (!user || !isAuthReady || !db) return;
 
     const sessionRef = doc(db, 'sessions', user.uid);
     const unsubscribe = onSnapshot(sessionRef, (snapshot) => {
@@ -844,6 +984,7 @@ export default function App() {
 
   // Firebase Redirect Result Listener
   useEffect(() => {
+    if (!auth) return;
     getRedirectResult(auth).then((result) => {
       if (result) {
         setUser(result.user);
@@ -854,6 +995,72 @@ export default function App() {
   useEffect(() => {
     setAuthoringCustomTagsInput((authoringCartridge?.meta?.tags || []).join('，'));
   }, [authoringCartridge?.storyId, authoringCartridge?.meta?.tags]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(display-mode: standalone)');
+    const updateStandalone = () => {
+      setIsStandaloneMode(mediaQuery.matches || (window.navigator as Navigator & { standalone?: boolean }).standalone === true);
+    };
+
+    const onBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPromptEvent(event as BeforeInstallPromptEvent);
+    };
+
+    const onAppInstalled = () => {
+      setInstallPromptEvent(null);
+      updateStandalone();
+    };
+
+    updateStandalone();
+    mediaQuery.addEventListener?.('change', updateStandalone);
+    window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt);
+    window.addEventListener('appinstalled', onAppInstalled);
+
+    return () => {
+      mediaQuery.removeEventListener?.('change', updateStandalone);
+      window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', onAppInstalled);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isStandaloneMode || !import.meta.env.PROD) return;
+
+    let isCancelled = false;
+    const detectIos =
+      /iPad|iPhone|iPod/.test(window.navigator.userAgent) ||
+      (window.navigator.platform === 'MacIntel' && window.navigator.maxTouchPoints > 1);
+
+    fetch(`/app-version.json?ts=${Date.now()}`, { cache: 'no-store' })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (isCancelled || !data?.buildId) return;
+        if (String(data.buildId) === __APP_BUILD_ID__) return;
+        setPwaUpdateInfo({
+          latestVersion: String(data.version || '最新版'),
+          latestBuildId: String(data.buildId),
+          isIos: detectIos,
+        });
+      })
+      .catch((error) => {
+        console.error('PWA version check failed:', error);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isStandaloneMode]);
+
+  useEffect(() => {
+    const updateViewportShape = () => {
+      setIsTallNarrowViewport(window.innerHeight / Math.max(window.innerWidth, 1) >= 1.5);
+    };
+
+    updateViewportShape();
+    window.addEventListener('resize', updateViewportShape);
+    return () => window.removeEventListener('resize', updateViewportShape);
+  }, []);
 
   useEffect(() => {
     const closeActiveModal = confirmationModal.isOpen
@@ -1077,19 +1284,31 @@ export default function App() {
 
   const handleLogin = async () => {
     if (isLoggingIn) return;
+    if (!auth) {
+      showError("Firebase 配置未完成，暂时无法登录。");
+      return;
+    }
     setIsLoggingIn(true);
     try {
       const provider = new GoogleAuthProvider();
-      // Use Popup for better desktop experience
+      const prefersRedirect = window.matchMedia('(max-width: 768px), (pointer: coarse)').matches;
+      if (prefersRedirect) {
+        await signInWithRedirect(auth, provider);
+        return;
+      }
       await signInWithPopup(auth, provider);
     } catch (error: any) {
       console.error(error);
       if (error.code === 'auth/popup-blocked') {
-        showError("登录窗口被浏览器拦截，请允许弹出窗口后重试。");
+        const provider = new GoogleAuthProvider();
+        await signInWithRedirect(auth, provider);
+        return;
       } else if (error.code === 'auth/cancelled-popup-request') {
         console.log("Previous login request was still pending.");
       } else if (error.code === 'auth/popup-closed-by-user') {
-        showError("登录窗口已关闭。");
+        const provider = new GoogleAuthProvider();
+        await signInWithRedirect(auth, provider);
+        return;
       } else {
         showError("登录失败，请稍后重试。");
       }
@@ -1100,6 +1319,10 @@ export default function App() {
 
   const handleGuestLogin = async () => {
     if (isLoggingIn) return;
+    if (!auth) {
+      showError("Firebase 配置未完成，暂时无法登录。");
+      return;
+    }
     setIsLoggingIn(true);
     try {
       await signInAnonymously(auth);
@@ -1112,6 +1335,10 @@ export default function App() {
   };
 
   const handleLogout = async () => {
+    if (!auth) {
+      resetGame();
+      return;
+    }
     try {
       await signOut(auth);
       resetGame();
@@ -1166,6 +1393,62 @@ export default function App() {
         endingNames: { ...(prev.meta.endingNames || {}), [side]: nextValue },
       },
     }));
+  };
+
+  const handleInstallApp = async () => {
+    if (!installPromptEvent) return;
+    try {
+      await installPromptEvent.prompt();
+      await installPromptEvent.userChoice;
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setInstallPromptEvent(null);
+    }
+  };
+
+  const handleApplyPwaUpdate = async () => {
+    if (!pwaUpdateInfo || !('serviceWorker' in navigator)) return;
+
+    setIsApplyingPwaUpdate(true);
+    try {
+      let hasReloaded = false;
+      const reloadOnce = () => {
+        if (hasReloaded) return;
+        hasReloaded = true;
+        window.location.reload();
+      };
+
+      navigator.serviceWorker.addEventListener('controllerchange', reloadOnce, { once: true } as AddEventListenerOptions);
+
+      const registration = await navigator.serviceWorker.register(`/sw.js?v=${encodeURIComponent(pwaUpdateInfo.latestBuildId)}`);
+      await registration.update().catch(() => {});
+
+      if (registration.waiting) {
+        registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+      } else if (registration.installing) {
+        await new Promise<void>((resolve) => {
+          const worker = registration.installing;
+          const timeout = window.setTimeout(resolve, 4000);
+          worker?.addEventListener('statechange', () => {
+            if (registration.waiting) {
+              registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+              window.clearTimeout(timeout);
+              resolve();
+            } else if (worker.state === 'activated') {
+              window.clearTimeout(timeout);
+              resolve();
+            }
+          });
+        });
+      }
+
+      window.setTimeout(reloadOnce, 1200);
+    } catch (error) {
+      console.error(error);
+      showError('升级失败，请稍后重试。');
+      setIsApplyingPwaUpdate(false);
+    }
   };
 
   const incrementStoryPopularityIfEligible = async (storyId: string | null, currentPopularity?: number) => {
@@ -1906,6 +2189,22 @@ export default function App() {
   };
 
   const handleEndGame = () => {
+    if (interventionsLeft > 0) {
+      setConfirmationModal({
+        isOpen: true,
+        title: '命运确定',
+        message: '你还有剩余干涉次数。确定现在直接总结，并结束这次干涉吗？',
+        onConfirm: () => {
+          setConfirmationModal(prev => ({ ...prev, isOpen: false }));
+          handleEndGameConfirmed();
+        }
+      });
+      return;
+    }
+    handleEndGameConfirmed();
+  };
+
+  const handleEndGameConfirmed = () => {
     const unfinishedChapter = chapters.find(ch => !isChapterTextReady(ch));
     if (unfinishedChapter || Object.values(fleshingOutChapters).some(Boolean) || isRewriting) {
       setPendingSummaryRequest('manual');
@@ -2032,54 +2331,332 @@ export default function App() {
     }
   };
 
+  const openRestartConfirmation = () => {
+    setConfirmationModal({
+      isOpen: true,
+      title: '重新开始当前故事',
+      message: '确定要放弃当前的干涉，回到故事最初的状态吗？',
+      onConfirm: () => {
+        restartSameStory();
+        setConfirmationModal(prev => ({ ...prev, isOpen: false }));
+      }
+    });
+    setIsActionMenuOpen(false);
+  };
+
+  const openAbandonInterventionConfirmation = () => {
+    setConfirmationModal({
+      isOpen: true,
+      title: '放弃干涉',
+      message: '确定要结束这次干涉并离开当前故事吗？',
+      onConfirm: () => {
+        resetGame();
+        setConfirmationModal(prev => ({ ...prev, isOpen: false }));
+      }
+    });
+    setIsActionMenuOpen(false);
+  };
+
+  const handleQuickAdapt = () => {
+    setIsActionMenuOpen(false);
+    handleFastAdaptToAuthoring();
+  };
+
+  const showCondensedStoryInfo = gameState === 'PLAYING' && isTallNarrowViewport;
+
+  const storyInfoPanel = blueprint ? (
+    <>
+      <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 mt-8 lg:mt-0">
+        <h2 className="text-2xl font-bold text-white mb-2">{blueprint.title}</h2>
+        <div className="flex flex-wrap items-center gap-2 text-sm text-zinc-400">
+          {(selectedThemes || []).map((theme, index) => (
+            <span key={`${theme || 'theme'}-${index}`} className="px-2 py-1 bg-zinc-800 rounded-md">
+              {theme}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
+        <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+          <BookOpen className="w-5 h-5 text-indigo-400" />
+          登场人物
+        </h3>
+        <div className="space-y-3">
+          {blueprint.characters.map(char => {
+            const statusObj = characterStatuses[char.id] || { status: '存活', isDead: false };
+            return (
+              <div key={char.id} className={`p-3 rounded-lg border transition-colors ${statusObj.isDead ? 'bg-zinc-950/50 border-zinc-900' : 'bg-zinc-950 border-zinc-800'}`}>
+                <div className="flex justify-between items-start mb-2 gap-3">
+                  <div className={`font-bold text-base ${statusObj.isDead ? 'text-zinc-600 line-through' : 'text-zinc-100'}`}>{char.name}</div>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-sm font-medium whitespace-nowrap ${
+                    statusObj.isDead ? 'bg-zinc-800 text-zinc-500' :
+                    statusObj.status === '存活' ? 'bg-emerald-500/10 text-emerald-400' :
+                    'bg-amber-500/10 text-amber-400'
+                  }`}>
+                    {statusObj.status}
+                  </span>
+                </div>
+                <div className="h-px bg-zinc-800 my-2" />
+                <div className={`text-sm leading-relaxed ${statusObj.isDead ? 'text-zinc-700' : 'text-zinc-400'}`}>{char.desc}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
+        <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
+          <Star className="w-5 h-5 text-yellow-500" />
+          命运支线
+        </h3>
+        <div className="space-y-3">
+          {blueprint.branches.map((branch) => {
+            const isUnlocked = unlockedBranches.some(b => b.id === branch.id);
+            const isHistoricallyUnlocked = historicallyUnlockedBranches.some(b => b.id === branch.id);
+
+            if (isUnlocked) {
+              return (
+                <div key={branch.id} className="p-3 bg-indigo-950/30 rounded-lg border border-indigo-500/30 shadow-[0_0_10px_rgba(99,102,241,0.1)]">
+                  <div className="flex justify-between items-center mb-1 gap-3">
+                    <span className="font-medium text-indigo-200">{branch.name}</span>
+                    <span className="text-xs font-bold px-2 py-1 bg-indigo-500/20 text-indigo-300 rounded whitespace-nowrap">已解锁</span>
+                  </div>
+                  <div className="text-sm text-indigo-200/70">{branch.desc}</div>
+                </div>
+              );
+            }
+
+            if (isHistoricallyUnlocked) {
+              const charName = blueprint.characters.find(c => c.id === branch.condition_char)?.name || '未知角色';
+              const actionName = branch.condition_action === 'bless' ? '庇佑' : '磨难';
+              return (
+                <div key={branch.id} className="p-3 bg-zinc-900/80 rounded-lg border border-zinc-700 flex flex-col gap-1">
+                  <div className="flex justify-between items-center gap-3">
+                    <span className="font-medium text-zinc-300">{branch.name}</span>
+                    <span className="text-xs font-bold px-2 py-1 bg-zinc-700/50 text-zinc-400 rounded flex items-center gap-1 whitespace-nowrap"><Lock className="w-3 h-3" /> 曾解锁</span>
+                  </div>
+                  <div className="text-xs text-zinc-500">
+                    解锁条件：在第 {branch.condition_chapter} 章对 {charName} 施加{actionName}
+                  </div>
+                </div>
+              );
+            }
+
+            if (!branch.is_hidden) {
+              return (
+                <div key={branch.id} className="p-3 bg-zinc-950/50 rounded-lg border border-zinc-800 border-dashed flex items-center gap-3">
+                  <Lock className="w-4 h-4 text-zinc-600" />
+                  <span className="text-sm font-medium text-zinc-500">{branch.name}（待解锁）</span>
+                </div>
+              );
+            }
+
+            return null;
+          })}
+        </div>
+      </div>
+    </>
+  ) : null;
+
+  const actionMenuOverlay = blueprint && (gameState === 'PLAYING' || gameState === 'SUMMARY') ? (
+    <div className="fixed top-4 left-4 z-[320]">
+      <button
+        type="button"
+        onClick={() => setIsActionMenuOpen((prev) => !prev)}
+        aria-label={isActionMenuOpen ? '关闭目录' : '打开目录'}
+        aria-expanded={isActionMenuOpen}
+        className="flex items-center justify-center w-11 h-11 rounded-2xl border border-zinc-700 bg-zinc-900/90 backdrop-blur-md text-white shadow-xl"
+      >
+        <Menu className="w-5 h-5" />
+      </button>
+
+      <AnimatePresence>
+        {isActionMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -8, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.96 }}
+            className="mt-3 w-48 rounded-2xl border border-zinc-800 bg-zinc-950/95 backdrop-blur-xl p-2 shadow-2xl"
+          >
+            <button
+              type="button"
+              onClick={openRestartConfirmation}
+              className="w-full px-3 py-3 rounded-xl text-left text-sm text-zinc-100 hover:bg-zinc-900 flex items-center gap-2"
+            >
+              <RefreshCcw className={`w-4 h-4 ${isRewriting ? 'animate-spin' : ''}`} />
+              重新干涉
+            </button>
+            <button
+              type="button"
+              onClick={openAbandonInterventionConfirmation}
+              className="w-full px-3 py-3 rounded-xl text-left text-sm text-zinc-100 hover:bg-zinc-900 flex items-center gap-2"
+            >
+              <Star className="w-4 h-4 text-amber-400" />
+              放弃干涉
+            </button>
+            <button
+              type="button"
+              onClick={handleQuickAdapt}
+              disabled={isRewriting || isGeneratingConclusion}
+              className="w-full px-3 py-3 rounded-xl text-left text-sm text-indigo-100 hover:bg-indigo-950/60 disabled:opacity-50 flex items-center gap-2"
+            >
+              <BookOpen className="w-4 h-4 text-indigo-300" />
+              一键改编
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  ) : null;
+
+  const compactFloatingActionPanel = blueprint && gameState === 'PLAYING' ? (
+    <div className="fixed left-4 right-4 bottom-4 z-[261] rounded-3xl border border-zinc-800 bg-zinc-950/92 backdrop-blur-xl shadow-2xl px-4 py-3 lg:right-auto lg:w-[22rem]">
+      <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
+        <div className="text-xl font-black leading-none text-indigo-200 whitespace-nowrap">{interventionsLeft} / 3</div>
+        <div className="text-sm font-bold leading-tight text-center">
+          <span className="text-indigo-300">左 {uiFeedback.leftProgress.toFixed(0)}%</span>
+          <span className="mx-2 text-zinc-600">/</span>
+          <span className="text-rose-300">右 {uiFeedback.rightProgress.toFixed(0)}%</span>
+        </div>
+        {interventionsLeft > 0 ? (
+          <button
+            type="button"
+            onClick={handleEndGame}
+            disabled={isRewriting}
+            className="px-4 py-2 rounded-2xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold flex items-center justify-center gap-2 whitespace-nowrap"
+          >
+            <BookOpen className="w-4 h-4" />
+            命运确定
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              suppressChapterWritesRef.current = true;
+              setSummaryEntrySource('auto_interventions');
+              setShowSummaryModal(true);
+              if (!storyConclusion && !isGeneratingConclusion) {
+                generateConclusion(chapters);
+              }
+            }}
+            disabled={isRewriting}
+            className="px-4 py-2 rounded-2xl bg-white text-black hover:bg-zinc-200 disabled:opacity-50 font-bold flex items-center justify-center gap-2 whitespace-nowrap"
+          >
+            <Check className="w-4 h-4" />
+            命运确定
+          </button>
+        )}
+      </div>
+    </div>
+  ) : null;
+
+  const storyInfoOverlay = showCondensedStoryInfo ? (
+    <>
+      <div className="fixed top-4 right-4 z-[321]">
+        <button
+          type="button"
+          onClick={() => setIsStoryInfoOpen(true)}
+          className="px-4 py-2.5 rounded-2xl border border-zinc-700 bg-zinc-900/90 backdrop-blur-md text-white shadow-xl font-medium"
+        >
+          故事信息
+        </button>
+      </div>
+
+      <AnimatePresence>
+        {isStoryInfoOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[330] bg-zinc-950 safe-top safe-bottom overflow-y-auto"
+          >
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-zinc-800 bg-zinc-950/95 px-4 py-4 pl-20 backdrop-blur-md">
+              <div className="text-sm uppercase tracking-[0.3em] text-zinc-500">故事信息</div>
+              <button
+                type="button"
+                onClick={() => setIsStoryInfoOpen(false)}
+                className="w-10 h-10 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-300 flex items-center justify-center"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              {storyInfoPanel}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  ) : null;
+
+  const pwaUpdateModal = (
+    <PwaUpdateModal
+      updateInfo={isStandaloneMode ? pwaUpdateInfo : null}
+      isApplying={isApplyingPwaUpdate}
+      onClose={() => {
+        if (isApplyingPwaUpdate) return;
+        setPwaUpdateInfo(null);
+      }}
+      onUpdate={handleApplyPwaUpdate}
+    />
+  );
+
   // --- Renderers ---
 
   if (!isAuthReady || !user) {
     return (
-      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center p-6 font-sans relative overflow-hidden">
+      <div className="min-h-[100dvh] bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center px-4 py-6 sm:p-6 font-sans relative overflow-hidden safe-top safe-bottom">
+        {pwaUpdateModal}
         {/* Background effects */}
         <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-          <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-500/10 blur-[120px] rounded-full" />
-          <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-rose-500/10 blur-[120px] rounded-full" />
+          <div className="absolute top-[-10%] left-[-10%] w-[55%] h-[30%] sm:w-[40%] sm:h-[40%] bg-indigo-500/10 blur-[90px] sm:blur-[120px] rounded-full" />
+          <div className="absolute bottom-[-10%] right-[-10%] w-[55%] h-[30%] sm:w-[40%] sm:h-[40%] bg-rose-500/10 blur-[90px] sm:blur-[120px] rounded-full" />
         </div>
 
-        <div className="max-w-md w-full text-center space-y-12 relative z-10">
-          <div className="space-y-6">
+        <div className="max-w-sm sm:max-w-md w-full text-center space-y-8 sm:space-y-12 relative z-10">
+          <div className="space-y-4 sm:space-y-6">
             <motion.div
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ duration: 1, ease: "easeOut" }}
             >
-              <h1 className="text-6xl font-black tracking-tighter text-white flex flex-col items-center gap-4">
-                <Wand2 className="w-20 h-20 text-indigo-400 drop-shadow-[0_0_20px_rgba(129,140,248,0.5)]" />
+              <h1 className="text-4xl sm:text-6xl font-black tracking-tighter text-white flex flex-col items-center gap-3 sm:gap-4">
+                <Wand2 className="w-14 h-14 sm:w-20 sm:h-20 text-indigo-400 drop-shadow-[0_0_20px_rgba(129,140,248,0.5)]" />
                 <span>命运引擎</span>
               </h1>
             </motion.div>
-            <p className="text-zinc-400 text-xl font-light tracking-wide">编织丝线，逆转因果，见证你的史诗结局。</p>
+            <p className="text-zinc-400 text-sm sm:text-xl font-light tracking-wide leading-relaxed">编织丝线，逆转因果，见证你的史诗结局。</p>
           </div>
 
-          <div className="space-y-6 pt-10 border-t border-zinc-900">
-            <p className="text-xs text-zinc-600 uppercase tracking-[0.4em] font-bold">请选择登入命运的方式</p>
+          <div className="space-y-5 pt-8 sm:pt-10 border-t border-zinc-900">
+            <p className="text-[11px] sm:text-xs text-zinc-600 uppercase tracking-[0.3em] sm:tracking-[0.4em] font-bold">请选择登入命运的方式</p>
+            <InstallAppBanner
+              canInstall={Boolean(installPromptEvent)}
+              isStandalone={isStandaloneMode}
+              onInstall={handleInstallApp}
+            />
+
             <div className="grid grid-cols-1 gap-4">
               <button
                 onClick={handleLogin}
-                className="group relative overflow-hidden py-4 bg-white text-black rounded-xl font-black text-xl transition-all active:scale-95 flex items-center justify-center gap-3 shadow-[0_0_30px_rgba(255,255,255,0.1)]"
+                className="group relative overflow-hidden py-3.5 sm:py-4 bg-white text-black rounded-xl font-black text-base sm:text-xl transition-all active:scale-95 flex items-center justify-center gap-3 shadow-[0_0_30px_rgba(255,255,255,0.1)]"
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-indigo-100 to-white opacity-0 group-hover:opacity-100 transition-opacity" />
                 <span className="relative z-10 flex items-center gap-3">
-                  <LogIn className="w-6 h-6" />
+                  <LogIn className="w-5 h-5 sm:w-6 sm:h-6" />
                   使用 Google 登录
                 </span>
               </button>
               <button
                 onClick={handleGuestLogin}
-                className="py-4 bg-zinc-900/50 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900 rounded-xl font-bold transition-all flex items-center justify-center gap-3 border border-zinc-800 active:scale-95"
+                className="py-3.5 sm:py-4 bg-zinc-900/50 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900 rounded-xl font-bold text-sm sm:text-base transition-all flex items-center justify-center gap-3 border border-zinc-800 active:scale-95"
               >
-                <UserIcon className="w-6 h-6" />
+                <UserIcon className="w-5 h-5 sm:w-6 sm:h-6" />
                 以游客身份继续
               </button>
             </div>
-            <p className="text-[10px] text-zinc-700 max-w-xs mx-auto leading-relaxed">
+            <p className="text-[10px] text-zinc-700 max-w-[18rem] mx-auto leading-relaxed">
               * 游客身份数据仅保留在当前设备。建议登录 Google 以同步多端进度。
             </p>
           </div>
@@ -2090,8 +2667,8 @@ export default function App() {
 
   if (firestoreError) {
     return (
-      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center p-6 font-sans">
-        <div className="max-w-md w-full bg-zinc-900 border border-rose-500/30 rounded-2xl p-8 text-center space-y-6">
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center p-4 sm:p-6 font-sans safe-top safe-bottom">
+        <div className="max-w-md w-full bg-zinc-900 border border-rose-500/30 rounded-2xl p-5 sm:p-8 text-center space-y-6">
           <AlertCircle className="w-16 h-16 text-rose-500 mx-auto" />
           <h2 className="text-2xl font-bold text-white">数据库连接异常</h2>
           <p className="text-zinc-400 text-sm leading-relaxed">
@@ -2111,25 +2688,49 @@ export default function App() {
     );
   }
 
+  if (firebaseInitError) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center p-4 sm:p-6 font-sans safe-top safe-bottom">
+        <div className="max-w-md w-full bg-zinc-900 border border-amber-500/30 rounded-2xl p-5 sm:p-8 text-center space-y-6">
+          <AlertCircle className="w-16 h-16 text-amber-400 mx-auto" />
+          <h2 className="text-2xl font-bold text-white">本地配置未完成</h2>
+          <p className="text-zinc-400 text-sm leading-relaxed">
+            应用已避免白屏，但当前缺少 Firebase 前端环境变量，所以登录和数据功能暂时不可用。
+          </p>
+          <div className="bg-black/40 p-4 rounded-lg text-left text-[11px] font-mono text-amber-300 overflow-auto">
+            {firebaseInitError}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (gameState === 'STORY_SELECT') {
     return (
-      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center p-6 font-sans relative">
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center p-4 sm:p-6 font-sans relative safe-top safe-bottom">
+        {pwaUpdateModal}
         <GlobalError errorMsg={errorMsg} />
-        <div className="absolute top-6 right-6 flex items-center gap-4">
-          <div className="text-right">
+        <div className="absolute left-4 right-4 top-4 sm:left-auto sm:right-6 sm:top-6 flex items-center justify-between gap-3">
+          <div className="text-left sm:text-right min-w-0">
             <div className="text-xs text-zinc-500">已登录</div>
-            <div className="text-sm font-medium text-zinc-300">{user.isAnonymous ? "游客用户" : user.displayName}</div>
+            <div className="text-sm font-medium text-zinc-300 truncate">{user.isAnonymous ? "游客用户" : user.displayName}</div>
           </div>
           <button aria-label="退出登录" onClick={handleLogout} className="p-2 bg-zinc-900 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
             <LogOut className="w-5 h-5 text-zinc-400" />
           </button>
         </div>
 
-        <div className="max-w-4xl w-full space-y-8">
+        <div className="max-w-4xl w-full space-y-6 sm:space-y-8 pt-14 sm:pt-0">
           <div className="text-center space-y-3">
-            <h1 className="text-4xl font-black tracking-tighter text-white">作品库</h1>
+            <h1 className="text-3xl sm:text-4xl font-black tracking-tighter text-white">作品库</h1>
             <p className="text-zinc-400">像卡带一样导入作品，即刻游玩。</p>
           </div>
+
+          <InstallAppBanner
+            canInstall={Boolean(installPromptEvent)}
+            isStandalone={isStandaloneMode}
+            onInstall={handleInstallApp}
+          />
 
           <div className="flex flex-col md:flex-row gap-3 justify-center">
             <button
@@ -2152,9 +2753,9 @@ export default function App() {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6">
-              <div className="flex items-center justify-between mb-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+            <div className="lg:col-span-2 bg-zinc-900/50 border border-zinc-800 rounded-2xl p-4 sm:p-6">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between mb-4">
                 <div className="font-bold text-white">公开作品</div>
                 <div className="text-xs text-zinc-500">点击即导入并开始游玩</div>
               </div>
@@ -2168,13 +2769,13 @@ export default function App() {
                       onClick={() => startStoryPlay(s.id)}
                       className="w-full text-left p-4 rounded-xl bg-zinc-950/50 border border-zinc-800 hover:border-indigo-500/40 transition-colors"
                     >
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="font-bold text-zinc-100">{formatBookTitle(s.title)}</div>
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="font-bold text-zinc-100 break-words">{formatBookTitle(s.title)}</div>
                         <div className="text-xs text-zinc-500 whitespace-nowrap">人气 {s.popularity || 0}</div>
                       </div>
                       <div className="mt-2 flex flex-wrap gap-2">
-                        {(s.tags || []).slice(0, DISPLAY_TAG_LIMIT).map((t: string) => (
-                          <span key={t} className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 border border-zinc-700">{t}</span>
+                        {(s.tags || []).slice(0, DISPLAY_TAG_LIMIT).map((t: string, index: number) => (
+                          <span key={`${t || 'tag'}-${index}`} className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 border border-zinc-700">{t}</span>
                         ))}
                       </div>
                     </button>
@@ -2183,7 +2784,7 @@ export default function App() {
               </div>
             </div>
 
-            <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 space-y-4">
+            <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-4 sm:p-6 space-y-4">
               <div className="font-bold text-white">分享码导入</div>
               <div className="text-xs text-zinc-500">MVP：暂用 storyId 作为分享码。仅公开或未列出的作品可被导入。</div>
               <input
@@ -2209,6 +2810,7 @@ export default function App() {
   if (gameState === 'AUTHORING') {
     return (
       <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6 md:p-10 font-sans">
+        {pwaUpdateModal}
         <GlobalError errorMsg={errorMsg} />
         <div className="max-w-6xl mx-auto space-y-6">
           <div className="flex items-center justify-between">
@@ -2303,8 +2905,8 @@ export default function App() {
                     </div>
                     <div className="mt-2 flex items-center justify-between gap-3">
                       <div className="flex flex-wrap gap-2 min-w-0">
-                        {(s.tags || []).slice(0, DISPLAY_TAG_LIMIT).map((tag: string) => (
-                          <span key={tag} className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-900 text-zinc-300 border border-zinc-700">{tag}</span>
+                        {(s.tags || []).slice(0, DISPLAY_TAG_LIMIT).map((tag: string, index: number) => (
+                          <span key={`${tag || 'tag'}-${index}`} className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-900 text-zinc-300 border border-zinc-700">{tag}</span>
                         ))}
                       </div>
                       <div className="text-[10px] text-zinc-500 whitespace-nowrap">人气 {s.popularity || 0}</div>
@@ -3069,28 +3671,37 @@ export default function App() {
 
   if (gameState === 'THEME_SELECTION') {
     return (
-      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center p-6 font-sans relative">
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center p-4 sm:p-6 font-sans relative safe-top safe-bottom">
+        {pwaUpdateModal}
         <GlobalError errorMsg={errorMsg} />
-        <div className="absolute top-6 right-6 flex items-center gap-4">
-          <div className="text-right">
+        <div className="absolute left-4 right-4 top-4 sm:left-auto sm:right-6 sm:top-6 flex items-center justify-between gap-2 sm:gap-4">
+          <div className="text-left sm:text-right min-w-0">
             <div className="text-xs text-zinc-500">已登录</div>
-            <div className="text-sm font-medium text-zinc-300">{user.isAnonymous ? "游客用户" : user.displayName}</div>
+            <div className="text-sm font-medium text-zinc-300 truncate">{user.isAnonymous ? "游客用户" : user.displayName}</div>
           </div>
-          <button onClick={() => setGameState('STORY_SELECT')} className="px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-300 hover:border-zinc-600 transition-colors">
-            返回作品库
-          </button>
-          <button aria-label="退出登录" onClick={handleLogout} className="p-2 bg-zinc-900 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
-            <LogOut className="w-5 h-5 text-zinc-400" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setGameState('STORY_SELECT')} className="px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-300 hover:border-zinc-600 transition-colors">
+              返回作品库
+            </button>
+            <button aria-label="退出登录" onClick={handleLogout} className="p-2 bg-zinc-900 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
+              <LogOut className="w-5 h-5 text-zinc-400" />
+            </button>
+          </div>
         </div>
-        <div className="max-w-2xl w-full space-y-8 text-center">
+        <div className="max-w-2xl w-full space-y-6 sm:space-y-8 text-center pt-16 sm:pt-0">
           <div className="space-y-4">
-            <h1 className="text-4xl font-bold tracking-tight text-white flex items-center justify-center gap-3">
+            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-white flex items-center justify-center gap-3">
               <Wand2 className="w-8 h-8 text-indigo-400" />
               命运引擎
             </h1>
             <p className="text-zinc-400">请选择 1 到 4 个主题，AI 将为你生成一个专属的互动世界。</p>
           </div>
+
+          <InstallAppBanner
+            canInstall={Boolean(installPromptEvent)}
+            isStandalone={isStandaloneMode}
+            onInstall={handleInstallApp}
+          />
           
           <div className="flex flex-wrap justify-center gap-3">
             {THEMES.map(theme => (
@@ -3145,20 +3756,29 @@ export default function App() {
 
   if (gameState === 'GENERATING_BLUEPRINT') {
     return (
-      <LoadingOverlay 
-        progress={generationProgress} 
-        status={generationStatus} 
-        subtext="由于您选择了较高的字数，这可能需要 1 到 2 分钟，请耐心等候命运的降临。"
-      />
+      <>
+        {pwaUpdateModal}
+        <LoadingOverlay 
+          progress={generationProgress} 
+          status={generationStatus} 
+          subtext="由于您选择了较高的字数，这可能需要 1 到 2 分钟，请耐心等候命运的降临。"
+        />
+      </>
     );
   }
 
   if (gameState === 'PLAYING' && blueprint) {
     return (
-      <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6 md:p-12 font-sans relative pb-28">
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 p-4 sm:p-6 md:p-12 font-sans relative pb-36 sm:pb-28 safe-top safe-bottom">
+        {pwaUpdateModal}
+        {actionMenuOverlay}
+        {compactFloatingActionPanel}
+        {storyInfoOverlay}
+
         <AnimatePresence>
           {activeInterventionOverlay && (
             <motion.div
+              key={`overlay-${activeInterventionOverlay.type}-${activeInterventionOverlay.targetChapter}`}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -3178,10 +3798,11 @@ export default function App() {
           )}
           {errorMsg && (
             <motion.div
+              key={`error-${errorMsg}`}
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] bg-rose-500 text-white px-6 py-3 rounded-lg shadow-lg font-medium"
+              className="fixed left-4 right-4 top-4 sm:left-1/2 sm:right-auto sm:top-6 sm:-translate-x-1/2 z-[100] bg-rose-500 text-white px-4 sm:px-6 py-3 rounded-lg shadow-lg font-medium text-center"
             >
               {errorMsg}
             </motion.div>
@@ -3191,6 +3812,7 @@ export default function App() {
         <AnimatePresence>
           {confirmationModal.isOpen && (
             <motion.div
+              key={`confirm-${confirmationModal.title}`}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -3234,6 +3856,7 @@ export default function App() {
         <AnimatePresence>
           {showSummaryModal && blueprint && (
             <motion.div 
+              key={`summary-modal-${summaryEntrySource || 'default'}`}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -3249,13 +3872,13 @@ export default function App() {
                 aria-modal="true"
                 data-modal-root="true"
                 tabIndex={-1}
-                className="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-lg w-[calc(100%-2rem)] shadow-2xl flex flex-col items-center text-center space-y-6 relative overflow-hidden"
+                className="bg-zinc-900 border border-zinc-700 rounded-2xl p-5 sm:p-6 max-w-lg w-[calc(100%-2rem)] shadow-2xl flex flex-col items-center text-center space-y-5 sm:space-y-6 relative overflow-hidden max-h-[85vh] overflow-y-auto"
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
 
                 <div className="space-y-1 text-center">
-                  <h2 className="text-3xl font-bold text-white uppercase tracking-tighter">命运已定</h2>
+                  <h2 className="text-2xl sm:text-3xl font-bold text-white uppercase tracking-tighter">命运已定</h2>
                   <div className="text-xs text-zinc-500 uppercase tracking-widest">结局类别</div>
                   <div className={`text-lg font-black ${
                     uiFeedback.endingLabel === '秩序律' ? 'text-indigo-400' :
@@ -3313,7 +3936,7 @@ export default function App() {
                       <span className="text-sm">正在凝结命运的结语...</span>
                     </div>
                   ) : (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-xl font-serif italic text-zinc-200 leading-relaxed">
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-lg sm:text-xl font-serif italic text-zinc-200 leading-relaxed">
                       "{storyConclusion}"
                     </motion.div>
                   )}
@@ -3331,182 +3954,32 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8">
           
-          {/* Mobile Menu Button */}
-          <button 
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            aria-label={isSidebarOpen ? "收起侧边栏" : "打开侧边栏"}
-            aria-expanded={isSidebarOpen}
-            className="lg:hidden fixed top-4 right-4 z-[160] p-2 bg-zinc-800 rounded-lg border border-zinc-700"
-          >
-            <Menu className="w-6 h-6 text-white" />
-          </button>
-
-          {/* Sticky bottom controls replace Mobile HUD */}
-
           {/* Left Sidebar: Status */}
-          <div className={`lg:col-span-4 space-y-6 ${isSidebarOpen ? 'fixed inset-0 z-[210] bg-zinc-950 p-6 overflow-y-auto' : 'hidden lg:block relative z-[210]'}`}>
+          <div className={`lg:col-span-4 space-y-6 ${showCondensedStoryInfo ? 'hidden lg:block' : isSidebarOpen ? 'fixed inset-0 z-[210] bg-zinc-950 p-4 sm:p-6 overflow-y-auto safe-top safe-bottom' : 'hidden lg:block relative z-[210]'}`}>
             {isSidebarOpen && (
               <button 
                 onClick={() => setIsSidebarOpen(false)}
-                aria-label="关闭侧边栏"
+                aria-label="关闭故事信息"
                 className="lg:hidden absolute top-4 right-4 p-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-zinc-400 hover:text-white transition-colors border border-zinc-700 z-[220]"
               >
                 <X className="w-6 h-6" />
               </button>
             )}
-            <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 mt-8 lg:mt-0">
-              <h2 className="text-2xl font-bold text-white mb-2">{blueprint.title}</h2>
-              <div className="flex items-center gap-2 text-sm text-zinc-400 mb-6">
-                <span className="px-2 py-1 bg-zinc-800 rounded-md">{selectedThemes.join(' · ')}</span>
-              </div>
-              
-              <div className="space-y-4">
-                <div className="flex justify-between items-center p-4 bg-zinc-950 rounded-lg border border-zinc-800">
-                  <span className="text-zinc-400 font-medium">剩余干涉次数</span>
-                  <span className="text-2xl font-bold text-indigo-400">{interventionsLeft} / 3</span>
-                </div>
-                
-                <div className="p-4 bg-zinc-950 rounded-lg border border-zinc-800 space-y-3">
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-indigo-400">左结局倾向</span>
-                      <span className="text-indigo-200">{uiFeedback.leftProgress.toFixed(0)}%</span>
-                    </div>
-                    <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
-                      <div className="h-full bg-indigo-500 transition-all duration-500" style={{ width: `${uiFeedback.leftProgress}%` }} />
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-rose-400">右结局倾向</span>
-                      <span className="text-rose-200">{uiFeedback.rightProgress.toFixed(0)}%</span>
-                    </div>
-                    <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
-                      <div className="h-full bg-rose-500 transition-all duration-500" style={{ width: `${uiFeedback.rightProgress}%` }} />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="hidden pt-2 grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => {
-                      setConfirmationModal({
-                        isOpen: true,
-                        title: '重新开始当前故事',
-                        message: '确定要放弃当前的干涉，回到故事最初的状态吗？',
-                        onConfirm: () => {
-                          restartSameStory();
-                          setConfirmationModal(prev => ({ ...prev, isOpen: false }));
-                        }
-                      });
-                    }}
-                    className="py-2.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 border border-zinc-800"
-                  >
-                    <RefreshCcw className={`w-3.5 h-3.5 ${isRewriting ? 'animate-spin' : ''}`} />
-                    重新干涉
-                  </button>
-                  <button
-                    onClick={() => {
-                      setConfirmationModal({
-                        isOpen: true,
-                        title: '开启全新故事',
-                        message: '确定要彻底结束这个故事，重新选择主题开启全新篇章吗？',
-                        onConfirm: () => {
-                          resetGame();
-                          setConfirmationModal(prev => ({ ...prev, isOpen: false }));
-                        }
-                      });
-                    }}
-                    className="py-2.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 border border-zinc-800"
-                  >
-                    <Star className="w-3.5 h-3.5 text-amber-500" />
-                    全新故事
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
-              <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
-                <BookOpen className="w-5 h-5 text-indigo-400" />
-                登场人物
-              </h3>
-              <div className="space-y-3">
-                {blueprint.characters.map(char => {
-                  const statusObj = characterStatuses[char.id] || { status: '存活', isDead: false };
-                  return (
-                    <div key={char.id} className={`p-3 rounded-lg border transition-colors ${statusObj.isDead ? 'bg-zinc-950/50 border-zinc-900' : 'bg-zinc-950 border-zinc-800'}`}>
-                      <div className="flex justify-between items-start mb-2">
-                        <div className={`font-bold text-base ${statusObj.isDead ? 'text-zinc-600 line-through' : 'text-zinc-100'}`}>{char.name}</div>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-sm font-medium ${
-                          statusObj.isDead ? 'bg-zinc-800 text-zinc-500' :
-                          statusObj.status === '存活' ? 'bg-emerald-500/10 text-emerald-400' :
-                          'bg-amber-500/10 text-amber-400'
-                        }`}>
-                          {statusObj.status}
-                        </span>
-                      </div>
-                      <div className="h-px bg-zinc-800 my-2" />
-                      <div className={`text-sm leading-relaxed ${statusObj.isDead ? 'text-zinc-700' : 'text-zinc-400'}`}>{char.desc}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
-              <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
-                <Star className="w-5 h-5 text-yellow-500" />
-                命运支线
-              </h3>
-              <div className="space-y-3">
-                {blueprint.branches.map((branch, index) => {
-                  const isUnlocked = unlockedBranches.some(b => b.id === branch.id);
-                  const isHistoricallyUnlocked = historicallyUnlockedBranches.some(b => b.id === branch.id);
-                  
-                  if (isUnlocked) {
-                    return (
-                      <div key={branch.id} className="p-3 bg-indigo-950/30 rounded-lg border border-indigo-500/30 shadow-[0_0_10px_rgba(99,102,241,0.1)]">
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="font-medium text-indigo-200">{branch.name}</span>
-                          <span className="text-xs font-bold px-2 py-1 bg-indigo-500/20 text-indigo-300 rounded">已解锁</span>
-                        </div>
-                        <div className="text-sm text-indigo-200/70">{branch.desc}</div>
-                      </div>
-                    );
-                  } else if (isHistoricallyUnlocked) {
-                    const charName = blueprint.characters.find(c => c.id === branch.condition_char)?.name || '未知角色';
-                    const actionName = branch.condition_action === 'bless' ? '庇佑' : '磨难';
-                    return (
-                      <div key={branch.id} className="p-3 bg-zinc-900/80 rounded-lg border border-zinc-700 flex flex-col gap-1">
-                        <div className="flex justify-between items-center">
-                          <span className="font-medium text-zinc-300">{branch.name}</span>
-                          <span className="text-xs font-bold px-2 py-1 bg-zinc-700/50 text-zinc-400 rounded flex items-center gap-1"><Lock className="w-3 h-3" /> 曾解锁</span>
-                        </div>
-                        <div className="text-xs text-zinc-500">
-                          解锁条件：在第 {branch.condition_chapter} 章对 {charName} 施加{actionName}
-                        </div>
-                      </div>
-                    );
-                  } else if (!branch.is_hidden) {
-                    return (
-                      <div key={branch.id} className="p-3 bg-zinc-950/50 rounded-lg border border-zinc-800 border-dashed flex items-center gap-3">
-                        <Lock className="w-4 h-4 text-zinc-600" />
-                        <span className="text-sm font-medium text-zinc-500">{branch.name} (待解锁)</span>
-                      </div>
-                    );
-                  }
-                  // Hidden and locked branches are not shown
-                  return null;
-                })}
-              </div>
-            </div>
+            {storyInfoPanel}
           </div>
 
           {/* Right Content: Chapters */}
           <div className="lg:col-span-8 space-y-6">
+            {showCondensedStoryInfo && (
+              <div className="pt-10 sm:pt-12">
+                <div className="bg-zinc-900/70 border border-zinc-800 rounded-2xl px-5 py-4">
+                  <h2 className="text-2xl font-bold text-white break-words pr-6">{blueprint.title}</h2>
+                </div>
+              </div>
+            )}
+
             {chapters.map((chapter) => (
               <div key={chapter.chapter_num} className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 relative overflow-hidden">
                 <div className="flex justify-between items-center mb-4">
@@ -3564,6 +4037,7 @@ export default function App() {
                 <AnimatePresence>
                   {activeInterventionChapter === chapter.chapter_num && (
                     <motion.div
+                      key={`intervention-${chapter.chapter_num}`}
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: 'auto' }}
                       exit={{ opacity: 0, height: 0 }}
@@ -3626,111 +4100,6 @@ export default function App() {
               </div>
             ))}
 
-            {/* Sticky bottom controls */}
-            <div className="fixed bottom-0 left-0 right-0 z-[250] bg-zinc-950/90 backdrop-blur-md border-t border-zinc-800 px-4 py-3">
-              <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="flex flex-col">
-                    <div className="text-[10px] text-zinc-500 uppercase tracking-widest">干涉次数</div>
-                    <div className="font-mono text-indigo-200">{interventionsLeft} / 3</div>
-                  </div>
-                  <div className="hidden sm:flex items-center gap-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-indigo-400">左倾</span>
-                      <div className="w-24 h-2 bg-zinc-800 rounded-full overflow-hidden flex">
-                        <div className="h-full bg-indigo-500" style={{ width: `${uiFeedback.leftProgress}%` }} />
-                        <div className="h-full bg-rose-500" style={{ width: `${uiFeedback.rightProgress}%` }} />
-                      </div>
-                    </div>
-                    <div className="text-[10px] text-rose-300">右倾 {uiFeedback.rightProgress.toFixed(0)}%</div>
-                  </div>
-                  <div className="sm:hidden w-24 h-2 bg-zinc-800 rounded-full overflow-hidden flex">
-                    <div className="h-full bg-indigo-500" style={{ width: `${uiFeedback.leftProgress}%` }} />
-                    <div className="h-full bg-rose-500" style={{ width: `${uiFeedback.rightProgress}%` }} />
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      setConfirmationModal({
-                        isOpen: true,
-                        title: '重新开始当前故事',
-                        message: '确定要放弃当前的干涉，回到故事最初的状态吗？',
-                        onConfirm: () => {
-                          restartSameStory();
-                          setConfirmationModal(prev => ({ ...prev, isOpen: false }));
-                        }
-                      });
-                    }}
-                    disabled={isRewriting}
-                    className="px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-200 disabled:opacity-50 flex items-center gap-2"
-                  >
-                    <RefreshCcw className={`w-4 h-4 ${isRewriting ? 'animate-spin' : ''}`} />
-                    <span className="hidden sm:inline text-sm font-medium">重新干涉</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setConfirmationModal({
-                        isOpen: true,
-                        title: '开启全新故事',
-                        message: '确定要彻底结束这个故事，重新选择主题开启全新篇章吗？',
-                        onConfirm: () => {
-                          resetGame();
-                          setConfirmationModal(prev => ({ ...prev, isOpen: false }));
-                        }
-                      });
-                    }}
-                    disabled={isRewriting}
-                    className="px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-200 disabled:opacity-50 flex items-center gap-2"
-                  >
-                    <Star className="w-4 h-4 text-amber-500" />
-                    <span className="hidden sm:inline text-sm font-medium">全新故事</span>
-                  </button>
-
-                  <button
-                    onClick={handleFastAdaptToAuthoring}
-                    title="一键将本世界线导入私人创作空间，开启自由改编"
-                    disabled={isRewriting || isGeneratingConclusion}
-                    className="px-3 py-2 bg-indigo-900 border border-indigo-700 hover:bg-indigo-800 rounded-lg text-indigo-100 disabled:opacity-50 flex items-center gap-2 transition-colors"
-                  >
-                    <BookOpen className="w-4 h-4 text-indigo-300" />
-                    <span className="hidden lg:inline text-sm font-medium">一键改编为我的作品</span>
-                    <span className="hidden sm:inline lg:hidden text-sm font-medium">改编</span>
-                  </button>
-
-                  {interventionsLeft > 0 ? (
-                    <button
-                      onClick={handleEndGame}
-                      disabled={isRewriting}
-                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold disabled:opacity-50 flex items-center gap-2"
-                    >
-                      <BookOpen className="w-4 h-4" />
-                      <span className="hidden sm:inline">直接总结</span>
-                      <span className="sm:hidden">总结</span>
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        suppressChapterWritesRef.current = true;
-                        setSummaryEntrySource('auto_interventions');
-                        setShowSummaryModal(true);
-                        if (!storyConclusion && !isGeneratingConclusion) {
-                          generateConclusion(chapters);
-                        }
-                      }}
-                      disabled={isRewriting}
-                      className="px-4 py-2 bg-white text-black hover:bg-zinc-200 rounded-lg font-bold disabled:opacity-50 flex items-center gap-2"
-                    >
-                      <Check className="w-4 h-4" />
-                      <span className="hidden sm:inline">查看命运总结</span>
-                      <span className="sm:hidden">查看</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -3739,11 +4108,14 @@ export default function App() {
 
   if (gameState === 'SUMMARY' && blueprint) {
     return (
-      <div className="min-h-screen bg-zinc-950 text-zinc-100 p-6 md:p-12 font-sans relative">
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 p-4 sm:p-6 md:p-12 font-sans relative safe-top safe-bottom">
+        {pwaUpdateModal}
+        {actionMenuOverlay}
         
         <AnimatePresence>
           {showSummaryModal && (
             <motion.div 
+              key={`summary-screen-modal-${summaryEntrySource || 'default'}`}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -3761,12 +4133,12 @@ export default function App() {
                 data-modal-root="true"
                 tabIndex={-1}
                 onClick={(e) => e.stopPropagation()}
-                className="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 md:p-8 max-w-lg w-[calc(100%-2rem)] shadow-2xl flex flex-col items-center text-center space-y-6 relative overflow-hidden"
+                className="bg-zinc-900 border border-zinc-700 rounded-2xl p-5 sm:p-6 md:p-8 max-w-lg w-[calc(100%-2rem)] shadow-2xl flex flex-col items-center text-center space-y-5 sm:space-y-6 relative overflow-hidden max-h-[85vh] overflow-y-auto"
               >
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
                 
                 <div className="space-y-1 text-center">
-                  <h2 id="summary-modal-title" className="text-3xl font-bold text-white uppercase tracking-tighter">命运已定</h2>
+                  <h2 id="summary-modal-title" className="text-2xl sm:text-3xl font-bold text-white uppercase tracking-tighter">命运已定</h2>
                   <div className="text-xs text-zinc-500 uppercase tracking-widest">结局类别</div>
                   <div className={`text-lg font-black ${
                     uiFeedback.endingLabel === '秩序律' ? 'text-indigo-400' : 
@@ -3827,7 +4199,7 @@ export default function App() {
                     <motion.div 
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
-                      className="text-xl font-serif italic text-zinc-200 leading-relaxed"
+                      className="text-lg sm:text-xl font-serif italic text-zinc-200 leading-relaxed"
                     >
                       "{storyConclusion}"
                     </motion.div>
@@ -3841,7 +4213,7 @@ export default function App() {
                     className="flex-1 py-3 bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50 rounded-lg font-bold text-lg transition-colors flex items-center justify-center gap-2"
                   >
                     <BookOpen className="w-5 h-5 text-indigo-200" />
-                    一键改编本故事
+                    一键改编
                   </button>
                   <button
                     onClick={() => setShowSummaryModal(false)}
@@ -3859,6 +4231,7 @@ export default function App() {
         <AnimatePresence>
           {confirmationModal.isOpen && (
             <motion.div
+              key={`summary-confirm-${confirmationModal.title}`}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -3875,7 +4248,7 @@ export default function App() {
                 data-modal-root="true"
                 tabIndex={-1}
                 onClick={(e) => e.stopPropagation()}
-                className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 max-w-md w-full shadow-2xl space-y-6"
+                className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 sm:p-8 max-w-md w-full shadow-2xl space-y-6 max-h-[85vh] overflow-y-auto"
               >
                 <div className="space-y-2">
                   <h3 className="text-2xl font-bold text-white flex items-center gap-3">
@@ -3907,7 +4280,7 @@ export default function App() {
 
         <div className="max-w-3xl mx-auto space-y-8">
           <div className="text-center space-y-4">
-            <h1 className="text-4xl font-bold text-white">{blueprint.title}</h1>
+            <h1 className="text-3xl sm:text-4xl font-bold text-white break-words">{blueprint.title}</h1>
             <p className="text-zinc-400">命运已定，这是你创造的专属故事。</p>
             {!showSummaryModal && (
               <button
@@ -3920,8 +4293,8 @@ export default function App() {
             )}
           </div>
 
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-8 space-y-6">
-            <div className="flex justify-between items-center pb-6 border-b border-zinc-800">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 sm:p-8 space-y-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center pb-6 border-b border-zinc-800">
               <div>
                 <div className="text-sm text-zinc-500 mb-1">解锁支线</div>
                 <div className="text-xl font-bold text-indigo-400">{unlockedBranches.length} / {blueprint.branches.length}</div>
@@ -4022,7 +4395,7 @@ export default function App() {
               className="px-8 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2 shadow-lg shadow-indigo-500/20"
             >
               <Star className="w-5 h-5" />
-              全新故事
+              放弃干涉
             </button>
           </div>
         </div>

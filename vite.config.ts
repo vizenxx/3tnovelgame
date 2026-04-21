@@ -1,12 +1,42 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+import fs from 'fs';
 import path from 'path';
 import {defineConfig, loadEnv} from 'vite';
 
 export default defineConfig(({mode}) => {
   loadEnv(mode, '.', '');
+  const packageJson = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf8'));
+  const appVersion = String(packageJson.version || '0.0.0');
+  const buildId = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
+
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [
+      react(),
+      tailwindcss(),
+      {
+        name: 'emit-app-version',
+        generateBundle() {
+          this.emitFile({
+            type: 'asset',
+            fileName: 'app-version.json',
+            source: JSON.stringify(
+              {
+                version: appVersion,
+                buildId,
+                generatedAt: new Date().toISOString(),
+              },
+              null,
+              2,
+            ),
+          });
+        },
+      },
+    ],
+    define: {
+      __APP_VERSION__: JSON.stringify(appVersion),
+      __APP_BUILD_ID__: JSON.stringify(buildId),
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
