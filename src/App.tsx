@@ -1435,10 +1435,12 @@ export default function App() {
   const handlePasswordLogin = async () => {
     if (isLoggingIn) return;
     if (!auth) { showError("Firebase 未初始化，请刷新页面重试。"); return; }
-    if (!pwEmail || !pwPassword) { showError("请填写邮箱和密码。"); return; }
+    const email = pwEmail.trim().toLowerCase();
+    const password = pwPassword.trim();
+    if (!email || !password) { showError("请填写邮箱和密码。"); return; }
     setIsLoggingIn(true);
     try {
-      await signInWithEmailAndPassword(auth, pwEmail, pwPassword);
+      await signInWithEmailAndPassword(auth, email, password);
     } catch (error: any) {
       console.error("Password Login Error:", error);
       const code: string = error?.code ?? 'unknown';
@@ -1456,19 +1458,22 @@ export default function App() {
 
   const handlePasswordRegister = async () => {
     if (!auth || isLoggingIn) return;
-    if (!pwEmail || !pwPassword) { showError("\u8bf7\u586b\u5199\u90ae\u7bb1\u548c\u5bc6\u7801\u3002"); return; }
-    if (pwPassword !== pwConfirm) { showError("\u4e24\u6b21\u8f93\u5165\u7684\u5bc6\u7801\u4e0d\u4e00\u81f4\uff01"); return; }
-    if (pwPassword.length < 6) { showError("\u5bc6\u7801\u81f3\u5c11\u9700\u8981 6 \u4f4d\u3002"); return; }
+    const email = pwEmail.trim().toLowerCase();
+    const password = pwPassword.trim();
+    const confirm = pwConfirm.trim();
+    if (!email || !password) { showError("请填写邮箱和密码。"); return; }
+    if (password !== confirm) { showError("两次输入的密码不一致！"); return; }
+    if (password.length < 6) { showError("密码至少需要 6 位。"); return; }
     setIsLoggingIn(true);
     try {
-      await createUserWithEmailAndPassword(auth, pwEmail, pwPassword);
+      await createUserWithEmailAndPassword(auth, email, password);
     } catch (error: any) {
       console.error(error);
       if (error.code === 'auth/email-already-in-use') {
-        showError("\u8be5\u90ae\u7bb1\u5df2\u6ce8\u518c\uff0c\u8bf7\u76f4\u63a5\u767b\u5f55\u3002");
+        showError("该邮箱已注册，请直接登录。");
         setPwMode('login');
       } else {
-        showError(`\u6ce8\u518c\u5931\u8d25 [${error.code}]`);
+        showError(`注册失败 [${error.code}]`);
       }
     } finally {
       setIsLoggingIn(false);
@@ -1507,10 +1512,11 @@ export default function App() {
 
   const handleForgotPassword = async () => {
     if (!auth) return;
-    if (!pwEmail) { showError("请先填写邮箱地址，再点「忘记密码」。"); return; }
+    const email = pwEmail.trim().toLowerCase();
+    if (!email) { showError("请先填写邮箱地址，再点「忘记密码」。"); return; }
     try {
-      await sendPasswordResetEmail(auth, pwEmail);
-      showError(`✉️ 重置密码邮件已发送到 ${pwEmail}，请在邮箱里点击链接（注意查看垃圾邮件）完成重置后再来登录。`);
+      await sendPasswordResetEmail(auth, email);
+      showError(`✉️ 重置密码邮件已发送到 ${email}，请在邮箱里点击链接（注意查看垃圾邮件）完成重置后再来登录。`);
     } catch (error: any) {
       const code: string = error?.code ?? 'unknown';
       if (code === 'auth/user-not-found') {
