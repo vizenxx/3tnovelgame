@@ -19,6 +19,7 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   linkWithCredential,
+  sendPasswordResetEmail,
   User as FirebaseUser
 } from 'firebase/auth';
 import { 
@@ -1488,19 +1489,35 @@ export default function App() {
       setShowLinkModal(false);
       setLinkPassword("");
       setLinkPasswordConfirm("");
-      showError("\u2705 \u7ed1\u5b9a\u6210\u529f\uff01\u4eca\u540e\u5728 iOS PWA \u53ef\u7528\u6b64\u90ae\u7bb1+\u5bc6\u7801\u767b\u5f55\u540c\u4e00\u8d26\u6237\u3002");
+      showError(`✅ 绑定成功！绑定邮箱：${email} — 今后在 iOS PWA 用此邮箱+刚设的密码登录即可同步账户。`);
     } catch (error: any) {
       console.error(error);
       if (error.code === 'auth/provider-already-linked') {
-        showError("\u8be5\u8d26\u6237\u5df2\u7ed1\u5b9a\u5bc6\u7801\u767b\u5f55\uff0c\u53ef\u76f4\u63a5\u5728iOS\u4f7f\u7528\u90ae\u7bb1+\u5bc6\u7801\u767b\u5f55\u3002");
+        showError("该账户已绑定密码登录，可直接在iOS使用邮箱+密码登录。");
         setShowLinkModal(false);
       } else if (error.code === 'auth/requires-recent-login') {
-        showError("\u64cd\u4f5c\u9700\u8981\u91cd\u65b0\u9a8c\u8bc1\uff0c\u8bf7\u9000\u51fa\u540e\u91cd\u65b0\u767b\u5f55 Google\uff0c\u518d\u6765\u7ed1\u5b9a\u5bc6\u7801\u3002");
+        showError("操作需要重新验证，请退出后重新登录 Google，再来绑定密码。");
       } else {
-        showError(`\u7ed1\u5b9a\u5931\u8d25 [${error.code}]`);
+        showError(`绑定失败 [${error.code}]`);
       }
     } finally {
       setIsLinking(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!auth) return;
+    if (!pwEmail) { showError("请先填写邮箱地址，再点「忘记密码」。"); return; }
+    try {
+      await sendPasswordResetEmail(auth, pwEmail);
+      showError(`✉️ 重置密码邮件已发送到 ${pwEmail}，请在邮箱里点击链接（注意查看垃圾邮件）完成重置后再来登录。`);
+    } catch (error: any) {
+      const code: string = error?.code ?? 'unknown';
+      if (code === 'auth/user-not-found') {
+        showError("该邮箱尚未注册，请先注册或使用 Google 登录后绑定。");
+      } else {
+        showError(`发送失败 [${code}]`);
+      }
     }
   };
 
@@ -2985,6 +3002,12 @@ export default function App() {
                             >
                               {isLoggingIn ? <Loader2 className="w-4 h-4 animate-spin" /> : (pwMode === 'login' ? '登录' : '注册')}
                             </button>
+                            {pwMode === 'login' && (
+                              <button onClick={handleForgotPassword} type="button"
+                                className="w-full text-center text-xs text-zinc-600 hover:text-indigo-400 transition-colors py-1">
+                                忘记密码？发送重置邮件
+                              </button>
+                            )}
                           </div>
                         </motion.div>
                       )}
