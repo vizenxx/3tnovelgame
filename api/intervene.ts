@@ -1,7 +1,7 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './_auth';
-import { getGeminiApiKey } from './_gemini';
+import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './_auth.js';
+import { getGeminiApiKey } from './_gemini.js';
 
 function ensureParagraphing(raw: string, opts?: { minParas?: number; maxParas?: number }) {
   const minParas = opts?.minParas ?? 6;

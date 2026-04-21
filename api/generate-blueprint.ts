@@ -1,7 +1,7 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './_auth';
-import { getGeminiApiKey } from './_gemini';
+import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './_auth.js';
+import { getGeminiApiKey } from './_gemini.js';
 
 const blueprintSchema = {
   type: Type.OBJECT,
