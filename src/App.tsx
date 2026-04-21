@@ -2716,7 +2716,7 @@ export default function App() {
             >
               <h1 className="text-4xl sm:text-6xl font-black tracking-tighter text-white flex flex-col items-center gap-3 sm:gap-4">
                 <Wand2 className="w-14 h-14 sm:w-20 sm:h-20 text-indigo-400 drop-shadow-[0_0_20px_rgba(129,140,248,0.5)]" />
-                <span>命运引擎</span>
+                <span>命运干涉</span>
               </h1>
             </motion.div>
             <p className="text-zinc-400 text-sm sm:text-xl font-light tracking-wide leading-relaxed">编织丝线，逆转因果，见证你的史诗结局。</p>
