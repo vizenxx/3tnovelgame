@@ -2307,27 +2307,30 @@ export default function App() {
   };
 
   const handleEndGameConfirmed = () => {
-    suppressChapterWritesRef.current = true;
-    setSummaryEntrySource('manual');
-    
+    setInterventionsLeft(0);
+    incrementStoryPopularityIfEligible(
+      activeStoryId, 
+      (publicStories.find((story: any) => story.id === activeStoryId)?.popularity ?? 
+       myStories.find((story: any) => story.id === activeStoryId)?.popularity ?? 
+       authoringCartridge?.meta?.popularity ?? 0)
+    );
+
+    if (user) {
+      updateDoc(doc(db, 'sessions', user.uid), {
+        interventionsLeft: 0,
+        updatedAt: new Date().toISOString(),
+      }).catch(() => {});
+    }
+
     if (!storyConclusion) {
       setActiveInterventionOverlay({
         type: 'ending',
         targetChapter: chapters[chapters.length - 1]?.chapter_num || 7,
         statusRaw: '终局裁定：正在生成最终结语...',
       });
-      generateConclusion(chapters).then(() => {
-        setActiveInterventionOverlay(null);
-        setShowSummaryModal(true);
-      });
+      // The useEffect for activeInterventionOverlay will catch this and call generateConclusion
     } else {
       setShowSummaryModal(true);
-    }
-    if (user) {
-      updateDoc(doc(db, 'sessions', user.uid), {
-        gameState: 'PLAYING',
-        updatedAt: new Date().toISOString(),
-      }).catch(() => {});
     }
   };
 
@@ -2645,7 +2648,7 @@ export default function App() {
             className="px-4 py-2 rounded-2xl bg-white text-black hover:bg-zinc-200 disabled:opacity-50 font-bold flex items-center justify-center gap-2 whitespace-nowrap"
           >
             <Check className="w-4 h-4" />
-            命运确定
+            查看结语
           </button>
         )}
       </div>
