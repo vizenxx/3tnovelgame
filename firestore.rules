@@ -172,18 +172,7 @@ service cloud.firestore {
         isValidStoryMeta(request.resource.data)
       ) || (
         canReadStoryData(resource.data) &&
-        request.resource.data.authorId == resource.data.authorId &&
-        request.resource.data.title == resource.data.title &&
-        request.resource.data.main_axis == resource.data.main_axis &&
-        request.resource.data.tags == resource.data.tags &&
-        request.resource.data.visibility == resource.data.visibility &&
-        request.resource.data.version == resource.data.version &&
-        request.resource.data.defaults == resource.data.defaults &&
-        request.resource.data.characters == resource.data.characters &&
-        request.resource.data.endingMode == resource.data.endingMode &&
-        request.resource.data.endingRates == resource.data.endingRates &&
-        request.resource.data.endingNames == resource.data.endingNames &&
-        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['popularity']) &&
         request.resource.data.popularity == (storyPopularity(resource.data) + 1)
       );
       allow delete: if isAuthenticated() && resource.data.authorId == request.auth.uid;
