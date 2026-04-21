@@ -4784,5 +4784,14 @@ export default function App() {
     );
   }
 
+  if (gameState === 'PLAYING' && !blueprint) {
+    return (
+      <div className="min-h-[100dvh] bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center font-sans">
+        <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mb-4" />
+        <div className="text-zinc-500 text-sm animate-pulse">正在同步命运蓝图...</div>
+      </div>
+    );
+  }
+
   return null;
 }
