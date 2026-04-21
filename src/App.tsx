@@ -2406,22 +2406,25 @@ export default function App() {
   };
 
   const handleEndGameConfirmed = () => {
-    const unfinishedChapter = chapters.find(ch => !isChapterTextReady(ch));
-    if (unfinishedChapter || Object.values(fleshingOutChapters).some(Boolean) || isRewriting) {
-      setPendingSummaryRequest('manual');
-      setSummaryEntrySource('manual');
+    // 剔除所有还没有生成完毕的章节，丢弃后续不必要的生成
+    const finishedChapters = chapters.filter(ch => isChapterTextReady(ch));
+    setChapters(finishedChapters);
+    
+    suppressChapterWritesRef.current = true;
+    setSummaryEntrySource('manual');
+    
+    if (!storyConclusion) {
       setActiveInterventionOverlay({
         type: 'ending',
-        targetChapter: unfinishedChapter?.chapter_num || chapters[chapters.length - 1]?.chapter_num || 7,
-        statusRaw: '终局裁定：正在补全未竟章节...',
+        targetChapter: finishedChapters[finishedChapters.length - 1]?.chapter_num || 7,
+        statusRaw: '终局裁定：正在生成最终结语...',
+      });
+      generateConclusion(finishedChapters).then(() => {
+        setActiveInterventionOverlay(null);
+        setShowSummaryModal(true);
       });
     } else {
-      suppressChapterWritesRef.current = true;
-      setSummaryEntrySource('manual');
       setShowSummaryModal(true);
-      if (!storyConclusion) {
-        generateConclusion(chapters);
-      }
     }
     if (user) {
       updateDoc(doc(db, 'sessions', user.uid), {
