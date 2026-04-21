@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2 } from 'lucide-react';
+import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail } from 'lucide-react';
 import { auth, db, firebaseInitError } from './firebase';
 import { createEmptyStory, adaptBlueprintToStory, createStoryBranch, deleteStoryBranch, deleteStoryCartridge, getStoryCartridge, listMyStories, listPublicStories, saveStoryMainlineBundle, saveStoryMeta, upsertStoryBranch } from './storyStore';
 import { isBranchUnlockedByHistory, tierToScore } from './storyCartridge';
@@ -12,6 +12,9 @@ import {
   onAuthStateChanged, 
   signOut,
   signInAnonymously,
+  sendSignInLinkToEmail,
+  isSignInWithEmailLink,
+  signInWithEmailLink,
   User as FirebaseUser
 } from 'firebase/auth';
 import { 
@@ -634,6 +637,11 @@ export default function App() {
   const [pwaUpdateInfo, setPwaUpdateInfo] = useState<PwaUpdateInfo | null>(null);
   const [isApplyingPwaUpdate, setIsApplyingPwaUpdate] = useState(false);
 
+  // Email login state
+  const [showEmailLogin, setShowEmailLogin] = useState(false);
+  const [emailInput, setEmailInput] = useState("");
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+
   // Cartridge platform state
   const [activeStoryId, setActiveStoryId] = useState<string | null>(null);
   const [publicStories, setPublicStories] = useState<any[]>([]);
@@ -988,9 +996,31 @@ export default function App() {
     return () => unsubscribe();
   }, [user, isAuthReady]);
 
-  // Firebase Redirect Result Listener
+  // Firebase Auth Results Listener
   useEffect(() => {
     if (!auth) return;
+
+    if (isSignInWithEmailLink(auth, window.location.href)) {
+      let email = window.localStorage.getItem('emailForSignIn');
+      if (!email) {
+        email = window.prompt("检测到登录链接。请输入您的邮箱地址以确认您的身份：");
+      }
+      if (email) {
+        setIsLoggingIn(true);
+        signInWithEmailLink(auth, email, window.location.href)
+          .then((result) => {
+            window.localStorage.removeItem('emailForSignIn');
+            setUser(result.user);
+          })
+          .catch((error) => {
+            console.error("Email Link Sign In Error:", error);
+            showError("免密登录链接已失效或不匹配。如果您从别的设备点击链接，请确保在同一设备/同个浏览器使用。也可以重新获取链接。");
+          })
+          .finally(() => setIsLoggingIn(false));
+      }
+      return;
+    }
+
     getRedirectResult(auth).then((result) => {
       if (result) {
         setUser(result.user);
@@ -1348,6 +1378,31 @@ export default function App() {
       }
     } finally {
       setIsLoggingIn(false);
+    }
+  };
+
+  const handleEmailLinkLogin = async () => {
+    if (isSendingEmail) return;
+    if (!emailInput || !emailInput.includes('@')) {
+      showError("请先输入有效的邮箱地址！");
+      return;
+    }
+    setIsSendingEmail(true);
+    try {
+      const actionCodeSettings = {
+        url: window.location.origin + '/',
+        handleCodeInApp: true,
+      };
+      await sendSignInLinkToEmail(auth, emailInput, actionCodeSettings);
+      window.localStorage.setItem('emailForSignIn', emailInput);
+      showError("免密链接已发送到您的邮箱 📨 请前往邮箱点击链接即可自动登入！(如果没收到，请查看垃圾邮件)");
+      setShowEmailLogin(false);
+      setEmailInput("");
+    } catch (error: any) {
+      console.error(error);
+      showError("发送邮件失败，可能是Firebase Auth中未启用密码无感登录，或者是超频限制。");
+    } finally {
+      setIsSendingEmail(false);
     }
   };
 
@@ -2739,15 +2794,56 @@ export default function App() {
                 <div className="absolute inset-0 bg-gradient-to-r from-indigo-100 to-white opacity-0 group-hover:opacity-100 transition-opacity" />
                 <span className="relative z-10 flex items-center gap-3">
                   <LogIn className="w-5 h-5 sm:w-6 sm:h-6" />
-                  使用 Google 登录
+                  Google 同步登录
                 </span>
               </button>
+
+              <div className="flex flex-col rounded-xl border border-zinc-800 overflow-hidden bg-zinc-900/50">
+                <button
+                  onClick={() => setShowEmailLogin(!showEmailLogin)}
+                  className="py-3 sm:py-3.5 text-zinc-300 hover:text-white hover:bg-zinc-800 font-bold text-sm sm:text-base transition-all flex items-center justify-center gap-2 relative z-10 active:bg-zinc-700"
+                >
+                  <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-400" />
+                  {showEmailLogin ? "收起邮箱登录" : "使用邮箱免密登录 (推荐 iOS 同步)"}
+                </button>
+                <AnimatePresence>
+                  {showEmailLogin && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="px-4 pb-4 pt-1 space-y-3">
+                        <p className="text-[11px] text-zinc-500 font-medium">只要输入邮箱，我们会发一封包含魔法链接的邮件，点击它的瞬间就会在这里自动解锁登入。</p>
+                        <div className="flex gap-2">
+                          <input
+                            type="email"
+                            placeholder="your@email.com"
+                            value={emailInput}
+                            onChange={(e) => setEmailInput(e.target.value)}
+                            className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                          />
+                          <button
+                            onClick={handleEmailLinkLogin}
+                            disabled={isSendingEmail || !emailInput}
+                            className="bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white px-4 rounded-lg font-bold text-sm transition-colors disabled:opacity-50 flex items-center"
+                          >
+                            {isSendingEmail ? <Loader2 className="w-4 h-4 animate-spin" /> : "发送"}
+                          </button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
               <button
                 onClick={handleGuestLogin}
                 disabled={isLoggingIn}
-                className="py-3.5 sm:py-4 bg-zinc-900/50 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900 rounded-xl font-bold text-sm sm:text-base transition-all flex items-center justify-center gap-3 border border-zinc-800 active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+                className="py-3 sm:py-3.5 mt-2 bg-zinc-950/50 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 border border-zinc-800/50 active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
               >
-                <UserIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+                <UserIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                 以游客身份继续
               </button>
             </div>
