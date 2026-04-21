@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail } from 'lucide-react';
+import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft } from 'lucide-react';
 import { auth, db, firebaseInitError } from './firebase';
 import { createEmptyStory, adaptBlueprintToStory, createStoryBranch, deleteStoryBranch, deleteStoryCartridge, getStoryCartridge, listMyStories, listPublicStories, saveStoryMainlineBundle, saveStoryMeta, upsertStoryBranch } from './storyStore';
 import { isBranchUnlockedByHistory, tierToScore } from './storyCartridge';
@@ -2941,7 +2941,16 @@ export default function App() {
 
   // --- Renderers ---
 
-  if (!isAuthReady || !user) {
+  if (!isAuthReady) {
+    return (
+      <div className="min-h-[100dvh] bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center font-sans">
+        <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mb-4" />
+        <div className="text-zinc-500 text-sm animate-pulse">正在连接时空枢纽...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
     return (
       <div className="min-h-[100dvh] bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center px-4 py-6 sm:p-6 font-sans relative overflow-hidden safe-top safe-bottom">
         {pwaUpdateModal}
@@ -3282,11 +3291,7 @@ export default function App() {
         <GlobalError errorMsg={errorMsg} />
         <div className="max-w-6xl mx-auto space-y-6">
           <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs text-zinc-500">作者后台</div>
-              <div className="text-2xl font-black text-white">作品编辑器</div>
-            </div>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-3">
               <button 
                 onClick={() => {
                   if (blueprint) {
@@ -3295,10 +3300,17 @@ export default function App() {
                     setGameState('STORY_SELECT');
                   }
                 }} 
-                className="px-4 py-2 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 rounded-lg text-sm transition-colors"
+                className="p-2 -ml-2 rounded-full hover:bg-zinc-900 transition-colors"
+                aria-label="返回"
               >
-                {blueprint ? '返回游玩界面' : '返回作品库'}
+                <ChevronLeft className="w-6 h-6 text-zinc-400 hover:text-white" />
               </button>
+              <div>
+                <div className="text-xs text-zinc-500">作者后台</div>
+                <div className="text-2xl font-black text-white">作品编辑器</div>
+              </div>
+            </div>
+            <div className="flex gap-2">
               <button
                 disabled={authoringSaving}
                 onClick={async () => {
@@ -3367,7 +3379,7 @@ export default function App() {
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="font-bold text-zinc-100 truncate">{formatBookTitle(s.title)}</div>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full border ${s.visibility === 'public' ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' : s.visibility === 'unlisted' ? 'bg-amber-500/10 text-amber-300 border-amber-500/30' : 'bg-zinc-800 text-zinc-300 border-zinc-700'}`}>
+                      <span className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full border ${s.visibility === 'public' ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' : s.visibility === 'unlisted' ? 'bg-amber-500/10 text-amber-300 border-amber-500/30' : 'bg-zinc-800 text-zinc-300 border-zinc-700'}`}>
                         {s.visibility === 'public' ? '公开' : s.visibility === 'unlisted' ? '未列出' : '私有'}
                       </span>
                     </div>
