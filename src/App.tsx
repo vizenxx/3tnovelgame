@@ -1432,17 +1432,21 @@ export default function App() {
   };
 
   const handlePasswordLogin = async () => {
-    if (!auth || isLoggingIn) return;
-    if (!pwEmail || !pwPassword) { showError("\u8bf7\u586b\u5199\u90ae\u7bb1\u548c\u5bc6\u7801\u3002"); return; }
+    if (isLoggingIn) return;
+    if (!auth) { showError("Firebase 未初始化，请刷新页面重试。"); return; }
+    if (!pwEmail || !pwPassword) { showError("请填写邮箱和密码。"); return; }
     setIsLoggingIn(true);
     try {
       await signInWithEmailAndPassword(auth, pwEmail, pwPassword);
     } catch (error: any) {
-      console.error(error);
-      if ((['auth/invalid-credential','auth/wrong-password','auth/user-not-found'] as string[]).includes(error.code)) {
-        showError("\u90ae\u7bb1\u6216\u5bc6\u7801\u9519\u8bef\uff0c\u8bf7\u91cd\u8bd5\u3002");
+      console.error("Password Login Error:", error);
+      const code: string = error?.code ?? 'unknown';
+      if (['auth/invalid-credential','auth/wrong-password','auth/user-not-found'].includes(code)) {
+        showError("邮箱或密码错误，请重试。如未注册过密码，请先绑定。");
+      } else if (code === 'auth/too-many-requests') {
+        showError("尝试次数过多，账户已被临时锁定，请稍后再试。");
       } else {
-        showError(`\u767b\u5f55\u5931\u8d25 [${error.code}]`);
+        showError(`登录失败 [${code}] — 请截图发给开发者`);
       }
     } finally {
       setIsLoggingIn(false);
