@@ -1300,13 +1300,14 @@ export default function App() {
       const isIos = /iPad|iPhone|iPod/.test(window.navigator.userAgent) ||
         (window.navigator.platform === 'MacIntel' && window.navigator.maxTouchPoints > 1);
 
-      if (isIos) {
+      if (isIos && !isStandaloneMode) {
         // iOS Safari blocks 3rd party cookies heavily which breaks signInWithRedirect. Force popup.
         await signInWithPopup(auth, provider);
         return;
       }
 
-      const prefersRedirect = window.matchMedia('(max-width: 768px), (pointer: coarse)').matches;
+      // Full screen PWA on iOS physically suppresses popups natively, MUST use redirect, or default to redirect on Android.
+      const prefersRedirect = isStandaloneMode || window.matchMedia('(max-width: 768px), (pointer: coarse)').matches;
       if (prefersRedirect) {
         await signInWithRedirect(auth, provider);
         return;
@@ -1336,10 +1337,15 @@ export default function App() {
     }
     setIsLoggingIn(true);
     try {
-      await signInAnonymously(auth);
+      const timeoutPromise = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 15000));
+      await Promise.race([signInAnonymously(auth), timeoutPromise]);
     } catch (error: any) {
       console.error(error);
-      showError("游客登录失败，请检查网络或重试。");
+      if (error.message === 'TIMEOUT') {
+        showError("连接超时。若您使用的是 iOS 桌面版，可尝试重启应用或点击右上角取消。");
+      } else {
+        showError("游客登录失败，请检查网络或重试。");
+      }
     } finally {
       setIsLoggingIn(false);
     }
@@ -2670,6 +2676,18 @@ export default function App() {
               <span className="text-white/90 font-bold tracking-widest text-sm bg-black/40 px-4 py-2 rounded-full backdrop-blur-sm border border-white/5 shadow-2xl">
                 {isLoggingIn ? "连结命运中..." : isLoadingStories ? "提取档案中..." : authoringSaving ? "保存世界线中..." : "请稍候..."}
               </span>
+              {(isLoggingIn || isLoadingStories) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsLoggingIn(false);
+                    setIsLoadingStories(false);
+                  }}
+                  className="mt-6 px-4 py-2 text-xs text-zinc-500 underline decoration-zinc-700 hover:text-white transition-colors"
+                >
+                  等待太久？点击此处取消
+                </button>
+              )}
             </motion.div>
           </div>
         )}
