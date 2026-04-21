@@ -912,6 +912,7 @@ export default function App() {
         setUnlockedBranches(data.unlockedBranches || []);
         setIntervenedChapters(data.intervenedChapters || []);
         setNaturalChapters(data.naturalChapters || []);
+        setInitialNaturalChapters(data.initialNaturalChapters || []);
         setUnlockedBranches(data.unlockedBranches || []);
         setCharacterStatuses(data.characterStatuses || {});
         setStoryConclusion(data.storyConclusion || null);
@@ -1654,6 +1655,7 @@ export default function App() {
           selectedThemes,
           currentChapters: data.chapters,
           naturalChapters: data.chapters,
+          initialNaturalChapters: data.chapters,
           interventionsLeft: 3,
           endingValue: 0,
           unlockedBranches: [],
@@ -1824,6 +1826,7 @@ export default function App() {
         selectedThemes: cartridge.meta.tags || [],
         currentChapters: bp.chapters,
         naturalChapters: bp.chapters,
+        initialNaturalChapters: bp.chapters,
         interventionsLeft: 3,
         endingValue: 0,
         unlockedBranches: initialUnlocked,
@@ -2307,7 +2310,6 @@ export default function App() {
   };
 
   const handleEndGameConfirmed = () => {
-    setInterventionsLeft(0);
     incrementStoryPopularityIfEligible(
       activeStoryId, 
       (publicStories.find((story: any) => story.id === activeStoryId)?.popularity ?? 
@@ -2317,7 +2319,6 @@ export default function App() {
 
     if (user) {
       updateDoc(doc(db, 'sessions', user.uid), {
-        interventionsLeft: 0,
         updatedAt: new Date().toISOString(),
       }).catch(() => {});
     }
@@ -2623,11 +2624,11 @@ export default function App() {
           <span className="mx-2 text-zinc-600">/</span>
           <span className="text-rose-300">右 {uiFeedback.rightProgress.toFixed(0)}%</span>
         </div>
-        {interventionsLeft > 0 ? (
+        {(!storyConclusion && interventionsLeft > 0) ? (
           <button
             type="button"
             onClick={handleEndGame}
-            disabled={isRewriting}
+            disabled={isRewriting || isGeneratingConclusion || activeInterventionOverlay !== null}
             className="px-4 py-2 rounded-2xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold flex items-center justify-center gap-2 whitespace-nowrap"
           >
             <BookOpen className="w-4 h-4" />
@@ -2644,7 +2645,7 @@ export default function App() {
                 generateConclusion(chapters);
               }
             }}
-            disabled={isRewriting}
+            disabled={isRewriting || isGeneratingConclusion || (activeInterventionOverlay !== null && activeInterventionOverlay.type !== 'ending')}
             className="px-4 py-2 rounded-2xl bg-white text-black hover:bg-zinc-200 disabled:opacity-50 font-bold flex items-center justify-center gap-2 whitespace-nowrap"
           >
             <Check className="w-4 h-4" />
@@ -4394,11 +4395,11 @@ export default function App() {
                     const hasValidChars = validChars.length > 0;
                     const isIntervened = intervenedChapters.includes(chapter.chapter_num);
                     
-                    if (chapter.chapter_num >= 2 && chapter.chapter_num <= 6 && interventionsLeft > 0 && hasValidChars) {
+                    if (chapter.chapter_num >= 2 && chapter.chapter_num <= 6 && interventionsLeft > 0 && hasValidChars && !storyConclusion) {
                       return (
                         <button
                           onClick={() => setActiveInterventionChapter(activeInterventionChapter === chapter.chapter_num ? null : chapter.chapter_num)}
-                          disabled={isRewriting}
+                          disabled={isRewriting || isGeneratingConclusion || activeInterventionOverlay !== null}
                           className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors border ${
                             isIntervened 
                               ? "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30" 
@@ -4456,14 +4457,14 @@ export default function App() {
                                 <div className="flex gap-2">
                                 <button
                                   onClick={() => handleInterveneRequest(chapter.chapter_num, char.id, 'bless')}
-                                  disabled={isRewriting}
+                                  disabled={isRewriting || isGeneratingConclusion || activeInterventionOverlay !== null}
                                   className="flex-1 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 disabled:opacity-50 text-emerald-400 border border-emerald-500/30 rounded text-xs font-medium flex items-center justify-center gap-1 transition-colors"
                                 >
                                   <Zap className="w-3 h-3" /> 庇佑
                                 </button>
                                 <button
                                   onClick={() => handleInterveneRequest(chapter.chapter_num, char.id, 'curse')}
-                                  disabled={isRewriting}
+                                  disabled={isRewriting || isGeneratingConclusion || activeInterventionOverlay !== null}
                                   className="flex-1 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 disabled:opacity-50 text-rose-400 border border-rose-500/30 rounded text-xs font-medium flex items-center justify-center gap-1 transition-colors"
                                 >
                                   <Skull className="w-3 h-3" /> 磨难
