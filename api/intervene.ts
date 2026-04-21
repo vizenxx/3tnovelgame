@@ -3,8 +3,6 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './_auth';
 import { getGeminiApiKey } from './_gemini';
 
-export const maxDuration = 60;
-
 function ensureParagraphing(raw: string, opts?: { minParas?: number; maxParas?: number }) {
   const minParas = opts?.minParas ?? 6;
   const maxParas = opts?.maxParas ?? 10;

@@ -3,8 +3,6 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './_auth';
 import { getGeminiApiKey } from './_gemini';
 
-export const maxDuration = 60;
-
 const summarySchema = {
   type: Type.OBJECT,
   properties: {
