@@ -2990,9 +2990,14 @@ export default function App() {
                         <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
                           <div className="px-4 pb-4 pt-2 space-y-3">
                             <div className="flex gap-2 text-xs">
-                              <button onClick={() => setPwMode('login')} className={`flex-1 py-1.5 rounded-lg font-bold transition-colors ${pwMode==='login' ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}>登录</button>
-                              <button onClick={() => setPwMode('register')} className={`flex-1 py-1.5 rounded-lg font-bold transition-colors ${pwMode==='register' ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}>注册新账号</button>
+                              <button onClick={() => setPwMode('login')} className={`flex-1 py-1.5 rounded-lg font-bold transition-colors ${pwMode==='login' ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}>已有账号→登录</button>
+                              <button onClick={() => setPwMode('register')} className={`flex-1 py-1.5 rounded-lg font-bold transition-colors ${pwMode==='register' ? 'bg-indigo-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}>全新注册</button>
                             </div>
+                            {pwMode === 'login' && (
+                              <p className="text-[10px] text-indigo-400/80 leading-relaxed">
+                                💡 已绑定Google账号的用户：填写Google邮箱 + 绑定时设的密码，点「已有账号→登录」
+                              </p>
+                            )}
                             <input type="email" placeholder="邮箱地址" value={pwEmail} onChange={e => setPwEmail(e.target.value)}
                               className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
                             <input type="password" placeholder="密码（至少6位）" value={pwPassword} onChange={e => setPwPassword(e.target.value)}
