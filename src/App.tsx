@@ -635,7 +635,6 @@ export default function App() {
   const [targetWordCount, setTargetWordCount] = useState(600);
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationStatus, setGenerationStatus] = useState("");
-  const [fleshingOutChapters, setFleshingOutChapters] = useState<Record<number, boolean>>({});
   const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [showIosInstallModal, setShowIosInstallModal] = useState<boolean>(false);
   const [isStandaloneMode, setIsStandaloneMode] = useState(false);
@@ -1180,20 +1179,8 @@ export default function App() {
     };
   }, [confirmationModal.isOpen, showSummaryModal]);
 
-  // Lazy flesh out chapters
-  useEffect(() => {
-    if (!blueprint || gameState !== 'PLAYING' || isRewriting || suppressChapterWritesRef.current) return;
-    
-    // Find chapters that have index but no content (except current generation in progress)
-    const incompleteChapter = chapters.find(c => !c.text || c.text === '命运涟漪正在扩散，重写中...');
-    // We only trigger flesh out if it's completely empty. If it's "命运涟漪正在扩散，重写中...", 
-    // it's considered empty for generation purposes, but we also ensure we don't start duplicate requests 
-    // via fleshingOutChapters state.
-    const chapToFlesh = chapters.find(c => !c.text || (typeof c.text === 'string' && c.text.trim().length < 50 && c.text !== '命运涟漪正在扩散，重写中...'));
-    if (chapToFlesh && !fleshingOutChapters[chapToFlesh.chapter_num]) {
-      fleshOutChapter(chapToFlesh.chapter_num);
-    }
-  }, [chapters, gameState, isRewriting, blueprint, fleshingOutChapters]);
+  // Lazy flesh out chapters removed.
+
 
   // Monitor chapter generation to clear the active intervention overlay
   useEffect(() => {
@@ -1237,9 +1224,8 @@ export default function App() {
   useEffect(() => {
     if (pendingSummaryRequest !== 'manual' || !blueprint || isRewriting || isGeneratingConclusion) return;
 
-    const hasPendingGeneration = Object.values(fleshingOutChapters).some(Boolean);
     const allChaptersReady = chapters.length > 0 && chapters.every((chapter) => isChapterTextReady(chapter));
-    if (!allChaptersReady || hasPendingGeneration) return;
+    if (!allChaptersReady) return;
 
     if (activeInterventionOverlay?.type === 'ending' && activeInterventionOverlay.statusRaw !== '命运定格：命运箴言推演中...') {
       setActiveInterventionOverlay(prev => prev ? { ...prev, statusRaw: '命运定格：命运箴言推演中...' } : null);
@@ -1251,92 +1237,8 @@ export default function App() {
       setActiveInterventionOverlay(null);
       setShowSummaryModal(true);
     });
-  }, [pendingSummaryRequest, blueprint, isRewriting, isGeneratingConclusion, fleshingOutChapters, chapters, activeInterventionOverlay]);
+  }, [pendingSummaryRequest, blueprint, isRewriting, isGeneratingConclusion, chapters, activeInterventionOverlay]);
 
-  const fleshOutChapter = async (targetChapterNum: number) => {
-    if (suppressChapterWritesRef.current) {
-      setFleshingOutChapters(prev => ({ ...prev, [targetChapterNum]: false }));
-      return;
-    }
-    // Check if we already have a natural version of this chapter
-    const naturalVersion = naturalChapters.find(c => c.chapter_num === targetChapterNum);
-    if (naturalVersion && naturalVersion.text) {
-      if (suppressChapterWritesRef.current) return;
-      setChapters(prev => prev.map(c => c.chapter_num === targetChapterNum ? { ...c, text: naturalVersion.text } : c));
-      return;
-    }
-
-    // Fallback: check blueprint for pre-authored text (e.g. chapter 7 = default ending from authored stories)
-    const bpVersion = blueprint.chapters.find((bc: any) => bc.chapter_num === targetChapterNum);
-    if (bpVersion && bpVersion.text && bpVersion.text.trim().length > 0) {
-      if (suppressChapterWritesRef.current) return;
-      setChapters(prev => prev.map(c => c.chapter_num === targetChapterNum ? { ...c, text: bpVersion.text } : c));
-      return;
-    }
-
-    setFleshingOutChapters(prev => ({ ...prev, [targetChapterNum]: true }));
-    try {
-      const response = await withRetry(() => apiFetch('/api/generate-next-chapter', {
-        method: 'POST',
-        body: JSON.stringify({
-          blueprint,
-          chapters,
-          targetChapterNum,
-          targetWordCount,
-          worldState: buildWorldStateForPrompt(targetChapterNum, endingValue)
-        })
-      }, 90000), 4, 3000);
-      if (!response.ok) throw new Error("Flesh out failed");
-      const newChapter = await response.json();
-      
-      const newText = newChapter.text;
-      if (!newText || typeof newText !== 'string' || newText.trim().length < 50) {
-        throw new Error("章节内容为空或过短");
-      }
-      if (suppressChapterWritesRef.current || !user) {
-        return;
-      }
-
-      // To avoid stale closures overwriting handleIntervene changes, refetch from snapshot
-      const sessionDoc = await getDoc(doc(db, 'sessions', user.uid));
-      const sessionData = sessionDoc.exists() ? sessionDoc.data() : null;
-      const latestChapters = sessionData?.currentChapters || chapters;
-      const latestNatural = sessionData?.naturalChapters || naturalChapters;
-
-      const updatedChapters = latestChapters.map((c: any) => c.chapter_num === targetChapterNum ? { ...c, text: newText } : c);
-      setChapters(updatedChapters);
-
-      // Save to naturalChapters for persistence
-      const updatedNatural = [...latestNatural];
-      const natIdx = updatedNatural.findIndex((c: any) => c.chapter_num === targetChapterNum);
-      if (natIdx !== -1) {
-        updatedNatural[natIdx] = { ...updatedNatural[natIdx], text: newText };
-      } else {
-        // Find chapter metadata from blueprint if possible
-        const bpChapter = blueprint.chapters.find((bc: any) => bc.chapter_num === targetChapterNum);
-        updatedNatural.push({
-          chapter_num: targetChapterNum,
-          title: bpChapter?.title || `第${targetChapterNum}章`,
-          summary: bpChapter?.summary || '',
-          text: newText
-        });
-      }
-      setNaturalChapters(updatedNatural);
-
-      await updateDoc(doc(db, 'sessions', user.uid), {
-        currentChapters: updatedChapters,
-        naturalChapters: updatedNatural,
-        updatedAt: serverTimestamp()
-      });
-    } catch (error) {
-      console.error(error);
-      if (!suppressChapterWritesRef.current) {
-        showError(`第 ${targetChapterNum} 章生成失败，可稍后重试。`);
-      }
-    } finally {
-      setFleshingOutChapters(prev => ({ ...prev, [targetChapterNum]: false }));
-    }
-  };
 
   const handleLogin = async () => {
     if (isLoggingIn) return;
@@ -2266,10 +2168,9 @@ export default function App() {
         const index = updatedChapters.findIndex(c => c.chapter_num === rc.chapter_num);
         if (index === -1) return;
         const existing = updatedChapters[index];
-        const isFuture = rc.chapter_num > chapterNum;
         const hasNewText = typeof rc.text === 'string' && rc.text.trim().length > 0;
         const merged = { ...existing, ...rc } as any;
-        merged.text = hasNewText ? rc.text : (isFuture ? '' : (existing.text || ''));
+        merged.text = hasNewText ? rc.text : (existing.text || '');
         if (typeof rc.summary !== 'string' || !rc.summary.trim()) {
           merged.summary = existing.summary || '';
         }
@@ -2406,20 +2307,16 @@ export default function App() {
   };
 
   const handleEndGameConfirmed = () => {
-    // 剔除所有还没有生成完毕的章节，丢弃后续不必要的生成
-    const finishedChapters = chapters.filter(ch => isChapterTextReady(ch));
-    setChapters(finishedChapters);
-    
     suppressChapterWritesRef.current = true;
     setSummaryEntrySource('manual');
     
     if (!storyConclusion) {
       setActiveInterventionOverlay({
         type: 'ending',
-        targetChapter: finishedChapters[finishedChapters.length - 1]?.chapter_num || 7,
+        targetChapter: chapters[chapters.length - 1]?.chapter_num || 7,
         statusRaw: '终局裁定：正在生成最终结语...',
       });
-      generateConclusion(finishedChapters).then(() => {
+      generateConclusion(chapters).then(() => {
         setActiveInterventionOverlay(null);
         setShowSummaryModal(true);
       });

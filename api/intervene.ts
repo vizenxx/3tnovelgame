@@ -61,7 +61,7 @@ const rewriteSchema = {
         type: Type.OBJECT,
         properties: {
           chapter_num: { type: Type.INTEGER },
-          text: { type: Type.STRING, description: '重写后的章节内容（仅当前干涉章节需要全文）' },
+          text: { type: Type.STRING, description: '重写后的章节内容正文（必须包含全文）' },
           summary: { type: Type.STRING, description: '本章节的最新剧情大纲（20-40字）' },
           present_characters: {
             type: Type.ARRAY,
@@ -209,11 +209,10 @@ ${injected ? `支线注入包（必须落地）：\n${injected.map((item: any) =
 ${(!worldState || !worldState.canonical) && endingProto ? `作者结局原型：\n- default: ${String(endingProto.default || '').substring(0, 800)}\n- left: ${String(endingProto.left || '').substring(0, 800)}\n- right: ${String(endingProto.right || '').substring(0, 800)}` : ''}
 
 要求：
-1. 第 ${safeChapterNum} 章必须重写成完整正文，字数约 ${safeTargetWordCount} 字。
-2. 全文必须拆成 6-10 段，每段 2-4 句，段落之间用两个换行符。
-3. 第 ${safeChapterNum + 1} 到 7 章只写 summary，不写正文。
-4. 所有因本次干涉直接或间接导致的变化，都必须用 <mark>...</mark> 包起来。
-5. 即使未触发支线，也必须让本章和后续大纲出现可感知偏移，不能复制旧 summary。
+1. 第 ${safeChapterNum} 章到第 7 章都必须重写成完整正文，每章字数约 ${safeTargetWordCount} 字。
+2. 每一章的正文必须拆成 6-10 段，每段 2-4 句，段落之间用两个换行符。
+3. 所有因本次干涉直接或间接导致的变化，都必须用 <mark>...</mark> 包起来。
+4. 即使未触发支线，也必须让本章和后续所有章节出现可感知偏移，不能复制旧正文。
 
 请严格按 JSON 输出，不要包含元数据。`;
 
