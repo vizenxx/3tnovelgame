@@ -730,6 +730,8 @@ export default function App() {
   const conclusionRequestedRef = useRef(false);
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
   const [expandedBranchId, setExpandedBranchId] = useState<string | null>(null);
+  const [authoringSavedSnapshot, setAuthoringSavedSnapshot] = useState('');
+  const [authoringDirty, setAuthoringDirty] = useState(false);
   const [interventionHistory, setInterventionHistory] = useState<Array<{ chapterNum: number; charId: string; action: 'bless' | 'curse' }>>([]);
 
   // World State system
@@ -1530,6 +1532,121 @@ export default function App() {
     }));
   };
 
+  const normalizeBranchConditionsForStorage = (conditions: ConditionForm[] = []) => (
+    conditions.slice(0, 3).map((c) =>
+      c.kind === 'single'
+        ? {
+            type: 'single' as const,
+            single: {
+              chapterNum: Math.max(2, Math.min(6, c.singleChapterNum)),
+              charId: c.singleCharId || '',
+              action: c.singleAction,
+            },
+          }
+        : {
+            type: 'count' as const,
+            count: {
+              charId: c.countCharId || '',
+              action: c.countAction,
+              minCount: Math.max(1, c.minCount),
+              upToChapterNum: Math.max(2, Math.min(6, c.upToChapterNum)),
+            },
+          }
+    )
+  );
+
+  const buildAuthoringSnapshot = (cartridge: any) => {
+    if (!cartridge) return '';
+    const meta = cartridge.meta || {};
+    const normalizedCharacters = normalizeCharacters(meta.characters || []).map((c: any) => ({
+      id: c.id || '',
+      name: String(c.name || '').trim(),
+      desc: String(c.desc || '').trim(),
+    }));
+    const normalizedChapters = (cartridge.chapters || [])
+      .filter((c: any) => c.chapter_num >= 1 && c.chapter_num <= 6)
+      .sort((a: any, b: any) => a.chapter_num - b.chapter_num)
+      .map((c: any) => ({
+        chapter_num: c.chapter_num,
+        title: String(c.title || ''),
+        summary: String(c.summary || ''),
+        text: String(c.text || ''),
+      }));
+    const normalizedEndings = (cartridge.endings || [])
+      .filter((e: any) => ['default', 'left', 'right'].includes(e.id))
+      .sort((a: any, b: any) => String(a.id).localeCompare(String(b.id)))
+      .map((e: any) => ({
+        id: e.id,
+        title: String(e.title || ''),
+        text: String(e.text || ''),
+      }));
+
+    return JSON.stringify({
+      storyId: cartridge.storyId || '',
+      meta: {
+        title: stripBookTitle(meta.title || ''),
+        main_axis: String(meta.main_axis || ''),
+        visibility: meta.visibility || 'private',
+        tags: normalizeTagList(meta.tags || []),
+        endingMode: meta.endingMode || 'dual',
+        endingRates: {
+          left: Number(meta.endingRates?.left ?? 40),
+          right: Number(meta.endingRates?.right ?? 40),
+        },
+        endingNames: {
+          left: limitFiveChars(meta.endingNames?.left || ''),
+          right: limitFiveChars(meta.endingNames?.right || ''),
+        },
+        characters: normalizedCharacters,
+      },
+      chapters: normalizedChapters,
+      endings: normalizedEndings,
+    });
+  };
+
+  const markAuthoringSaved = (cartridge: any) => {
+    setAuthoringSavedSnapshot(buildAuthoringSnapshot(cartridge));
+    setAuthoringDirty(false);
+  };
+
+  const getSelectedBranchSavedSignature = () => {
+    if (!selectedBranchId || !authoringCartridge) return '';
+    const source = (authoringCartridge.branches || []).find((b: any) => b.id === selectedBranchId);
+    if (!source) return '';
+    const sourceConditions = (source.triggerGroups && Array.isArray(source.triggerGroups) && source.triggerGroups.length > 0)
+      ? source.triggerGroups
+      : (source.trigger ? [source.trigger] : []);
+    return JSON.stringify({
+      id: selectedBranchId,
+      side: source.side || 'left',
+      tier: source.tier || 'small',
+      name: source.name || '',
+      hint: source.hint || '',
+      sceneText: source.sceneText || '',
+      common: Boolean(source.common),
+      conditions: sourceConditions,
+    });
+  };
+
+  const getSelectedBranchDraftSignature = () => {
+    if (!selectedBranchId) return '';
+    return JSON.stringify({
+      id: selectedBranchId,
+      side: branchForm.side,
+      tier: branchForm.tier,
+      name: branchForm.name || '',
+      hint: branchForm.hint || '',
+      sceneText: branchForm.sceneText || '',
+      common: Boolean((branchForm as any).common),
+      conditions: normalizeBranchConditionsForStorage(branchConditions),
+    });
+  };
+
+  const confirmDiscardAuthoringChanges = (targetLabel: string) => {
+    if (!authoringDirty) return true;
+    return window.confirm(`当前有未保存更改，确定要放弃并${targetLabel}吗？`);
+  };
+
   const handleInstallApp = async () => {
     const isIos = /iPad|iPhone|iPod/.test(window.navigator.userAgent) ||
       (window.navigator.platform === 'MacIntel' && window.navigator.maxTouchPoints > 1);
@@ -1941,6 +2058,7 @@ export default function App() {
       showError('请先登录后再新建作品。');
       return;
     }
+    if (!confirmDiscardAuthoringChanges('创建并切换到新作品')) return;
     try {
       setAuthoringSaving(true);
       const storyId = await createEmptyStory(db as any, {
@@ -1951,6 +2069,7 @@ export default function App() {
       const cartridge = await getStoryCartridge(db as any, storyId);
       setAuthoringStoryId(storyId);
       setAuthoringCartridge(cartridge as any);
+      markAuthoringSaved(cartridge);
       setAuthoringTab('play');
       await refreshStories();
       showError('新作品已创建。');
@@ -1975,6 +2094,8 @@ export default function App() {
       await deleteStoryCartridge(db as any, authoringStoryId);
       setAuthoringStoryId(null);
       setAuthoringCartridge(null);
+      setAuthoringSavedSnapshot('');
+      setAuthoringDirty(false);
       await refreshStories();
       showError('作品已删除。');
     } catch (e: any) {
@@ -1995,6 +2116,98 @@ export default function App() {
     }
   };
 
+  const handleSaveAuthoringMainline = async () => {
+    if (!authoringStoryId || !authoringCartridge) {
+      showError('请先选择作品再保存。');
+      return;
+    }
+    setAuthoringSaving(true);
+    try {
+      const normalizedChars = normalizeCharacters(authoringCartridge.meta.characters || []);
+      const endingMode = authoringCartridge.meta.endingMode || 'dual';
+      const normalizedTags = parseTagInput(authoringCustomTagsInput || (authoringCartridge.meta.tags || []).join('，'));
+      await saveStoryMainlineBundle(db as any, authoringStoryId, {
+        metaPatch: {
+          ...authoringCartridge.meta,
+          title: stripBookTitle(authoringCartridge.meta.title || ''),
+          tags: normalizedTags,
+          characters: normalizedChars,
+          defaults: { ...authoringCartridge.meta.defaults, targetWordCount: 1200 },
+        } as any,
+        chapters: (authoringCartridge.chapters || []).filter((c: any) => c.chapter_num >= 1 && c.chapter_num <= 6).map((c: any) => ({
+          chapter_num: c.chapter_num,
+          title: c.title || `第${c.chapter_num}章`,
+          summary: c.summary || '',
+          present_characters: normalizedChars.map((x: any) => x.id),
+          text: (c.text || '').slice(0, 1200),
+        })),
+        endings: (authoringCartridge.endings || [])
+          .filter((e: any) => endingMode === 'dual' ? true : e.id === 'default')
+          .map((e: any) => ({ id: e.id, title: e.title || endingIdToLabel(e.id), text: (e.text || '').slice(0, 1200) })),
+      });
+      setAuthoringCustomTagsInput(normalizedTags.join('，'));
+      const latest = await getStoryCartridge(db as any, authoringStoryId);
+      setAuthoringCartridge(latest);
+      markAuthoringSaved(latest);
+      await refreshStories();
+      showError('更改已保存。');
+    } catch (e: any) {
+      console.error(e);
+      showError(`保存失败：${e?.message || String(e)}`);
+    } finally {
+      setAuthoringSaving(false);
+    }
+  };
+
+  const handleSaveSelectedBranch = async () => {
+    if (!authoringStoryId || !selectedBranchId) {
+      showError('请先展开并选择要保存的支线。');
+      return;
+    }
+    const normalizedConditions = normalizeBranchConditionsForStorage(branchConditions);
+    const trigger = normalizedConditions[0];
+    const patch = {
+      id: selectedBranchId,
+      side: branchForm.side,
+      tier: branchForm.tier,
+      name: branchForm.name,
+      hint: branchForm.hint || `留意${branchForm.name}`,
+      desc: branchForm.sceneText.slice(0, 80) || branchForm.name,
+      common: (branchForm as any).common || false,
+      trigger,
+      triggerGroups: normalizedConditions,
+      inject: {
+        mustHappen: branchForm.sceneText ? [branchForm.sceneText] : [],
+        mustReveal: [],
+        mustChange: [],
+      },
+      sceneText: branchForm.sceneText,
+    };
+    setAuthoringSaving(true);
+    try {
+      await upsertStoryBranch(db as any, authoringStoryId, selectedBranchId, patch as any);
+      const latest = await getStoryCartridge(db as any, authoringStoryId);
+      setAuthoringCartridge(latest);
+      markAuthoringSaved(latest);
+      showError('已更新支线。');
+      setExpandedBranchId(null);
+      setSelectedBranchId(null);
+    } catch (e: any) {
+      console.error(e);
+      showError(`保存支线失败：${e?.message || String(e)}`);
+    } finally {
+      setAuthoringSaving(false);
+    }
+  };
+
+  const handleSaveAuthoringChanges = async () => {
+    if (authoringTab === 'branches' && selectedBranchId) {
+      await handleSaveSelectedBranch();
+      return;
+    }
+    await handleSaveAuthoringMainline();
+  };
+
   const handleFastAdaptToAuthoring = async () => {
     if (!user || !blueprint) return;
     try {
@@ -2007,8 +2220,11 @@ export default function App() {
       });
       setAuthoringStoryId(storyId);
       await refreshStories();
-      const st = (myStories || []).find((s) => s.id === storyId);
-      if (st) setAuthoringCartridge(st as any);
+      const cartridge = await getStoryCartridge(db as any, storyId);
+      if (cartridge) {
+        setAuthoringCartridge(cartridge as any);
+        markAuthoringSaved(cartridge);
+      }
       setGameState('AUTHORING');
       setShowSummaryModal(false);
     } catch (e) {
@@ -2133,6 +2349,7 @@ export default function App() {
 
       const latest = await getStoryCartridge(db as any, authoringStoryId);
       setAuthoringCartridge(latest);
+      markAuthoringSaved(latest);
       await refreshStories();
       showError(`导入完成：主线已填充，支线 ${payload.branches.length} 条${authoringImportReplaceBranches ? '（已覆盖旧支线）' : '（已追加）'}。`);
 
@@ -2172,6 +2389,32 @@ export default function App() {
       refreshStories();
     }
   }, [user, isAuthReady, gameState]);
+
+  useEffect(() => {
+    if (gameState !== 'AUTHORING') return;
+    if (!authoringStoryId || !authoringCartridge) {
+      setAuthoringDirty(false);
+      return;
+    }
+    const currentSnapshot = buildAuthoringSnapshot(authoringCartridge);
+    const hasMainlineUnsaved = Boolean(authoringSavedSnapshot) && currentSnapshot !== authoringSavedSnapshot;
+    const typedTags = parseTagInput(authoringCustomTagsInput || '').join('，');
+    const savedTags = normalizeTagList(authoringCartridge.meta?.tags || []).join('，');
+    const hasTagDraftUnsaved = typedTags !== savedTags;
+    const branchSavedSig = getSelectedBranchSavedSignature();
+    const branchDraftSig = getSelectedBranchDraftSignature();
+    const hasBranchUnsaved = Boolean(branchSavedSig) && branchDraftSig !== branchSavedSig;
+    setAuthoringDirty(hasMainlineUnsaved || hasTagDraftUnsaved || hasBranchUnsaved);
+  }, [
+    gameState,
+    authoringStoryId,
+    authoringCartridge,
+    authoringSavedSnapshot,
+    authoringCustomTagsInput,
+    branchForm,
+    branchConditions,
+    selectedBranchId,
+  ]);
 
   const fetchingChapterRef = useRef<number | null>(null);
 
@@ -2758,6 +3001,7 @@ export default function App() {
       const cartridge = await getStoryCartridge(db as any, storyId);
       if (cartridge) {
         setAuthoringCartridge(cartridge as any);
+        markAuthoringSaved(cartridge);
       }
       setGameState('AUTHORING');
     } catch (error) {
@@ -3571,6 +3815,7 @@ export default function App() {
             <div className="flex items-center gap-3">
               <button 
                 onClick={() => {
+                  if (!confirmDiscardAuthoringChanges('离开作者后台')) return;
                   if (blueprint) {
                     setGameState('PLAYING');
                   } else {
@@ -3588,6 +3833,14 @@ export default function App() {
               </div>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={handleSaveAuthoringChanges}
+                disabled={authoringSaving || !authoringStoryId || !authoringDirty}
+                className="px-3 py-2 rounded-lg text-xs font-bold bg-emerald-500/90 hover:bg-emerald-500 text-white disabled:opacity-50"
+              >
+                保存更改
+              </button>
               <button
                 type="button"
                 onClick={handleCreateAuthoringStory}
@@ -3614,6 +3867,12 @@ export default function App() {
               </button>
             </div>
           </div>
+
+          {authoringDirty && (
+            <div className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
+              当前有未保存更改，请先点击“保存更改”。
+            </div>
+          )}
 
           <div className="flex flex-wrap gap-2">
             <button
@@ -3646,9 +3905,11 @@ export default function App() {
                   <button
                     key={s.id}
                     onClick={async () => {
+                      if (authoringStoryId !== s.id && !confirmDiscardAuthoringChanges('切换到其他作品')) return;
                       setAuthoringStoryId(s.id);
                       const c = await getStoryCartridge(db as any, s.id);
                       setAuthoringCartridge(c);
+                      markAuthoringSaved(c);
                       setAuthoringTab('play');
                     }}
                     className={`w-full text-left p-3 rounded-xl border transition-colors ${authoringStoryId === s.id ? 'bg-indigo-950/30 border-indigo-500/40' : 'bg-zinc-950/50 border-zinc-800 hover:border-zinc-600'}`}
@@ -3877,6 +4138,7 @@ export default function App() {
                               showError('主线与结局已整体保存。');
                               const c = await getStoryCartridge(db as any, authoringStoryId);
                               setAuthoringCartridge(c);
+                              markAuthoringSaved(c);
                               await refreshStories();
                             } catch (e: any) {
                               console.error(e);
@@ -4230,6 +4492,7 @@ export default function App() {
                             showError('支线已创建。');
                             const c = await getStoryCartridge(db as any, authoringStoryId);
                             setAuthoringCartridge(c);
+                            markAuthoringSaved(c);
                             setExpandedBranchId(newId);
                             setSelectedBranchId(newId);
                           }}
@@ -4300,6 +4563,7 @@ export default function App() {
                                     await deleteStoryBranch(db as any, authoringStoryId, b.id);
                                     const c = await getStoryCartridge(db as any, authoringStoryId);
                                     setAuthoringCartridge(c);
+                                    markAuthoringSaved(c);
                                     if (expandedBranchId === b.id) {
                                       setExpandedBranchId(null);
                                       setSelectedBranchId(null);
@@ -4441,6 +4705,7 @@ export default function App() {
                                       await upsertStoryBranch(db as any, authoringStoryId, selectedBranchId, patch as any);
                                       const c = await getStoryCartridge(db as any, authoringStoryId);
                                       setAuthoringCartridge(c);
+                                      markAuthoringSaved(c);
                                       showError('已更新支线。');
                                       setExpandedBranchId(null);
                                       setSelectedBranchId(null);
