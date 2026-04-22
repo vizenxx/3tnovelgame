@@ -2969,6 +2969,27 @@ export default function App() {
     </>
   );
 
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const storyId = urlParams.get('story');
+    if (storyId) {
+      setSharedStoryId(storyId);
+      // Wait for DB to be available, and only load readonly view if we haven't decided to play it
+      if (db && (gameState === 'STORY_SELECT' || gameState === 'THEME_SELECTION')) {
+        getStoryCartridge(db as any, storyId).then(c => {
+          if (c) {
+            setReadonlyStoryData({ meta: c.meta, chapters: c.chapters });
+            setGameState('READONLY_STORY');
+          } else {
+            showError("æ— æ³•æ‰¾åˆ°è¯¥æ•…äº‹ï¼Œæˆ–ç”±äºŽéšç§è®¾ç½®æ— æ³•æŸ¥çœ‹ã€‚");
+          }
+        }).catch(() => {
+          showError("åŠ è½½æ•…äº‹å¤±è´¥ã€‚");
+        });
+      }
+    }
+  }, [db]); // Run once when DB is ready
+
   // --- Renderers ---
 
   if (!isAuthReady) {
