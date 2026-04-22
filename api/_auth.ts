@@ -1,5 +1,6 @@
 import { OAuth2Client } from 'google-auth-library';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { isGeminiMisconfiguredError } from './_gemini.js';
 
 const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID;
 const FIREBASE_ISSUER = FIREBASE_PROJECT_ID
@@ -118,6 +119,21 @@ export function sendInternalError(
   error: unknown
 ) {
   console.error(message, error);
-  const detail = error instanceof Error ? error.stack || error.message : String(error);
-  return res.status(500).json({ error: message, detail });
+  const isProd =
+    process.env.NODE_ENV === 'production' ||
+    process.env.VERCEL_ENV === 'production';
+
+  if (isGeminiMisconfiguredError(error)) {
+    return res.status(503).json({
+      error: 'AI 服务配置未完成，请稍后再试。',
+    });
+  }
+
+  const body: Record<string, string> = { error: message };
+  if (!isProd) {
+    body.detail =
+      error instanceof Error ? error.stack || error.message : String(error);
+  }
+
+  return res.status(500).json(body);
 }

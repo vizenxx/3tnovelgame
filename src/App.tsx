@@ -247,6 +247,25 @@ const InstallAppBanner = ({
   );
 };
 
+const SimulatedProgressBar = () => {
+  const [width, setWidth] = useState("0%");
+  useEffect(() => {
+    // Mount to 85% smoothly
+    const frame = requestAnimationFrame(() => {
+      setTimeout(() => setWidth("85%"), 50);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
+  return (
+    <div className="w-48 sm:w-64 h-1.5 bg-zinc-800/80 rounded-full overflow-hidden mt-6 relative border border-white/5 shadow-inner">
+      <div 
+        className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-rose-500 rounded-full transition-all ease-out" 
+        style={{ width, transitionDuration: '6000ms' }} 
+      />
+    </div>
+  );
+};
+
 const PwaUpdateModal = ({
   updateInfo,
   isApplying,
@@ -726,9 +745,9 @@ export default function App() {
     }
   };
 
-  const withTimeout = async <T,>(promise: Promise<T>, ms: number): Promise<T> => {
+  const withTimeout = async <T,>(promise: Promise<T>, ms: number, errorMsg = "AI 响应超时，请重试。"): Promise<T> => {
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error("AI 响应超时，请重试。")), ms);
+      setTimeout(() => reject(new Error(errorMsg)), ms);
     });
     return Promise.race([promise, timeoutPromise]);
   };
@@ -1734,15 +1753,19 @@ export default function App() {
     if (!user) return;
     setIsLoadingStories(true);
     try {
-      const [pub, mine] = await Promise.all([
-        listPublicStories(db as any, 30),
-        listMyStories(db as any, user.uid, 50),
-      ]);
+      const [pub, mine] = await withTimeout(
+        Promise.all([
+          listPublicStories(db as any, 30),
+          listMyStories(db as any, user.uid, 50),
+        ]),
+        8000,
+        "连接数据库超时，请检查网络后重试。"
+      );
       setPublicStories(pub);
       setMyStories(mine);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      showError('作品库加载失败。');
+      showError(e.message || '作品库加载失败。');
     } finally {
       setIsLoadingStories(false);
     }
@@ -1752,7 +1775,7 @@ export default function App() {
     if (!user) return;
     setIsLoadingStories(true);
     try {
-      const cartridge = await getStoryCartridge(db as any, storyId);
+      const cartridge = await withTimeout(getStoryCartridge(db as any, storyId), 8000, "提取故事档案超时，请检查网络后重试。");
       if (!cartridge) throw new Error('story not found');
 
       const bp: Blueprint = {
@@ -2056,12 +2079,8 @@ export default function App() {
           branches: payload.branches.map((b: any) => ({ name: b.name, side: b.side, desc: b.sceneText || b.name || '' })),
         })
       }).then(r => r.json()).then(result => {
-        if (result?.canonicalWorldState && authoringStoryId) {
-          import('./firebase').then(({ db: fbDb }) => {
-            import('firebase/firestore').then(({ updateDoc, doc: fbDoc }) => {
-              updateDoc(fbDoc(fbDb, 'stories', authoringStoryId), { canonicalWorldState: result.canonicalWorldState }).catch(() => {});
-            });
-          });
+        if (result?.canonicalWorldState && authoringStoryId && db) {
+          updateDoc(doc(db, 'stories', authoringStoryId), { canonicalWorldState: result.canonicalWorldState }).catch(() => {});
         }
       }).catch(() => {});
     } catch (e: any) {
@@ -2874,21 +2893,10 @@ export default function App() {
                 <div className="absolute inset-2 border-r-2 border-rose-500 rounded-full animate-[spin_1.5s_linear_infinite_reverse]"></div>
                 <Loader2 className="w-6 h-6 text-white animate-pulse" />
               </div>
-              <span className="text-white/90 font-bold tracking-widest text-sm bg-black/40 px-4 py-2 rounded-full backdrop-blur-sm border border-white/5 shadow-2xl">
+              <span className="text-white/90 font-bold tracking-widest text-sm bg-black/40 px-4 py-2 rounded-full backdrop-blur-sm border border-white/5 shadow-2xl mt-4">
                 {isLoggingIn ? "连结命运中..." : isLoadingStories ? "提取档案中..." : authoringSaving ? "保存世界线中..." : "请稍候..."}
               </span>
-              {(isLoggingIn || isLoadingStories) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsLoggingIn(false);
-                    setIsLoadingStories(false);
-                  }}
-                  className="mt-6 px-4 py-2 text-xs text-zinc-500 underline decoration-zinc-700 hover:text-white transition-colors"
-                >
-                  等待太久？点击此处取消
-                </button>
-              )}
+              <SimulatedProgressBar />
             </motion.div>
           </div>
         )}
