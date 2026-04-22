@@ -2981,10 +2981,10 @@ export default function App() {
             setReadonlyStoryData({ meta: c.meta, chapters: c.chapters });
             setGameState('READONLY_STORY');
           } else {
-            showError("æ— æ³•æ‰¾åˆ°è¯¥æ•…äº‹ï¼Œæˆ–ç”±äºŽéšç§è®¾ç½®æ— æ³•æŸ¥çœ‹ã€‚");
+            showError("\u65e0\u6cd5\u627e\u5230\u8be5\u6545\u4e8b\uff0c\u6216\u7531\u4e8e\u9690\u79c1\u8bbe\u7f6e\u65e0\u6cd5\u67e5\u770b\u3002");
           }
         }).catch(() => {
-          showError("åŠ è½½æ•…äº‹å¤±è´¥ã€‚");
+          showError("\u52a0\u8f7d\u6545\u4e8b\u5931\u8d25\u3002");
         });
       }
     }
@@ -3001,26 +3001,6 @@ export default function App() {
     );
   }
 
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const storyId = urlParams.get('story');
-    if (storyId) {
-      setSharedStoryId(storyId);
-      // Wait for DB to be available, and only load readonly view if we haven't decided to play it
-      if (db && (gameState === 'STORY_SELECT' || gameState === 'THEME_SELECTION')) {
-        getStoryCartridge(db as any, storyId).then(c => {
-          if (c) {
-            setReadonlyStoryData({ meta: c.meta, chapters: c.chapters });
-            setGameState('READONLY_STORY');
-          } else {
-            showError("无法找到该故事，或由于隐私设置无法查看。");
-          }
-        }).catch(() => {
-          showError("加载故事失败。");
-        });
-      }
-    }
-  }, [db]); // Run once when DB is ready
 
   if (gameState === 'READONLY_STORY' && readonlyStoryData) {
     return (
