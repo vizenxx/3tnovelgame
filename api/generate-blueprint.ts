@@ -82,24 +82,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const user = await requireFirebaseAuth(req, res);
     if (!user) return;
 
-    const { selectedThemes, targetWordCount } = req.body || {};
+    const { selectedThemes, customOutline, targetWordCount } = req.body || {};
 
-    if (!Array.isArray(selectedThemes)) {
-      return res.status(400).json({ error: '缺少选定的主题列表 (selectedThemes)' });
-    }
-    if (
-      selectedThemes.length < 1 ||
-      selectedThemes.length > 4 ||
-      selectedThemes.some((theme) => typeof theme !== 'string' || theme.trim().length === 0 || theme.length > 24)
-    ) {
-      return res.status(400).json({ error: '主题数量或格式不合法。' });
+    if (!Array.isArray(selectedThemes) && !customOutline) {
+      return res.status(400).json({ error: '必须选择至少一个主题或提供大纲' });
     }
 
     const safeTargetWordCount = Math.min(1200, Math.max(600, Number(targetWordCount) || 600));
     const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
 
     const prompt = `你是一个互动小说世界构建师。
-已知主题：${selectedThemes.join(', ')}。
+已知主题：${Array.isArray(selectedThemes) ? selectedThemes.join(', ') : '无'}。
+用户提供的故事大纲/期望：${customOutline ? customOutline : '无'}。
 
 任务：生成一个完整的首篇章（7章）的故事蓝图骨架。
 
@@ -110,8 +104,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 4. 设定 3-5 个角色，ID 必须为 c1, c2 ...
 5. 每个角色的 desc 必须是 15-35 字的具体简介，至少包含身份/动机/矛盾点中的两项。
 6. 设定结局影响率参数：left_mainline_default 和 right_mainline_default (0-100)。
-7. 设定逻辑严密的 3 种第 7 章结局走向。
-8. 规划 6-10 个支线命运点（branches），左右各半。
+7. 设定逻辑严密的 3 种第 7 章结局走向。结局与主线设定必须契合。
+8. 规划 6-10 个支线命运点（branches），左右各半。支线情节必须根据左/右主线做数学设定，相互影响。角色性格和核心主线必须在后续章节的大纲里严格体现。
 9. 每条支线必须提供 hint（8-18字），用于 UI 中的隐约提示，但不要直接暴露完整触发条件。
 10. condition_char 只能使用已创建的角色ID；condition_chapter 必须是 2 到 6 的整数；condition_action 只能是 bless 或 curse。
 11. desc 必须写清该支线发生时的具体剧情变化和隐藏内幕。

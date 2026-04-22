@@ -590,6 +590,7 @@ export default function App() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [gameState, setGameState] = useState<GameState>('STORY_SELECT');
   const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
+  const [customOutline, setCustomOutline] = useState<string>('');
   const [blueprint, setBlueprint] = useState<Blueprint | null>(null);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [interventionsLeft, setInterventionsLeft] = useState(3);
@@ -1586,34 +1587,38 @@ export default function App() {
     try {
       const response = await apiFetch('/api/generate-blueprint', {
         method: 'POST',
-        body: JSON.stringify({ selectedThemes, targetWordCount })
+        body: JSON.stringify({ selectedThemes, customOutline, targetWordCount })
       });
       if (!response.ok) throw new Error(await readErrorMessage(response));
-      const data = await response.json();
+      let data = await response.json();
       
-      // NEW: Immediately flesh out Chapter 1 before entering game
-      setGenerationStatus("正在撰写序章内容...");
-      setGenerationProgress(85);
-      
-      const ch1Response = await withRetry(() => apiFetch('/api/generate-next-chapter', {
-        method: 'POST',
-        body: JSON.stringify({
-          blueprint: data,
-          currentChapters: [],
-          targetChapterNum: 1,
-          targetWordCount
-        })
-      }, 90000), 3, 2500);
+      // Generate Chapters 1, 2, 3 sequentially
+      const prefetchChapters = [1, 2, 3];
+      for (const chNum of prefetchChapters) {
+        setGenerationStatus(`正在具象化世界细节 (${chNum}/3)...`);
+        setGenerationProgress(75 + (chNum * 5));
+        
+        const chResponse = await withRetry(() => apiFetch('/api/generate-next-chapter', {
+          method: 'POST',
+          body: JSON.stringify({
+            blueprint: data,
+            currentChapters: data.chapters,
+            targetChapterNum: chNum,
+            targetWordCount
+          })
+        }, 90000), 3, 2500);
 
-      if (!ch1Response.ok) throw new Error(await readErrorMessage(ch1Response));
-      const ch1Data = await ch1Response.json();
-      if (!ch1Data?.text || typeof ch1Data.text !== 'string' || ch1Data.text.trim().length < 50) {
-        throw new Error("第一章生成内容为空或过短");
+        if (!chResponse.ok) throw new Error(await readErrorMessage(chResponse));
+        const chData = await chResponse.json();
+        if (!chData?.text || typeof chData.text !== 'string' || chData.text.trim().length < 50) {
+          throw new Error(`第${chNum}章生成内容为空或过短`);
+        }
+        
+        // Update data.chapters with the new text so subsequent iterations see it
+        data.chapters = data.chapters.map((c: any) =>
+          c.chapter_num === chNum ? { ...c, text: chData.text } : c
+        );
       }
-      const updatedChapters = data.chapters.map((c: any) =>
-        c.chapter_num === 1 ? { ...c, text: ch1Data.text } : c
-      );
-      data.chapters = updatedChapters;
 
       // 修复核心逻辑：将大模型生成的平面支线条件映射为系统严格的 trigger 格式
       data.branches = (data.branches || []).map((b: any) => ({
@@ -2070,6 +2075,62 @@ export default function App() {
       refreshStories();
     }
   }, [user, isAuthReady, gameState]);
+
+  const fetchingChapterRef = useRef<number | null>(null);
+
+  // Background eager generation for chapters 4-7
+  useEffect(() => {
+    if (gameState !== 'PLAYING' || !blueprint || interventionsLeft < 3 || isRewriting || activeInterventionOverlay || !user) return;
+
+    const missingCh = chapters.find(c => c.chapter_num > 3 && (!c.text || c.text.trim() === ''));
+    if (!missingCh) return;
+
+    if (fetchingChapterRef.current === missingCh.chapter_num) return; // Already fetching this one
+
+    fetchingChapterRef.current = missingCh.chapter_num;
+
+    const generateRemaining = async () => {
+      try {
+        const chResponse = await apiFetch('/api/generate-next-chapter', {
+          method: 'POST',
+          body: JSON.stringify({
+            blueprint,
+            currentChapters: chapters,
+            targetChapterNum: missingCh.chapter_num,
+            targetWordCount
+          })
+        });
+
+        if (!chResponse.ok) throw new Error("Fetch failed");
+        
+        const chData = await chResponse.json();
+        if (!chData?.text || typeof chData.text !== 'string' || chData.text.trim().length < 50) throw new Error("Invalid text");
+
+        setChapters(prev => {
+          // Double check if intervention happened while fetching
+          if (interventionsLeft < 3) return prev;
+          
+          const newChapters = prev.map(c => c.chapter_num === missingCh.chapter_num ? { ...c, text: chData.text } : c);
+          setNaturalChapters(newChapters);
+          if (db && user) {
+            updateDoc(doc(db, 'sessions', user.uid), {
+              currentChapters: newChapters,
+              naturalChapters: newChapters,
+              initialNaturalChapters: newChapters,
+              updatedAt: new Date().toISOString()
+            }).catch(console.error);
+          }
+          return newChapters;
+        });
+      } catch (e) {
+        console.error("Background generation failed for chapter", missingCh.chapter_num, e);
+      } finally {
+        fetchingChapterRef.current = null;
+      }
+    };
+
+    generateRemaining();
+  }, [gameState, blueprint, chapters, interventionsLeft, isRewriting, activeInterventionOverlay, user, db, targetWordCount]);
 
   const generateConclusion = async (storyChapters: Chapter[]) => {
     setIsGeneratingConclusion(true);
@@ -4100,6 +4161,22 @@ export default function App() {
             ))}
           </div>
 
+          <div className="pt-6 space-y-4 max-w-md mx-auto w-full">
+            <div className="text-left">
+              <label htmlFor="customOutline" className="block text-sm font-medium text-zinc-400 mb-2">
+                或者输入你想写的专属故事大纲（选填）：
+              </label>
+              <textarea
+                id="customOutline"
+                rows={3}
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-3 text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+                placeholder="例如：一个现代都市里的神秘书店，主角在某天晚上遇到了一位来自未来的访客..."
+                value={customOutline}
+                onChange={(e) => setCustomOutline(e.target.value)}
+              />
+            </div>
+          </div>
+
           <div className="pt-8 space-y-6">
             <div className="max-w-md mx-auto space-y-3">
               <div className="flex justify-between items-center text-sm">
@@ -4124,10 +4201,10 @@ export default function App() {
 
             <button
               onClick={handleGenerateBlueprint}
-              disabled={selectedThemes.length < 1 || selectedThemes.length > 4}
+              disabled={(selectedThemes.length < 1 && customOutline.trim().length === 0) || selectedThemes.length > 4}
               className="px-8 py-3 bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white rounded-lg font-medium transition-colors shadow-lg shadow-indigo-500/20"
             >
-              {selectedThemes.length < 1 ? '请至少选择 1 个主题' : '生成世界蓝图'}
+              {(selectedThemes.length < 1 && customOutline.trim().length === 0) ? '请至少选择主题或输入大纲' : '生成世界蓝图'}
             </button>
           </div>
         </div>
