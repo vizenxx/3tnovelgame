@@ -621,6 +621,7 @@ export default function App() {
   const [isRewriting, setIsRewriting] = useState(false);
   const [interventionEffect, setInterventionEffect] = useState<'bless' | 'curse' | null>(null);
   const [activeInterventionOverlay, setActiveInterventionOverlay] = useState<{ type: 'bless' | 'curse' | 'ending', targetChapter: number, statusRaw: string } | null>(null);
+  const [branchUnlockNotice, setBranchUnlockNotice] = useState<Branch | null>(null);
   const [characterStatuses, setCharacterStatuses] = useState<Record<string, { status: string, isDead: boolean }>>({});
   const [storyConclusion, setStoryConclusion] = useState<string | null>(null);
   const [isGeneratingConclusion, setIsGeneratingConclusion] = useState(false);
@@ -726,6 +727,7 @@ export default function App() {
     },
   ]);
   const popularityCountedRef = useRef(false);
+  const conclusionRequestedRef = useRef(false);
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
   const [expandedBranchId, setExpandedBranchId] = useState<string | null>(null);
   const [interventionHistory, setInterventionHistory] = useState<Array<{ chapterNum: number; charId: string; action: 'bless' | 'curse' }>>([]);
@@ -1224,7 +1226,7 @@ export default function App() {
         // Change overlay text
         setActiveInterventionOverlay(prev => prev ? { ...prev, statusRaw: '命运定格：命运箴言推演中...' } : null);
         setSummaryEntrySource('auto_interventions');
-        generateConclusion(chapters).then(() => {
+        ensureConclusionGenerated(chapters).then(() => {
           setActiveInterventionOverlay(null);
           setShowSummaryModal(true);
         });
@@ -1257,11 +1259,25 @@ export default function App() {
 
     setPendingSummaryRequest(null);
     setSummaryEntrySource('manual');
-    generateConclusion(chapters).then(() => {
+    ensureConclusionGenerated(chapters).then(() => {
       setActiveInterventionOverlay(null);
       setShowSummaryModal(true);
     });
   }, [pendingSummaryRequest, blueprint, isRewriting, isGeneratingConclusion, chapters, activeInterventionOverlay]);
+
+  useEffect(() => {
+    if (!storyConclusion) {
+      conclusionRequestedRef.current = false;
+    }
+  }, [storyConclusion]);
+
+  useEffect(() => {
+    if (!branchUnlockNotice) return;
+    const timer = window.setTimeout(() => {
+      setBranchUnlockNotice(null);
+    }, 2200);
+    return () => window.clearTimeout(timer);
+  }, [branchUnlockNotice]);
 
 
   const handleLogin = async () => {
@@ -2164,14 +2180,21 @@ export default function App() {
       // If we don't have a storyId yet, we are playing a newly generated story.
       // We must publish it as a public cartridge first.
       if (!shareId) {
+        const sourceChapters = naturalChapters.length > 0 ? naturalChapters : chapters;
+        const snapshotBlueprint: Blueprint = {
+          ...blueprint,
+          branches: [],
+          endingMode: 'single',
+          endingNames: {},
+          endings: [{ type: 'normal', text: sourceChapters.find((chapter) => chapter.chapter_num === 7)?.text || '' }],
+        };
         shareId = await adaptBlueprintToStory(db as any, {
           authorId: user.uid,
-          blueprint,
-          chapters: naturalChapters.length > 0 ? naturalChapters : chapters,
+          blueprint: snapshotBlueprint,
+          chapters: sourceChapters,
           tags: selectedThemes
         });
         await saveStoryMeta(db as any, shareId, { visibility: 'public' });
-        setActiveStoryId(shareId);
       } else {
         // Ensure it's public
         await saveStoryMeta(db as any, shareId, { visibility: 'public' });
@@ -2218,6 +2241,12 @@ export default function App() {
     } finally {
       setIsGeneratingConclusion(false);
     }
+  };
+
+  const ensureConclusionGenerated = async (storyChapters: Chapter[]) => {
+    if (storyConclusion || isGeneratingConclusion || conclusionRequestedRef.current) return;
+    conclusionRequestedRef.current = true;
+    await generateConclusion(storyChapters);
   };
 
   const handleInterveneRequest = (chapterNum: number, charId: string, action: 'bless' | 'curse') => {
@@ -2285,7 +2314,7 @@ export default function App() {
       const unlocked = data.unlockedBranch;
       
       if (unlocked) {
-        showError(`【命运契机】已解锁支线：${unlocked.name}`);
+        setBranchUnlockNotice(unlocked);
         if (!historicallyUnlockedBranches.find(b => b.id === unlocked.id)) {
           setHistoricallyUnlockedBranches(prev => [...prev, unlocked]);
         }
@@ -2598,6 +2627,88 @@ export default function App() {
     handleFastAdaptToAuthoring();
   };
 
+  const handleShareReadonlyStory = async () => {
+    if (!sharedStoryId) return;
+    try {
+      setIsSharing(true);
+      const url = `${window.location.origin}${window.location.pathname}?story=${sharedStoryId}`;
+      if (navigator.share) {
+        await navigator.share({
+          title: '命运引擎',
+          text: '来看看这篇故事记录',
+          url,
+        });
+      } else {
+        await navigator.clipboard.writeText(url);
+        setErrorMsg('已复制链接到剪贴板！去分享给朋友吧~');
+        setTimeout(() => setErrorMsg(null), 3000);
+      }
+    } catch (error) {
+      if ((error as Error).name !== 'AbortError') {
+        setErrorMsg('分享失败，请重试。');
+        setTimeout(() => setErrorMsg(null), 3000);
+      }
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+  const handleAdaptReadonlyStory = async () => {
+    if (!user || !readonlyStoryData) {
+      setGameState('STORY_SELECT');
+      return;
+    }
+
+    try {
+      setAuthoringSaving(true);
+      const sourceMeta = readonlyStoryData.meta || {};
+      const sourceChapters = readonlyStoryData.chapters || [];
+      const snapshotBlueprint: Blueprint = {
+        title: sourceMeta.title || '未命名作品',
+        main_axis: sourceMeta.main_axis || '（无主轴记录）',
+        tags: Array.isArray(sourceMeta.tags) ? sourceMeta.tags : [],
+        left_mainline_default: 50,
+        right_mainline_default: 50,
+        endingMode: 'single',
+        endingNames: {},
+        characters: Array.isArray(sourceMeta.characters) ? sourceMeta.characters : [],
+        chapters: sourceChapters.map((chapter: any) => ({
+          chapter_num: chapter.chapter_num,
+          text: chapter.text || '',
+          present_characters: Array.isArray(chapter.present_characters) ? chapter.present_characters : [],
+          title: chapter.title || '',
+          summary: chapter.summary || '',
+        })),
+        endings: [
+          {
+            type: 'normal',
+            text: sourceChapters.find((chapter: any) => chapter.chapter_num === 7)?.text || '',
+          },
+        ],
+        branches: [],
+      };
+
+      const storyId = await adaptBlueprintToStory(db as any, {
+        authorId: user.uid,
+        blueprint: snapshotBlueprint,
+        chapters: sourceChapters,
+        tags: snapshotBlueprint.tags || [],
+      });
+
+      setAuthoringStoryId(storyId);
+      const cartridge = await getStoryCartridge(db as any, storyId);
+      if (cartridge) {
+        setAuthoringCartridge(cartridge as any);
+      }
+      setGameState('AUTHORING');
+    } catch (error) {
+      console.error(error);
+      showError('改编失败，请重试。');
+    } finally {
+      setAuthoringSaving(false);
+    }
+  };
+
   const showCondensedStoryInfo = gameState === 'PLAYING' && isTallNarrowViewport;
 
   const storyInfoPanel = blueprint ? (
@@ -2781,9 +2892,7 @@ export default function App() {
               suppressChapterWritesRef.current = true;
               setSummaryEntrySource('auto_interventions');
               setShowSummaryModal(true);
-              if (!storyConclusion && !isGeneratingConclusion) {
-                generateConclusion(chapters);
-              }
+              ensureConclusionGenerated(chapters);
             }}
             disabled={isRewriting || isGeneratingConclusion || (activeInterventionOverlay !== null && activeInterventionOverlay.type !== 'ending')}
             className="px-4 py-2 rounded-2xl bg-white text-black hover:bg-zinc-200 disabled:opacity-50 font-bold flex items-center justify-center gap-2 whitespace-nowrap"
@@ -2798,7 +2907,7 @@ export default function App() {
 
   const storyInfoOverlay = showCondensedStoryInfo ? (
     <>
-      <div className="fixed top-4 right-4 z-[321]">
+      <div className="fixed top-[max(1rem,env(safe-area-inset-top))] right-4 z-[321]">
         <button
           type="button"
           onClick={() => setIsStoryInfoOpen(true)}
@@ -3029,18 +3138,30 @@ export default function App() {
               <div className="text-sm font-bold text-white mb-1">想改变这段故事的走向吗？</div>
               <div className="text-xs text-indigo-300 truncate">登入命运引擎，亲自干涉时间线，创造你的专属结局！</div>
             </div>
-            <button 
-              onClick={() => {
-                if (user) {
-                  startStoryPlay(sharedStoryId!);
-                } else {
-                  setGameState('STORY_SELECT'); // Will fallback to Login Screen
-                }
-              }}
-              className="w-full sm:w-auto px-6 py-3 bg-indigo-500 hover:bg-indigo-400 text-white font-bold rounded-xl transition-colors whitespace-nowrap shadow-lg shadow-indigo-500/20 flex-shrink-0"
-            >
-              {user ? "立即干涉" : "注册 / 登录游玩"}
-            </button>
+            <div className="w-full sm:w-auto flex flex-col sm:flex-row gap-2">
+              <button
+                onClick={handleShareReadonlyStory}
+                disabled={isSharing || !sharedStoryId}
+                className="w-full sm:w-auto px-4 py-2.5 bg-zinc-900 border border-zinc-700 hover:border-zinc-500 text-zinc-100 font-bold rounded-xl transition-colors whitespace-nowrap flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isSharing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                {"\u5206\u4eab\u6545\u4e8b"}
+              </button>
+              <button
+                onClick={handleAdaptReadonlyStory}
+                disabled={authoringSaving}
+                className="w-full sm:w-auto px-4 py-2.5 bg-indigo-500 hover:bg-indigo-400 text-white font-bold rounded-xl transition-colors whitespace-nowrap shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <BookOpen className="w-4 h-4" />
+                {"\u4e00\u952e\u6539\u7f16"}
+              </button>
+              <button
+                onClick={() => setGameState('STORY_SELECT')}
+                className="w-full sm:w-auto px-4 py-2.5 bg-white text-black hover:bg-zinc-200 font-bold rounded-xl transition-colors whitespace-nowrap flex-shrink-0"
+              >
+                {"\u6253\u5f00\u6e38\u73a9\u5165\u53e3"}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -4398,6 +4519,24 @@ export default function App() {
               className="fixed left-4 right-4 top-[max(1rem,env(safe-area-inset-top))] sm:left-1/2 sm:right-auto sm:top-[max(1.5rem,env(safe-area-inset-top))] sm:-translate-x-1/2 z-[100] bg-rose-500 text-white px-4 sm:px-6 py-3 rounded-lg shadow-lg font-medium text-center"
             >
               {errorMsg}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {branchUnlockNotice && (
+            <motion.div
+              key={`branch-unlock-${branchUnlockNotice.id}`}
+              initial={{ opacity: 0, scale: 0.95, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 8 }}
+              className="fixed inset-0 z-[1200] flex items-center justify-center pointer-events-none p-6"
+            >
+              <div className="max-w-sm w-full rounded-2xl border border-indigo-500/40 bg-zinc-950/95 backdrop-blur-xl shadow-2xl px-5 py-4 text-center">
+                <div className="text-[11px] uppercase tracking-[0.28em] text-indigo-300 mb-2">命运契机</div>
+                <div className="text-lg font-bold text-white mb-1">已解锁支线</div>
+                <div className="text-base font-semibold text-indigo-200">{branchUnlockNotice.name}</div>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
