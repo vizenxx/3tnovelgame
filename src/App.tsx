@@ -37,7 +37,7 @@ import {
 } from 'firebase/firestore';
 
 // --- Types ---
-type GameState = 'STORY_SELECT' | 'AUTHORING' | 'THEME_SELECTION' | 'GENERATING_BLUEPRINT' | 'PLAYING' | 'SUMMARY';
+type GameState = 'STORY_SELECT' | 'AUTHORING' | 'THEME_SELECTION' | 'GENERATING_BLUEPRINT' | 'PLAYING' | 'SUMMARY' | 'READONLY_STORY';
 
 enum OperationType {
   CREATE = 'create',
@@ -639,6 +639,9 @@ export default function App() {
   const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [showIosInstallModal, setShowIosInstallModal] = useState<boolean>(false);
   const [isStandaloneMode, setIsStandaloneMode] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+  const [sharedStoryId, setSharedStoryId] = useState<string | null>(null);
+  const [readonlyStoryData, setReadonlyStoryData] = useState<{ meta: any, chapters: Chapter[] } | null>(null);
   const [pwaUpdateInfo, setPwaUpdateInfo] = useState<PwaUpdateInfo | null>(null);
   const [isApplyingPwaUpdate, setIsApplyingPwaUpdate] = useState(false);
 
@@ -2132,6 +2135,54 @@ export default function App() {
     generateRemaining();
   }, [gameState, blueprint, chapters, interventionsLeft, isRewriting, activeInterventionOverlay, user, db, targetWordCount]);
 
+  const handleShareStory = async () => {
+    if (!user || !blueprint) return;
+    
+    try {
+      setIsSharing(true);
+      let shareId = activeStoryId;
+      
+      // If we don't have a storyId yet, we are playing a newly generated story.
+      // We must publish it as a public cartridge first.
+      if (!shareId) {
+        shareId = await adaptBlueprintToStory(db as any, {
+          authorId: user.uid,
+          blueprint,
+          chapters: naturalChapters.length > 0 ? naturalChapters : chapters,
+          tags: selectedThemes
+        });
+        await saveStoryMeta(db as any, shareId, { visibility: 'public' });
+        setActiveStoryId(shareId);
+      } else {
+        // Ensure it's public
+        await saveStoryMeta(db as any, shareId, { visibility: 'public' });
+      }
+
+      const url = `${window.location.origin}${window.location.pathname}?story=${shareId}`;
+      
+      if (navigator.share) {
+        await navigator.share({
+          title: `命运引擎: ${blueprint.title}`,
+          text: `我刚刚在命运引擎里创造了【${blueprint.title}】的故事，快来看看！`,
+          url: url
+        });
+      } else {
+        await navigator.clipboard.writeText(url);
+        // Reuse global error for toast notification
+        setErrorMsg("已复制链接到剪贴板！去分享给朋友吧~");
+        setTimeout(() => setErrorMsg(null), 3000);
+      }
+    } catch (e) {
+      console.error(e);
+      if ((e as Error).name !== 'AbortError') {
+        setErrorMsg("分享失败，请重试。");
+        setTimeout(() => setErrorMsg(null), 3000);
+      }
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
   const generateConclusion = async (storyChapters: Chapter[]) => {
     setIsGeneratingConclusion(true);
     try {
@@ -2626,7 +2677,7 @@ export default function App() {
   ) : null;
 
   const actionMenuOverlay = blueprint && (gameState === 'PLAYING' || gameState === 'SUMMARY') ? (
-    <div className="fixed top-4 left-4 z-[320]">
+    <div className="fixed top-[max(1rem,env(safe-area-inset-top))] left-4 z-[320]">
       <button
         type="button"
         onClick={() => setIsActionMenuOpen((prev) => !prev)}
@@ -2645,6 +2696,15 @@ export default function App() {
             exit={{ opacity: 0, y: -8, scale: 0.96 }}
             className="mt-3 w-48 rounded-2xl border border-zinc-800 bg-zinc-950/95 backdrop-blur-xl p-2 shadow-2xl"
           >
+            <button
+              type="button"
+              onClick={handleShareStory}
+              disabled={isSharing || isRewriting || isGeneratingConclusion}
+              className="w-full px-3 py-3 rounded-xl text-left text-sm text-emerald-100 hover:bg-emerald-950/60 disabled:opacity-50 flex items-center gap-2"
+            >
+              {isSharing ? <Loader2 className="w-4 h-4 text-emerald-300 animate-spin" /> : <Sparkles className="w-4 h-4 text-emerald-300" />}
+              分享故事
+            </button>
             <button
               type="button"
               onClick={openRestartConfirmation}
@@ -2912,6 +2972,72 @@ export default function App() {
     );
   }
 
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const storyId = urlParams.get('story');
+    if (storyId) {
+      setSharedStoryId(storyId);
+      // Wait for DB to be available, and only load readonly view if we haven't decided to play it
+      if (db && (gameState === 'STORY_SELECT' || gameState === 'THEME_SELECTION')) {
+        getStoryCartridge(db as any, storyId).then(c => {
+          if (c) {
+            setReadonlyStoryData({ meta: c.meta, chapters: c.chapters });
+            setGameState('READONLY_STORY');
+          } else {
+            showError("无法找到该故事，或由于隐私设置无法查看。");
+          }
+        }).catch(() => {
+          showError("加载故事失败。");
+        });
+      }
+    }
+  }, [db]); // Run once when DB is ready
+
+  if (gameState === 'READONLY_STORY' && readonlyStoryData) {
+    return (
+      <div className="min-h-[100dvh] bg-zinc-950 text-zinc-100 flex flex-col font-sans relative pb-24">
+        <header className="p-4 sm:p-6 text-center border-b border-zinc-900 bg-zinc-950/80 sticky top-0 z-50 backdrop-blur-md pt-[max(1rem,env(safe-area-inset-top))]">
+          <h1 className="text-xl sm:text-2xl font-bold text-white mb-2">{readonlyStoryData.meta.title}</h1>
+          <p className="text-xs sm:text-sm text-zinc-500 max-w-xl mx-auto">{readonlyStoryData.meta.main_axis}</p>
+        </header>
+        <div className="max-w-2xl mx-auto w-full p-4 sm:p-6 space-y-12 mt-4">
+          {readonlyStoryData.chapters.filter(c => c.text && c.text.trim().length > 0).map((ch, idx) => (
+            <div key={idx} className="space-y-6">
+              <h2 className="text-xl sm:text-2xl font-bold text-indigo-400 border-b border-indigo-900/30 pb-3">{ch.title || `第${ch.chapter_num}章`}</h2>
+              <div className="text-base sm:text-lg text-zinc-300 leading-loose whitespace-pre-wrap font-serif tracking-wide">{ch.text}</div>
+            </div>
+          ))}
+          {readonlyStoryData.chapters.filter(c => c.text && c.text.trim().length > 0).length === 0 && (
+            <div className="text-center text-zinc-500 py-12">该故事暂无可用章节内容。</div>
+          )}
+          <div className="h-10"></div>
+        </div>
+        
+        {/* Fixed Bottom Banner */}
+        <div className="fixed bottom-0 left-0 w-full bg-indigo-950/90 backdrop-blur-lg border-t border-indigo-500/30 p-4 shadow-2xl z-[100] pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <div className="max-w-2xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="text-center sm:text-left flex-1 min-w-0">
+              <div className="text-sm font-bold text-white mb-1">想改变这段故事的走向吗？</div>
+              <div className="text-xs text-indigo-300 truncate">登入命运引擎，亲自干涉时间线，创造你的专属结局！</div>
+            </div>
+            <button 
+              onClick={() => {
+                if (user) {
+                  startStoryPlay(sharedStoryId!);
+                } else {
+                  setGameState('STORY_SELECT'); // Will fallback to Login Screen
+                }
+              }}
+              className="w-full sm:w-auto px-6 py-3 bg-indigo-500 hover:bg-indigo-400 text-white font-bold rounded-xl transition-colors whitespace-nowrap shadow-lg shadow-indigo-500/20 flex-shrink-0"
+            >
+              {user ? "立即干涉" : "注册 / 登录游玩"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!user) {
     return (
       <div className="min-h-[100dvh] bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center px-4 py-6 sm:p-6 font-sans relative overflow-hidden safe-top safe-bottom">
@@ -3140,7 +3266,7 @@ export default function App() {
       <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center p-4 sm:p-6 font-sans relative safe-top safe-bottom">
         {pwaUpdateModal}
         <GlobalError errorMsg={errorMsg} />
-        <div className="absolute left-4 right-4 top-4 sm:left-auto sm:right-6 sm:top-6 flex items-center justify-end gap-2">
+        <div className="absolute left-4 right-4 top-[max(1rem,env(safe-area-inset-top))] sm:left-auto sm:right-6 sm:top-[max(1.5rem,env(safe-area-inset-top))] flex items-center justify-end gap-2 z-50">
           <div className="text-right min-w-0 mr-1">
             <div className="text-xs text-zinc-500">已登录</div>
             <div className="text-sm font-medium text-zinc-300 truncate max-w-[120px]">{user.isAnonymous ? "游客用户" : (user.displayName || user.email)}</div>
@@ -4116,7 +4242,7 @@ export default function App() {
       <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center p-4 sm:p-6 font-sans relative safe-top safe-bottom">
         {pwaUpdateModal}
         <GlobalError errorMsg={errorMsg} />
-        <div className="absolute left-4 right-4 top-4 sm:left-auto sm:right-6 sm:top-6 flex items-center justify-between gap-2 sm:gap-4">
+        <div className="absolute left-4 right-4 top-[max(1rem,env(safe-area-inset-top))] sm:left-auto sm:right-6 sm:top-[max(1.5rem,env(safe-area-inset-top))] flex items-center justify-between gap-2 sm:gap-4 z-50">
           <div className="text-left sm:text-right min-w-0">
             <div className="text-xs text-zinc-500">已登录</div>
             <div className="text-sm font-medium text-zinc-300 truncate">{user.isAnonymous ? "游客用户" : user.displayName}</div>
@@ -4260,7 +4386,7 @@ export default function App() {
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="fixed left-4 right-4 top-4 sm:left-1/2 sm:right-auto sm:top-6 sm:-translate-x-1/2 z-[100] bg-rose-500 text-white px-4 sm:px-6 py-3 rounded-lg shadow-lg font-medium text-center"
+              className="fixed left-4 right-4 top-[max(1rem,env(safe-area-inset-top))] sm:left-1/2 sm:right-auto sm:top-[max(1.5rem,env(safe-area-inset-top))] sm:-translate-x-1/2 z-[100] bg-rose-500 text-white px-4 sm:px-6 py-3 rounded-lg shadow-lg font-medium text-center"
             >
               {errorMsg}
             </motion.div>
@@ -4420,7 +4546,7 @@ export default function App() {
               <button 
                 onClick={() => setIsSidebarOpen(false)}
                 aria-label="关闭故事信息"
-                className="lg:hidden absolute top-4 right-4 p-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-zinc-400 hover:text-white transition-colors border border-zinc-700 z-[220]"
+                className="lg:hidden absolute top-[max(1rem,env(safe-area-inset-top))] right-4 p-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-zinc-400 hover:text-white transition-colors border border-zinc-700 z-[220]"
               >
                 <X className="w-6 h-6" />
               </button>
