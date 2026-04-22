@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft } from 'lucide-react';
 import { auth, db, firebaseInitError } from './firebase';
@@ -3169,44 +3170,47 @@ export default function App() {
     </div>
   ) : null;
 
-  const compactFloatingActionPanel = blueprint && gameState === 'PLAYING' ? (
-    <div className="fixed left-4 right-4 bottom-4 z-[261] rounded-3xl border border-zinc-800 bg-zinc-950/92 backdrop-blur-xl shadow-2xl px-4 py-3 lg:right-auto lg:w-[22rem]">
-      <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
-        <div className="text-xl font-black leading-none text-indigo-200 whitespace-nowrap">{interventionsLeft} / 3</div>
-        <div className="text-sm font-bold leading-tight text-center">
-          <span className="text-indigo-300">左 {uiFeedback.leftProgress.toFixed(0)}%</span>
-          <span className="mx-2 text-zinc-600">/</span>
-          <span className="text-rose-300">右 {uiFeedback.rightProgress.toFixed(0)}%</span>
+  const compactFloatingActionPanel = blueprint && gameState === 'PLAYING' && typeof document !== 'undefined'
+    ? createPortal(
+      <div className="fixed left-4 right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-[261] rounded-3xl border border-zinc-800 bg-zinc-950/92 backdrop-blur-xl shadow-2xl px-4 py-3 lg:right-auto lg:w-[22rem]">
+        <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
+          <div className="text-xl font-black leading-none text-indigo-200 whitespace-nowrap">{interventionsLeft} / 3</div>
+          <div className="text-sm font-bold leading-tight text-center">
+            <span className="text-indigo-300">左 {uiFeedback.leftProgress.toFixed(0)}%</span>
+            <span className="mx-2 text-zinc-600">/</span>
+            <span className="text-rose-300">右 {uiFeedback.rightProgress.toFixed(0)}%</span>
+          </div>
+          {(!storyConclusion && interventionsLeft > 0) ? (
+            <button
+              type="button"
+              onClick={handleEndGame}
+              disabled={isRewriting || isGeneratingConclusion || activeInterventionOverlay !== null}
+              className="px-4 py-2 rounded-2xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold flex items-center justify-center gap-2 whitespace-nowrap"
+            >
+              <BookOpen className="w-4 h-4" />
+              命运确定
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                suppressChapterWritesRef.current = true;
+                setSummaryEntrySource('auto_interventions');
+                setShowSummaryModal(true);
+                ensureConclusionGenerated(chapters);
+              }}
+              disabled={isRewriting || isGeneratingConclusion || (activeInterventionOverlay !== null && activeInterventionOverlay.type !== 'ending')}
+              className="px-4 py-2 rounded-2xl bg-white text-black hover:bg-zinc-200 disabled:opacity-50 font-bold flex items-center justify-center gap-2 whitespace-nowrap"
+            >
+              <Check className="w-4 h-4" />
+              查看结语
+            </button>
+          )}
         </div>
-        {(!storyConclusion && interventionsLeft > 0) ? (
-          <button
-            type="button"
-            onClick={handleEndGame}
-            disabled={isRewriting || isGeneratingConclusion || activeInterventionOverlay !== null}
-            className="px-4 py-2 rounded-2xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold flex items-center justify-center gap-2 whitespace-nowrap"
-          >
-            <BookOpen className="w-4 h-4" />
-            命运确定
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => {
-              suppressChapterWritesRef.current = true;
-              setSummaryEntrySource('auto_interventions');
-              setShowSummaryModal(true);
-              ensureConclusionGenerated(chapters);
-            }}
-            disabled={isRewriting || isGeneratingConclusion || (activeInterventionOverlay !== null && activeInterventionOverlay.type !== 'ending')}
-            className="px-4 py-2 rounded-2xl bg-white text-black hover:bg-zinc-200 disabled:opacity-50 font-bold flex items-center justify-center gap-2 whitespace-nowrap"
-          >
-            <Check className="w-4 h-4" />
-            查看结语
-          </button>
-        )}
-      </div>
-    </div>
-  ) : null;
+      </div>,
+      document.body
+    )
+    : null;
 
   const storyInfoOverlay = showCondensedStoryInfo ? (
     <>

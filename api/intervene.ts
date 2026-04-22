@@ -202,11 +202,17 @@ ${worldStatePrompt}
 各章情节概况（大纲）：
 ${chapters.map((chapter: any) => `第${chapter.chapter_num}章：${chapter.summary || String(chapter.text || '').substring(0, 50)}`).join('\n')}
 
-干涉指令：玩家对角色【${charName}】施加了【${action === 'bless' ? '庇佑' : '磨难'}】。
+命运扰动参数：目标角色【${charName}】，扰动极性【${action === 'bless' ? '正向' : '逆向'}】。这是系统层参数，不是角色可直接感知的事实。
 命运倾向值（干涉前→干涉后）：${Number(currentEndingValue) || 0} → ${newEndingValue}。数值越大越偏向秩序/左结局，越小越偏向混沌/右结局。
 ${newlyUnlocked.length > 0 ? `本次新解锁支线：${newlyUnlocked.map((branch: any) => branch.name).join('、')}` : '本次未触发支线事件，只能做局部涟漪。'}
 ${injected ? `支线注入包（必须落地）：\n${injected.map((item: any) => `- [${item.id}] ${item.name}\n  - mustHappen: ${(item.inject?.mustHappen || []).join('；')}\n  - mustReveal: ${(item.inject?.mustReveal || []).join('；')}\n  - mustChange: ${(item.inject?.mustChange || []).join('；')}\n  - sceneText: ${String(item.sceneText || '').substring(0, 400)}`).join('\n')}` : ''}
 ${(!worldState || !worldState.canonical) && endingProto ? `作者结局原型：\n- default: ${String(endingProto.default || '').substring(0, 800)}\n- left: ${String(endingProto.left || '').substring(0, 800)}\n- right: ${String(endingProto.right || '').substring(0, 800)}` : ''}
+
+隐性干预写作规则：
+1. 严禁在正文出现“庇佑/磨难/干涉/玩家操作/系统指令”等元叙事字眼。
+2. 必须将干预转译为自然因果：新事件、偶发变故、灵感、启示、线索暴露、人物决策偏移等。
+3. 所有偏移都要依托原有故事与已触发支线的综合情况推进，不得突兀“神降”。
+4. 允许结果偏向左/右，但不允许角色直接宣称“被庇佑/被诅咒/被操控”。
 
 要求：
 1. 第 ${safeChapterNum} 章到第 7 章都必须重写成完整正文，每章字数约 ${safeTargetWordCount} 字。
