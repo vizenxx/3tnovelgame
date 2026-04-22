@@ -697,7 +697,7 @@ export default function App() {
   const [authoringSaving, setAuthoringSaving] = useState(false);
   const [authoringImportText, setAuthoringImportText] = useState('');
   const [authoringImportReplaceBranches, setAuthoringImportReplaceBranches] = useState(true);
-  const [authoringTab, setAuthoringTab] = useState<'mainline' | 'branches'>('mainline');
+  const [authoringTab, setAuthoringTab] = useState<'play' | 'mainline' | 'branches'>('play');
   const [branchForm, setBranchForm] = useState({
     id: '',
     name: '',
@@ -1934,6 +1934,65 @@ export default function App() {
   const enterAuthoring = async () => {
     setGameState('AUTHORING');
     await refreshStories();
+  };
+
+  const handleCreateAuthoringStory = async () => {
+    if (!db || !user) {
+      showError('请先登录后再新建作品。');
+      return;
+    }
+    try {
+      setAuthoringSaving(true);
+      const storyId = await createEmptyStory(db as any, {
+        authorId: user.uid,
+        title: '未命名作品',
+        tags: [],
+      });
+      const cartridge = await getStoryCartridge(db as any, storyId);
+      setAuthoringStoryId(storyId);
+      setAuthoringCartridge(cartridge as any);
+      setAuthoringTab('play');
+      await refreshStories();
+      showError('新作品已创建。');
+    } catch (e: any) {
+      console.error(e);
+      showError(`新建失败：${e?.message || String(e)}`);
+    } finally {
+      setAuthoringSaving(false);
+    }
+  };
+
+  const handleDeleteAuthoringStory = async () => {
+    if (!db || !authoringStoryId) {
+      showError('请先选择要删除的作品。');
+      return;
+    }
+    const ok = window.confirm('确定删除当前作品吗？此操作不可撤销。');
+    if (!ok) return;
+
+    try {
+      setAuthoringSaving(true);
+      await deleteStoryCartridge(db as any, authoringStoryId);
+      setAuthoringStoryId(null);
+      setAuthoringCartridge(null);
+      await refreshStories();
+      showError('作品已删除。');
+    } catch (e: any) {
+      console.error(e);
+      showError(`删除失败：${e?.message || String(e)}`);
+    } finally {
+      setAuthoringSaving(false);
+    }
+  };
+
+  const handleRefreshAuthoringStories = async () => {
+    try {
+      await refreshStories();
+      showError('作品列表已刷新。');
+    } catch (e: any) {
+      console.error(e);
+      showError(`刷新失败：${e?.message || String(e)}`);
+    }
   };
 
   const handleFastAdaptToAuthoring = async () => {
@@ -3528,54 +3587,53 @@ export default function App() {
                 <div className="text-2xl font-black text-white">作品编辑器</div>
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-2">
               <button
+                type="button"
+                onClick={handleCreateAuthoringStory}
                 disabled={authoringSaving}
-                onClick={async () => {
-                  if (!user) return;
-                  setAuthoringSaving(true);
-                  try {
-                    const id = await createEmptyStory(db as any, { authorId: user.uid, tags: [] });
-                    await refreshStories();
-                    setAuthoringStoryId(id);
-                    const c = await getStoryCartridge(db as any, id);
-                    setAuthoringCartridge(c);
-                    showError('作品已创建。');
-                  } catch (e: any) {
-                    console.error(e);
-                    showError(`新建作品失败：${e?.message || String(e)}`);
-                  } finally {
-                    setAuthoringSaving(false);
-                  }
-                }}
-                className="px-4 py-2 bg-white text-black rounded-lg font-bold disabled:opacity-50"
+                className="px-3 py-2 rounded-lg text-xs font-bold bg-white text-black disabled:opacity-50"
               >
-                {authoringSaving ? '创建中...' : '新建作品'}
+                新建作品
               </button>
               <button
-                disabled={!authoringStoryId || authoringSaving}
-                onClick={async () => {
-                  if (!authoringStoryId) return;
-                  setAuthoringSaving(true);
-                  try {
-                    await deleteStoryCartridge(db as any, authoringStoryId);
-                    showError('作品已删除。');
-                    setAuthoringStoryId(null);
-                    setAuthoringCartridge(null);
-                    await refreshStories();
-                  } catch (e: any) {
-                    console.error(e);
-                    showError(`删除失败：${e?.message || String(e)}`);
-                  } finally {
-                    setAuthoringSaving(false);
-                  }
-                }}
-                className="px-4 py-2 bg-zinc-900 border border-rose-500/30 text-rose-300 rounded-lg text-sm disabled:opacity-50"
+                type="button"
+                onClick={handleDeleteAuthoringStory}
+                disabled={authoringSaving || !authoringStoryId}
+                className="px-3 py-2 rounded-lg text-xs font-bold bg-rose-500/90 hover:bg-rose-500 text-white disabled:opacity-50"
               >
-                删除作品
+                删除当前
               </button>
-              <button onClick={refreshStories} className="px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-sm">{isLoadingStories ? '加载中...' : '刷新'}</button>
+              <button
+                type="button"
+                onClick={handleRefreshAuthoringStories}
+                disabled={authoringSaving}
+                className="px-3 py-2 rounded-lg text-xs font-bold bg-zinc-900 border border-zinc-800 text-zinc-200 disabled:opacity-50"
+              >
+                刷新列表
+              </button>
             </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setAuthoringTab('play')}
+              className={`px-4 py-2 rounded-lg text-sm font-bold ${authoringTab === 'play' ? 'bg-white text-black' : 'bg-zinc-900 border border-zinc-800 text-zinc-300'}`}
+            >
+              游玩式编辑
+            </button>
+            <button
+              onClick={() => setAuthoringTab('mainline')}
+              className={`px-4 py-2 rounded-lg text-sm font-bold ${authoringTab === 'mainline' ? 'bg-white text-black' : 'bg-zinc-900 border border-zinc-800 text-zinc-300'}`}
+            >
+              主线设定
+            </button>
+            <button
+              onClick={() => setAuthoringTab('branches')}
+              className={`px-4 py-2 rounded-lg text-sm font-bold ${authoringTab === 'branches' ? 'bg-white text-black' : 'bg-zinc-900 border border-zinc-800 text-zinc-300'}`}
+            >
+              支线设定
+            </button>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -3591,7 +3649,7 @@ export default function App() {
                       setAuthoringStoryId(s.id);
                       const c = await getStoryCartridge(db as any, s.id);
                       setAuthoringCartridge(c);
-                      setAuthoringTab('mainline');
+                      setAuthoringTab('play');
                     }}
                     className={`w-full text-left p-3 rounded-xl border transition-colors ${authoringStoryId === s.id ? 'bg-indigo-950/30 border-indigo-500/40' : 'bg-zinc-950/50 border-zinc-800 hover:border-zinc-600'}`}
                   >
@@ -3643,20 +3701,61 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setAuthoringTab('mainline')}
-                      className={`px-4 py-2 rounded-lg text-sm font-bold ${authoringTab === 'mainline' ? 'bg-white text-black' : 'bg-zinc-900 border border-zinc-800 text-zinc-300'}`}
-                    >
-                      Tab1 主线设置
-                    </button>
-                    <button
-                      onClick={() => setAuthoringTab('branches')}
-                      className={`px-4 py-2 rounded-lg text-sm font-bold ${authoringTab === 'branches' ? 'bg-white text-black' : 'bg-zinc-900 border border-zinc-800 text-zinc-300'}`}
-                    >
-                      Tab2 支线设置
-                    </button>
-                  </div>
+
+
+                  {authoringTab === 'play' && (
+                    <div className="space-y-6">
+                      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                        <div className="lg:col-span-4 space-y-4">
+                          <div className="bg-zinc-950/50 border border-zinc-800 rounded-xl p-4 space-y-3">
+                            <div className="text-sm uppercase tracking-[0.2em] text-zinc-500">故事信息</div>
+                            <input
+                              value={stripBookTitle(authoringCartridge.meta.title || '')}
+                              onChange={(e) => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, title: stripBookTitle(e.target.value) } }))}
+                              className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-100"
+                              placeholder="作品标题"
+                            />
+                            <textarea
+                              value={authoringCartridge.meta.main_axis || ''}
+                              onChange={(e) => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, main_axis: e.target.value } }))}
+                              className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-200 min-h-[90px]"
+                              placeholder="主轴 / 命题"
+                            />
+                            <select
+                              value={authoringCartridge.meta.visibility || 'private'}
+                              onChange={(e) => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, visibility: e.target.value } }))}
+                              className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm"
+                            >
+                              <option value="private">私有</option>
+                              <option value="unlisted">未列出</option>
+                              <option value="public">公开</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div className="lg:col-span-8 space-y-4">
+                          {(authoringCartridge.chapters || []).filter((chapter: any) => chapter.chapter_num >= 1 && chapter.chapter_num <= 6).map((chapter: any) => (
+                            <div key={`playlike-chapter-${chapter.chapter_num}`} className="bg-zinc-950/50 border border-zinc-800 rounded-xl p-4 space-y-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="text-sm font-bold text-indigo-300">第 {chapter.chapter_num} 章</div>
+                                <input
+                                  value={chapter.title || ''}
+                                  onChange={(e) => setAuthoringCartridge((prev: any) => ({ ...prev, chapters: (prev.chapters || []).map((item: any) => item.chapter_num === chapter.chapter_num ? { ...item, title: e.target.value } : item) }))}
+                                  className="w-[70%] px-3 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-sm"
+                                  placeholder="章节标题"
+                                />
+                              </div>
+                              <textarea
+                                value={chapter.text || ''}
+                                onChange={(e) => setAuthoringCartridge((prev: any) => ({ ...prev, chapters: (prev.chapters || []).map((item: any) => item.chapter_num === chapter.chapter_num ? { ...item, text: e.target.value } : item) }))}
+                                className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm min-h-[180px]"
+                                placeholder="像游玩界面一样编辑本章正文..."
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {authoringTab === 'mainline' && (
                     <div className="space-y-6">
