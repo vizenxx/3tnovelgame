@@ -133,6 +133,23 @@ export async function getStoryCartridge(db: Firestore, storyId: string) {
   return { storyId, meta, chapters, endings, branches };
 }
 
+export async function getSharedStoryRecord(db: Firestore, storyId: string) {
+  const metaSnap = await getDoc(doc(db, 'stories', storyId));
+  if (!metaSnap.exists()) return null;
+
+  const meta = metaSnap.data() as any as StoryMeta;
+  if (meta.visibility !== 'public' && meta.visibility !== 'unlisted') {
+    return null;
+  }
+
+  const chaptersSnap = await getDocs(
+    query(collection(db, 'stories', storyId, 'chapters'), orderBy('chapter_num', 'asc'))
+  );
+  const chapters = chaptersSnap.docs.map(d => d.data() as any as StoryChapterDoc);
+
+  return { storyId, meta, chapters };
+}
+
 export async function adaptBlueprintToStory(db: Firestore, args: { authorId: string; blueprint: any; chapters: any[]; conclusionText?: string; tags?: string[] }) {
   const now = new Date().toISOString();
   const bp = args.blueprint;

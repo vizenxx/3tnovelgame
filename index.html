@@ -26,9 +26,62 @@
     <link rel="icon" type="image/svg+xml" href="/pwa-icon.svg" />
     <link rel="apple-touch-icon" href="/pwa-icon-192.png" />
     <title>命运干涉</title>
+    <style>
+      html, body {
+        margin: 0;
+        min-height: 100%;
+        background: #09090b;
+        color: #f4f4f5;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      #root {
+        min-height: 100dvh;
+      }
+
+      .boot-splash {
+        min-height: 100dvh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        text-align: center;
+        padding: 24px;
+        background:
+          radial-gradient(circle at top, rgba(99, 102, 241, 0.18), transparent 40%),
+          #09090b;
+      }
+
+      .boot-spinner {
+        width: 36px;
+        height: 36px;
+        border-radius: 9999px;
+        border: 3px solid rgba(99, 102, 241, 0.18);
+        border-top-color: #818cf8;
+        animation: boot-spin 0.9s linear infinite;
+      }
+
+      .boot-label {
+        font-size: 14px;
+        color: #a1a1aa;
+        letter-spacing: 0.08em;
+      }
+
+      @keyframes boot-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="boot-splash">
+        <div class="boot-spinner" aria-hidden="true"></div>
+        <div class="boot-label">正在接通命运干涉...</div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

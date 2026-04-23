@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft } from 'lucide-react';
 import { auth, db, firebaseInitError } from './firebase';
-import { createEmptyStory, adaptBlueprintToStory, createStoryBranch, deleteStoryBranch, deleteStoryCartridge, getStoryCartridge, listMyStories, listPublicStories, saveStoryMainlineBundle, saveStoryMeta, upsertStoryBranch } from './storyStore';
+import { createEmptyStory, adaptBlueprintToStory, createStoryBranch, deleteStoryBranch, deleteStoryCartridge, getSharedStoryRecord, getStoryCartridge, listMyStories, listPublicStories, saveStoryMainlineBundle, saveStoryMeta, upsertStoryBranch } from './storyStore';
 import { isBranchUnlockedByHistory, tierToScore } from './storyCartridge';
 import { 
   signInWithRedirect,
@@ -177,6 +177,20 @@ const buildFacebookShareUrl = (url: string, quote: string) => {
   shareUrl.searchParams.set('u', url);
   shareUrl.searchParams.set('quote', quote);
   return shareUrl.toString();
+};
+
+const isIosDevice = () =>
+  /iPad|iPhone|iPod/.test(window.navigator.userAgent) ||
+  (window.navigator.platform === 'MacIntel' && window.navigator.maxTouchPoints > 1);
+
+const writeClipboardText = async (value: string) => {
+  if (!navigator.clipboard?.writeText) return false;
+  try {
+    await navigator.clipboard.writeText(value);
+    return true;
+  } catch {
+    return false;
+  }
 };
 
 const renderParagraphWithHighlights = (text: string, characters: Character[] = []) => {
@@ -1506,6 +1520,37 @@ export default function App() {
     setTimeout(() => setErrorMsg(null), 5000);
   };
 
+  const shareStoryLink = async (args: { title: string; url: string; text: string }) => {
+    const clipboardPayload = `${args.text}\n${args.url}`;
+    const copied = await writeClipboardText(clipboardPayload);
+    const shareTitle = '命运干涉';
+
+    if (navigator.share) {
+      await navigator.share({
+        title: shareTitle,
+        text: args.text,
+        url: args.url,
+      });
+
+      if (copied) {
+        showError(
+          isIosDevice()
+            ? '已调起系统分享，分享文案也已复制；如果 Facebook 没带上文字，可直接粘贴。'
+            : '已调起系统分享，分享文案也已复制。'
+        );
+      }
+      return;
+    }
+
+    if (copied) {
+      showError('分享文案与链接已复制。');
+      return;
+    }
+
+    window.open(buildFacebookShareUrl(args.url, args.text), '_blank', 'noopener,noreferrer');
+    showError('已打开分享页。');
+  };
+
   const toggleTheme = (theme: string) => {
     if (selectedThemes.includes(theme)) {
       setSelectedThemes(selectedThemes.filter(t => t !== theme));
@@ -2518,6 +2563,12 @@ export default function App() {
 
       const url = buildSharedStoryUrl(shareId);
       const shareText = buildStoryShareText(blueprint.title);
+      await shareStoryLink({
+        title: `å‘½è¿å¹²æ¶‰: ${blueprint.title}`,
+        text: shareText,
+        url,
+      });
+      if ((globalThis as any).__legacyShareFallback__) {
       const clipboardPayload = `${shareText}\n${url}`;
 
       if (navigator.share) {
@@ -2531,6 +2582,7 @@ export default function App() {
         window.open(buildFacebookShareUrl(url, shareText), '_blank', 'noopener,noreferrer');
         setErrorMsg('已复制分享文案与链接，也已打开 Facebook 分享页。');
         setTimeout(() => setErrorMsg(null), 3000);
+      }
       }
     } catch (e) {
       console.error(e);
@@ -2952,6 +3004,12 @@ export default function App() {
       const shareTitle = readonlyStoryData?.meta?.title || '未命名故事';
       const url = buildSharedStoryUrl(sharedStoryId);
       const shareText = buildStoryShareText(shareTitle);
+      await shareStoryLink({
+        title: `命运干涉: ${shareTitle}`,
+        text: shareText,
+        url,
+      });
+      if ((globalThis as any).__legacyShareFallback__) {
       const clipboardPayload = `${shareText}\n${url}`;
       if (navigator.share) {
         await navigator.share({
@@ -2964,6 +3022,7 @@ export default function App() {
         window.open(buildFacebookShareUrl(url, shareText), '_blank', 'noopener,noreferrer');
         setErrorMsg('已复制分享文案与链接，也已打开 Facebook 分享页。');
         setTimeout(() => setErrorMsg(null), 3000);
+      }
       }
     } catch (error) {
       if ((error as Error).name !== 'AbortError') {
@@ -3411,15 +3470,14 @@ export default function App() {
 
     setSharedStoryId(storyId);
 
-    if (!db || !isAuthReady) return;
-    if (!(gameState === 'STORY_SELECT' || gameState === 'THEME_SELECTION' || gameState === 'READONLY_STORY')) return;
+    if (!db) return;
 
     let cancelled = false;
 
     const loadSharedStory = async () => {
       try {
         setIsLoadingSharedStory(true);
-        const cartridge = await getStoryCartridge(db as any, storyId);
+        const cartridge = await getSharedStoryRecord(db as any, storyId);
         if (cancelled) return;
 
         if (cartridge) {
@@ -3447,9 +3505,19 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [db, isAuthReady, gameState]);
+  }, [db]);
 
   // --- Renderers ---
+
+  if (sharedStoryId && isLoadingSharedStory && !readonlyStoryData) {
+    return (
+      <div className="min-h-[100dvh] bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center px-6 text-center font-sans">
+        <Loader2 className="w-8 h-8 text-indigo-400 animate-spin mb-4" />
+        <div className="text-lg font-bold text-white">正在载入分享故事</div>
+        <div className="mt-2 text-sm text-zinc-500">我们正在调取这条时间线的故事记录，请稍候。</div>
+      </div>
+    );
+  }
 
   if (!isAuthReady) {
     return (
