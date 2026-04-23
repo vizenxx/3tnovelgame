@@ -59,10 +59,10 @@ service cloud.firestore {
     }
 
     function canReadStoryData(data) {
-      return isAuthenticated() && (
+      return (
         data.visibility == 'public' ||
         data.visibility == 'unlisted' ||
-        data.authorId == request.auth.uid
+        (isAuthenticated() && data.authorId == request.auth.uid)
       );
     }
 

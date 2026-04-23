@@ -164,6 +164,21 @@ const endingIdToLabel = (id: 'default' | 'left' | 'right') => {
   return '默认结局';
 };
 
+const buildSharedStoryUrl = (storyId: string) =>
+  `${window.location.origin}${window.location.pathname}?story=${encodeURIComponent(storyId)}`;
+
+const buildStoryShareText = (title?: string) => {
+  const safeTitle = stripBookTitle(title || '未命名故事');
+  return `我在命运干涉里记录了《${safeTitle}》的时间线，来看看这篇故事会将你带到哪个结局。`;
+};
+
+const buildFacebookShareUrl = (url: string, quote: string) => {
+  const shareUrl = new URL('https://www.facebook.com/sharer/sharer.php');
+  shareUrl.searchParams.set('u', url);
+  shareUrl.searchParams.set('quote', quote);
+  return shareUrl.toString();
+};
+
 const renderParagraphWithHighlights = (text: string, characters: Character[] = []) => {
   const parts = text.split(/(<mark>.*?<\/mark>)/g);
   return parts.map((part, i) => {
@@ -663,6 +678,7 @@ export default function App() {
   const [isSharing, setIsSharing] = useState(false);
   const [sharedStoryId, setSharedStoryId] = useState<string | null>(null);
   const [readonlyStoryData, setReadonlyStoryData] = useState<{ meta: any, chapters: Chapter[] } | null>(null);
+  const [isLoadingSharedStory, setIsLoadingSharedStory] = useState(false);
   const [pwaUpdateInfo, setPwaUpdateInfo] = useState<PwaUpdateInfo | null>(null);
   const [isApplyingPwaUpdate, setIsApplyingPwaUpdate] = useState(false);
 
@@ -2475,13 +2491,11 @@ export default function App() {
 
   const handleShareStory = async () => {
     if (!user || !blueprint) return;
-    
+
     try {
       setIsSharing(true);
       let shareId = activeStoryId;
-      
-      // If we don't have a storyId yet, we are playing a newly generated story.
-      // We must publish it as a public cartridge first.
+
       if (!shareId) {
         const sourceChapters = naturalChapters.length > 0 ? naturalChapters : chapters;
         const snapshotBlueprint: Blueprint = {
@@ -2495,32 +2509,33 @@ export default function App() {
           authorId: user.uid,
           blueprint: snapshotBlueprint,
           chapters: sourceChapters,
-          tags: selectedThemes
+          tags: selectedThemes,
         });
         await saveStoryMeta(db as any, shareId, { visibility: 'public' });
       } else {
-        // Ensure it's public
         await saveStoryMeta(db as any, shareId, { visibility: 'public' });
       }
 
-      const url = `${window.location.origin}${window.location.pathname}?story=${shareId}`;
-      
+      const url = buildSharedStoryUrl(shareId);
+      const shareText = buildStoryShareText(blueprint.title);
+      const clipboardPayload = `${shareText}\n${url}`;
+
       if (navigator.share) {
         await navigator.share({
-          title: `命运引擎: ${blueprint.title}`,
-          text: `我刚刚在命运引擎里创造了【${blueprint.title}】的故事，快来看看！`,
-          url: url
+          title: `命运干涉: ${blueprint.title}`,
+          text: shareText,
+          url,
         });
       } else {
-        await navigator.clipboard.writeText(url);
-        // Reuse global error for toast notification
-        setErrorMsg("已复制链接到剪贴板！去分享给朋友吧~");
+        await navigator.clipboard.writeText(clipboardPayload);
+        window.open(buildFacebookShareUrl(url, shareText), '_blank', 'noopener,noreferrer');
+        setErrorMsg('已复制分享文案与链接，也已打开 Facebook 分享页。');
         setTimeout(() => setErrorMsg(null), 3000);
       }
     } catch (e) {
       console.error(e);
       if ((e as Error).name !== 'AbortError') {
-        setErrorMsg("分享失败，请重试。");
+        setErrorMsg('分享失败，请重试。');
         setTimeout(() => setErrorMsg(null), 3000);
       }
     } finally {
@@ -2934,16 +2949,20 @@ export default function App() {
     if (!sharedStoryId) return;
     try {
       setIsSharing(true);
-      const url = `${window.location.origin}${window.location.pathname}?story=${sharedStoryId}`;
+      const shareTitle = readonlyStoryData?.meta?.title || '未命名故事';
+      const url = buildSharedStoryUrl(sharedStoryId);
+      const shareText = buildStoryShareText(shareTitle);
+      const clipboardPayload = `${shareText}\n${url}`;
       if (navigator.share) {
         await navigator.share({
-          title: '命运引擎',
-          text: '来看看这篇故事记录',
+          title: `命运干涉: ${shareTitle}`,
+          text: shareText,
           url,
         });
       } else {
-        await navigator.clipboard.writeText(url);
-        setErrorMsg('已复制链接到剪贴板！去分享给朋友吧~');
+        await navigator.clipboard.writeText(clipboardPayload);
+        window.open(buildFacebookShareUrl(url, shareText), '_blank', 'noopener,noreferrer');
+        setErrorMsg('已复制分享文案与链接，也已打开 Facebook 分享页。');
         setTimeout(() => setErrorMsg(null), 3000);
       }
     } catch (error) {
@@ -3388,23 +3407,47 @@ export default function App() {
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const storyId = urlParams.get('story');
-    if (storyId) {
-      setSharedStoryId(storyId);
-      // Wait for DB to be available, and only load readonly view if we haven't decided to play it
-      if (db && (gameState === 'STORY_SELECT' || gameState === 'THEME_SELECTION')) {
-        getStoryCartridge(db as any, storyId).then(c => {
-          if (c) {
-            setReadonlyStoryData({ meta: c.meta, chapters: c.chapters });
-            setGameState('READONLY_STORY');
-          } else {
-            showError("\u65e0\u6cd5\u627e\u5230\u8be5\u6545\u4e8b\uff0c\u6216\u7531\u4e8e\u9690\u79c1\u8bbe\u7f6e\u65e0\u6cd5\u67e5\u770b\u3002");
-          }
-        }).catch(() => {
-          showError("\u52a0\u8f7d\u6545\u4e8b\u5931\u8d25\u3002");
-        });
+    if (!storyId) return;
+
+    setSharedStoryId(storyId);
+
+    if (!db || !isAuthReady) return;
+    if (!(gameState === 'STORY_SELECT' || gameState === 'THEME_SELECTION' || gameState === 'READONLY_STORY')) return;
+
+    let cancelled = false;
+
+    const loadSharedStory = async () => {
+      try {
+        setIsLoadingSharedStory(true);
+        const cartridge = await getStoryCartridge(db as any, storyId);
+        if (cancelled) return;
+
+        if (cartridge) {
+          setReadonlyStoryData({ meta: cartridge.meta, chapters: cartridge.chapters });
+          setGameState('READONLY_STORY');
+        } else {
+          setReadonlyStoryData(null);
+          showError('无法找到该故事，或由于隐私设置无法查看。');
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Failed to load shared story', error);
+          setReadonlyStoryData(null);
+          showError('加载故事失败。');
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingSharedStory(false);
+        }
       }
-    }
-  }, [db]); // Run once when DB is ready
+    };
+
+    void loadSharedStory();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [db, isAuthReady, gameState]);
 
   // --- Renderers ---
 
@@ -3417,10 +3460,20 @@ export default function App() {
     );
   }
 
+  if (sharedStoryId && isLoadingSharedStory && !readonlyStoryData) {
+    return (
+      <div className="min-h-[100dvh] bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center px-6 text-center font-sans">
+        <Loader2 className="w-8 h-8 text-indigo-400 animate-spin mb-4" />
+        <div className="text-lg font-bold text-white">正在载入分享故事</div>
+        <div className="mt-2 text-sm text-zinc-500">我们正在调取这条时间线的故事记录，请稍候。</div>
+      </div>
+    );
+  }
+
 
   if (gameState === 'READONLY_STORY' && readonlyStoryData) {
     return (
-      <div className="min-h-[100dvh] bg-zinc-950 text-zinc-100 flex flex-col font-sans relative pb-24">
+      <div className="min-h-[100dvh] bg-zinc-950 text-zinc-100 flex flex-col font-sans">
         <header className="p-4 sm:p-6 text-center border-b border-zinc-900 bg-zinc-950/80 sticky top-0 z-50 backdrop-blur-md pt-[max(1rem,env(safe-area-inset-top))]">
           <h1 className="text-xl sm:text-2xl font-bold text-white mb-2">{readonlyStoryData.meta.title}</h1>
           <p className="text-xs sm:text-sm text-zinc-500 max-w-xl mx-auto">{readonlyStoryData.meta.main_axis}</p>
@@ -3435,11 +3488,44 @@ export default function App() {
           {readonlyStoryData.chapters.filter(c => c.text && c.text.trim().length > 0).length === 0 && (
             <div className="text-center text-zinc-500 py-12">该故事暂无可用章节内容。</div>
           )}
-          <div className="h-10"></div>
-        </div>
-        
+          <section className="rounded-3xl border border-indigo-500/20 bg-gradient-to-br from-indigo-950/90 via-zinc-950 to-zinc-950 p-5 sm:p-6 shadow-[0_20px_80px_rgba(79,70,229,0.18)]">
+            <div className="space-y-3 text-center sm:text-left">
+              <div className="inline-flex items-center gap-2 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.25em] text-indigo-200">
+                Story CTA
+              </div>
+              <div className="text-2xl font-black text-white">想亲自改写这段故事的走向吗？</div>
+              <div className="text-sm leading-relaxed text-indigo-100/80">
+                这篇页面保留原始故事记录，阅读不会再被悬浮栏打断；如果你想继续分享，或把这条时间线带回命运引擎里重新干涉，可以在这里继续。
+              </div>
+            </div>
+            <div className="mt-5 flex flex-col sm:flex-row gap-2">
+              <button
+                onClick={handleShareReadonlyStory}
+                disabled={isSharing || !sharedStoryId}
+                className="w-full sm:w-auto px-4 py-3 bg-zinc-900 border border-zinc-700 hover:border-zinc-500 text-zinc-100 font-bold rounded-xl transition-colors whitespace-nowrap flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isSharing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                {"分享故事"}
+              </button>
+              <button
+                onClick={handleAdaptReadonlyStory}
+                disabled={authoringSaving}
+                className="w-full sm:w-auto px-4 py-3 bg-indigo-500 hover:bg-indigo-400 text-white font-bold rounded-xl transition-colors whitespace-nowrap shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <BookOpen className="w-4 h-4" />
+                {"一键改编"}
+              </button>
+              <button
+                onClick={() => setGameState('STORY_SELECT')}
+                className="w-full sm:w-auto px-4 py-3 bg-white text-black hover:bg-zinc-200 font-bold rounded-xl transition-colors whitespace-nowrap flex-shrink-0"
+              >
+                {"打开游玩入口"}
+              </button>
+            </div>
+          </section>
+
         {/* Fixed Bottom Banner */}
-        <div className="fixed bottom-0 left-0 w-full bg-indigo-950/90 backdrop-blur-lg border-t border-indigo-500/30 p-4 shadow-2xl z-[100] pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className="hidden">
           <div className="max-w-2xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="text-center sm:text-left flex-1 min-w-0">
               <div className="text-sm font-bold text-white mb-1">想改变这段故事的走向吗？</div>
