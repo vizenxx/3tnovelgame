@@ -3523,39 +3523,6 @@ export default function App() {
               </button>
             </div>
           </section>
-
-        {/* Fixed Bottom Banner */}
-        <div className="hidden">
-          <div className="max-w-2xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="text-center sm:text-left flex-1 min-w-0">
-              <div className="text-sm font-bold text-white mb-1">想改变这段故事的走向吗？</div>
-              <div className="text-xs text-indigo-300 truncate">登入命运引擎，亲自干涉时间线，创造你的专属结局！</div>
-            </div>
-            <div className="w-full sm:w-auto flex flex-col sm:flex-row gap-2">
-              <button
-                onClick={handleShareReadonlyStory}
-                disabled={isSharing || !sharedStoryId}
-                className="w-full sm:w-auto px-4 py-2.5 bg-zinc-900 border border-zinc-700 hover:border-zinc-500 text-zinc-100 font-bold rounded-xl transition-colors whitespace-nowrap flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {isSharing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                {"\u5206\u4eab\u6545\u4e8b"}
-              </button>
-              <button
-                onClick={handleAdaptReadonlyStory}
-                disabled={authoringSaving}
-                className="w-full sm:w-auto px-4 py-2.5 bg-indigo-500 hover:bg-indigo-400 text-white font-bold rounded-xl transition-colors whitespace-nowrap shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                <BookOpen className="w-4 h-4" />
-                {"\u4e00\u952e\u6539\u7f16"}
-              </button>
-              <button
-                onClick={() => setGameState('STORY_SELECT')}
-                className="w-full sm:w-auto px-4 py-2.5 bg-white text-black hover:bg-zinc-200 font-bold rounded-xl transition-colors whitespace-nowrap flex-shrink-0"
-              >
-                {"\u6253\u5f00\u6e38\u73a9\u5165\u53e3"}
-              </button>
-            </div>
-          </div>
         </div>
       </div>
     );
