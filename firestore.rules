@@ -141,6 +141,17 @@ service cloud.firestore {
              ));
     }
 
+    function isValidSharedStory(data) {
+      return data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.main_axis is string && data.main_axis.size() > 0 && data.main_axis.size() < 5000 &&
+             data.tags is list && data.tags.size() <= 20 &&
+             data.characters is list && data.characters.size() <= 10 &&
+             data.chapters is list && data.chapters.size() <= 10 &&
+             data.authorId is string &&
+             (isValidDateString(data.createdAt) || isValidTimestamp(data.createdAt)) &&
+             (isValidDateString(data.updatedAt) || isValidTimestamp(data.updatedAt));
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
@@ -189,6 +200,12 @@ service cloud.firestore {
         allow read: if canReadStoryData(get(/databases/$(database)/documents/stories/$(storyId)).data);
         allow write: if isAuthenticated() && get(/databases/$(database)/documents/stories/$(storyId)).data.authorId == request.auth.uid;
       }
+    }
+
+    match /sharedStories/{shareId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidSharedStory(request.resource.data) && request.resource.data.authorId == request.auth.uid;
+      allow update, delete: if isAuthenticated() && resource.data.authorId == request.auth.uid;
     }
 
     // Default deny

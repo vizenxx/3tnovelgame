@@ -37,6 +37,19 @@ export type StoryListItem = {
   version: number;
 };
 
+export type SharedStoryRecord = {
+  id: string;
+  title: string;
+  main_axis: string;
+  tags: string[];
+  characters: StoryCharacter[];
+  chapters: StoryChapterDoc[];
+  authorId: string;
+  sourceStoryId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export async function listPublicStories(db: Firestore, pageSize = 20) {
   const q = query(
     collection(db, 'stories'),
@@ -134,6 +147,22 @@ export async function getStoryCartridge(db: Firestore, storyId: string) {
 }
 
 export async function getSharedStoryRecord(db: Firestore, storyId: string) {
+  const sharedSnap = await getDoc(doc(db, 'sharedStories', storyId));
+  if (sharedSnap.exists()) {
+    const data = sharedSnap.data() as SharedStoryRecord;
+    return {
+      storyId: sharedSnap.id,
+      meta: {
+        title: data.title,
+        main_axis: data.main_axis,
+        tags: data.tags || [],
+        characters: data.characters || [],
+        authorId: data.authorId,
+      },
+      chapters: Array.isArray(data.chapters) ? data.chapters : [],
+    };
+  }
+
   const metaSnap = await getDoc(doc(db, 'stories', storyId));
   if (!metaSnap.exists()) return null;
 
@@ -148,6 +177,38 @@ export async function getSharedStoryRecord(db: Firestore, storyId: string) {
   const chapters = chaptersSnap.docs.map(d => d.data() as any as StoryChapterDoc);
 
   return { storyId, meta, chapters };
+}
+
+export async function createSharedStoryRecord(db: Firestore, args: {
+  authorId: string;
+  title: string;
+  main_axis: string;
+  tags?: string[];
+  characters?: StoryCharacter[];
+  chapters: StoryChapterDoc[];
+  sourceStoryId?: string | null;
+}) {
+  const now = new Date().toISOString();
+  const payload: Omit<SharedStoryRecord, 'id'> = {
+    title: args.title,
+    main_axis: args.main_axis,
+    tags: args.tags || [],
+    characters: args.characters || [],
+    chapters: (args.chapters || []).map((chapter) => ({
+      chapter_num: chapter.chapter_num,
+      title: chapter.title || '',
+      summary: chapter.summary || '',
+      present_characters: Array.isArray(chapter.present_characters) ? chapter.present_characters : [],
+      text: chapter.text || '',
+    })),
+    authorId: args.authorId,
+    sourceStoryId: args.sourceStoryId || null,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  const ref = await addDoc(collection(db, 'sharedStories'), payload);
+  return ref.id;
 }
 
 export async function adaptBlueprintToStory(db: Firestore, args: { authorId: string; blueprint: any; chapters: any[]; conclusionText?: string; tags?: string[] }) {

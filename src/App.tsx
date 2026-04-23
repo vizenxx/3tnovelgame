@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft } from 'lucide-react';
 import { auth, db, firebaseInitError } from './firebase';
-import { createEmptyStory, adaptBlueprintToStory, createStoryBranch, deleteStoryBranch, deleteStoryCartridge, getSharedStoryRecord, getStoryCartridge, listMyStories, listPublicStories, saveStoryMainlineBundle, saveStoryMeta, upsertStoryBranch } from './storyStore';
+import { createEmptyStory, createSharedStoryRecord, adaptBlueprintToStory, createStoryBranch, deleteStoryBranch, deleteStoryCartridge, getSharedStoryRecord, getStoryCartridge, listMyStories, listPublicStories, saveStoryMainlineBundle, saveStoryMeta, upsertStoryBranch } from './storyStore';
 import { isBranchUnlockedByHistory, tierToScore } from './storyCartridge';
 import { 
   signInWithRedirect,
@@ -165,7 +165,12 @@ const endingIdToLabel = (id: 'default' | 'left' | 'right') => {
 };
 
 const buildSharedStoryUrl = (storyId: string) =>
-  `${window.location.origin}${window.location.pathname}?story=${encodeURIComponent(storyId)}`;
+  `${window.location.origin}${window.location.pathname}?share=${encodeURIComponent(storyId)}`;
+
+const getSharedStoryIdFromUrl = () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  return urlParams.get('share') || urlParams.get('story');
+};
 
 const buildStoryShareText = (title?: string) => {
   const safeTitle = stripBookTitle(title || '未命名故事');
@@ -2539,27 +2544,16 @@ export default function App() {
 
     try {
       setIsSharing(true);
-      let shareId = activeStoryId;
-
-      if (!shareId) {
-        const sourceChapters = naturalChapters.length > 0 ? naturalChapters : chapters;
-        const snapshotBlueprint: Blueprint = {
-          ...blueprint,
-          branches: [],
-          endingMode: 'single',
-          endingNames: {},
-          endings: [{ type: 'normal', text: sourceChapters.find((chapter) => chapter.chapter_num === 7)?.text || '' }],
-        };
-        shareId = await adaptBlueprintToStory(db as any, {
-          authorId: user.uid,
-          blueprint: snapshotBlueprint,
-          chapters: sourceChapters,
-          tags: selectedThemes,
-        });
-        await saveStoryMeta(db as any, shareId, { visibility: 'public' });
-      } else {
-        await saveStoryMeta(db as any, shareId, { visibility: 'public' });
-      }
+      const sourceChapters = naturalChapters.length > 0 ? naturalChapters : chapters;
+      const shareId = await createSharedStoryRecord(db as any, {
+        authorId: user.uid,
+        title: blueprint.title,
+        main_axis: blueprint.main_axis,
+        tags: selectedThemes,
+        characters: blueprint.characters,
+        chapters: sourceChapters as any,
+        sourceStoryId: activeStoryId,
+      });
 
       const url = buildSharedStoryUrl(shareId);
       const shareText = buildStoryShareText(blueprint.title);
@@ -2568,6 +2562,7 @@ export default function App() {
         text: shareText,
         url,
       });
+      return;
       if ((globalThis as any).__legacyShareFallback__) {
       const clipboardPayload = `${shareText}\n${url}`;
 
@@ -3009,6 +3004,7 @@ export default function App() {
         text: shareText,
         url,
       });
+      return;
       if ((globalThis as any).__legacyShareFallback__) {
       const clipboardPayload = `${shareText}\n${url}`;
       if (navigator.share) {
@@ -3464,8 +3460,7 @@ export default function App() {
   );
 
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const storyId = urlParams.get('story');
+    const storyId = getSharedStoryIdFromUrl();
     if (!storyId) return;
 
     setSharedStoryId(storyId);
@@ -3509,7 +3504,7 @@ export default function App() {
 
   // --- Renderers ---
 
-  if (sharedStoryId && isLoadingSharedStory && !readonlyStoryData) {
+  if (false && sharedStoryId && isLoadingSharedStory && !readonlyStoryData) {
     return (
       <div className="min-h-[100dvh] bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center px-6 text-center font-sans">
         <Loader2 className="w-8 h-8 text-indigo-400 animate-spin mb-4" />
@@ -3559,11 +3554,11 @@ export default function App() {
           <section className="rounded-3xl border border-indigo-500/20 bg-gradient-to-br from-indigo-950/90 via-zinc-950 to-zinc-950 p-5 sm:p-6 shadow-[0_20px_80px_rgba(79,70,229,0.18)]">
             <div className="space-y-3 text-center sm:text-left">
               <div className="inline-flex items-center gap-2 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.25em] text-indigo-200">
-                Story CTA
+                分享记录
               </div>
               <div className="text-2xl font-black text-white">想亲自改写这段故事的走向吗？</div>
               <div className="text-sm leading-relaxed text-indigo-100/80">
-                这篇页面保留原始故事记录，阅读不会再被悬浮栏打断；如果你想继续分享，或把这条时间线带回命运引擎里重新干涉，可以在这里继续。
+                这里保留的是本次游玩的完整故事记录。你可以继续分享给别人阅读，或把这条时间线带回命运干涉里开始自己的改编版本。
               </div>
             </div>
             <div className="mt-5 flex flex-col sm:flex-row gap-2">
