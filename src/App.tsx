@@ -33,7 +33,6 @@ import {
   increment,
   serverTimestamp,
   onSnapshot,
-  getDocFromServer,
   deleteField
 } from 'firebase/firestore';
 
@@ -641,6 +640,8 @@ function parseImportedAuthoringText(raw: string) {
 export default function App() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const [isSessionHydrated, setIsSessionHydrated] = useState(false);
+  const [startupMessage, setStartupMessage] = useState('正在连接时空枢纽...');
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [gameState, setGameState] = useState<GameState>('STORY_SELECT');
   const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
@@ -925,159 +926,172 @@ export default function App() {
   useEffect(() => {
     if (!auth) {
       setIsAuthReady(true);
+      setIsSessionHydrated(true);
       return;
     }
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
       setIsAuthReady(true);
+      setStartupMessage(u ? '正在同步命运记录...' : '正在准备入口...');
+      setIsSessionHydrated(!u);
     });
     return () => unsubscribe();
   }, []);
 
-  useEffect(() => {
-    if (!user || !db) return;
-
-    // Test connection
-    const testConnection = async () => {
-      try {
-        await getDocFromServer(doc(db, 'test', 'connection'));
-      } catch (error) {
-        if (error instanceof Error && error.message.includes('the client is offline')) {
-          console.error("Please check your Firebase configuration.");
-          showError("Firebase 配置错误或客户端离线。");
-        }
-      }
-    };
-    testConnection();
-  }, [user]);
-
   // Sync session from Firestore
   useEffect(() => {
-    if (!user || !isAuthReady || !db) return;
+    if (!isAuthReady) return;
+    if (!user || !db) {
+      setIsSessionHydrated(true);
+      return;
+    }
 
+    setIsSessionHydrated(false);
+    setStartupMessage('正在同步命运记录...');
+
+    let cancelled = false;
     const sessionRef = doc(db, 'sessions', user.uid);
-    const unsubscribe = onSnapshot(sessionRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.data();
-        const gs = data.gameState === 'THEME_SELECTION'
-          ? 'STORY_SELECT'
-          : data.gameState === 'SUMMARY'
-            ? 'PLAYING'
-            : data.gameState;
-        setGameState(gs);
-        if (data.gameState === 'THEME_SELECTION' && user) {
-          updateDoc(sessionRef, { gameState: 'STORY_SELECT', updatedAt: new Date().toISOString() }).catch(() => {});
-        }
-        setSelectedThemes(data.selectedThemes || []);
-        setChapters(data.currentChapters || []);
-        setInterventionsLeft(data.interventionsLeft ?? 3);
-        setEndingValue(data.endingValue || 0);
-        setUnlockedBranches(data.unlockedBranches || []);
-        setIntervenedChapters(data.intervenedChapters || []);
-        setNaturalChapters(data.naturalChapters || []);
-        setInitialNaturalChapters(data.initialNaturalChapters || []);
-        setUnlockedBranches(data.unlockedBranches || []);
-        setCharacterStatuses(data.characterStatuses || {});
-        setStoryConclusion(data.storyConclusion || null);
-        setActiveStoryId(data.storyId || null);
-        setInterventionHistory(data.interventionHistory || []);
-        setCanonicalWorldState(data.canonicalWorldState || null);
-        setDeltaWorldStateByChapter(data.deltaWorldStateByChapter || {});
-        
-        if (data.uiFeedback) {
-          setUiFeedback(data.uiFeedback);
-        }
+    const unsubscribe = onSnapshot(sessionRef, async (snapshot) => {
+      if (cancelled) return;
 
+      if (!snapshot.exists()) {
         setSessionId(user.uid);
-        
-        // If we have a blueprintId, fetch it
-        if (data.blueprintId) {
-          getDoc(doc(db, 'blueprints', data.blueprintId)).then(bpSnap => {
-            if (bpSnap.exists()) {
-              setBlueprint(bpSnap.data() as Blueprint);
-            }
-          });
-        }
-        // Cartridge mode: load story cartridge and build blueprint if needed
-        if (data.storyId) {
-          getStoryCartridge(db as any, data.storyId).then((cartridge) => {
-            if (!cartridge) return;
-            const bp: Blueprint = {
-              title: cartridge.meta.title,
-              main_axis: cartridge.meta.main_axis,
-              left_mainline_default: 80,
-              right_mainline_default: 40,
-              endingMode: cartridge.meta.endingMode,
-              endingNames: cartridge.meta.endingNames,
-              characters: cartridge.meta.characters,
-              chapters: (() => {
-                const baseChaps = cartridge.chapters.map((c: any) => ({
-                  chapter_num: c.chapter_num,
-                  title: c.title,
-                  summary: c.summary,
-                  present_characters: c.present_characters,
-                  text: c.text,
-                }));
-                // Authored story: fill chapter 7 text from default ending if chapter 7 has no text
-                const ch7 = baseChaps.find((c: any) => c.chapter_num === 7);
-                const defaultEnding = cartridge.endings.find((e: any) => e.id === 'default');
-                const defaultEndingText = (defaultEnding?.text || '').trim();
-                if (ch7 && (!ch7.text || !ch7.text.trim()) && defaultEndingText) {
-                  ch7.text = defaultEndingText;
-                  ch7.title = ch7.title || defaultEnding?.title || '第七章';
-                }
-                return baseChaps;
-              })(),
-              endings: [
-                { type: 'normal', title: (cartridge.endings.find((e: any) => e.id === 'default')?.title || '第七章'), text: (cartridge.endings.find((e: any) => e.id === 'default')?.text || '') },
-                { type: 'good', title: (cartridge.endings.find((e: any) => e.id === 'left')?.title || '左结局'), text: (cartridge.endings.find((e: any) => e.id === 'left')?.text || '') },
-                { type: 'bad', title: (cartridge.endings.find((e: any) => e.id === 'right')?.title || '右结局'), text: (cartridge.endings.find((e: any) => e.id === 'right')?.text || '') },
-              ],
-              tags: cartridge.meta.tags || [],
-              branches: cartridge.branches.map((b: any) => {
-                const score = tierToScore(b.tier);
-                // default condition mapping for UI; real unlock can use trigger/history
-                const cond = b.trigger?.type === 'single' ? b.trigger.single : { chapterNum: 2, charId: cartridge.meta.characters[0]?.id || 'c1', action: 'bless' as const };
-                return {
-                  id: b.id,
-                  name: b.name,
-                  score,
-                  side: b.side,
-                  condition_char: cond.charId,
-                  condition_action: cond.action,
-                  condition_chapter: cond.chapterNum,
-                  desc: b.desc,
-                  is_hidden: b.tier === 'hidden',
-                  hint: b.hint,
-                  trigger: b.trigger,
-                  triggerGroups: b.triggerGroups,
-                  tier: b.tier,
-                  inject: b.inject,
-                  sceneText: b.sceneText,
-                } as any;
-              }),
-              authorAssets: {
-                defaultChapters: cartridge.chapters.reduce((acc: any, c: any) => {
-                  acc[c.chapter_num] = { text: c.text || '', title: c.title || '', summary: c.summary || '' };
-                  return acc;
-                }, {}),
-                endingPrototypes: {
-                  default: cartridge.endings.find((e: any) => e.id === 'default')?.text || '',
-                  left: cartridge.endings.find((e: any) => e.id === 'left')?.text || '',
-                  right: cartridge.endings.find((e: any) => e.id === 'right')?.text || '',
-                }
-              }
-            };
-            setBlueprint(bp);
-          });
+        setIsSessionHydrated(true);
+        return;
+      }
+
+      const data = snapshot.data();
+      const gs = data.gameState === 'THEME_SELECTION'
+        ? 'STORY_SELECT'
+        : data.gameState === 'SUMMARY'
+          ? 'PLAYING'
+          : data.gameState;
+
+      setGameState(gs);
+      if (data.gameState === 'THEME_SELECTION') {
+        updateDoc(sessionRef, { gameState: 'STORY_SELECT', updatedAt: new Date().toISOString() }).catch(() => {});
+      }
+
+      setSelectedThemes(data.selectedThemes || []);
+      setChapters(data.currentChapters || []);
+      setInterventionsLeft(data.interventionsLeft ?? 3);
+      setEndingValue(data.endingValue || 0);
+      setUnlockedBranches(data.unlockedBranches || []);
+      setIntervenedChapters(data.intervenedChapters || []);
+      setNaturalChapters(data.naturalChapters || []);
+      setInitialNaturalChapters(data.initialNaturalChapters || []);
+      setUnlockedBranches(data.unlockedBranches || []);
+      setCharacterStatuses(data.characterStatuses || {});
+      setStoryConclusion(data.storyConclusion || null);
+      setActiveStoryId(data.storyId || null);
+      setInterventionHistory(data.interventionHistory || []);
+      setCanonicalWorldState(data.canonicalWorldState || null);
+      setDeltaWorldStateByChapter(data.deltaWorldStateByChapter || {});
+      setSessionId(user.uid);
+
+      if (data.uiFeedback) {
+        setUiFeedback(data.uiFeedback);
+      }
+
+      let nextBlueprint: Blueprint | null = null;
+
+      if (data.blueprintId) {
+        setStartupMessage('正在整理作品档案...');
+        const bpSnap = await getDoc(doc(db, 'blueprints', data.blueprintId));
+        if (cancelled) return;
+        if (bpSnap.exists()) {
+          nextBlueprint = bpSnap.data() as Blueprint;
         }
       }
+
+      if (data.storyId) {
+        setStartupMessage('正在恢复上次旅程...');
+        const cartridge = await getStoryCartridge(db as any, data.storyId);
+        if (cancelled) return;
+        if (cartridge) {
+          nextBlueprint = {
+            title: cartridge.meta.title,
+            main_axis: cartridge.meta.main_axis,
+            left_mainline_default: 80,
+            right_mainline_default: 40,
+            endingMode: cartridge.meta.endingMode,
+            endingNames: cartridge.meta.endingNames,
+            characters: cartridge.meta.characters,
+            chapters: (() => {
+              const baseChaps = cartridge.chapters.map((c: any) => ({
+                chapter_num: c.chapter_num,
+                title: c.title,
+                summary: c.summary,
+                present_characters: c.present_characters,
+                text: c.text,
+              }));
+              const ch7 = baseChaps.find((c: any) => c.chapter_num === 7);
+              const defaultEnding = cartridge.endings.find((e: any) => e.id === 'default');
+              const defaultEndingText = (defaultEnding?.text || '').trim();
+              if (ch7 && (!ch7.text || !ch7.text.trim()) && defaultEndingText) {
+                ch7.text = defaultEndingText;
+                ch7.title = ch7.title || defaultEnding?.title || '第七章';
+              }
+              return baseChaps;
+            })(),
+            endings: [
+              { type: 'normal', title: (cartridge.endings.find((e: any) => e.id === 'default')?.title || '第七章'), text: (cartridge.endings.find((e: any) => e.id === 'default')?.text || '') },
+              { type: 'good', title: (cartridge.endings.find((e: any) => e.id === 'left')?.title || '左结局'), text: (cartridge.endings.find((e: any) => e.id === 'left')?.text || '') },
+              { type: 'bad', title: (cartridge.endings.find((e: any) => e.id === 'right')?.title || '右结局'), text: (cartridge.endings.find((e: any) => e.id === 'right')?.text || '') },
+            ],
+            tags: cartridge.meta.tags || [],
+            branches: cartridge.branches.map((b: any) => {
+              const score = tierToScore(b.tier);
+              const cond = b.trigger?.type === 'single' ? b.trigger.single : { chapterNum: 2, charId: cartridge.meta.characters[0]?.id || 'c1', action: 'bless' as const };
+              return {
+                id: b.id,
+                name: b.name,
+                score,
+                side: b.side,
+                condition_char: cond.charId,
+                condition_action: cond.action,
+                condition_chapter: cond.chapterNum,
+                desc: b.desc,
+                is_hidden: b.tier === 'hidden',
+                hint: b.hint,
+                trigger: b.trigger,
+                triggerGroups: b.triggerGroups,
+                tier: b.tier,
+                inject: b.inject,
+                sceneText: b.sceneText,
+              } as any;
+            }),
+            authorAssets: {
+              defaultChapters: cartridge.chapters.reduce((acc: any, c: any) => {
+                acc[c.chapter_num] = { text: c.text || '', title: c.title || '', summary: c.summary || '' };
+                return acc;
+              }, {}),
+              endingPrototypes: {
+                default: cartridge.endings.find((e: any) => e.id === 'default')?.text || '',
+                left: cartridge.endings.find((e: any) => e.id === 'left')?.text || '',
+                right: cartridge.endings.find((e: any) => e.id === 'right')?.text || '',
+              }
+            }
+          };
+        }
+      }
+
+      if (nextBlueprint) {
+        setBlueprint(nextBlueprint);
+      }
+
+      setIsSessionHydrated(true);
     }, (error) => {
+      if (cancelled) return;
       handleFirestoreError(error, OperationType.GET, `sessions/${user.uid}`);
+      setIsSessionHydrated(true);
     });
 
-    return () => unsubscribe();
-  }, [user, isAuthReady]);
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [user, isAuthReady, db]);
 
   // Firebase Auth Results Listener
   useEffect(() => {
@@ -2451,11 +2465,11 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (!user || !isAuthReady) return;
+    if (!user || !isAuthReady || !isSessionHydrated) return;
     if (gameState === 'STORY_SELECT') {
       refreshStories();
     }
-  }, [user, isAuthReady, gameState]);
+  }, [user, isAuthReady, isSessionHydrated, gameState]);
 
   useEffect(() => {
     if (gameState !== 'AUTHORING') return;
@@ -3514,11 +3528,28 @@ export default function App() {
     );
   }
 
-  if (!isAuthReady) {
+  if (!isAuthReady || (user && !isSessionHydrated)) {
     return (
-      <div className="min-h-[100dvh] bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center font-sans">
-        <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mb-4" />
-        <div className="text-zinc-500 text-sm animate-pulse">正在连接时空枢纽...</div>
+      <div className="min-h-[100dvh] bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center px-6 text-center font-sans relative overflow-hidden">
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute top-[-10%] left-[-10%] w-[55%] h-[30%] sm:w-[40%] sm:h-[40%] bg-indigo-500/12 blur-[90px] sm:blur-[120px] rounded-full" />
+          <div className="absolute bottom-[-10%] right-[-10%] w-[55%] h-[30%] sm:w-[40%] sm:h-[40%] bg-rose-500/12 blur-[90px] sm:blur-[120px] rounded-full" />
+        </div>
+        <div className="relative z-10 max-w-md space-y-6">
+          <div className="space-y-4">
+            <Wand2 className="w-14 h-14 sm:w-16 sm:h-16 text-indigo-400 mx-auto drop-shadow-[0_0_20px_rgba(129,140,248,0.4)]" />
+            <div className="space-y-2">
+              <div className="text-4xl sm:text-5xl font-black tracking-tight text-white">命运干涉</div>
+              <div className="text-sm sm:text-base text-zinc-400 leading-relaxed">
+                你的时间线、故事记录与上次旅程正在归位，请稍候片刻。
+              </div>
+            </div>
+          </div>
+          <div className="inline-flex items-center gap-3 rounded-full border border-zinc-800 bg-zinc-950/70 px-4 py-3 shadow-2xl">
+            <Loader2 className="w-4 h-4 text-indigo-400 animate-spin" />
+            <div className="text-sm text-zinc-300">{startupMessage}</div>
+          </div>
+        </div>
       </div>
     );
   }

@@ -45,7 +45,7 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 16px;
+        gap: 20px;
         text-align: center;
         padding: 24px;
         background:
@@ -68,6 +68,21 @@
         letter-spacing: 0.08em;
       }
 
+      .boot-title {
+        font-size: clamp(32px, 7vw, 52px);
+        line-height: 1;
+        font-weight: 900;
+        letter-spacing: -0.04em;
+        color: #ffffff;
+      }
+
+      .boot-subtitle {
+        max-width: 360px;
+        font-size: 14px;
+        line-height: 1.7;
+        color: #a1a1aa;
+      }
+
       @keyframes boot-spin {
         to {
           transform: rotate(360deg);
@@ -78,6 +93,8 @@
   <body>
     <div id="root">
       <div class="boot-splash">
+        <div class="boot-title">命运干涉</div>
+        <div class="boot-subtitle">正在整理你的故事记录与时间线，请稍候片刻。</div>
         <div class="boot-spinner" aria-hidden="true"></div>
         <div class="boot-label">正在接通命运干涉...</div>
       </div>
