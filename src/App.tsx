@@ -197,6 +197,61 @@ const writeClipboardText = async (value: string) => {
   }
 };
 
+const semanticButtonClass = (
+  variant: 'primary' | 'secondary' | 'danger' | 'ghost',
+  options?: { fullWidth?: boolean; compact?: boolean }
+) => {
+  const base = `inline-flex items-center justify-center gap-2 rounded-xl transition-colors disabled:opacity-50 ${
+    options?.compact ? 'px-3 py-2 text-xs font-bold' : 'px-4 py-3 text-sm font-bold'
+  } ${options?.fullWidth ? 'w-full' : ''}`;
+  const variants = {
+    primary: 'bg-white text-black hover:bg-zinc-200 shadow-lg',
+    secondary: 'bg-zinc-900 border border-zinc-700 text-zinc-100 hover:border-zinc-500',
+    danger: 'bg-rose-500/90 text-white hover:bg-rose-500',
+    ghost: 'bg-zinc-800 text-zinc-200 hover:bg-zinc-700',
+  };
+  return `${base} ${variants[variant]}`;
+};
+
+const semanticIconButtonClass = (variant: 'secondary' | 'danger' | 'ghost' = 'ghost') => {
+  const variants = {
+    secondary: 'border-zinc-700 bg-zinc-900/90 text-zinc-100 hover:border-zinc-500 hover:text-white',
+    danger: 'border-rose-500/40 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 hover:border-rose-400/60',
+    ghost: 'border-zinc-800 bg-zinc-900 text-zinc-300 hover:border-zinc-600 hover:text-white',
+  };
+  return `inline-flex h-10 w-10 items-center justify-center rounded-xl border transition-colors ${variants[variant]}`;
+};
+
+const semanticMenuButtonClass = (variant: 'primary' | 'secondary' | 'danger' | 'ghost' = 'ghost') => {
+  const variants = {
+    primary: 'text-indigo-100 hover:bg-indigo-950/60',
+    secondary: 'text-emerald-100 hover:bg-emerald-950/60',
+    danger: 'text-rose-100 hover:bg-rose-950/60',
+    ghost: 'text-zinc-100 hover:bg-zinc-900',
+  };
+  return `flex w-full items-center gap-2 rounded-xl px-3 py-3 text-left text-sm transition-colors disabled:opacity-50 ${variants[variant]}`;
+};
+
+const BackNavButton = ({
+  label,
+  onClick,
+  className = '',
+}: {
+  label: string;
+  onClick: () => void;
+  className?: string;
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    aria-label={label}
+    className={`inline-flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-950/80 px-3 py-2 text-sm font-bold text-zinc-200 transition-colors hover:border-zinc-600 hover:text-white ${className}`}
+  >
+    <ChevronLeft className="h-4 w-4" />
+    <span>{label}</span>
+  </button>
+);
+
 const renderParagraphWithHighlights = (text: string, characters: Character[] = []) => {
   const parts = text.split(/(<mark>.*?<\/mark>)/g);
   return parts.map((part, i) => {
@@ -699,6 +754,7 @@ export default function App() {
   const [sharedStoryId, setSharedStoryId] = useState<string | null>(null);
   const [readonlyStoryData, setReadonlyStoryData] = useState<{ meta: any, chapters: Chapter[] } | null>(null);
   const [isLoadingSharedStory, setIsLoadingSharedStory] = useState(false);
+  const [readonlyCanGoBack, setReadonlyCanGoBack] = useState(false);
   const [pwaUpdateInfo, setPwaUpdateInfo] = useState<PwaUpdateInfo | null>(null);
   const [isApplyingPwaUpdate, setIsApplyingPwaUpdate] = useState(false);
 
@@ -3205,7 +3261,7 @@ export default function App() {
         onClick={() => setIsActionMenuOpen((prev) => !prev)}
         aria-label={isActionMenuOpen ? '关闭目录' : '打开目录'}
         aria-expanded={isActionMenuOpen}
-        className="flex items-center justify-center w-11 h-11 rounded-2xl border border-zinc-700 bg-zinc-900/90 backdrop-blur-md text-white shadow-xl"
+        className={`${semanticIconButtonClass('secondary')} h-11 w-11 rounded-2xl backdrop-blur-md shadow-xl`}
       >
         <Menu className="w-5 h-5" />
       </button>
@@ -3222,7 +3278,7 @@ export default function App() {
               type="button"
               onClick={handleShareStory}
               disabled={isSharing || isRewriting || isGeneratingConclusion}
-              className="w-full px-3 py-3 rounded-xl text-left text-sm text-emerald-100 hover:bg-emerald-950/60 disabled:opacity-50 flex items-center gap-2"
+              className={semanticMenuButtonClass('secondary')}
             >
               {isSharing ? <Loader2 className="w-4 h-4 text-emerald-300 animate-spin" /> : <Sparkles className="w-4 h-4 text-emerald-300" />}
               分享故事
@@ -3230,7 +3286,7 @@ export default function App() {
             <button
               type="button"
               onClick={openRestartConfirmation}
-              className="w-full px-3 py-3 rounded-xl text-left text-sm text-zinc-100 hover:bg-zinc-900 flex items-center gap-2"
+              className={semanticMenuButtonClass('ghost')}
             >
               <RefreshCcw className={`w-4 h-4 ${isRewriting ? 'animate-spin' : ''}`} />
               重新干涉
@@ -3238,7 +3294,7 @@ export default function App() {
             <button
               type="button"
               onClick={openAbandonInterventionConfirmation}
-              className="w-full px-3 py-3 rounded-xl text-left text-sm text-zinc-100 hover:bg-zinc-900 flex items-center gap-2"
+              className={semanticMenuButtonClass('danger')}
             >
               <Star className="w-4 h-4 text-amber-400" />
               放弃干涉
@@ -3247,7 +3303,7 @@ export default function App() {
               type="button"
               onClick={handleQuickAdapt}
               disabled={isRewriting || isGeneratingConclusion}
-              className="w-full px-3 py-3 rounded-xl text-left text-sm text-indigo-100 hover:bg-indigo-950/60 disabled:opacity-50 flex items-center gap-2"
+              className={semanticMenuButtonClass('primary')}
             >
               <BookOpen className="w-4 h-4 text-indigo-300" />
               一键改编
@@ -3273,7 +3329,7 @@ export default function App() {
               type="button"
               onClick={handleEndGame}
               disabled={isRewriting || isGeneratingConclusion || activeInterventionOverlay !== null}
-              className="px-4 py-2 rounded-2xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold flex items-center justify-center gap-2 whitespace-nowrap"
+              className={`${semanticButtonClass('primary', { compact: true })} rounded-2xl whitespace-nowrap`}
             >
               <BookOpen className="w-4 h-4" />
               命运确定
@@ -3288,7 +3344,7 @@ export default function App() {
                 ensureConclusionGenerated(chapters);
               }}
               disabled={isRewriting || isGeneratingConclusion || (activeInterventionOverlay !== null && activeInterventionOverlay.type !== 'ending')}
-              className="px-4 py-2 rounded-2xl bg-white text-black hover:bg-zinc-200 disabled:opacity-50 font-bold flex items-center justify-center gap-2 whitespace-nowrap"
+              className={`${semanticButtonClass('secondary', { compact: true })} rounded-2xl whitespace-nowrap`}
             >
               <Check className="w-4 h-4" />
               查看结语
@@ -3306,7 +3362,7 @@ export default function App() {
         <button
           type="button"
           onClick={() => setIsStoryInfoOpen(true)}
-          className="px-4 py-2.5 rounded-2xl border border-zinc-700 bg-zinc-900/90 backdrop-blur-md text-white shadow-xl font-medium"
+          className={`${semanticButtonClass('secondary', { compact: true })} rounded-2xl backdrop-blur-md shadow-xl`}
         >
           故事信息
         </button>
@@ -3325,7 +3381,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setIsStoryInfoOpen(false)}
-                className="w-10 h-10 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-300 flex items-center justify-center"
+                className={semanticIconButtonClass('ghost')}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -3372,7 +3428,7 @@ export default function App() {
                 <div className="pt-2">
                   <button
                     onClick={() => setShowIosInstallModal(false)}
-                    className="w-full rounded-xl bg-indigo-600 py-3 font-bold text-white transition-colors hover:bg-indigo-500 active:bg-indigo-400"
+                    className={semanticButtonClass('primary', { fullWidth: true })}
                   >
                     我知道了
                   </button>
@@ -3423,9 +3479,9 @@ export default function App() {
                   className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
                 <div className="flex gap-3 pt-1">
                   <button onClick={() => { setShowLinkModal(false); setLinkPassword(""); setLinkPasswordConfirm(""); }}
-                    className="flex-1 py-2.5 rounded-xl bg-zinc-800 text-zinc-300 font-bold text-sm hover:bg-zinc-700 transition-colors">取消</button>
+                    className={semanticButtonClass('ghost', { fullWidth: true })}>取消</button>
                   <button onClick={handleLinkPassword} disabled={isLinking}
-                    className="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-500 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                    className={semanticButtonClass('primary', { fullWidth: true })}>
                     {isLinking ? <Loader2 className="w-4 h-4 animate-spin" /> : "确认绑定"}
                   </button>
                 </div>
@@ -3463,7 +3519,7 @@ export default function App() {
                 </div>
                 <button
                   onClick={() => setShowSafariGuide(false)}
-                  className="w-full py-3 rounded-xl bg-zinc-800 text-zinc-300 font-bold text-sm hover:bg-zinc-700 transition-colors"
+                  className={semanticButtonClass('ghost', { fullWidth: true })}
                 >知道了</button>
               </div>
             </motion.div>
@@ -3478,6 +3534,14 @@ export default function App() {
     if (!storyId) return;
 
     setSharedStoryId(storyId);
+    const hasSameOriginReferrer = (() => {
+      try {
+        return Boolean(document.referrer) && new URL(document.referrer).origin === window.location.origin;
+      } catch {
+        return false;
+      }
+    })();
+    setReadonlyCanGoBack(hasSameOriginReferrer);
 
     if (!db) return;
 
@@ -3517,16 +3581,6 @@ export default function App() {
   }, [db]);
 
   // --- Renderers ---
-
-  if (false && sharedStoryId && isLoadingSharedStory && !readonlyStoryData) {
-    return (
-      <div className="min-h-[100dvh] bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center px-6 text-center font-sans">
-        <Loader2 className="w-8 h-8 text-indigo-400 animate-spin mb-4" />
-        <div className="text-lg font-bold text-white">正在载入分享故事</div>
-        <div className="mt-2 text-sm text-zinc-500">我们正在调取这条时间线的故事记录，请稍候。</div>
-      </div>
-    );
-  }
 
   if (!isAuthReady || (user && !isSessionHydrated)) {
     return (
@@ -3568,9 +3622,16 @@ export default function App() {
   if (gameState === 'READONLY_STORY' && readonlyStoryData) {
     return (
       <div className="min-h-[100dvh] bg-zinc-950 text-zinc-100 flex flex-col font-sans">
-        <header className="p-4 sm:p-6 text-center border-b border-zinc-900 bg-zinc-950/80 sticky top-0 z-50 backdrop-blur-md pt-[max(1rem,env(safe-area-inset-top))]">
-          <h1 className="text-xl sm:text-2xl font-bold text-white mb-2">{readonlyStoryData.meta.title}</h1>
-          <p className="text-xs sm:text-sm text-zinc-500 max-w-xl mx-auto">{readonlyStoryData.meta.main_axis}</p>
+        <header className="p-4 sm:p-6 border-b border-zinc-900 bg-zinc-950/80 sticky top-0 z-50 backdrop-blur-md pt-[max(1rem,env(safe-area-inset-top))]">
+          <div className="mx-auto max-w-2xl space-y-4">
+            {readonlyCanGoBack && (
+              <BackNavButton label="返回上一页" onClick={() => window.history.back()} />
+            )}
+            <div className="text-center">
+              <h1 className="text-xl sm:text-2xl font-bold text-white mb-2">{readonlyStoryData.meta.title}</h1>
+              <p className="text-xs sm:text-sm text-zinc-500 max-w-xl mx-auto">{readonlyStoryData.meta.main_axis}</p>
+            </div>
+          </div>
         </header>
         <div className="max-w-2xl mx-auto w-full p-4 sm:p-6 space-y-12 mt-4">
           {readonlyStoryData.chapters.filter(c => c.text && c.text.trim().length > 0).map((ch, idx) => (
@@ -3596,7 +3657,7 @@ export default function App() {
               <button
                 onClick={handleShareReadonlyStory}
                 disabled={isSharing || !sharedStoryId}
-                className="w-full sm:w-auto px-4 py-3 bg-zinc-900 border border-zinc-700 hover:border-zinc-500 text-zinc-100 font-bold rounded-xl transition-colors whitespace-nowrap flex items-center justify-center gap-2 disabled:opacity-50"
+                className={`${semanticButtonClass('secondary')} w-full sm:w-auto whitespace-nowrap`}
               >
                 {isSharing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                 {"分享故事"}
@@ -3604,17 +3665,14 @@ export default function App() {
               <button
                 onClick={handleAdaptReadonlyStory}
                 disabled={authoringSaving}
-                className="w-full sm:w-auto px-4 py-3 bg-indigo-500 hover:bg-indigo-400 text-white font-bold rounded-xl transition-colors whitespace-nowrap shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2 disabled:opacity-50"
+                className={`${semanticButtonClass('primary')} w-full sm:w-auto whitespace-nowrap`}
               >
                 <BookOpen className="w-4 h-4" />
                 {"一键改编"}
               </button>
-              <button
-                onClick={() => setGameState('STORY_SELECT')}
-                className="w-full sm:w-auto px-4 py-3 bg-white text-black hover:bg-zinc-200 font-bold rounded-xl transition-colors whitespace-nowrap flex-shrink-0"
-              >
-                {"打开游玩入口"}
-              </button>
+              {readonlyCanGoBack && (
+                <BackNavButton label="返回上一页" onClick={() => window.history.back()} className="w-full sm:w-auto justify-center" />
+              )}
             </div>
           </section>
         </div>
@@ -3864,8 +3922,8 @@ export default function App() {
               <Mail className="w-4 h-4 text-indigo-400" />
             </button>
           )}
-          <button aria-label="退出登录" onClick={handleLogout} className="p-2 bg-zinc-900 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
-            <LogOut className="w-5 h-5 text-zinc-400" />
+          <button aria-label="退出登录" onClick={handleLogout} className={semanticIconButtonClass('danger')}>
+            <LogOut className="w-5 h-5" />
           </button>
         </div>
 
@@ -3945,7 +4003,7 @@ export default function App() {
               />
               <button
                 onClick={() => storyImportCode.trim() && startStoryPlay(storyImportCode.trim())}
-                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-bold"
+                className={semanticButtonClass('primary', { fullWidth: true })}
               >
                 导入并游玩
               </button>
@@ -3964,7 +4022,8 @@ export default function App() {
         <div className="max-w-6xl mx-auto space-y-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <button 
+              <BackNavButton
+                label={blueprint ? '返回游玩' : '返回作品库'}
                 onClick={() => {
                   if (!confirmDiscardAuthoringChanges('离开作者后台')) return;
                   if (blueprint) {
@@ -3972,12 +4031,8 @@ export default function App() {
                   } else {
                     setGameState('STORY_SELECT');
                   }
-                }} 
-                className="p-2 -ml-2 rounded-full hover:bg-zinc-900 transition-colors"
-                aria-label="返回"
-              >
-                <ChevronLeft className="w-6 h-6 text-zinc-400 hover:text-white" />
-              </button>
+                }}
+              />
               <div>
                 <div className="text-xs text-zinc-500">作者后台</div>
                 <div className="text-2xl font-black text-white">作品编辑器</div>
@@ -3988,7 +4043,7 @@ export default function App() {
                 type="button"
                 onClick={handleSaveAuthoringChanges}
                 disabled={authoringSaving || !authoringStoryId || !authoringDirty}
-                className="px-3 py-2 rounded-lg text-xs font-bold bg-emerald-500/90 hover:bg-emerald-500 text-white disabled:opacity-50"
+                className={semanticButtonClass('primary', { compact: true })}
               >
                 保存更改
               </button>
@@ -3996,7 +4051,7 @@ export default function App() {
                 type="button"
                 onClick={handleCreateAuthoringStory}
                 disabled={authoringSaving}
-                className="px-3 py-2 rounded-lg text-xs font-bold bg-white text-black disabled:opacity-50"
+                className={semanticButtonClass('secondary', { compact: true })}
               >
                 新建作品
               </button>
@@ -4004,7 +4059,7 @@ export default function App() {
                 type="button"
                 onClick={handleDeleteAuthoringStory}
                 disabled={authoringSaving || !authoringStoryId}
-                className="px-3 py-2 rounded-lg text-xs font-bold bg-rose-500/90 hover:bg-rose-500 text-white disabled:opacity-50"
+                className={semanticButtonClass('danger', { compact: true })}
               >
                 删除当前
               </button>
@@ -4012,7 +4067,7 @@ export default function App() {
                 type="button"
                 onClick={handleRefreshAuthoringStories}
                 disabled={authoringSaving}
-                className="px-3 py-2 rounded-lg text-xs font-bold bg-zinc-900 border border-zinc-800 text-zinc-200 disabled:opacity-50"
+                className={semanticButtonClass('ghost', { compact: true })}
               >
                 刷新列表
               </button>
@@ -4808,7 +4863,7 @@ export default function App() {
                                       setExpandedBranchId(null);
                                       setSelectedBranchId(null);
                                     }}
-                                    className="px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs flex items-center gap-2"
+                                    className={semanticButtonClass('ghost', { compact: true })}
                                   >
                                     <X className="w-4 h-4" /> 取消
                                   </button>
@@ -4861,7 +4916,7 @@ export default function App() {
                                       setExpandedBranchId(null);
                                       setSelectedBranchId(null);
                                     }}
-                                    className="px-3 py-2 bg-white text-black rounded-lg text-xs font-bold flex items-center gap-2"
+                                    className={semanticButtonClass('primary', { compact: true })}
                                   >
                                     <Check className="w-4 h-4" /> 确认
                                   </button>
@@ -4893,11 +4948,9 @@ export default function App() {
             <div className="text-sm font-medium text-zinc-300 truncate">{user.isAnonymous ? "游客用户" : user.displayName}</div>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => setGameState('STORY_SELECT')} className="px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs text-zinc-300 hover:border-zinc-600 transition-colors">
-              返回作品库
-            </button>
-            <button aria-label="退出登录" onClick={handleLogout} className="p-2 bg-zinc-900 border border-zinc-800 rounded-lg hover:border-zinc-600 transition-colors">
-              <LogOut className="w-5 h-5 text-zinc-400" />
+            <BackNavButton label="返回作品库" onClick={() => setGameState('STORY_SELECT')} />
+            <button aria-label="退出登录" onClick={handleLogout} className={semanticIconButtonClass('danger')}>
+              <LogOut className="w-5 h-5" />
             </button>
           </div>
         </div>
@@ -5083,13 +5136,13 @@ export default function App() {
                 <div className="grid grid-cols-2 gap-4">
                   <button
                     onClick={() => setConfirmationModal(prev => ({ ...prev, isOpen: false }))}
-                    className="py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-medium transition-colors"
+                    className={semanticButtonClass('ghost', { fullWidth: true })}
                   >
                     取消
                   </button>
                   <button
                     onClick={confirmationModal.onConfirm}
-                    className="py-3 bg-white text-black hover:bg-zinc-200 rounded-xl font-bold transition-colors shadow-lg"
+                    className={semanticButtonClass('primary', { fullWidth: true })}
                   >
                     确认
                   </button>
@@ -5192,7 +5245,7 @@ export default function App() {
                 <button
                   onClick={() => setShowSummaryModal(false)}
                   disabled={isGeneratingConclusion}
-                  className="w-full py-3 bg-white text-black hover:bg-zinc-200 disabled:opacity-50 disabled:hover:bg-white rounded-lg font-bold text-lg transition-colors"
+                  className={semanticButtonClass('secondary', { fullWidth: true })}
                 >
                   查看故事档案
                 </button>
@@ -5209,7 +5262,7 @@ export default function App() {
               <button 
                 onClick={() => setIsSidebarOpen(false)}
                 aria-label="关闭故事信息"
-                className="lg:hidden absolute top-[max(1rem,env(safe-area-inset-top))] right-4 p-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-zinc-400 hover:text-white transition-colors border border-zinc-700 z-[220]"
+                className={`${semanticIconButtonClass('ghost')} lg:hidden absolute top-[max(1rem,env(safe-area-inset-top))] right-4 z-[220]`}
               >
                 <X className="w-6 h-6" />
               </button>
@@ -5457,7 +5510,7 @@ export default function App() {
                   <button
                     onClick={handleFastAdaptToAuthoring}
                     disabled={isGeneratingConclusion}
-                    className="flex-1 py-3 bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50 rounded-lg font-bold text-lg transition-colors flex items-center justify-center gap-2"
+                    className={`${semanticButtonClass('primary', { fullWidth: true })} flex-1`}
                   >
                     <BookOpen className="w-5 h-5 text-indigo-200" />
                     一键改编
@@ -5465,7 +5518,7 @@ export default function App() {
                   <button
                     onClick={() => setShowSummaryModal(false)}
                     disabled={isGeneratingConclusion}
-                    className="flex-1 py-3 bg-white text-black hover:bg-zinc-200 disabled:opacity-50 disabled:hover:bg-white rounded-lg font-bold text-lg transition-colors"
+                    className={`${semanticButtonClass('secondary', { fullWidth: true })} flex-1`}
                   >
                     查看故事档案
                   </button>
@@ -5509,13 +5562,13 @@ export default function App() {
                 <div className="grid grid-cols-2 gap-4">
                   <button
                     onClick={() => setConfirmationModal(prev => ({ ...prev, isOpen: false }))}
-                    className="py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-medium transition-colors"
+                    className={semanticButtonClass('ghost', { fullWidth: true })}
                   >
                     取消
                   </button>
                   <button
                     onClick={confirmationModal.onConfirm}
-                    className="py-3 bg-white text-black hover:bg-zinc-200 rounded-xl font-bold transition-colors shadow-lg"
+                    className={semanticButtonClass('primary', { fullWidth: true })}
                   >
                     确认
                   </button>
