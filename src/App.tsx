@@ -959,6 +959,7 @@ export default function App() {
         const progressRef = doc(db, 'users', user.uid, 'progress', activeStoryId);
         await setDoc(progressRef, {
           ...sessionSnap.data(),
+          userId: user.uid,
           updatedAt: serverTimestamp()
         });
       }
@@ -1179,7 +1180,7 @@ export default function App() {
 
       setGameState(gs);
       if (data.gameState === 'THEME_SELECTION') {
-        updateDoc(sessionRef, { gameState: 'STORY_SELECT', updatedAt: new Date().toISOString() }).catch(() => {});
+        setDoc(sessionRef, { userId: user.uid, gameState: 'STORY_SELECT', updatedAt: serverTimestamp() }, { merge: true }).catch(() => {});
       }
 
       setSelectedThemes(data.selectedThemes || []);
@@ -1284,6 +1285,7 @@ export default function App() {
     try {
       const progressRef = doc(db, 'users', user.uid, 'progress', activeStoryId);
       await setDoc(progressRef, {
+        userId: user.uid,
         storyId: activeStoryId,
         gameState: 'PLAYING',
         interventionsLeft,
@@ -1417,7 +1419,8 @@ export default function App() {
       conclusionRequestedRef.current = false;
 
       const sessionRef = doc(db, 'sessions', user.uid);
-      await updateDoc(sessionRef, {
+      await setDoc(sessionRef, {
+        userId: user.uid,
         gameState: 'STORY_SELECT',
         selectedThemes: [],
         blueprintId: null,
@@ -1435,7 +1438,7 @@ export default function App() {
         canonicalWorldState: null,
         deltaWorldStateByChapter: {},
         updatedAt: serverTimestamp(),
-      });
+      }, { merge: true });
     } catch (e) {
       console.error(e);
       showError("重置命运失败");
@@ -1486,6 +1489,7 @@ export default function App() {
 
       const sessionRef = doc(db, 'sessions', user.uid);
       await setDoc(sessionRef, {
+        userId: user.uid,
         gameState: 'PLAYING',
         storyId: storyId,
         interventionsLeft: 3,
@@ -1513,6 +1517,7 @@ export default function App() {
       const sessionRef = doc(db, 'sessions', user.uid);
       await setDoc(sessionRef, {
         ...progressData,
+        userId: user.uid,
         updatedAt: serverTimestamp(),
       });
       setPendingProgressToLoad(null);
@@ -2106,6 +2111,52 @@ export default function App() {
                       ))}
                     </div>
                   </section>
+                  <section className="space-y-4">
+                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">命运支线</h4>
+                    <div className="grid gap-3">
+                      {(blueprint.branches || []).length === 0 ? (
+                        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 text-sm text-zinc-500">
+                          暂无支线记录。
+                        </div>
+                      ) : (
+                        (blueprint.branches || []).map((branch: any) => {
+                          const isUnlocked = unlockedBranches.some((item: any) => item.id === branch.id);
+                          const wasUnlocked = historicallyUnlockedBranches.some((item: any) => item.id === branch.id);
+                          const isHidden = branch.is_hidden || branch.tier === 'hidden';
+                          const visibleName = isHidden && !isUnlocked && !wasUnlocked ? '隐藏支线' : branch.name;
+                          const visibleDesc = isHidden && !isUnlocked && !wasUnlocked
+                            ? (branch.hint || '继续干涉命运，寻找这条支线的触发契机。')
+                            : (branch.desc || branch.sceneText || branch.hint || '尚无支线描述。');
+                          return (
+                            <div
+                              key={branch.id || branch.name}
+                              className={`rounded-2xl border p-4 ${
+                                isUnlocked
+                                  ? 'border-indigo-500/40 bg-indigo-950/30'
+                                  : wasUnlocked
+                                    ? 'border-zinc-700 bg-zinc-900/60'
+                                    : 'border-zinc-800 bg-zinc-900/30'
+                              }`}
+                            >
+                              <div className="mb-2 flex items-center justify-between gap-3">
+                                <div className="font-bold text-zinc-100">{visibleName}</div>
+                                <div className={`rounded-full px-2 py-1 text-[10px] font-black ${
+                                  isUnlocked
+                                    ? 'bg-indigo-500/20 text-indigo-200'
+                                    : wasUnlocked
+                                      ? 'bg-zinc-700/60 text-zinc-300'
+                                      : 'bg-zinc-800 text-zinc-500'
+                                }`}>
+                                  {isUnlocked ? '已解锁' : wasUnlocked ? '曾解锁' : '待解锁'}
+                                </div>
+                              </div>
+                              <div className="text-xs leading-relaxed text-zinc-500">{visibleDesc}</div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </section>
                 </>
               )}
             </div>
@@ -2120,7 +2171,7 @@ export default function App() {
       {gameState === 'PLAYING' && (
         <button
           type="button"
-          onClick={handleSaveProgressAndReturn}
+          onClick={() => setShowLeaveGameModal(true)}
           aria-label="返回作品库"
           className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950/80 text-zinc-200 transition-colors hover:border-zinc-600 hover:text-white backdrop-blur-md"
         >
