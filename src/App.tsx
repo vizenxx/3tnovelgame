@@ -1655,6 +1655,7 @@ export default function App() {
               strokeWidth="8"
               strokeDasharray="377"
               animate={{ strokeDashoffset: 377 - (377 * progress) / 100 }}
+              transition={{ duration: 0.18, ease: 'linear' }}
               className={variant === 'bless' ? 'text-emerald-500' : variant === 'curse' ? 'text-rose-500' : 'text-indigo-500'}
             />
           </svg>
@@ -2294,13 +2295,56 @@ export default function App() {
       }
 
       const result = await response.json();
+      const aiData = result?.aiData || {};
       
       const newHistory = [...interventionHistory, { chapterNum, charId, action }];
       setInterventionHistory(newHistory);
       setInterventionsLeft(prev => prev - 1);
       
-      if (result.newChapters) {
-        setChapters(result.newChapters);
+      if (Array.isArray(aiData?.chapters) && aiData.chapters.length > 0) {
+        const previousByNum = new Map<number, any>((chapters || []).map((chapter) => [chapter.chapter_num, chapter as any]));
+        const mergedChapters = aiData.chapters.map((chapter: any) => {
+          const previous = (previousByNum.get(chapter.chapter_num) || {}) as any;
+          return {
+            chapter_num: chapter.chapter_num,
+            title: chapter.title || previous.title || `第${chapter.chapter_num}章`,
+            summary: chapter.summary || previous.summary || '',
+            present_characters: Array.isArray(chapter.present_characters) ? chapter.present_characters : (previous.present_characters || []),
+            text: chapter.text || previous.text || '',
+          };
+        });
+        setChapters(mergedChapters as any);
+      }
+
+      if (Array.isArray(aiData?.character_updates) && aiData.character_updates.length > 0) {
+        setCharacterStatuses((prev) => {
+          const next = { ...(prev || {}) } as Record<string, { status: string; isDead: boolean }>;
+          aiData.character_updates.forEach((update: any) => {
+            if (!update?.id) return;
+            next[update.id] = {
+              status: String(update.status || next[update.id]?.status || '存活'),
+              isDead: Boolean(update.is_dead),
+            };
+          });
+          return next;
+        });
+      }
+
+      if (typeof result?.newEndingValue === 'number') {
+        setEndingValue(result.newEndingValue);
+      }
+      if (Array.isArray(result?.newUnlockedBranches)) {
+        setUnlockedBranches(result.newUnlockedBranches);
+      }
+      if (result?.unlockedBranch) {
+        setBranchUnlockNotice(result.unlockedBranch);
+        setHistoricallyUnlockedBranches((prev) => {
+          if ((prev || []).some((branch: any) => branch.id === result.unlockedBranch.id)) return prev;
+          return [...(prev || []), result.unlockedBranch];
+        });
+      }
+      if (result?.uiFeedback) {
+        setUiFeedback(result.uiFeedback);
       }
       
       if (result.worldState) {
@@ -2347,14 +2391,12 @@ export default function App() {
         "正在铭刻命运总结..."
       ]);
 
-      const response = await apiFetch('/api/conclude', {
+      const response = await apiFetch('/api/generate-summary', {
         method: 'POST',
         body: JSON.stringify({
-          storyId: activeStoryId,
-          interventionHistory,
-          worldState: canonicalWorldState,
+          blueprint,
           endingValue,
-          chapters: chapters
+          chapters,
         })
       });
 
@@ -2365,7 +2407,7 @@ export default function App() {
       }
 
       const result = await response.json();
-      setStoryConclusion(result.conclusion);
+      setStoryConclusion(result.text || result.conclusion || '');
       setShowSummaryModal(true);
       try {
         await incrementStoryCounter(activeStoryId, 'interventionCount');
