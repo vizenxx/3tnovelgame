@@ -570,6 +570,11 @@ const getStoryLikeCount = (story: any) => Number(story?.likeCount ?? story?.meta
 const getStoryInterventionCount = (story: any) =>
   Number(story?.interventionCount ?? story?.meta?.interventionCount ?? story?.popularity ?? story?.meta?.popularity ?? 0);
 const getStoryFavoriteCount = (story: any) => Number(story?.favoriteCount ?? story?.meta?.favoriteCount ?? 0);
+const getStoryUpdatedMs = (story: any) => {
+  const value = story?.updatedAt?.toDate?.() || story?.updatedAt || story?.createdAt?.toDate?.() || story?.createdAt;
+  const ms = value instanceof Date ? value.getTime() : Date.parse(String(value || ''));
+  return Number.isFinite(ms) ? ms : 0;
+};
 
 const sanitizeTextForAdaptation = (input?: string) => {
   const value = String(input || '');
@@ -850,6 +855,11 @@ export default function App() {
   const [archiveUpdatingIds, setArchiveUpdatingIds] = useState<Record<string, boolean>>({});
   const [showScrollTopButton, setShowScrollTopButton] = useState(false);
   const [readonlyReturnTarget, setReadonlyReturnTarget] = useState<GameState>('STORY_SELECT');
+  const [archiveReturnTarget, setArchiveReturnTarget] = useState<GameState>('STORY_SELECT');
+  const [storyLibraryTab, setStoryLibraryTab] = useState<'mine' | 'public'>('public');
+  const [storyLibrarySearch, setStoryLibrarySearch] = useState('');
+  const [storyLibraryVisibilityFilter, setStoryLibraryVisibilityFilter] = useState<'all' | 'public' | 'private' | 'unlisted'>('all');
+  const [storyLibrarySort, setStoryLibrarySort] = useState<'updated' | 'likes' | 'interventions' | 'favorites' | 'words'>('updated');
   const storySelectScrollYRef = useRef(0);
   const [storyImportCode, setStoryImportCode] = useState('');
   const [authoringCustomTagsInput, setAuthoringCustomTagsInput] = useState('');
@@ -1326,6 +1336,20 @@ export default function App() {
       showError('更新公开设置失败，请稍后再试。');
     } finally {
       setArchiveUpdatingIds((prev) => ({ ...prev, [story.id]: false }));
+    }
+  };
+
+  const openArchiveView = (returnTarget: GameState = gameState === 'PLAYING' ? 'PLAYING' : 'STORY_SELECT') => {
+    setArchiveReturnTarget(returnTarget);
+    setIsActionMenuOpen(false);
+    setIsAccountCenterOpen(false);
+    setGameState('ARCHIVE');
+  };
+
+  const leaveArchiveView = () => {
+    setGameState(archiveReturnTarget);
+    if (archiveReturnTarget === 'STORY_SELECT') {
+      window.setTimeout(() => window.scrollTo({ top: storySelectScrollYRef.current || 0, behavior: 'smooth' }), 0);
     }
   };
 
@@ -3017,7 +3041,28 @@ export default function App() {
     </motion.div>
   );
 
-  const renderStorySelectView = () => (
+  const getVisibleStoryLibraryItems = () => {
+    const source = storyLibraryTab === 'mine' ? myStories : publicStories;
+    const keyword = storyLibrarySearch.trim().toLowerCase();
+    return [...source]
+      .filter((story: any) => {
+        if (storyLibraryTab === 'mine' && storyLibraryVisibilityFilter !== 'all' && story.visibility !== storyLibraryVisibilityFilter) return false;
+        if (!keyword) return true;
+        const haystack = `${getStoryTitle(story)}\n${getStoryAuthorName(story)}\n${getStoryMainAxis(story)}\n${getStoryTags(story).join(' ')}`.toLowerCase();
+        return haystack.includes(keyword);
+      })
+      .sort((a: any, b: any) => {
+        if (storyLibrarySort === 'likes') return getStoryLikeCount(b) - getStoryLikeCount(a);
+        if (storyLibrarySort === 'interventions') return getStoryInterventionCount(b) - getStoryInterventionCount(a);
+        if (storyLibrarySort === 'favorites') return getStoryFavoriteCount(b) - getStoryFavoriteCount(a);
+        if (storyLibrarySort === 'words') return getStoryAverageChapterWords(b) - getStoryAverageChapterWords(a);
+        return getStoryUpdatedMs(b) - getStoryUpdatedMs(a);
+      });
+  };
+
+  const renderStorySelectView = () => {
+    const visibleStories = getVisibleStoryLibraryItems();
+    return (
     <div className="mx-auto max-w-7xl px-6 py-12 lg:px-8">
       <div className="mb-12 flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
@@ -3089,7 +3134,74 @@ export default function App() {
         </div>
       )}
 
-      <div className="space-y-12">
+      <section className="rounded-[2rem] border border-zinc-800 bg-zinc-900/20 p-4 sm:p-5">
+        <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex rounded-2xl border border-zinc-800 bg-zinc-950/70 p-1">
+            {[
+              { id: 'public', label: '热门作品', count: publicStories.length },
+              { id: 'mine', label: '我的作品', count: myStories.length },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setStoryLibraryTab(tab.id as 'public' | 'mine')}
+                className={`rounded-xl px-4 py-2 text-sm font-black transition-colors ${
+                  storyLibraryTab === tab.id ? 'bg-indigo-600 text-white' : 'text-zinc-500 hover:text-zinc-200'
+                }`}
+              >
+                {tab.label} <span className="ml-1 text-[10px] opacity-70">{tab.count}</span>
+              </button>
+            ))}
+          </div>
+          <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+            <input
+              type="search"
+              value={storyLibrarySearch}
+              onChange={(event) => setStoryLibrarySearch(event.target.value)}
+              placeholder="搜索标题、作者、标签或主轴"
+              className="min-w-0 rounded-xl border border-zinc-800 bg-zinc-950/80 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500 sm:w-72"
+            />
+            {storyLibraryTab === 'mine' && (
+              <select
+                value={storyLibraryVisibilityFilter}
+                onChange={(event) => setStoryLibraryVisibilityFilter(event.target.value as any)}
+                className="rounded-xl border border-zinc-800 bg-zinc-950/80 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+              >
+                <option value="all">全部权限</option>
+                <option value="private">私密</option>
+                <option value="public">公开</option>
+                <option value="unlisted">非公开链接</option>
+              </select>
+            )}
+            <select
+              value={storyLibrarySort}
+              onChange={(event) => setStoryLibrarySort(event.target.value as any)}
+              className="rounded-xl border border-zinc-800 bg-zinc-950/80 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+            >
+              <option value="updated">最近更新</option>
+              <option value="likes">点赞最多</option>
+              <option value="interventions">干涉最多</option>
+              <option value="favorites">收藏最多</option>
+              <option value="words">平均字数</option>
+            </select>
+          </div>
+        </div>
+        {isLoadingStories ? (
+          <div className="flex h-64 items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-zinc-700" />
+          </div>
+        ) : visibleStories.length === 0 ? (
+          <div className="rounded-3xl border border-dashed border-zinc-800 bg-zinc-950/40 p-10 text-center text-sm font-bold text-zinc-500">
+            没有符合条件的作品。
+          </div>
+        ) : (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {visibleStories.map((story) => renderStoryCard(story, storyLibraryTab === 'public'))}
+          </div>
+        )}
+      </section>
+
+      <div className="hidden">
         {myStories.length > 0 && (
           <section>
             <div className="mb-6 flex items-center gap-3">
@@ -3122,6 +3234,7 @@ export default function App() {
       </div>
     </div>
   );
+  };
 
   const renderArchiveView = () => {
     const keyword = archiveSearch.trim().toLowerCase();
@@ -3139,7 +3252,7 @@ export default function App() {
             <h2 className="mt-2 text-3xl font-black text-white sm:text-4xl">保存与分享记录</h2>
             <p className="mt-2 text-sm text-zinc-500">在这里查看你保存过的私密馆藏与公开分享记录。</p>
           </div>
-          <BackNavButton label="返回作品库" onClick={() => setGameState('STORY_SELECT')} />
+          <BackNavButton label={archiveReturnTarget === 'PLAYING' ? '返回游玩页' : '返回作品库'} onClick={leaveArchiveView} />
         </div>
 
         <div className="mb-6 space-y-3 rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4">
@@ -3398,10 +3511,7 @@ export default function App() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => {
-                      setIsAccountCenterOpen(false);
-                      setGameState('ARCHIVE');
-                    }}
+                    onClick={() => openArchiveView('STORY_SELECT')}
                     className={semanticButtonClass('secondary', { fullWidth: true })}
                   >
                     <Archive className="h-4 w-4" />
@@ -3521,7 +3631,12 @@ export default function App() {
                           暂无支线记录。
                         </div>
                       ) : (
-                        (blueprint.branches || []).map((branch: any) => {
+                        (blueprint.branches || []).filter((branch: any) => {
+                          const isUnlocked = unlockedBranches.some((item: any) => item.id === branch.id);
+                          const wasUnlocked = historicallyUnlockedBranches.some((item: any) => item.id === branch.id);
+                          const isHidden = branch.is_hidden || branch.tier === 'hidden';
+                          return !isHidden || isUnlocked || wasUnlocked;
+                        }).map((branch: any) => {
                           const isUnlocked = unlockedBranches.some((item: any) => item.id === branch.id);
                           const wasUnlocked = historicallyUnlockedBranches.some((item: any) => item.id === branch.id);
                           const isHidden = branch.is_hidden || branch.tier === 'hidden';
@@ -3614,7 +3729,7 @@ export default function App() {
     <div className="fixed right-4 top-[max(1rem,env(safe-area-inset-top))] z-[2100] flex items-center gap-2 sm:right-6">
       <button
         type="button"
-        onClick={() => setGameState('ARCHIVE')}
+        onClick={() => openArchiveView('STORY_SELECT')}
         aria-label="打开故事馆藏"
         className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950/85 text-zinc-200 transition-colors hover:border-zinc-600 hover:text-white backdrop-blur-md"
       >
@@ -4422,10 +4537,7 @@ export default function App() {
                 故事档案
               </button>
               <button
-                onClick={() => {
-                  setIsActionMenuOpen(false);
-                  setGameState('ARCHIVE');
-                }}
+                onClick={() => openArchiveView('PLAYING')}
                 className={semanticMenuButtonClass('ghost')}
               >
                 <Archive className="h-5 w-5" />
