@@ -2116,7 +2116,7 @@ export default function App() {
   );
 
   const actionMenuButton = (
-    <div className="fixed top-6 right-6 z-[2000] flex items-center gap-3">
+    <div className="fixed left-4 right-4 top-[max(1rem,env(safe-area-inset-top))] z-[2000] flex items-center justify-between gap-3 sm:left-auto sm:right-6">
       {gameState === 'PLAYING' && (
         <button
           type="button"
@@ -2127,18 +2127,59 @@ export default function App() {
           <ChevronLeft className="h-6 w-6" />
         </button>
       )}
-      <button
-        type="button"
-        onClick={() => setIsActionMenuOpen(true)}
-        className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950/80 text-zinc-200 transition-colors hover:border-zinc-600 hover:text-white backdrop-blur-md"
-      >
-        <Menu className="h-6 w-6" />
-      </button>
+      <div className="flex items-center gap-2">
+        {gameState === 'PLAYING' && (
+          <button
+            type="button"
+            onClick={() => setIsStoryInfoOpen(true)}
+            className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-zinc-800 bg-zinc-950/80 px-4 text-sm font-bold text-zinc-200 transition-colors hover:border-zinc-600 hover:text-white backdrop-blur-md"
+          >
+            <BookOpen className="h-4 w-4" />
+            故事信息
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => setIsActionMenuOpen(true)}
+          className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950/80 text-zinc-200 transition-colors hover:border-zinc-600 hover:text-white backdrop-blur-md"
+        >
+          <Menu className="h-6 w-6" />
+        </button>
+      </div>
     </div>
   );
 
+  const floatingInterventionPanel = blueprint && gameState === 'PLAYING' && typeof document !== 'undefined'
+    ? createPortal(
+      <div className="fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-[1900] rounded-3xl border border-zinc-800 bg-zinc-950/92 px-4 py-3 shadow-2xl backdrop-blur-xl sm:left-auto sm:right-6 sm:w-[24rem]">
+        <div className="grid grid-cols-[auto_1fr] items-center gap-3 sm:grid-cols-[auto_1fr_auto]">
+          <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/10 px-3 py-2 text-center">
+            <div className="text-[10px] font-black uppercase tracking-[0.18em] text-indigo-300">干涉</div>
+            <div className="text-lg font-black leading-none text-indigo-100">{interventionsLeft} / 3</div>
+          </div>
+          <div className="min-w-0 text-center text-xs font-bold sm:text-sm">
+            <span className="text-indigo-300">左 {uiFeedback.leftProgress.toFixed(0)}%</span>
+            <span className="mx-2 text-zinc-600">/</span>
+            <span className="text-rose-300">右 {uiFeedback.rightProgress.toFixed(0)}%</span>
+            <div className="mt-1 truncate text-[10px] font-bold text-zinc-500">{uiFeedback.endingLabel}</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => handleGenerateSummary(interventionsLeft > 0 ? 'manual' : 'auto_interventions')}
+            disabled={isRewriting || isGeneratingConclusion || !activeStoryId}
+            className={`${semanticButtonClass(storyConclusion ? 'secondary' : 'primary', { compact: true })} col-span-2 rounded-2xl whitespace-nowrap sm:col-span-1`}
+          >
+            {isGeneratingConclusion ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {storyConclusion ? '查看结语' : '命运确定'}
+          </button>
+        </div>
+      </div>,
+      document.body
+    )
+    : null;
+
   const renderPlayingView = () => (
-    <div className="relative mx-auto max-w-4xl px-6 py-24 sm:px-8">
+    <div className="relative mx-auto max-w-4xl px-6 py-24 pb-40 sm:px-8 sm:pb-32">
       {blueprint && (
         <div className="mb-16 space-y-4 text-center">
           <motion.div
@@ -2188,37 +2229,38 @@ export default function App() {
 
               {gameState === 'PLAYING' && !intervenedChapters.includes(chapter.chapter_num) && chapter.chapter_num > 1 && (
                 <div className="mt-12 flex justify-center border-t border-zinc-800/50 pt-10">
-                  <div className="flex flex-col items-center gap-6">
-                    <div className="text-center">
+                  <div className="flex w-full flex-col items-center gap-6">
+                    <div className="max-w-xl text-center">
                       <div className="mb-1 text-sm font-black text-zinc-100">因果节点已就绪</div>
-                      <div className="text-xs text-zinc-500">点击角色头像，干涉此章节的命运走向</div>
+                      <div className="text-xs leading-relaxed text-zinc-500">
+                        提示：选择一个登场角色，再选择「庇佑」或「磨难」。干涉会影响本章之后的故事走向，并可能触发支线。
+                      </div>
                     </div>
-                    <div className="flex gap-4">
+                    <div className="grid w-full gap-3 sm:grid-cols-2 lg:grid-cols-3">
                       {blueprint?.characters.map(char => (
-                        <div key={char.id} className="flex flex-col gap-2">
-                          <div className="flex gap-2">
+                        <div key={char.id} className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+                          <div className="mb-3">
+                            <div className="text-sm font-black text-zinc-100">{char.name}</div>
+                            <div className="mt-1 line-clamp-2 text-xs leading-relaxed text-zinc-500">{char.desc}</div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
                             <button
                               onClick={() => handleIntervene(chapter.chapter_num, char.id, 'bless')}
                               disabled={interventionsLeft <= 0 || isRewriting}
-                              className="group relative flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-500/20 bg-emerald-500/5 text-emerald-400 transition-all hover:border-emerald-500/50 hover:bg-emerald-500/10 disabled:opacity-30"
+                              className="flex min-h-14 items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-3 text-sm font-black text-emerald-300 transition-colors hover:border-emerald-400/60 hover:bg-emerald-500/15 disabled:opacity-30"
                             >
-                              <Zap className="h-6 w-6" />
-                              <div className="absolute -top-12 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-emerald-500 px-2 py-1 text-[10px] font-bold text-white opacity-0 transition-opacity group-hover:opacity-100">
-                                庇佑 {char.name}
-                              </div>
+                              <Zap className="h-4 w-4" />
+                              庇佑
                             </button>
                             <button
                               onClick={() => handleIntervene(chapter.chapter_num, char.id, 'curse')}
                               disabled={interventionsLeft <= 0 || isRewriting}
-                              className="group relative flex h-14 w-14 items-center justify-center rounded-2xl border border-rose-500/20 bg-rose-500/5 text-rose-400 transition-all hover:border-rose-500/50 hover:bg-rose-500/10 disabled:opacity-30"
+                              className="flex min-h-14 items-center justify-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-3 text-sm font-black text-rose-300 transition-colors hover:border-rose-400/60 hover:bg-rose-500/15 disabled:opacity-30"
                             >
-                              <Skull className="h-6 w-6" />
-                              <div className="absolute -top-12 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-rose-500 px-2 py-1 text-[10px] font-bold text-white opacity-0 transition-opacity group-hover:opacity-100">
-                                磨难 {char.name}
-                              </div>
+                              <Skull className="h-4 w-4" />
+                              磨难
                             </button>
                           </div>
-                          <div className="text-center text-[10px] font-bold text-zinc-500">{char.name}</div>
                         </div>
                       ))}
                     </div>
@@ -2630,6 +2672,7 @@ export default function App() {
           {gameState === 'AUTHORING' && renderAuthoringView()}
 
           {actionMenuButton}
+          {floatingInterventionPanel}
           {actionMenuOverlay}
           {storyInfoPanel}
           {renderConfirmationModal()}
