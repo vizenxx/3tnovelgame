@@ -70,6 +70,14 @@ service cloud.firestore {
       return (('popularity' in data) && data.popularity is number) ? data.popularity : 0;
     }
 
+    function storyFavoriteCount(data) {
+      return (('favoriteCount' in data) && data.favoriteCount is number) ? data.favoriteCount : 0;
+    }
+
+    function storyReportCount(data) {
+      return (('reportCount' in data) && data.reportCount is number) ? data.reportCount : 0;
+    }
+
     function uidUnchanged() {
       return !('userId' in request.resource.data) ||
         request.resource.data.userId == request.auth.uid;
@@ -126,8 +134,12 @@ service cloud.firestore {
              data.main_axis is string && data.main_axis.size() > 0 && data.main_axis.size() < 5000 &&
              data.tags is list && data.tags.size() <= 20 &&
              data.authorId is string &&
+             (!('authorName' in data) || (data.authorName is string && data.authorName.size() <= 80)) &&
              data.visibility in ['public', 'unlisted', 'private'] &&
              (!('popularity' in data) || data.popularity is number) &&
+             (!('favoriteCount' in data) || data.favoriteCount is number) &&
+             (!('reportCount' in data) || data.reportCount is number) &&
+             (!('averageChapterWords' in data) || data.averageChapterWords is number) &&
              (isValidDateString(data.createdAt) || isValidTimestamp(data.createdAt)) &&
              (isValidDateString(data.updatedAt) || isValidTimestamp(data.updatedAt)) &&
              data.version is number &&
@@ -148,6 +160,8 @@ service cloud.firestore {
              data.characters is list && data.characters.size() <= 10 &&
              data.chapters is list && data.chapters.size() <= 10 &&
              data.authorId is string &&
+             (!('authorName' in data) || (data.authorName is string && data.authorName.size() <= 80)) &&
+             (!('averageChapterWords' in data) || data.averageChapterWords is number) &&
              (isValidDateString(data.createdAt) || isValidTimestamp(data.createdAt)) &&
              (isValidDateString(data.updatedAt) || isValidTimestamp(data.updatedAt));
     }
@@ -183,8 +197,10 @@ service cloud.firestore {
         isValidStoryMeta(request.resource.data)
       ) || (
         canReadStoryData(resource.data) &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['popularity']) &&
-        request.resource.data.popularity == (storyPopularity(resource.data) + 1)
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['popularity', 'favoriteCount', 'reportCount']) &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['popularity']) || request.resource.data.popularity == (storyPopularity(resource.data) + 1)) &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['favoriteCount']) || request.resource.data.favoriteCount == (storyFavoriteCount(resource.data) + 1)) &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['reportCount']) || request.resource.data.reportCount == (storyReportCount(resource.data) + 1))
       );
       allow delete: if isAuthenticated() && resource.data.authorId == request.auth.uid;
 

@@ -16,8 +16,12 @@ export interface StoryMeta {
   tags: string[];
   coverUrl?: string;
   authorId: string;
+  authorName?: string;
   visibility: Visibility;
   popularity?: number;
+  favoriteCount?: number;
+  reportCount?: number;
+  averageChapterWords?: number;
   endingMode?: EndingMode; // default: dual
   endingRates?: { left: number; right: number }; // 0-80, only meaningful in dual mode
   /** 玩家总结界面展示用，各≤5字；双向模式下对应左/右倾向结局的「XX结局」 */

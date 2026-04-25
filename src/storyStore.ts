@@ -31,7 +31,11 @@ export type StoryListItem = {
   tags: string[];
   visibility: Visibility;
   authorId: string;
+  authorName?: string;
   popularity?: number;
+  favoriteCount?: number;
+  reportCount?: number;
+  averageChapterWords?: number;
   updatedAt: string | any;
   createdAt: string | any;
   version: number;
@@ -45,9 +49,12 @@ export type SharedStoryRecord = {
   characters: StoryCharacter[];
   chapters: StoryChapterDoc[];
   authorId: string;
+  authorName?: string;
   sourceStoryId?: string | null;
+  averageChapterWords?: number;
   createdAt: string;
   updatedAt: string;
+  visibility: 'public' | 'private';
 };
 
 export async function listPublicStories(db: Firestore, pageSize = 20) {
@@ -72,15 +79,19 @@ export async function listMyStories(db: Firestore, authorId: string, pageSize = 
   return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as StoryListItem[];
 }
 
-export async function createEmptyStory(db: Firestore, args: { authorId: string; title?: string; tags?: string[] }) {
+export async function createEmptyStory(db: Firestore, args: { authorId: string; authorName?: string; title?: string; tags?: string[] }) {
   const now = new Date().toISOString();
   const meta: Omit<StoryMeta, 'coverUrl'> = {
     title: args.title || '未命名作品',
     main_axis: '（请填写本作主轴/命题/世界观核心）',
     tags: args.tags || [],
     authorId: args.authorId,
+    authorName: args.authorName || `游客+${args.authorId.slice(0, 6).toUpperCase()}`,
     visibility: 'private',
     popularity: 0,
+    favoriteCount: 0,
+    reportCount: 0,
+    averageChapterWords: 0,
     endingMode: 'dual',
     endingRates: { left: 40, right: 40 },
     endingNames: { left: '', right: '' },
@@ -146,10 +157,16 @@ export async function getStoryCartridge(db: Firestore, storyId: string) {
   return { storyId, meta, chapters, endings, branches };
 }
 
-export async function getSharedStoryRecord(db: Firestore, storyId: string) {
+export async function getSharedStoryRecord(db: Firestore, storyId: string, currentUserId?: string) {
   const sharedSnap = await getDoc(doc(db, 'sharedStories', storyId));
   if (sharedSnap.exists()) {
     const data = sharedSnap.data() as SharedStoryRecord;
+    
+    // Check privacy
+    if (data.visibility === 'private' && data.authorId !== currentUserId) {
+      return null;
+    }
+
     return {
       storyId: sharedSnap.id,
       meta: {
@@ -158,6 +175,8 @@ export async function getSharedStoryRecord(db: Firestore, storyId: string) {
         tags: data.tags || [],
         characters: data.characters || [],
         authorId: data.authorId,
+        authorName: data.authorName,
+        averageChapterWords: data.averageChapterWords || 0,
       },
       chapters: Array.isArray(data.chapters) ? data.chapters : [],
     };
@@ -181,12 +200,15 @@ export async function getSharedStoryRecord(db: Firestore, storyId: string) {
 
 export async function createSharedStoryRecord(db: Firestore, args: {
   authorId: string;
+  authorName?: string;
   title: string;
   main_axis: string;
   tags?: string[];
   characters?: StoryCharacter[];
   chapters: StoryChapterDoc[];
   sourceStoryId?: string | null;
+  averageChapterWords?: number;
+  visibility?: 'public' | 'private';
 }) {
   const now = new Date().toISOString();
   const payload: Omit<SharedStoryRecord, 'id'> = {
@@ -202,16 +224,19 @@ export async function createSharedStoryRecord(db: Firestore, args: {
       text: chapter.text || '',
     })),
     authorId: args.authorId,
+    authorName: args.authorName || `游客+${args.authorId.slice(0, 6).toUpperCase()}`,
     sourceStoryId: args.sourceStoryId || null,
+    averageChapterWords: args.averageChapterWords || 0,
     createdAt: now,
     updatedAt: now,
+    visibility: args.visibility || 'public',
   };
 
   const ref = await addDoc(collection(db, 'sharedStories'), payload);
   return ref.id;
 }
 
-export async function adaptBlueprintToStory(db: Firestore, args: { authorId: string; blueprint: any; chapters: any[]; conclusionText?: string; tags?: string[] }) {
+export async function adaptBlueprintToStory(db: Firestore, args: { authorId: string; authorName?: string; blueprint: any; chapters: any[]; conclusionText?: string; tags?: string[] }) {
   const now = new Date().toISOString();
   const bp = args.blueprint;
 
@@ -229,8 +254,12 @@ export async function adaptBlueprintToStory(db: Firestore, args: { authorId: str
     main_axis: bp.main_axis || '（无主轴记录）',
     tags: args.tags || bp.tags || [],
     authorId: args.authorId,
+    authorName: args.authorName || `游客+${args.authorId.slice(0, 6).toUpperCase()}`,
     visibility: 'private',
     popularity: 0,
+    favoriteCount: 0,
+    reportCount: 0,
+    averageChapterWords: 0,
     endingMode: 'dual',
     endingRates: { left: bp.left_mainline_default || 40, right: bp.right_mainline_default || 40 },
     endingNames: { left: '', right: '' },
