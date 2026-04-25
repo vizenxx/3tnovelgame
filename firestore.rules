@@ -184,6 +184,10 @@ service cloud.firestore {
       allow delete: if isOwner(sessionId);
     }
 
+    match /users/{userId}/progress/{storyId} {
+      allow read, create, update, delete: if isOwner(userId);
+    }
+
     // ===============================================================
     // Stories ("Cartridges")
     // ===============================================================

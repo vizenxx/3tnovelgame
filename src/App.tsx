@@ -2120,7 +2120,8 @@ export default function App() {
       {gameState === 'PLAYING' && (
         <button
           type="button"
-          onClick={() => setShowLeaveGameModal(true)}
+          onClick={handleSaveProgressAndReturn}
+          aria-label="返回作品库"
           className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950/80 text-zinc-200 transition-colors hover:border-zinc-600 hover:text-white backdrop-blur-md"
         >
           <ChevronLeft className="h-6 w-6" />
