@@ -79,6 +79,39 @@ export async function listMyStories(db: Firestore, authorId: string, pageSize = 
   return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as StoryListItem[];
 }
 
+export async function listMySharedStories(db: Firestore, authorId: string, pageSize = 50) {
+  const q = query(
+    collection(db, 'sharedStories'),
+    where('authorId', '==', authorId),
+    orderBy('updatedAt', 'desc'),
+    limit(pageSize)
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as SharedStoryRecord[];
+}
+
+export async function updateAuthorNameEverywhere(db: Firestore, authorId: string, authorName: string) {
+  const [stories, sharedStories] = await Promise.all([
+    listMyStories(db, authorId, 100),
+    listMySharedStories(db, authorId, 100),
+  ]);
+
+  const batch = writeBatch(db);
+  stories.forEach((story) => {
+    batch.update(doc(db, 'stories', story.id), {
+      authorName,
+      updatedAt: new Date().toISOString(),
+    });
+  });
+  sharedStories.forEach((story) => {
+    batch.update(doc(db, 'sharedStories', story.id), {
+      authorName,
+      updatedAt: new Date().toISOString(),
+    });
+  });
+  await batch.commit();
+}
+
 export async function createEmptyStory(db: Firestore, args: { authorId: string; authorName?: string; title?: string; tags?: string[] }) {
   const now = new Date().toISOString();
   const meta: Omit<StoryMeta, 'coverUrl'> = {

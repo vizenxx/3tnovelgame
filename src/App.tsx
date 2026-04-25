@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag } from 'lucide-react';
+import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink } from 'lucide-react';
 import { auth, db, firebaseInitError } from './firebase';
-import { createEmptyStory, createSharedStoryRecord, adaptBlueprintToStory, createStoryBranch, deleteStoryBranch, deleteStoryCartridge, getSharedStoryRecord, getStoryCartridge, listMyStories, listPublicStories, saveStoryMainlineBundle, saveStoryMeta, upsertStoryBranch } from './storyStore';
+import { createEmptyStory, createSharedStoryRecord, adaptBlueprintToStory, createStoryBranch, deleteStoryBranch, deleteStoryCartridge, getSharedStoryRecord, getStoryCartridge, listMySharedStories, listMyStories, listPublicStories, saveStoryMainlineBundle, saveStoryMeta, updateAuthorNameEverywhere, upsertStoryBranch } from './storyStore';
 import { isBranchUnlockedByHistory, tierToScore } from './storyCartridge';
 import { 
   signInWithRedirect,
@@ -22,6 +22,9 @@ import {
   createUserWithEmailAndPassword,
   linkWithCredential,
   sendPasswordResetEmail,
+  updateProfile,
+  updatePassword,
+  reauthenticateWithCredential,
   User as FirebaseUser
 } from 'firebase/auth';
 import { 
@@ -792,6 +795,10 @@ export default function App() {
   const [showSafariGuide, setShowSafariGuide] = useState(false);
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
+  const [profileDisplayName, setProfileDisplayName] = useState('');
+  const [profileCurrentPassword, setProfileCurrentPassword] = useState('');
+  const [profileNewPassword, setProfileNewPassword] = useState('');
+  const [isAccountCenterOpen, setIsAccountCenterOpen] = useState(false);
   const [showLeaveGameModal, setShowLeaveGameModal] = useState(false);
   const [pendingProgressToLoad, setPendingProgressToLoad] = useState<{ id: string, data: any } | null>(null);
 
@@ -801,6 +808,7 @@ export default function App() {
   const [activeStoryMeta, setActiveStoryMeta] = useState<any | null>(null);
   const [publicStories, setPublicStories] = useState<any[]>([]);
   const [myStories, setMyStories] = useState<any[]>([]);
+  const [mySharedStories, setMySharedStories] = useState<any[]>([]);
   const [storyImportCode, setStoryImportCode] = useState('');
   const [authoringCustomTagsInput, setAuthoringCustomTagsInput] = useState('');
   const [isLoadingStories, setIsLoadingStories] = useState(false);
@@ -949,6 +957,77 @@ export default function App() {
     return interval;
   };
 
+  const normalizeBranchConditionsForStorage = (conditions: ConditionForm[] = []) => (
+    conditions.slice(0, 3).map((condition) =>
+      condition.kind === 'single'
+        ? {
+            type: 'single' as const,
+            single: {
+              chapterNum: Math.max(2, Math.min(6, condition.singleChapterNum)),
+              charId: condition.singleCharId || '',
+              action: condition.singleAction,
+            },
+          }
+        : {
+            type: 'count' as const,
+            count: {
+              charId: condition.countCharId || '',
+              action: condition.countAction,
+              minCount: Math.max(1, condition.minCount),
+              upToChapterNum: Math.max(2, Math.min(6, condition.upToChapterNum)),
+            },
+          }
+    )
+  );
+
+  const buildAuthoringSnapshot = (cartridge: any) => {
+    if (!cartridge) return '';
+    return JSON.stringify({
+      storyId: cartridge.storyId || '',
+      meta: {
+        title: stripBookTitle(cartridge.meta?.title || ''),
+        main_axis: String(cartridge.meta?.main_axis || ''),
+        visibility: cartridge.meta?.visibility || 'private',
+        tags: normalizeTagList(cartridge.meta?.tags || []),
+        endingMode: cartridge.meta?.endingMode || 'dual',
+        endingNames: {
+          left: limitFiveChars(cartridge.meta?.endingNames?.left || ''),
+          right: limitFiveChars(cartridge.meta?.endingNames?.right || ''),
+        },
+        characters: normalizeCharacters(cartridge.meta?.characters || []),
+      },
+      chapters: (cartridge.chapters || []).map((chapter: any) => ({
+        chapter_num: chapter.chapter_num,
+        title: String(chapter.title || ''),
+        summary: String(chapter.summary || ''),
+        text: String(chapter.text || ''),
+      })),
+      endings: (cartridge.endings || []).map((ending: any) => ({
+        id: ending.id,
+        title: String(ending.title || ''),
+        text: String(ending.text || ''),
+      })),
+      branches: (cartridge.branches || []).map((branch: any) => ({
+        id: branch.id,
+        name: String(branch.name || ''),
+        hint: String(branch.hint || ''),
+        tier: branch.tier || 'small',
+        side: branch.side || 'left',
+        sceneText: String(branch.sceneText || ''),
+      })),
+    });
+  };
+
+  const markAuthoringSaved = (cartridge: any) => {
+    setAuthoringSavedSnapshot(buildAuthoringSnapshot(cartridge));
+    setAuthoringDirty(false);
+  };
+
+  const confirmDiscardAuthoringChanges = (targetLabel: string) => {
+    if (!authoringDirty) return true;
+    return window.confirm(`当前有未保存更改，确定要放弃并${targetLabel}吗？`);
+  };
+
   const handleSaveProgressAndReturnLegacy = async () => {
     if (!user || !activeStoryId || !db) return;
     try {
@@ -1045,12 +1124,79 @@ export default function App() {
     if (!db) return;
     const authorName = getUserAuthorName(targetUser);
     try {
-      const stories = await listMyStories(db as any, targetUser.uid);
-      await Promise.all(stories.map((story: any) => saveStoryMeta(db as any, story.id, { authorName } as any)));
+      await updateAuthorNameEverywhere(db as any, targetUser.uid, authorName);
       setActiveStoryMeta((prev: any) => prev ? { ...prev, authorName } : prev);
+      setProfileDisplayName(authorName);
     } catch (error) {
       console.error(error);
     }
+  };
+
+  const refreshStories = async () => {
+    if (!user || !db) return;
+    setIsLoadingStories(true);
+    try {
+      const [pub, mine, shared] = await withTimeout(
+        Promise.all([
+          listPublicStories(db as any, 30),
+          listMyStories(db as any, user.uid, 50),
+          listMySharedStories(db as any, user.uid, 50),
+        ]),
+        10000,
+        "连接作品档案超时，请稍后重试。"
+      );
+      setPublicStories(pub);
+      setMyStories(mine);
+      setMySharedStories(shared);
+    } catch (error: any) {
+      console.error(error);
+      showError(error?.message || '作品库加载失败。');
+    } finally {
+      setIsLoadingStories(false);
+    }
+  };
+
+  const toggleTheme = (theme: string) => {
+    setSelectedThemes((prev) => (
+      prev.includes(theme)
+        ? prev.filter((item) => item !== theme)
+        : prev.length >= 4
+          ? prev
+          : [...prev, theme]
+    ));
+  };
+
+  const openReadonlyStory = async (storyId: string, options?: { allowBack?: boolean }) => {
+    if (!db) return;
+    try {
+      setIsLoadingStories(true);
+      const record = await getSharedStoryRecord(db as any, storyId, user?.uid);
+      if (!record) {
+        showError('未找到这份故事记录，或你没有访问权限。');
+        return;
+      }
+      setReadonlyStoryData({ meta: record.meta, chapters: record.chapters as any });
+      setReadonlyCanGoBack(Boolean(options?.allowBack));
+      setGameState('READONLY_STORY');
+      const nextUrl = buildSharedStoryUrl(storyId);
+      window.history.replaceState({ internalReadonly: true }, '', nextUrl);
+    } catch (error) {
+      console.error(error);
+      showError('载入故事记录失败。');
+    } finally {
+      setIsLoadingStories(false);
+    }
+  };
+
+  const leaveReadonlyStory = () => {
+    if (readonlyCanGoBack && window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+    window.history.replaceState({}, '', window.location.pathname);
+    setReadonlyStoryData(null);
+    setReadonlyCanGoBack(false);
+    setGameState('STORY_SELECT');
   };
 
   const handleGoogleLogin = async () => {
@@ -1149,6 +1295,15 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    setProfileDisplayName(getUserAuthorName(user));
+  }, [user]);
+
+  useEffect(() => {
+    if (!authoringCartridge) return;
+    setAuthoringDirty(buildAuthoringSnapshot(authoringCartridge) !== authoringSavedSnapshot);
+  }, [authoringCartridge, authoringSavedSnapshot]);
+
   // Sync session from Firestore
   useEffect(() => {
     if (!isAuthReady) return;
@@ -1172,17 +1327,11 @@ export default function App() {
       }
 
       const data = snapshot.data();
-      const gs = data.gameState === 'THEME_SELECTION'
-        ? 'STORY_SELECT'
-        : data.gameState === 'SUMMARY'
-          ? 'PLAYING'
-          : data.gameState;
+      const gs = data.gameState === 'SUMMARY'
+        ? 'PLAYING'
+        : data.gameState;
 
       setGameState(gs);
-      if (data.gameState === 'THEME_SELECTION') {
-        setDoc(sessionRef, { userId: user.uid, gameState: 'STORY_SELECT', updatedAt: serverTimestamp() }, { merge: true }).catch(() => {});
-      }
-
       setSelectedThemes(data.selectedThemes || []);
       setChapters(data.currentChapters || []);
       setInterventionsLeft(data.interventionsLeft ?? 3);
@@ -1279,6 +1428,22 @@ export default function App() {
       unsubscribe();
     };
   }, [isAuthReady, user]);
+
+  useEffect(() => {
+    if (!db || !isAuthReady) return;
+    const sharedStoryIdFromUrl = getSharedStoryIdFromUrl();
+    if (!sharedStoryIdFromUrl) return;
+    getSharedStoryRecord(db as any, sharedStoryIdFromUrl, user?.uid)
+      .then((record) => {
+        if (!record) throw new Error('not-found');
+        setReadonlyStoryData({ meta: record.meta, chapters: record.chapters as any });
+        setReadonlyCanGoBack(Boolean(document.referrer) && new URL(document.referrer).origin === window.location.origin);
+        setGameState('READONLY_STORY');
+      })
+      .catch(() => {
+        showError('加载分享故事失败。');
+      });
+  }, [db, user, isSessionHydrated]);
 
   const handleSaveProgressAndReturn = async () => {
     if (!user || !activeStoryId || !blueprint) return;
@@ -1527,6 +1692,346 @@ export default function App() {
     }
   };
 
+  const handleGenerateBlueprint = async () => {
+    if (!user || !db) return;
+    if (selectedThemes.length < 1 && !customOutline.trim()) {
+      showError('请至少选择一个主题或输入故事大纲。');
+      return;
+    }
+    if (selectedThemes.length > 4) {
+      showError('最多选择 4 个主题。');
+      return;
+    }
+
+    setGameState('GENERATING_BLUEPRINT');
+    const progressInterval = startProgressSimulation(45000, [
+      "正在构思宏大世界观...",
+      "正在编织命运的丝线...",
+      "正在塑造传奇英雄...",
+      "正在铺设史诗篇章...",
+      "正在雕琢文学细节...",
+      "正在注入灵魂与情感...",
+      "即将开启新的征程..."
+    ]);
+
+    try {
+      const response = await apiFetch('/api/generate-blueprint', {
+        method: 'POST',
+        body: JSON.stringify({ selectedThemes, customOutline, targetWordCount }),
+      }, 90000);
+      if (!response.ok) throw new Error(await readErrorMessage(response));
+      let data = await response.json();
+
+      const prefetchChapters = [1, 2, 3];
+      for (const chapterNum of prefetchChapters) {
+        setGenerationStatus(`正在具象化世界细节 (${chapterNum}/3)...`);
+        setGenerationProgress(72 + chapterNum * 7);
+        const chapterResponse = await withRetry(() => apiFetch('/api/generate-next-chapter', {
+          method: 'POST',
+          body: JSON.stringify({
+            blueprint: data,
+            currentChapters: data.chapters,
+            targetChapterNum: chapterNum,
+            targetWordCount,
+          }),
+        }, 90000), 3, 2500);
+        if (!chapterResponse.ok) throw new Error(await readErrorMessage(chapterResponse));
+        const chapterData = await chapterResponse.json();
+        data.chapters = (data.chapters || []).map((chapter: any) => (
+          chapter.chapter_num === chapterNum ? { ...chapter, text: chapterData.text || '' } : chapter
+        ));
+      }
+
+      data.branches = (data.branches || []).map((branch: any) => ({
+        ...branch,
+        id: branch.id || `b_${Math.random().toString(36).slice(2, 11)}`,
+        sceneText: branch.sceneText || branch.desc || '',
+        trigger: branch.trigger || {
+          type: 'single',
+          single: {
+            chapterNum: branch.condition_chapter || 2,
+            charId: branch.condition_char || data.characters?.[0]?.id || 'c1',
+            action: branch.condition_action === 'curse' ? 'curse' : 'bless',
+          },
+        },
+      }));
+
+      const blueprintRef = await addDoc(collection(db, 'blueprints'), {
+        ...data,
+        userId: user.uid,
+        createdAt: new Date().toISOString(),
+      });
+
+      const initialStatuses: Record<string, { status: string; isDead: boolean }> = {};
+      (data.characters || []).forEach((character: any) => {
+        initialStatuses[character.id] = { status: '存活', isDead: false };
+      });
+
+      await setDoc(doc(db, 'sessions', user.uid), {
+        userId: user.uid,
+        blueprintId: blueprintRef.id,
+        gameState: 'PLAYING',
+        selectedThemes,
+        currentChapters: data.chapters || [],
+        naturalChapters: data.chapters || [],
+        initialNaturalChapters: data.chapters || [],
+        interventionsLeft: 3,
+        endingValue: 0,
+        unlockedBranches: [],
+        intervenedChapters: [],
+        characterStatuses: initialStatuses,
+        storyConclusion: null,
+        uiFeedback: { leftProgress: 0, rightProgress: 0, endingLabel: '均衡道' },
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+
+      setBlueprint(data);
+      setChapters(data.chapters || []);
+      setNaturalChapters(data.chapters || []);
+      setInitialNaturalChapters((data.chapters || []).map((chapter: any) => ({
+        ...chapter,
+        present_characters: Array.isArray(chapter.present_characters) ? [...chapter.present_characters] : [],
+        title: chapter.title || '',
+        summary: chapter.summary || '',
+        text: chapter.text || '',
+      })));
+      setCharacterStatuses(initialStatuses);
+      setInterventionsLeft(3);
+      setEndingValue(0);
+      setUnlockedBranches([]);
+      setIntervenedChapters([]);
+      setInterventionHistory([]);
+      setActiveStoryId(null);
+      setActiveStoryMeta(null);
+      setGameState('PLAYING');
+    } catch (error) {
+      console.error(error);
+      showError('生成失败，请检查网络或稍后重试。');
+      setGameState('THEME_SELECTION');
+    } finally {
+      clearInterval(progressInterval);
+      setGenerationProgress(100);
+    }
+  };
+
+  const enterAuthoring = async () => {
+    setGameState('AUTHORING');
+    await refreshStories();
+    if (!authoringStoryId && myStories.length > 0 && db) {
+      const cartridge = await getStoryCartridge(db as any, myStories[0].id);
+      if (cartridge) {
+        setAuthoringStoryId(myStories[0].id);
+        setAuthoringCartridge(cartridge);
+        markAuthoringSaved(cartridge);
+      }
+    }
+  };
+
+  const selectAuthoringStory = async (storyId: string) => {
+    if (!db) return;
+    const cartridge = await getStoryCartridge(db as any, storyId);
+    if (!cartridge) {
+      showError('无法载入该作品。');
+      return;
+    }
+    setAuthoringStoryId(storyId);
+    setAuthoringCartridge(cartridge);
+    setAuthoringCustomTagsInput((cartridge.meta?.tags || []).join('，'));
+    setAuthoringImportText('');
+    setSelectedBranchId(null);
+    setExpandedBranchId(null);
+    setAuthoringTab('mainline');
+    markAuthoringSaved(cartridge);
+  };
+
+  const handleCreateAuthoringStory = async () => {
+    if (!db || !user) return;
+    if (!confirmDiscardAuthoringChanges('创建并切换到新作品')) return;
+    try {
+      setAuthoringSaving(true);
+      const storyId = await createEmptyStory(db as any, {
+        authorId: user.uid,
+        authorName: getUserAuthorName(user),
+        title: '未命名作品',
+        tags: [],
+      });
+      await refreshStories();
+      await selectAuthoringStory(storyId);
+      showError('新作品已创建。');
+    } catch (error: any) {
+      console.error(error);
+      showError(error?.message || '新建作品失败。');
+    } finally {
+      setAuthoringSaving(false);
+    }
+  };
+
+  const handleDeleteAuthoringStory = async () => {
+    if (!db || !authoringStoryId) return;
+    if (!window.confirm('确定删除当前作品吗？此操作不可撤销。')) return;
+    try {
+      setAuthoringSaving(true);
+      await deleteStoryCartridge(db as any, authoringStoryId);
+      setAuthoringStoryId(null);
+      setAuthoringCartridge(null);
+      setSelectedBranchId(null);
+      setExpandedBranchId(null);
+      setAuthoringSavedSnapshot('');
+      setAuthoringDirty(false);
+      await refreshStories();
+      showError('作品已删除。');
+    } catch (error: any) {
+      console.error(error);
+      showError(error?.message || '删除作品失败。');
+    } finally {
+      setAuthoringSaving(false);
+    }
+  };
+
+  const handleSaveSelectedBranch = async () => {
+    if (!authoringStoryId || !selectedBranchId) {
+      showError('请先选择需要保存的支线。');
+      return;
+    }
+    try {
+      setAuthoringSaving(true);
+      await upsertStoryBranch(db as any, authoringStoryId, selectedBranchId, {
+        id: selectedBranchId,
+        side: branchForm.side,
+        tier: branchForm.tier,
+        name: branchForm.name || '未命名支线',
+        hint: branchForm.hint || `留意${branchForm.name || '支线变化'}`,
+        desc: branchForm.sceneText.slice(0, 80) || branchForm.name || '支线',
+        common: false,
+        trigger: normalizeBranchConditionsForStorage(branchConditions)[0],
+        triggerGroups: normalizeBranchConditionsForStorage(branchConditions),
+        inject: {
+          mustHappen: branchForm.sceneText ? [branchForm.sceneText] : [],
+          mustReveal: [],
+          mustChange: [],
+        },
+        sceneText: branchForm.sceneText,
+      } as any);
+      const latest = await getStoryCartridge(db as any, authoringStoryId);
+      setAuthoringCartridge(latest);
+      markAuthoringSaved(latest);
+      showError('支线已保存。');
+    } catch (error: any) {
+      console.error(error);
+      showError(error?.message || '保存支线失败。');
+    } finally {
+      setAuthoringSaving(false);
+    }
+  };
+
+  const handleSaveAuthoringMainline = async () => {
+    if (!authoringStoryId || !authoringCartridge || !db) return;
+    try {
+      setAuthoringSaving(true);
+      const normalizedCharacters = normalizeCharacters(authoringCartridge.meta?.characters || []);
+      const normalizedTags = parseTagInput(authoringCustomTagsInput || (authoringCartridge.meta?.tags || []).join('，'));
+      await saveStoryMainlineBundle(db as any, authoringStoryId, {
+        metaPatch: {
+          ...authoringCartridge.meta,
+          title: stripBookTitle(authoringCartridge.meta?.title || ''),
+          tags: normalizedTags,
+          characters: normalizedCharacters,
+        } as any,
+        chapters: (authoringCartridge.chapters || []).map((chapter: any) => ({
+          chapter_num: chapter.chapter_num,
+          title: chapter.title || `第${chapter.chapter_num}章`,
+          summary: chapter.summary || '',
+          present_characters: Array.isArray(chapter.present_characters) && chapter.present_characters.length > 0
+            ? chapter.present_characters
+            : normalizedCharacters.map((character: any) => character.id),
+          text: chapter.text || '',
+        })),
+        endings: (authoringCartridge.endings || []).map((ending: any) => ({
+          id: ending.id,
+          title: ending.title || endingIdToLabel(ending.id),
+          text: ending.text || '',
+        })),
+      });
+      const latest = await getStoryCartridge(db as any, authoringStoryId);
+      setAuthoringCartridge(latest);
+      setAuthoringCustomTagsInput(normalizedTags.join('，'));
+      markAuthoringSaved(latest);
+      await refreshStories();
+      showError('作品更改已保存。');
+    } catch (error: any) {
+      console.error(error);
+      showError(error?.message || '保存作品失败。');
+    } finally {
+      setAuthoringSaving(false);
+    }
+  };
+
+  const handleSaveAuthoringChanges = async () => {
+    if (authoringTab === 'branches' && selectedBranchId) {
+      await handleSaveSelectedBranch();
+      return;
+    }
+    await handleSaveAuthoringMainline();
+  };
+
+  const handleUpdateProfileDisplayName = async () => {
+    if (!auth?.currentUser || auth.currentUser.isAnonymous) {
+      showError('游客请先注册为正式用户后再修改名称。');
+      return;
+    }
+    const nextName = limitFiveChars(profileDisplayName);
+    if (!nextName) {
+      showError('请输入新的显示名称。');
+      return;
+    }
+    try {
+      await updateProfile(auth.currentUser, { displayName: nextName });
+      setUser({ ...auth.currentUser } as FirebaseUser);
+      await syncCurrentAuthorName(auth.currentUser);
+      await refreshStories();
+      showError('显示名称已更新。');
+    } catch (error: any) {
+      console.error(error);
+      showError(error?.message || '更新名称失败。');
+    }
+  };
+
+  const handleUpdateAccountPassword = async () => {
+    if (!auth?.currentUser || !auth.currentUser.email) {
+      showError('当前账号无法直接修改密码。');
+      return;
+    }
+    if (!profileCurrentPassword || profileNewPassword.length < 6) {
+      showError('请输入当前密码，以及至少 6 位的新密码。');
+      return;
+    }
+    try {
+      const credential = EmailAuthProvider.credential(auth.currentUser.email, profileCurrentPassword);
+      await reauthenticateWithCredential(auth.currentUser, credential);
+      await updatePassword(auth.currentUser, profileNewPassword);
+      setProfileCurrentPassword('');
+      setProfileNewPassword('');
+      showError('账户密码已更新。');
+    } catch (error: any) {
+      console.error(error);
+      showError(error?.message || '修改密码失败。');
+    }
+  };
+
+  const handlePasswordResetForEmail = async (email: string) => {
+    if (!auth || !String(email || '').trim()) {
+      showError('请输入邮箱。');
+      return;
+    }
+    try {
+      await sendPasswordResetEmail(auth, String(email || '').trim());
+      showError('密码重设邮件已发送。');
+    } catch (error: any) {
+      console.error(error);
+      showError(error?.message || '无法发送重设邮件。');
+    }
+  };
+
   const handleIntervene = async (chapterNum: number, charId: string, action: 'bless' | 'curse') => {
     if (interventionsLeft <= 0 || isRewriting || !blueprint || !user) return;
     
@@ -1747,18 +2252,9 @@ export default function App() {
 
   useEffect(() => {
     if (gameState === 'STORY_SELECT' && user && db) {
-      setIsLoadingStories(true);
-      Promise.all([
-        listPublicStories(db as any),
-        listMyStories(db as any, user.uid)
-      ]).then(([pub, my]) => {
-        setPublicStories(pub);
-        setMyStories(my);
-      }).finally(() => {
-        setIsLoadingStories(false);
-      });
+      refreshStories().catch(() => {});
     }
-  }, [gameState, user]);
+  }, [gameState, user, db]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -1978,15 +2474,29 @@ export default function App() {
       <div className="mb-12 flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 className="text-3xl font-black text-white sm:text-4xl">选择命运篇章</h2>
-          <p className="mt-2 text-zinc-500">挑选一个世界，开始您的干涉之旅</p>
+          <p className="mt-2 text-zinc-500">挑选一个世界，或直接生成新世界、进入作者后台与个人馆藏。</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <button
-            onClick={() => setGameState('AUTHORING')}
+            onClick={() => setGameState('THEME_SELECTION')}
+            className={semanticButtonClass('primary', { compact: true })}
+          >
+            <Wand2 className="h-4 w-4" />
+            快速生成故事
+          </button>
+          <button
+            onClick={() => enterAuthoring()}
             className={semanticButtonClass('secondary', { compact: true })}
           >
             <Sparkles className="h-4 w-4" />
-            创作我的故事
+            作者后台
+          </button>
+          <button
+            onClick={() => setIsAccountCenterOpen(true)}
+            className={semanticButtonClass('ghost', { compact: true })}
+          >
+            <UserIcon className="h-4 w-4" />
+            个人中心
           </button>
         </div>
       </div>
@@ -2052,6 +2562,38 @@ export default function App() {
           </section>
         )}
 
+        {mySharedStories.length > 0 && (
+          <section>
+            <div className="mb-6 flex items-center gap-3">
+              <div className="h-px flex-1 bg-zinc-800" />
+              <h3 className="text-sm font-black uppercase tracking-[0.2em] text-zinc-500">我的馆藏与分享记录</h3>
+              <div className="h-px flex-1 bg-zinc-800" />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {mySharedStories.slice(0, 6).map((story: any) => (
+                <button
+                  key={story.id}
+                  type="button"
+                  onClick={() => openReadonlyStory(story.id, { allowBack: true })}
+                  className="rounded-[1.5rem] border border-zinc-800 bg-zinc-900/30 p-5 text-left transition-colors hover:border-zinc-600"
+                >
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <div className="text-sm font-black text-white">{formatBookTitle(story.title)}</div>
+                    <div className={`rounded-full px-2 py-1 text-[10px] font-black ${story.visibility === 'public' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-zinc-800 text-zinc-400'}`}>
+                      {story.visibility === 'public' ? '公开分享' : '私密馆藏'}
+                    </div>
+                  </div>
+                  <div className="text-xs leading-relaxed text-zinc-500 line-clamp-3">{story.main_axis || '暂无主轴摘要。'}</div>
+                  <div className="mt-4 inline-flex items-center gap-2 text-xs font-bold text-indigo-300">
+                    <Archive className="h-3.5 w-3.5" />
+                    打开记录
+                  </div>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
         <section>
           <div className="mb-6 flex items-center gap-3">
             <div className="h-px flex-1 bg-zinc-800" />
@@ -2071,6 +2613,243 @@ export default function App() {
       </div>
     </div>
   );
+
+  const renderThemeSelectionView = () => (
+    <div className="mx-auto flex min-h-[100dvh] max-w-5xl flex-col justify-center px-6 py-20 text-center lg:px-8">
+      <div className="mb-8 flex items-center justify-between">
+        <BackNavButton label="返回作品库" onClick={() => setGameState('STORY_SELECT')} />
+        <button type="button" onClick={() => setIsAccountCenterOpen(true)} className={semanticIconButtonClass('ghost')}>
+          <UserIcon className="h-5 w-5" />
+        </button>
+      </div>
+      <div className="mx-auto max-w-2xl space-y-4">
+        <div className="inline-flex items-center gap-2 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-4 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-indigo-300">
+          <Wand2 className="h-4 w-4" />
+          命运引擎
+        </div>
+        <h1 className="text-4xl font-black text-white sm:text-5xl">快速生成故事</h1>
+        <p className="text-sm leading-relaxed text-zinc-500 sm:text-base">
+          选择 1 到 4 个主题，或直接输入你的故事大纲。系统会先生成完整蓝图，再预先写好前 3 章供你开始干涉。
+        </p>
+      </div>
+
+      <div className="mt-10 flex flex-wrap justify-center gap-3">
+        {THEMES.map((theme) => (
+          <button
+            key={theme}
+            type="button"
+            onClick={() => toggleTheme(theme)}
+            className={`rounded-full border px-4 py-2 text-sm font-bold transition-colors ${
+              selectedThemes.includes(theme)
+                ? 'border-indigo-400 bg-indigo-500/10 text-indigo-200'
+                : 'border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
+            }`}
+          >
+            {theme}
+          </button>
+        ))}
+      </div>
+
+      <div className="mx-auto mt-10 w-full max-w-2xl rounded-[2rem] border border-zinc-800 bg-zinc-900/30 p-6 text-left">
+        <label className="mb-3 block text-sm font-bold text-zinc-300">专属故事大纲</label>
+        <textarea
+          value={customOutline}
+          onChange={(event) => setCustomOutline(event.target.value)}
+          placeholder="例如：一位在现代都市经营神秘书店的青年，某夜遇见来自未来的顾客，自此被卷入一场会改写现实的命运试炼。"
+          className="min-h-[140px] w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-sm text-zinc-200 outline-none transition-colors focus:border-indigo-500"
+        />
+        <div className="mt-6 space-y-3">
+          <div className="flex items-center justify-between text-sm">
+            <span className="font-bold text-zinc-400">每章目标字数</span>
+            <span className="font-black text-indigo-300">{targetWordCount} 字</span>
+          </div>
+          <input
+            type="range"
+            min="600"
+            max="1200"
+            step="100"
+            value={targetWordCount}
+            onChange={(event) => setTargetWordCount(parseInt(event.target.value, 10))}
+            className="w-full accent-indigo-500"
+          />
+          <div className="flex justify-between text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-600">
+            <span>精简</span>
+            <span>宏大</span>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={handleGenerateBlueprint}
+          disabled={(selectedThemes.length < 1 && customOutline.trim().length === 0) || selectedThemes.length > 4}
+          className={`${semanticButtonClass('primary', { fullWidth: true })} mt-6`}
+        >
+          <Sparkles className="h-4 w-4" />
+          生成世界蓝图
+        </button>
+      </div>
+    </div>
+  );
+
+  const accountCenterModal = (
+    <AnimatePresence>
+      {isAccountCenterOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[3200] flex items-center justify-center bg-black/80 p-4 backdrop-blur-md"
+          onClick={() => setIsAccountCenterOpen(false)}
+        >
+          <motion.div
+            initial={{ opacity: 0, y: 16, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 16, scale: 0.97 }}
+            className="max-h-[88vh] w-full max-w-4xl overflow-y-auto rounded-[2rem] border border-zinc-800 bg-zinc-950 p-6 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-6 flex items-center justify-between">
+              <div>
+                <div className="text-xs font-black uppercase tracking-[0.24em] text-zinc-500">个人中心</div>
+                <div className="mt-1 text-2xl font-black text-white">{getUserAuthorName(user)}</div>
+                <div className="text-sm text-zinc-500">{user?.email || '游客账号'}</div>
+              </div>
+              <button type="button" onClick={() => setIsAccountCenterOpen(false)} className={semanticIconButtonClass('ghost')}>
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-2">
+              <section className="rounded-[1.5rem] border border-zinc-800 bg-zinc-900/30 p-5">
+                <div className="mb-4 flex items-center gap-2 text-lg font-black text-white">
+                  <Settings className="h-5 w-5 text-indigo-300" />
+                  账号设置
+                </div>
+                <div className="space-y-3">
+                  <input
+                    value={profileDisplayName}
+                    onChange={(event) => setProfileDisplayName(event.target.value)}
+                    placeholder="显示名称"
+                    className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                  />
+                  <button type="button" onClick={handleUpdateProfileDisplayName} className={semanticButtonClass('secondary', { fullWidth: true })}>
+                    <PenSquare className="h-4 w-4" />
+                    更新名称
+                  </button>
+                  {!user?.isAnonymous && (
+                    <>
+                      <input
+                        type="password"
+                        value={profileCurrentPassword}
+                        onChange={(event) => setProfileCurrentPassword(event.target.value)}
+                        placeholder="当前密码"
+                        className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                      />
+                      <input
+                        type="password"
+                        value={profileNewPassword}
+                        onChange={(event) => setProfileNewPassword(event.target.value)}
+                        placeholder="新密码（至少 6 位）"
+                        className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                      />
+                      <button type="button" onClick={handleUpdateAccountPassword} className={semanticButtonClass('ghost', { fullWidth: true })}>
+                        <Lock className="h-4 w-4" />
+                        修改密码
+                      </button>
+                      <button type="button" onClick={() => handlePasswordResetForEmail(user?.email || '')} className={semanticButtonClass('ghost', { fullWidth: true })}>
+                        <Mail className="h-4 w-4" />
+                        发送重设邮件
+                      </button>
+                    </>
+                  )}
+                </div>
+              </section>
+
+              <section className="rounded-[1.5rem] border border-zinc-800 bg-zinc-900/30 p-5">
+                <div className="mb-4 flex items-center gap-2 text-lg font-black text-white">
+                  <Archive className="h-5 w-5 text-indigo-300" />
+                  我的馆藏与分享记录
+                </div>
+                <div className="space-y-3">
+                  {mySharedStories.length === 0 ? (
+                    <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4 text-sm text-zinc-500">
+                      还没有保存或分享过的故事记录。
+                    </div>
+                  ) : (
+                    mySharedStories.map((story: any) => (
+                      <div key={story.id} className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
+                        <div className="mb-1 flex items-center justify-between gap-3">
+                          <div className="text-sm font-black text-white">{formatBookTitle(story.title)}</div>
+                          <div className={`rounded-full px-2 py-1 text-[10px] font-black ${story.visibility === 'public' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-zinc-800 text-zinc-400'}`}>
+                            {story.visibility === 'public' ? '公开' : '私密'}
+                          </div>
+                        </div>
+                        <div className="text-xs leading-relaxed text-zinc-500 line-clamp-2">{story.main_axis || '暂无主轴摘要。'}</div>
+                        <div className="mt-3 flex gap-2">
+                          <button type="button" onClick={() => openReadonlyStory(story.id, { allowBack: true })} className={semanticButtonClass('secondary', { compact: true })}>
+                            <BookOpen className="h-4 w-4" />
+                            打开
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const url = buildSharedStoryUrl(story.id);
+                              const copied = await writeClipboardText(url);
+                              showError(copied ? '链接已复制。' : '复制失败，请手动复制地址栏链接。');
+                            }}
+                            className={semanticButtonClass('ghost', { compact: true })}
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                            复制链接
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </section>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
+  const renderReadonlyStoryView = () => {
+    const story = readonlyStoryData;
+    if (!story) return null;
+    return (
+      <div className="mx-auto max-w-4xl px-6 py-16 sm:px-8">
+        <div className="mb-10 flex items-start justify-between gap-4">
+          <div className="space-y-3">
+            <div className="text-xs font-black uppercase tracking-[0.24em] text-zinc-500">故事记录</div>
+            <h1 className="text-4xl font-black text-white">{formatBookTitle(story.meta?.title)}</h1>
+            <div className="text-sm font-bold text-zinc-500">作者：{getStoryAuthorName(story.meta)}</div>
+          </div>
+          {readonlyCanGoBack && <BackNavButton label="返回上一页" onClick={leaveReadonlyStory} />}
+        </div>
+        <div className="mb-10 rounded-[2rem] border border-zinc-800 bg-zinc-900/30 p-6 text-sm leading-relaxed text-zinc-300">
+          {story.meta?.main_axis || '暂无故事主轴摘要。'}
+        </div>
+        <div className="space-y-8">
+          {(story.chapters || []).map((chapter) => (
+            <section key={chapter.chapter_num} className="rounded-[2rem] border border-zinc-800 bg-zinc-900/20 p-8">
+              <div className="mb-4 flex items-center gap-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900/60 text-sm font-black text-zinc-400">
+                  {chapter.chapter_num}
+                </div>
+                <h2 className="text-xl font-black text-white">{chapter.title || `第${chapter.chapter_num}章`}</h2>
+              </div>
+              <div className="space-y-4 text-zinc-300">
+                {(chapter.text || '').split('\n').filter(Boolean).map((paragraph, idx) => (
+                  <p key={idx} className="leading-relaxed">{renderParagraphWithHighlights(paragraph, story.meta?.characters || [])}</p>
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   const storyInfoPanel = (
     <AnimatePresence>
@@ -2484,65 +3263,470 @@ export default function App() {
 
   const renderAuthoringView = () => (
     <div className="mx-auto max-w-7xl px-6 py-12 lg:px-8">
-      {/* Authoring Platform implementation... */}
-      <div className="mb-8 flex items-center justify-between">
-        <button
-          onClick={() => setGameState('STORY_SELECT')}
-          className="flex items-center gap-2 text-sm font-bold text-zinc-500 hover:text-white transition-colors"
-        >
-          <ChevronLeft className="h-4 w-4" />
-          返回选择页
-        </button>
-        <div className="flex gap-3">
-          <button
-            onClick={handleAuthoringSave}
-            disabled={authoringSaving}
-            className={semanticButtonClass('primary', { compact: true })}
-          >
+      <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
+        <BackNavButton label="返回作品库" onClick={() => setGameState('STORY_SELECT')} />
+        <div className="flex flex-wrap gap-3">
+          <button type="button" onClick={handleCreateAuthoringStory} disabled={authoringSaving} className={semanticButtonClass('secondary', { compact: true })}>
+            <Sparkles className="h-4 w-4" />
+            新建作品
+          </button>
+          <button type="button" onClick={handleDeleteAuthoringStory} disabled={authoringSaving || !authoringStoryId} className={semanticButtonClass('danger', { compact: true })}>
+            <Trash2 className="h-4 w-4" />
+            删除当前
+          </button>
+          <button type="button" onClick={() => refreshStories()} disabled={authoringSaving} className={semanticButtonClass('ghost', { compact: true })}>
+            <RefreshCcw className="h-4 w-4" />
+            刷新列表
+          </button>
+          <button type="button" onClick={handleSaveAuthoringChanges} disabled={authoringSaving || !authoringCartridge} className={semanticButtonClass('primary', { compact: true })}>
             {authoringSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-            保存作品
+            保存更改
           </button>
         </div>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-12">
-        <aside className="lg:col-span-3 space-y-6">
-          <nav className="space-y-1">
-            <button
-              onClick={() => setAuthoringTab('play')}
-              className={semanticMenuButtonClass(authoringTab === 'play' ? 'primary' : 'ghost')}
-            >
-              <Wand2 className="h-4 w-4" />
-              主线设定
-            </button>
-            <button
-              onClick={() => setAuthoringTab('branches')}
-              className={semanticMenuButtonClass(authoringTab === 'branches' ? 'secondary' : 'ghost')}
-            >
-              <Sparkles className="h-4 w-4" />
-              支线编织
-            </button>
-          </nav>
+      <div className="grid gap-6 lg:grid-cols-12">
+        <aside className="space-y-6 lg:col-span-4">
+          <div className="rounded-[2rem] border border-zinc-800 bg-zinc-900/30 p-5">
+            <div className="mb-4 text-lg font-black text-white">我的作品</div>
+            <div className="space-y-3">
+              {myStories.length === 0 ? (
+                <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4 text-sm text-zinc-500">
+                  还没有作品，点击“新建作品”开始创作。
+                </div>
+              ) : (
+                myStories.map((story: any) => (
+                  <button
+                    key={story.id}
+                    type="button"
+                    onClick={async () => {
+                      if (authoringStoryId !== story.id && !confirmDiscardAuthoringChanges('切换到其他作品')) return;
+                      await selectAuthoringStory(story.id);
+                    }}
+                    className={`w-full rounded-2xl border p-4 text-left transition-colors ${
+                      authoringStoryId === story.id
+                        ? 'border-indigo-500/40 bg-indigo-500/10'
+                        : 'border-zinc-800 bg-zinc-950/40 hover:border-zinc-600'
+                    }`}
+                  >
+                    <div className="text-sm font-black text-white">{formatBookTitle(getStoryTitle(story))}</div>
+                    <div className="mt-1 text-xs text-zinc-500">{getStoryAuthorName(story)}</div>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-[2rem] border border-zinc-800 bg-zinc-900/30 p-5">
+            <div className="mb-4 text-lg font-black text-white">创作入口</div>
+            <nav className="space-y-2">
+              <button type="button" onClick={() => setAuthoringTab('play')} className={semanticMenuButtonClass(authoringTab === 'play' ? 'primary' : 'ghost')}>
+                <Copy className="h-4 w-4" />
+                一键导入
+              </button>
+              <button type="button" onClick={() => setAuthoringTab('mainline')} className={semanticMenuButtonClass(authoringTab === 'mainline' ? 'primary' : 'ghost')}>
+                <BookOpen className="h-4 w-4" />
+                主线设定
+              </button>
+              <button type="button" onClick={() => setAuthoringTab('branches')} className={semanticMenuButtonClass(authoringTab === 'branches' ? 'secondary' : 'ghost')}>
+                <Sparkles className="h-4 w-4" />
+                支线设定
+              </button>
+            </nav>
+          </div>
         </aside>
 
-        <main className="lg:col-span-9 rounded-[2rem] border border-zinc-800 bg-zinc-900/20 p-8">
-          {authoringTab === 'play' && (
+        <main className="lg:col-span-8 rounded-[2rem] border border-zinc-800 bg-zinc-900/20 p-6 sm:p-8">
+          {!authoringCartridge ? (
+            <div className="rounded-[2rem] border border-dashed border-zinc-800 bg-zinc-950/40 p-10 text-center text-zinc-500">
+              请选择一个作品，或新建作品后开始编辑。
+            </div>
+          ) : (
             <div className="space-y-8">
-              <section className="space-y-4">
-                <h3 className="text-xl font-black text-white">主线内容</h3>
-                <textarea
-                  value={authoringImportText}
-                  onChange={(e) => setAuthoringImportText(e.target.value)}
-                  placeholder="粘贴作品内容（支持 Markdown 格式）"
-                  className="h-96 w-full rounded-2xl border border-zinc-800 bg-zinc-950 p-6 text-sm text-zinc-300 focus:border-indigo-500 focus:outline-none"
-                />
-                <button
-                  onClick={handleAuthoringImport}
-                  className={semanticButtonClass('secondary', { fullWidth: true })}
-                >
-                  解析并导入
-                </button>
-              </section>
+              {authoringTab === 'play' && (
+                <section className="space-y-4">
+                  <div>
+                    <h3 className="text-xl font-black text-white">一键导入</h3>
+                    <p className="mt-1 text-xs leading-relaxed text-zinc-500">支持按“主线设置 / 支线设置”范本格式自动解析并写入当前作品。</p>
+                  </div>
+                  <textarea
+                    value={authoringImportText}
+                    onChange={(event) => setAuthoringImportText(event.target.value)}
+                    placeholder="把其他 AI 生成的完整文本粘贴到这里..."
+                    className="min-h-[260px] w-full rounded-2xl border border-zinc-800 bg-zinc-950 p-5 text-sm text-zinc-300 outline-none transition-colors focus:border-indigo-500"
+                  />
+                  <label className="flex items-center gap-2 text-xs text-zinc-400">
+                    <input
+                      type="checkbox"
+                      checked={authoringImportReplaceBranches}
+                      onChange={(event) => setAuthoringImportReplaceBranches(event.target.checked)}
+                    />
+                    导入时尝试覆盖支线结构
+                  </label>
+                  <button type="button" onClick={handleAuthoringImport} className={semanticButtonClass('secondary', { fullWidth: true })}>
+                    <Copy className="h-4 w-4" />
+                    解析并导入
+                  </button>
+                </section>
+              )}
+
+              {authoringTab === 'mainline' && (
+                <section className="space-y-6">
+                  <div>
+                    <h3 className="text-xl font-black text-white">主线设定</h3>
+                    <p className="mt-1 text-xs leading-relaxed text-zinc-500">这里负责作品基本信息、角色、章节正文与结局。保存后会同步到作品库与游玩端。</p>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <label className="space-y-2 text-sm text-zinc-400">
+                      <div>作品标题</div>
+                      <input
+                        value={stripBookTitle(authoringCartridge.meta?.title || '')}
+                        onChange={(event) => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, title: event.target.value } }))}
+                        className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-white outline-none focus:border-indigo-500"
+                      />
+                    </label>
+                    <label className="space-y-2 text-sm text-zinc-400">
+                      <div>标签（以中文逗号分隔）</div>
+                      <input
+                        value={authoringCustomTagsInput}
+                        onChange={(event) => setAuthoringCustomTagsInput(event.target.value)}
+                        className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-white outline-none focus:border-indigo-500"
+                      />
+                    </label>
+                  </div>
+
+                  <label className="block space-y-2 text-sm text-zinc-400">
+                    <div>故事主轴</div>
+                    <textarea
+                      value={authoringCartridge.meta?.main_axis || ''}
+                      onChange={(event) => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, main_axis: event.target.value } }))}
+                      className="min-h-[120px] w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-white outline-none focus:border-indigo-500"
+                    />
+                  </label>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="text-lg font-black text-white">角色设定</div>
+                      <button
+                        type="button"
+                        onClick={() => setAuthoringCartridge((prev: any) => {
+                          const characters = [...(prev.meta?.characters || [])];
+                          if (characters.length >= 5) return prev;
+                          characters.push({ name: `角色${characters.length + 1}`, desc: '（待填写简介）' });
+                          return { ...prev, meta: { ...prev.meta, characters } };
+                        })}
+                        className={semanticButtonClass('ghost', { compact: true })}
+                      >
+                        <Sparkles className="h-4 w-4" />
+                        新增角色
+                      </button>
+                    </div>
+                    {(authoringCartridge.meta?.characters || []).map((character: any, index: number) => (
+                      <div key={index} className="grid gap-3 md:grid-cols-[1fr_1.4fr_auto]">
+                        <input
+                          value={character.name || ''}
+                          onChange={(event) => setAuthoringCartridge((prev: any) => ({
+                            ...prev,
+                            meta: {
+                              ...prev.meta,
+                              characters: prev.meta.characters.map((item: any, itemIndex: number) => itemIndex === index ? { ...item, name: event.target.value } : item),
+                            },
+                          }))}
+                          className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                          placeholder="角色名"
+                        />
+                        <input
+                          value={character.desc || ''}
+                          onChange={(event) => setAuthoringCartridge((prev: any) => ({
+                            ...prev,
+                            meta: {
+                              ...prev.meta,
+                              characters: prev.meta.characters.map((item: any, itemIndex: number) => itemIndex === index ? { ...item, desc: event.target.value } : item),
+                            },
+                          }))}
+                          className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                          placeholder="角色简介"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setAuthoringCartridge((prev: any) => ({
+                            ...prev,
+                            meta: { ...prev.meta, characters: prev.meta.characters.filter((_: any, itemIndex: number) => itemIndex !== index) },
+                          }))}
+                          disabled={(authoringCartridge.meta?.characters || []).length <= 1}
+                          className={semanticButtonClass('danger', { compact: true })}
+                        >
+                          删除
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="text-lg font-black text-white">章节正文</div>
+                    {(authoringCartridge.chapters || []).map((chapter: any) => (
+                      <div key={chapter.chapter_num} className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/40 p-4 space-y-3">
+                        <div className="text-sm font-black text-white">{formatStoryHeading(chapter)}</div>
+                        <input
+                          value={chapter.title || ''}
+                          onChange={(event) => setAuthoringCartridge((prev: any) => ({
+                            ...prev,
+                            chapters: prev.chapters.map((item: any) => item.chapter_num === chapter.chapter_num ? { ...item, title: event.target.value } : item),
+                          }))}
+                          className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                          placeholder="章节标题"
+                        />
+                        <textarea
+                          value={chapter.text || ''}
+                          onChange={(event) => setAuthoringCartridge((prev: any) => ({
+                            ...prev,
+                            chapters: prev.chapters.map((item: any) => item.chapter_num === chapter.chapter_num ? { ...item, text: event.target.value } : item),
+                          }))}
+                          className="min-h-[140px] w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-sm text-white outline-none focus:border-indigo-500"
+                          placeholder={`第${chapter.chapter_num}章正文`}
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="text-lg font-black text-white">结局设置</div>
+                    {(authoringCartridge.endings || []).map((ending: any) => (
+                      <div key={ending.id} className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/40 p-4 space-y-3">
+                        <div className="text-sm font-black text-white">{endingIdToLabel(ending.id)}</div>
+                        <input
+                          value={ending.title || ''}
+                          onChange={(event) => setAuthoringCartridge((prev: any) => ({
+                            ...prev,
+                            endings: prev.endings.map((item: any) => item.id === ending.id ? { ...item, title: event.target.value } : item),
+                          }))}
+                          className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                          placeholder="结局标题"
+                        />
+                        <textarea
+                          value={ending.text || ''}
+                          onChange={(event) => setAuthoringCartridge((prev: any) => ({
+                            ...prev,
+                            endings: prev.endings.map((item: any) => item.id === ending.id ? { ...item, text: event.target.value } : item),
+                          }))}
+                          className="min-h-[140px] w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-sm text-white outline-none focus:border-indigo-500"
+                          placeholder="结局正文"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {authoringTab === 'branches' && (
+                <section className="space-y-6">
+                  <div>
+                    <h3 className="text-xl font-black text-white">支线设定</h3>
+                    <p className="mt-1 text-xs leading-relaxed text-zinc-500">支线会根据触发条件在游玩时被判定解锁。提示短句会出现在干涉面板中。</p>
+                  </div>
+
+                  <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/40 p-5 space-y-4">
+                    <div className="text-sm font-black text-white">新建 / 编辑支线</div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <input value={branchForm.name} onChange={(event) => setBranchForm((prev) => ({ ...prev, name: event.target.value }))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" placeholder="支线名" />
+                      <input value={branchForm.hint} onChange={(event) => setBranchForm((prev) => ({ ...prev, hint: event.target.value }))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" placeholder="提示短句" />
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <select value={branchForm.side} onChange={(event) => setBranchForm((prev) => ({ ...prev, side: event.target.value as 'left' | 'right' }))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500">
+                        <option value="left">左倾支线</option>
+                        <option value="right">右倾支线</option>
+                      </select>
+                      <select value={branchForm.tier} onChange={(event) => setBranchForm((prev) => ({ ...prev, tier: event.target.value as 'small' | 'medium' | 'large' | 'hidden' }))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500">
+                        <option value="small">影响：小</option>
+                        <option value="medium">影响：中</option>
+                        <option value="large">影响：大</option>
+                        <option value="hidden">影响：隐</option>
+                      </select>
+                    </div>
+                    <textarea value={branchForm.sceneText} onChange={(event) => setBranchForm((prev) => ({ ...prev, sceneText: event.target.value }))} className="min-h-[120px] w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-sm text-white outline-none focus:border-indigo-500" placeholder="支线情节（300 字以内）" />
+                    <div className="space-y-3">
+                      <div className="text-sm font-black text-white">触发条件</div>
+                      {branchConditions.map((condition, idx) => (
+                        <div key={idx} className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 space-y-3">
+                          <div className="grid gap-3 md:grid-cols-4">
+                            <select value={condition.kind} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, kind: event.target.value as 'single' | 'count' } : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500">
+                              <option value="single">单次判定</option>
+                              <option value="count">累计判定</option>
+                            </select>
+                            <select value={condition.kind === 'single' ? condition.singleChapterNum : condition.upToChapterNum} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? (condition.kind === 'single' ? { ...item, singleChapterNum: Number(event.target.value) } : { ...item, upToChapterNum: Number(event.target.value) }) : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500">
+                              {chapterOptions.map((chapterNum) => <option key={chapterNum} value={chapterNum}>第{chapterNum}章</option>)}
+                            </select>
+                            <select value={condition.kind === 'single' ? condition.singleCharId : condition.countCharId} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? (condition.kind === 'single' ? { ...item, singleCharId: event.target.value } : { ...item, countCharId: event.target.value }) : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500">
+                              <option value="">选择角色</option>
+                              {normalizeCharacters(authoringCartridge.meta?.characters || []).map((character: any) => <option key={character.id} value={character.id}>{character.name}</option>)}
+                            </select>
+                            {condition.kind === 'single' ? (
+                              <select value={condition.singleAction} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, singleAction: event.target.value as 'bless' | 'curse' } : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500">
+                                <option value="bless">庇佑</option>
+                                <option value="curse">磨难</option>
+                              </select>
+                            ) : (
+                              <input type="number" min={1} value={condition.minCount} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, minCount: Math.max(1, Number(event.target.value) || 1) } : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500" placeholder="累计次数" />
+                            )}
+                          </div>
+                          <div className="text-xs text-indigo-300">
+                            {triggerPreview({
+                              triggerType: condition.kind,
+                              singleChapterNum: condition.singleChapterNum,
+                              singleCharId: condition.singleCharId,
+                              singleAction: condition.singleAction,
+                              countCharId: condition.countCharId,
+                              countAction: condition.countAction,
+                              minCount: condition.minCount,
+                              upToChapterNum: condition.upToChapterNum,
+                              characters: normalizeCharacters(authoringCartridge.meta?.characters || []),
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setBranchConditions((prev) => prev.length >= 3 ? prev : [...prev, {
+                          kind: 'single',
+                          singleChapterNum: 2,
+                          singleCharId: '',
+                          singleAction: 'bless',
+                          countCharId: '',
+                          countAction: 'bless',
+                          minCount: 1,
+                          upToChapterNum: 6,
+                        }])}
+                        className={semanticButtonClass('ghost', { compact: true })}
+                      >
+                        新增条件组
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!authoringStoryId || !branchForm.name.trim()) {
+                            showError('请先填写支线名。');
+                            return;
+                          }
+                          const newId = await createStoryBranch(db as any, authoringStoryId, {
+                            side: branchForm.side,
+                            tier: branchForm.tier,
+                            name: branchForm.name,
+                            hint: branchForm.hint || `留意${branchForm.name}`,
+                            desc: branchForm.sceneText.slice(0, 80) || branchForm.name,
+                            common: false,
+                            trigger: normalizeBranchConditionsForStorage(branchConditions)[0],
+                            triggerGroups: normalizeBranchConditionsForStorage(branchConditions),
+                            inject: { mustHappen: branchForm.sceneText ? [branchForm.sceneText] : [], mustReveal: [], mustChange: [] },
+                            sceneText: branchForm.sceneText,
+                          } as any);
+                          await selectAuthoringStory(authoringStoryId);
+                          setSelectedBranchId(newId);
+                          setExpandedBranchId(newId);
+                          showError('支线已创建。');
+                        }}
+                        className={semanticButtonClass('primary', { compact: true })}
+                      >
+                        创建支线
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    {(authoringCartridge.branches || []).map((branch: any) => (
+                      <div key={branch.id} className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/40 p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-black text-white">{branch.name}</div>
+                            <div className="text-xs text-zinc-500">{branch.side} / {branch.tier}</div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedBranchId(branch.id);
+                                setExpandedBranchId(expandedBranchId === branch.id ? null : branch.id);
+                                setBranchForm({
+                                  id: branch.id,
+                                  name: branch.name || '',
+                                  side: branch.side || 'left',
+                                  tier: branch.tier || 'small',
+                                  triggerType: 'single',
+                                  singleChapterNum: branch.trigger?.single?.chapterNum || 2,
+                                  singleCharId: branch.trigger?.single?.charId || '',
+                                  singleAction: branch.trigger?.single?.action || 'bless',
+                                  countCharId: branch.trigger?.count?.charId || '',
+                                  countAction: branch.trigger?.count?.action || 'bless',
+                                  minCount: branch.trigger?.count?.minCount || 1,
+                                  upToChapterNum: branch.trigger?.count?.upToChapterNum || 6,
+                                  hint: branch.hint || '',
+                                  sceneText: branch.sceneText || '',
+                                });
+                                setBranchConditions((branch.triggerGroups && branch.triggerGroups.length > 0)
+                                  ? branch.triggerGroups.map((group: any) => group.type === 'count'
+                                    ? {
+                                        kind: 'count',
+                                        singleChapterNum: 2,
+                                        singleCharId: '',
+                                        singleAction: 'bless',
+                                        countCharId: group.count?.charId || '',
+                                        countAction: group.count?.action || 'bless',
+                                        minCount: group.count?.minCount || 1,
+                                        upToChapterNum: group.count?.upToChapterNum || 6,
+                                      }
+                                    : {
+                                        kind: 'single',
+                                        singleChapterNum: group.single?.chapterNum || 2,
+                                        singleCharId: group.single?.charId || '',
+                                        singleAction: group.single?.action || 'bless',
+                                        countCharId: '',
+                                        countAction: 'bless',
+                                        minCount: 1,
+                                        upToChapterNum: 6,
+                                      })
+                                  : [{
+                                      kind: 'single',
+                                      singleChapterNum: 2,
+                                      singleCharId: '',
+                                      singleAction: 'bless',
+                                      countCharId: '',
+                                      countAction: 'bless',
+                                      minCount: 1,
+                                      upToChapterNum: 6,
+                                    }]
+                                );
+                              }}
+                              className={semanticButtonClass('secondary', { compact: true })}
+                            >
+                              编辑
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!authoringStoryId) return;
+                                await deleteStoryBranch(db as any, authoringStoryId, branch.id);
+                                await selectAuthoringStory(authoringStoryId);
+                                showError('支线已删除。');
+                              }}
+                              className={semanticButtonClass('danger', { compact: true })}
+                            >
+                              删除
+                            </button>
+                          </div>
+                        </div>
+                        {expandedBranchId === branch.id && (
+                          <div className="mt-4 border-t border-zinc-800 pt-4 text-xs leading-relaxed text-zinc-500">
+                            <div className="mb-2 font-bold text-zinc-300">{branch.hint || '暂无提示短句'}</div>
+                            <div>{branch.sceneText || '暂无支线情节。'}</div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
             </div>
           )}
         </main>
@@ -2780,19 +3964,38 @@ export default function App() {
           <h2 className="text-xl font-black text-white">{startupMessage}</h2>
           <SimulatedProgressBar />
         </div>
+      ) : gameState === 'READONLY_STORY' && readonlyStoryData ? (
+        <>
+          {renderReadonlyStoryView()}
+          {accountCenterModal}
+        </>
       ) : !user ? (
         renderAuthView()
       ) : (
         <>
           {gameState === 'STORY_SELECT' && renderStorySelectView()}
+          {gameState === 'THEME_SELECTION' && renderThemeSelectionView()}
+          {gameState === 'GENERATING_BLUEPRINT' && (
+            <div className="fixed inset-0 z-[5000] flex flex-col items-center justify-center bg-zinc-950 p-6 text-center">
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ repeat: Infinity, duration: 4, ease: "linear" }}
+                className="mb-8 h-12 w-12 rounded-2xl border-2 border-indigo-500/20 border-t-indigo-500"
+              />
+              <h2 className="text-2xl font-black text-white">{generationStatus || '正在生成世界蓝图...'}</h2>
+              <SimulatedProgressBar />
+            </div>
+          )}
           {gameState === 'PLAYING' && renderPlayingView()}
           {gameState === 'SUMMARY' && renderSummaryView()}
           {gameState === 'AUTHORING' && renderAuthoringView()}
+          {gameState === 'READONLY_STORY' && renderReadonlyStoryView()}
 
-          {actionMenuButton}
+          {gameState === 'PLAYING' && actionMenuButton}
           {floatingInterventionPanel}
           {actionMenuOverlay}
           {storyInfoPanel}
+          {accountCenterModal}
           {renderConfirmationModal()}
           {renderResumePromptModal()}
           {renderLeaveGameModal()}
