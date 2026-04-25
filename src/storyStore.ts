@@ -25,6 +25,20 @@ import type {
   Visibility,
 } from './storyCartridge';
 
+const countWords = (text?: string) => {
+  const value = (text || '').trim();
+  if (!value) return 0;
+  const cjk = value.match(/[\u4e00-\u9fff]/g)?.length || 0;
+  const words = value.replace(/[\u4e00-\u9fff]/g, ' ').trim().split(/\s+/).filter(Boolean).length;
+  return cjk + words;
+};
+
+const calcAverageChapterWords = (chapters?: Array<{ text?: string }>) => {
+  const ready = (chapters || []).filter((chapter) => (chapter?.text || '').trim().length > 0);
+  if (ready.length === 0) return 0;
+  return Math.round(ready.reduce((sum, chapter) => sum + countWords(chapter.text), 0) / ready.length);
+};
+
 export type StoryListItem = {
   id: string;
   title: string;
@@ -32,7 +46,9 @@ export type StoryListItem = {
   visibility: Visibility;
   authorId: string;
   authorName?: string;
-  popularity?: number;
+  popularity?: number; // legacy field; replaced by interventionCount
+  likeCount?: number;
+  interventionCount?: number;
   favoriteCount?: number;
   reportCount?: number;
   averageChapterWords?: number;
@@ -122,6 +138,8 @@ export async function createEmptyStory(db: Firestore, args: { authorId: string; 
     authorName: args.authorName || `游客+${args.authorId.slice(0, 6).toUpperCase()}`,
     visibility: 'private',
     popularity: 0,
+    likeCount: 0,
+    interventionCount: 0,
     favoriteCount: 0,
     reportCount: 0,
     averageChapterWords: 0,
@@ -203,12 +221,15 @@ export async function getSharedStoryRecord(db: Firestore, storyId: string, curre
     return {
       storyId: sharedSnap.id,
       meta: {
+        sharedStoryId: sharedSnap.id,
+        sourceStoryId: data.sourceStoryId || null,
         title: data.title,
         main_axis: data.main_axis,
         tags: data.tags || [],
         characters: data.characters || [],
         authorId: data.authorId,
         authorName: data.authorName,
+        visibility: data.visibility || 'public',
         averageChapterWords: data.averageChapterWords || 0,
       },
       chapters: Array.isArray(data.chapters) ? data.chapters : [],
@@ -228,7 +249,14 @@ export async function getSharedStoryRecord(db: Firestore, storyId: string, curre
   );
   const chapters = chaptersSnap.docs.map(d => d.data() as any as StoryChapterDoc);
 
-  return { storyId, meta, chapters };
+  return {
+    storyId,
+    meta: {
+      ...meta,
+      sourceStoryId: storyId,
+    },
+    chapters,
+  };
 }
 
 export async function createSharedStoryRecord(db: Firestore, args: {
@@ -269,6 +297,19 @@ export async function createSharedStoryRecord(db: Firestore, args: {
   return ref.id;
 }
 
+export async function updateSharedStoryVisibility(
+  db: Firestore,
+  sharedStoryId: string,
+  args: { authorId: string; visibility: 'public' | 'private' }
+) {
+  await updateDoc(doc(db, 'sharedStories', sharedStoryId), {
+    authorId: args.authorId,
+    visibility: args.visibility,
+    updatedAt: new Date().toISOString(),
+    updatedAtServer: serverTimestamp(),
+  } as any);
+}
+
 export async function adaptBlueprintToStory(db: Firestore, args: { authorId: string; authorName?: string; blueprint: any; chapters: any[]; conclusionText?: string; tags?: string[] }) {
   const now = new Date().toISOString();
   const bp = args.blueprint;
@@ -290,9 +331,11 @@ export async function adaptBlueprintToStory(db: Firestore, args: { authorId: str
     authorName: args.authorName || `游客+${args.authorId.slice(0, 6).toUpperCase()}`,
     visibility: 'private',
     popularity: 0,
+    likeCount: 0,
+    interventionCount: 0,
     favoriteCount: 0,
     reportCount: 0,
-    averageChapterWords: 0,
+    averageChapterWords: calcAverageChapterWords(args.chapters as any),
     endingMode: 'dual',
     endingRates: { left: bp.left_mainline_default || 40, right: bp.right_mainline_default || 40 },
     endingNames: { left: '', right: '' },

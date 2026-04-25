@@ -70,6 +70,14 @@ service cloud.firestore {
       return (('popularity' in data) && data.popularity is number) ? data.popularity : 0;
     }
 
+    function storyLikeCount(data) {
+      return (('likeCount' in data) && data.likeCount is number) ? data.likeCount : 0;
+    }
+
+    function storyInterventionCount(data) {
+      return (('interventionCount' in data) && data.interventionCount is number) ? data.interventionCount : storyPopularity(data);
+    }
+
     function storyFavoriteCount(data) {
       return (('favoriteCount' in data) && data.favoriteCount is number) ? data.favoriteCount : 0;
     }
@@ -137,6 +145,8 @@ service cloud.firestore {
              (!('authorName' in data) || (data.authorName is string && data.authorName.size() <= 80)) &&
              data.visibility in ['public', 'unlisted', 'private'] &&
              (!('popularity' in data) || data.popularity is number) &&
+             (!('likeCount' in data) || data.likeCount is number) &&
+             (!('interventionCount' in data) || data.interventionCount is number) &&
              (!('favoriteCount' in data) || data.favoriteCount is number) &&
              (!('reportCount' in data) || data.reportCount is number) &&
              (!('averageChapterWords' in data) || data.averageChapterWords is number) &&
@@ -201,8 +211,10 @@ service cloud.firestore {
         isValidStoryMeta(request.resource.data)
       ) || (
         canReadStoryData(resource.data) &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['popularity', 'favoriteCount', 'reportCount']) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['popularity', 'likeCount', 'interventionCount', 'favoriteCount', 'reportCount']) &&
         (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['popularity']) || request.resource.data.popularity == (storyPopularity(resource.data) + 1)) &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['likeCount']) || request.resource.data.likeCount == (storyLikeCount(resource.data) + 1)) &&
+        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['interventionCount']) || request.resource.data.interventionCount == (storyInterventionCount(resource.data) + 1)) &&
         (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['favoriteCount']) || request.resource.data.favoriteCount == (storyFavoriteCount(resource.data) + 1)) &&
         (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['reportCount']) || request.resource.data.reportCount == (storyReportCount(resource.data) + 1))
       );
@@ -219,6 +231,15 @@ service cloud.firestore {
       match /branches/{branchId} {
         allow read: if canReadStoryData(get(/databases/$(database)/documents/stories/$(storyId)).data);
         allow write: if isAuthenticated() && get(/databases/$(database)/documents/stories/$(storyId)).data.authorId == request.auth.uid;
+      }
+      match /likes/{userId} {
+        allow read: if isAuthenticated() && request.auth.uid == userId;
+        allow create: if isAuthenticated() &&
+          request.auth.uid == userId &&
+          !exists(/databases/$(database)/documents/stories/$(storyId)/likes/$(userId)) &&
+          request.resource.data.keys().hasAll(['userId']) &&
+          request.resource.data.userId == request.auth.uid;
+        allow update, delete: if false;
       }
     }
 

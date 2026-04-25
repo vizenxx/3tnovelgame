@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink } from 'lucide-react';
 import { auth, db, firebaseInitError } from './firebase';
-import { createEmptyStory, createSharedStoryRecord, adaptBlueprintToStory, createStoryBranch, deleteStoryBranch, deleteStoryCartridge, getSharedStoryRecord, getStoryCartridge, listMySharedStories, listMyStories, listPublicStories, saveStoryMainlineBundle, saveStoryMeta, updateAuthorNameEverywhere, upsertStoryBranch } from './storyStore';
+import { createEmptyStory, createSharedStoryRecord, adaptBlueprintToStory, createStoryBranch, deleteStoryBranch, deleteStoryCartridge, getSharedStoryRecord, getStoryCartridge, listMySharedStories, listMyStories, listPublicStories, saveStoryMainlineBundle, saveStoryMeta, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch } from './storyStore';
 import { isBranchUnlockedByHistory, tierToScore } from './storyCartridge';
 import { 
   signInWithRedirect,
@@ -32,6 +32,7 @@ import {
   setDoc, 
   getDoc, 
   updateDoc, 
+  runTransaction,
   collection, 
   addDoc, 
   increment,
@@ -41,7 +42,7 @@ import {
 } from 'firebase/firestore';
 
 // --- Types ---
-type GameState = 'STORY_SELECT' | 'AUTHORING' | 'THEME_SELECTION' | 'GENERATING_BLUEPRINT' | 'PLAYING' | 'SUMMARY' | 'READONLY_STORY';
+type GameState = 'STORY_SELECT' | 'AUTHORING' | 'THEME_SELECTION' | 'GENERATING_BLUEPRINT' | 'PLAYING' | 'SUMMARY' | 'READONLY_STORY' | 'ARCHIVE';
 
 enum OperationType {
   CREATE = 'create',
@@ -514,10 +515,6 @@ function summaryEndingCategoryLabel(args: {
   return '默认结局';
 }
 
-const buildStoryPopularityPayload = () => ({
-  popularity: increment(1),
-});
-
 const shortUserId = (value?: string | null) => (value || 'guest').slice(0, 6).toUpperCase();
 
 const getUserAuthorName = (value: FirebaseUser | null) => {
@@ -549,7 +546,33 @@ const getAverageChapterWords = (chapters?: Array<{ text?: string }>) => {
   return Math.round(readyChapters.reduce((sum, chapter) => sum + countStoryWords(chapter.text), 0) / readyChapters.length);
 };
 
-const getStoryAverageChapterWords = (story: any) => story?.averageChapterWords || story?.meta?.averageChapterWords || 0;
+const getStoryAverageChapterWords = (story: any) => {
+  const stored = Number(story?.averageChapterWords ?? story?.meta?.averageChapterWords ?? 0);
+  if (stored > 0) return stored;
+  const fallback = getAverageChapterWords((story?.chapters || story?.meta?.chapters || []) as Array<{ text?: string }>);
+  return fallback > 0 ? fallback : 0;
+};
+
+const getStoryLikeCount = (story: any) => Number(story?.likeCount ?? story?.meta?.likeCount ?? 0);
+const getStoryInterventionCount = (story: any) =>
+  Number(story?.interventionCount ?? story?.meta?.interventionCount ?? story?.popularity ?? story?.meta?.popularity ?? 0);
+const getStoryFavoriteCount = (story: any) => Number(story?.favoriteCount ?? story?.meta?.favoriteCount ?? 0);
+
+const sanitizeTextForAdaptation = (input?: string) => {
+  const value = String(input || '');
+  return value
+    .replace(/\[focus\]|\[\/focus\]/gi, '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/[*_~`#>]+/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+};
+
+const toDefaultArtstyleChapters = (chapters?: Chapter[]) =>
+  (chapters || []).map((chapter) => ({
+    ...chapter,
+    text: sanitizeTextForAdaptation(chapter.text),
+  }));
 
 const normalizeCharacters = (chars: Array<{ name: string; desc: string }>) => {
   const trimmed = (chars || []).map(c => ({ name: (c.name || '').trim(), desc: (c.desc || '').trim() }));
@@ -809,6 +832,9 @@ export default function App() {
   const [publicStories, setPublicStories] = useState<any[]>([]);
   const [myStories, setMyStories] = useState<any[]>([]);
   const [mySharedStories, setMySharedStories] = useState<any[]>([]);
+  const [archiveFilter, setArchiveFilter] = useState<'all' | 'private' | 'public'>('all');
+  const [archiveSearch, setArchiveSearch] = useState('');
+  const [archiveUpdatingIds, setArchiveUpdatingIds] = useState<Record<string, boolean>>({});
   const [storyImportCode, setStoryImportCode] = useState('');
   const [authoringCustomTagsInput, setAuthoringCustomTagsInput] = useState('');
   const [isLoadingStories, setIsLoadingStories] = useState(false);
@@ -846,8 +872,6 @@ export default function App() {
       upToChapterNum: 6,
     },
   ]);
-  const popularityCountedRef = useRef(false);
-  const conclusionRequestedRef = useRef(false);
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
   const [expandedBranchId, setExpandedBranchId] = useState<string | null>(null);
   const [authoringSavedSnapshot, setAuthoringSavedSnapshot] = useState('');
@@ -1199,6 +1223,80 @@ export default function App() {
     setGameState('STORY_SELECT');
   };
 
+  const handleInterveneFromReadonly = async () => {
+    if (!readonlyStoryData?.meta || !user || !db) return;
+    const originalStoryId = readonlyStoryData.meta?.sourceStoryId;
+    if (!originalStoryId) {
+      showError('该分享记录未关联原始故事，无法直接干涉。');
+      return;
+    }
+    setReadonlyStoryData(null);
+    setReadonlyCanGoBack(false);
+    window.history.replaceState({}, '', window.location.pathname);
+    await startStoryPlay(originalStoryId);
+  };
+
+  const handleAdaptFromReadonly = async () => {
+    if (!readonlyStoryData?.meta || !readonlyStoryData?.chapters || !user || !db) return;
+    try {
+      setIsLoadingStories(true);
+      const blueprint = {
+        title: stripBookTitle(readonlyStoryData.meta.title || '未命名故事'),
+        main_axis: readonlyStoryData.meta.main_axis || '（无主轴记录）',
+        characters: readonlyStoryData.meta.characters || [],
+        tags: readonlyStoryData.meta.tags || [],
+        chapters: readonlyStoryData.chapters.map((chapter) => ({
+          chapter_num: chapter.chapter_num,
+          title: chapter.title || `第${chapter.chapter_num}章`,
+          summary: chapter.summary || '',
+          present_characters: Array.isArray(chapter.present_characters) ? chapter.present_characters : [],
+          text: '',
+        })),
+        endings: [],
+        left_mainline_default: 40,
+        right_mainline_default: 40,
+      };
+      const resetArtstyleChapters = toDefaultArtstyleChapters(readonlyStoryData.chapters);
+      const storyId = await adaptBlueprintToStory(db as any, {
+        authorId: user.uid,
+        authorName: getUserAuthorName(user),
+        blueprint,
+        chapters: resetArtstyleChapters,
+        tags: readonlyStoryData.meta.tags || [],
+      });
+      await refreshStories();
+      showError('已完成一键改编，并重置为默认文面风格。');
+      setReadonlyStoryData(null);
+      setReadonlyCanGoBack(false);
+      window.history.replaceState({}, '', window.location.pathname);
+      await startStoryPlay(storyId);
+    } catch (error) {
+      console.error(error);
+      showError('一键改编失败，请稍后再试。');
+    } finally {
+      setIsLoadingStories(false);
+    }
+  };
+
+  const handleArchiveVisibilityChange = async (story: any, visibility: 'public' | 'private') => {
+    if (!db || !user || !story?.id) return;
+    try {
+      setArchiveUpdatingIds((prev) => ({ ...prev, [story.id]: true }));
+      await updateSharedStoryVisibility(db as any, story.id, {
+        authorId: user.uid,
+        visibility,
+      });
+      setMySharedStories((prev) =>
+        prev.map((item) => (item.id === story.id ? { ...item, visibility } : item))
+      );
+    } catch (error) {
+      console.error(error);
+      showError('更新公开设置失败，请稍后再试。');
+    } finally {
+      setArchiveUpdatingIds((prev) => ({ ...prev, [story.id]: false }));
+    }
+  };
+
   const handleGoogleLogin = async () => {
     if (!auth) return;
     setIsLoggingIn(true);
@@ -1366,7 +1464,16 @@ export default function App() {
 
       if (data.storyId) {
         setStartupMessage('正在恢复上次旅程...');
-        const cartridge = await getStoryCartridge(db as any, data.storyId);
+        let cartridge: any = null;
+        try {
+          cartridge = await getStoryCartridge(db as any, data.storyId);
+        } catch (error) {
+          console.error(error);
+          showError('恢复故事失败，请从作品库重新打开。');
+          setGameState('STORY_SELECT');
+          setIsSessionHydrated(true);
+          return;
+        }
         if (cancelled) return;
         if (cartridge) {
           setActiveStoryMeta(cartridge.meta);
@@ -1413,6 +1520,8 @@ export default function App() {
             }),
           };
         }
+      } else {
+        setActiveStoryMeta(null);
       }
 
       if (nextBlueprint) {
@@ -1421,6 +1530,12 @@ export default function App() {
       }
 
       setIsSessionHydrated(true);
+    }, (error) => {
+      if (cancelled) return;
+      console.error(error);
+      setIsSessionHydrated(true);
+      setGameState('STORY_SELECT');
+      showError('同步会话失败，请检查 Firebase 权限配置后重试。');
     });
 
     return () => {
@@ -1448,6 +1563,7 @@ export default function App() {
   const handleSaveProgressAndReturn = async () => {
     if (!user || !activeStoryId || !blueprint) return;
     try {
+      setShowLeaveGameModal(false);
       const progressRef = doc(db, 'users', user.uid, 'progress', activeStoryId);
       await setDoc(progressRef, {
         userId: user.uid,
@@ -1467,17 +1583,18 @@ export default function App() {
         currentChapters: chapters,
         savedAt: serverTimestamp(),
       });
-      setShowLeaveGameModal(false);
       await resetGame();
     } catch (e) {
       console.error(e);
       showError("保存进度失败");
+      setShowLeaveGameModal(false);
     }
   };
 
   const handleSaveWorkAndReturn = async () => {
     if (!user || !activeStoryId || !blueprint) return;
     try {
+      setShowLeaveGameModal(false);
       await createSharedStoryRecord(db as any, {
         authorId: user.uid,
         authorName: getUserAuthorName(user),
@@ -1490,12 +1607,12 @@ export default function App() {
         sourceStoryId: activeStoryId,
         visibility: 'private',
       });
-      setShowLeaveGameModal(false);
       await resetGame();
       showError("作品已保存至个人馆藏（私密）");
     } catch (e) {
       console.error(e);
       showError("保存作品失败");
+      setShowLeaveGameModal(false);
     }
   };
 
@@ -1563,6 +1680,7 @@ export default function App() {
   const resetGame = async () => {
     if (!user || !db) return;
     try {
+      setShowLeaveGameModal(false);
       setGameState('STORY_SELECT');
       setSelectedThemes([]);
       setBlueprint(null);
@@ -1580,8 +1698,6 @@ export default function App() {
       setInterventionHistory([]);
       setCanonicalWorldState(null);
       setDeltaWorldStateByChapter({});
-      popularityCountedRef.current = false;
-      conclusionRequestedRef.current = false;
 
       const sessionRef = doc(db, 'sessions', user.uid);
       await setDoc(sessionRef, {
@@ -1607,23 +1723,111 @@ export default function App() {
     } catch (e) {
       console.error(e);
       showError("重置命运失败");
+      setShowLeaveGameModal(false);
     }
+  };
+
+  const buildBlueprintFromCartridge = (cartridge: any): Blueprint => ({
+    title: cartridge.meta.title,
+    main_axis: cartridge.meta.main_axis,
+    left_mainline_default: 80,
+    right_mainline_default: 40,
+    endingMode: cartridge.meta.endingMode,
+    endingNames: cartridge.meta.endingNames,
+    characters: cartridge.meta.characters || [],
+    chapters: (() => {
+      const baseChapters = (cartridge.chapters || []).map((chapter: any) => ({
+        chapter_num: chapter.chapter_num,
+        title: chapter.title,
+        summary: chapter.summary,
+        present_characters: Array.isArray(chapter.present_characters) ? chapter.present_characters : [],
+        text: chapter.text || '',
+      }));
+      const chapterSeven = baseChapters.find((chapter: any) => chapter.chapter_num === 7);
+      const defaultEnding = (cartridge.endings || []).find((ending: any) => ending.id === 'default');
+      const defaultEndingText = (defaultEnding?.text || '').trim();
+      if (chapterSeven && !chapterSeven.text.trim() && defaultEndingText) {
+        chapterSeven.text = defaultEndingText;
+        chapterSeven.title = chapterSeven.title || defaultEnding?.title || '第七章';
+      }
+      return baseChapters;
+    })(),
+    endings: [
+      { type: 'normal', title: ((cartridge.endings || []).find((ending: any) => ending.id === 'default')?.title || '第七章'), text: ((cartridge.endings || []).find((ending: any) => ending.id === 'default')?.text || '') },
+      { type: 'good', title: ((cartridge.endings || []).find((ending: any) => ending.id === 'left')?.title || '左结局'), text: ((cartridge.endings || []).find((ending: any) => ending.id === 'left')?.text || '') },
+      { type: 'bad', title: ((cartridge.endings || []).find((ending: any) => ending.id === 'right')?.title || '右结局'), text: ((cartridge.endings || []).find((ending: any) => ending.id === 'right')?.text || '') },
+    ],
+    tags: cartridge.meta.tags || [],
+    branches: (cartridge.branches || []).map((branch: any) => {
+      const condition = branch.trigger?.type === 'single'
+        ? branch.trigger.single
+        : { chapterNum: 2, charId: cartridge.meta.characters?.[0]?.id || 'c1', action: 'bless' as const };
+      return {
+        id: branch.id,
+        name: branch.name,
+        score: tierToScore(branch.tier),
+        side: branch.side,
+        condition_char: condition.charId,
+        condition_action: condition.action,
+        condition_chapter: condition.chapterNum,
+        desc: branch.desc,
+        is_hidden: branch.tier === 'hidden',
+        hint: branch.hint,
+        trigger: branch.trigger,
+        triggerGroups: branch.triggerGroups,
+        tier: branch.tier,
+        inject: branch.inject,
+        sceneText: branch.sceneText,
+      } as any;
+    }),
+  });
+
+  const applyStoryCartridgeForPlay = (storyId: string, cartridge: any, progressData?: any) => {
+    const nextBlueprint = buildBlueprintFromCartridge(cartridge);
+    const baseChapters = progressData?.currentChapters || nextBlueprint.chapters;
+    const initialStatuses: Record<string, { status: string; isDead: boolean }> = {};
+    (nextBlueprint.characters || []).forEach((character: any) => {
+      initialStatuses[character.id] = { status: '存活', isDead: false };
+    });
+
+    setBlueprint(nextBlueprint);
+    setActiveStoryId(storyId);
+    setActiveStoryMeta(cartridge.meta);
+    setSelectedThemes(nextBlueprint.tags || []);
+    setChapters(baseChapters);
+    setInterventionsLeft(progressData?.interventionsLeft ?? 3);
+    setEndingValue(progressData?.endingValue || 0);
+    setUnlockedBranches(progressData?.unlockedBranches || []);
+    setIntervenedChapters(progressData?.intervenedChapters || []);
+    setNaturalChapters(progressData?.naturalChapters || nextBlueprint.chapters);
+    setInitialNaturalChapters(progressData?.initialNaturalChapters || nextBlueprint.chapters);
+    setCharacterStatuses(progressData?.characterStatuses || initialStatuses);
+    setStoryConclusion(progressData?.storyConclusion || null);
+    setInterventionHistory(progressData?.interventionHistory || []);
+    setCanonicalWorldState(progressData?.canonicalWorldState || null);
+    setDeltaWorldStateByChapter(progressData?.deltaWorldStateByChapter || {});
+    setUiFeedback(progressData?.uiFeedback || { leftProgress: 0, rightProgress: 0, endingLabel: '均衡道' });
+    setGameState('PLAYING');
   };
 
   const startStoryPlay = async (storyId: string) => {
     if (!user || !db) return;
     try {
       setIsLoadingStories(true);
+      const cartridge = await getStoryCartridge(db as any, storyId);
+      if (!cartridge) {
+        throw new Error('story-not-found-or-denied');
+      }
       
       const progressRef = doc(db, 'users', user.uid, 'progress', storyId);
       const progressSnap = await getDoc(progressRef);
       
       if (progressSnap.exists()) {
-        setPendingProgressToLoad({ id: storyId, data: progressSnap.data() });
+        setPendingProgressToLoad({ id: storyId, data: { ...progressSnap.data(), cartridge } });
         return;
       }
       
-      await startNewStoryPlay(storyId);
+      await startNewStoryPlay(storyId, cartridge);
     } catch (e) {
       console.error(e);
       showError("无法开启故事");
@@ -1632,37 +1836,34 @@ export default function App() {
     }
   };
 
-  const startNewStoryPlay = async (storyId: string) => {
+  const startNewStoryPlay = async (storyId: string, loadedCartridge?: any) => {
     if (!user || !db) return;
     try {
-      setGameState('PLAYING');
-      setActiveStoryId(storyId);
-      setActiveStoryMeta(null);
-      setInterventionsLeft(3);
-      setEndingValue(0);
-      setUnlockedBranches([]);
-      setIntervenedChapters([]);
-      setNaturalChapters([]);
-      setInitialNaturalChapters([]);
-      setCharacterStatuses({});
-      setStoryConclusion(null);
-      setInterventionHistory([]);
-      setCanonicalWorldState(null);
-      setDeltaWorldStateByChapter({});
-      popularityCountedRef.current = false;
-      conclusionRequestedRef.current = false;
+      const cartridge = loadedCartridge || await getStoryCartridge(db as any, storyId);
+      if (!cartridge) {
+        throw new Error('story-not-found-or-denied');
+      }
+      applyStoryCartridgeForPlay(storyId, cartridge);
 
       const sessionRef = doc(db, 'sessions', user.uid);
       await setDoc(sessionRef, {
         userId: user.uid,
         gameState: 'PLAYING',
         storyId: storyId,
+        selectedThemes: cartridge.meta?.tags || [],
+        currentChapters: (cartridge.chapters || []).map((chapter: any) => ({
+          chapter_num: chapter.chapter_num,
+          title: chapter.title || '',
+          summary: chapter.summary || '',
+          present_characters: Array.isArray(chapter.present_characters) ? chapter.present_characters : [],
+          text: chapter.text || '',
+        })),
         interventionsLeft: 3,
         endingValue: 0,
         unlockedBranches: [],
         intervenedChapters: [],
-        naturalChapters: [],
-        initialNaturalChapters: [],
+        naturalChapters: (cartridge.chapters || []),
+        initialNaturalChapters: (cartridge.chapters || []),
         characterStatuses: {},
         storyConclusion: null,
         interventionHistory: [],
@@ -1679,9 +1880,15 @@ export default function App() {
   const resumeStoryPlay = async (storyId: string, progressData: any) => {
     if (!user || !db) return;
     try {
+      const cartridge = progressData.cartridge || await getStoryCartridge(db as any, storyId);
+      if (!cartridge) {
+        throw new Error('story-not-found-or-denied');
+      }
+      applyStoryCartridgeForPlay(storyId, cartridge, progressData);
       const sessionRef = doc(db, 'sessions', user.uid);
+      const { cartridge: _cartridge, ...sessionProgress } = progressData;
       await setDoc(sessionRef, {
-        ...progressData,
+        ...sessionProgress,
         userId: user.uid,
         updatedAt: serverTimestamp(),
       });
@@ -2032,6 +2239,21 @@ export default function App() {
     }
   };
 
+  const handleLogout = async () => {
+    if (!auth) return;
+    try {
+      await signOut(auth);
+      setIsAccountCenterOpen(false);
+      setShowLeaveGameModal(false);
+      setIsActionMenuOpen(false);
+      setIsStoryInfoOpen(false);
+      setGameState('STORY_SELECT');
+    } catch (error: any) {
+      console.error(error);
+      showError(error?.message || '登出失败，请重试。');
+    }
+  };
+
   const handleIntervene = async (chapterNum: number, charId: string, action: 'bless' | 'curse') => {
     if (interventionsLeft <= 0 || isRewriting || !blueprint || !user) return;
     
@@ -2101,6 +2323,13 @@ export default function App() {
     }
   };
 
+  const incrementStoryCounter = async (storyId: string, field: 'favoriteCount' | 'reportCount' | 'interventionCount') => {
+    if (!db) return;
+    await updateDoc(doc(db, 'stories', storyId), {
+      [field]: increment(1),
+    } as any);
+  };
+
   const handleGenerateSummary = async (source: 'auto_interventions' | 'manual') => {
     if (!activeStoryId || isGeneratingConclusion || !blueprint) return;
     
@@ -2135,6 +2364,11 @@ export default function App() {
       const result = await response.json();
       setStoryConclusion(result.conclusion);
       setShowSummaryModal(true);
+      try {
+        await incrementStoryCounter(activeStoryId, 'interventionCount');
+      } catch (counterError) {
+        console.error(counterError);
+      }
     } catch (e: any) {
       console.error(e);
       showError(e.message || "生成总结失败");
@@ -2175,14 +2409,39 @@ export default function App() {
   };
 
   const handleStoryInteraction = async (kind: 'like' | 'favorite' | 'report') => {
-    if (!activeStoryId || !db) return;
-    const field = kind === 'like' ? 'popularity' : kind === 'favorite' ? 'favoriteCount' : 'reportCount';
+    if (!activeStoryId || !db || !user) return;
     try {
+      if (kind === 'like') {
+        const storyRef = doc(db, 'stories', activeStoryId);
+        const likeRef = doc(db, 'stories', activeStoryId, 'likes', user.uid);
+        await runTransaction(db as any, async (transaction: any) => {
+          const likeSnap = await transaction.get(likeRef);
+          if (likeSnap.exists()) {
+            throw new Error('already-liked');
+          }
+          transaction.set(likeRef, {
+            userId: user.uid,
+            createdAt: serverTimestamp(),
+            createdAtIso: new Date().toISOString(),
+          });
+          transaction.update(storyRef, {
+            likeCount: increment(1),
+          });
+        });
+        showError('已点赞。');
+        return;
+      }
+      const field = kind === 'favorite' ? 'favoriteCount' : 'reportCount';
       await updateDoc(doc(db, 'stories', activeStoryId), {
         [field]: increment(1),
       } as any);
-      showError(kind === 'like' ? '已点赞。' : kind === 'favorite' ? '已收藏。' : '已收到举报。');
+      showError(kind === 'favorite' ? '已收藏。' : '已收到举报。');
+      return;
     } catch (error) {
+      if ((error as any)?.message === 'already-liked') {
+        showError('你已经点过赞了。');
+        return;
+      }
       console.error(error);
       showError('操作失败，请稍后再试。');
     }
@@ -2193,7 +2452,10 @@ export default function App() {
     try {
       setAuthoringSaving(true);
       await saveStoryMainlineBundle(db as any, authoringStoryId, {
-        metaPatch: authoringCartridge.meta,
+        metaPatch: {
+          ...authoringCartridge.meta,
+          averageChapterWords: getAverageChapterWords(authoringCartridge.chapters),
+        },
         chapters: authoringCartridge.chapters,
         endings: authoringCartridge.endings,
       });
@@ -2438,10 +2700,10 @@ export default function App() {
         <div className="rounded-xl bg-indigo-500/10 p-2.5 text-indigo-400 group-hover:bg-indigo-500 group-hover:text-white transition-colors">
           <BookOpen className="h-6 w-6" />
         </div>
-        {(story.popularity || story.meta?.popularity || 0) > 0 && (
+        {getStoryInterventionCount(story) > 0 && (
           <div className="flex items-center gap-1.5 rounded-full bg-zinc-800/50 px-3 py-1 text-[10px] font-bold text-zinc-400">
             <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
-            {story.popularity || story.meta?.popularity || 0}
+            {getStoryInterventionCount(story)}
           </div>
         )}
       </div>
@@ -2455,8 +2717,9 @@ export default function App() {
         {getStoryMainAxis(story)}
       </p>
       <div className="mb-4 grid grid-cols-2 gap-2 text-[11px] font-bold text-zinc-500">
-        <div className="rounded-lg bg-zinc-950/60 px-2 py-1">点赞 {story.popularity || story.meta?.popularity || 0}</div>
-        <div className="rounded-lg bg-zinc-950/60 px-2 py-1">收藏 {story.favoriteCount || story.meta?.favoriteCount || 0}</div>
+        <div className="rounded-lg bg-zinc-950/60 px-2 py-1">点赞 {getStoryLikeCount(story)}</div>
+        <div className="rounded-lg bg-zinc-950/60 px-2 py-1">干涉 {getStoryInterventionCount(story)}</div>
+        <div className="rounded-lg bg-zinc-950/60 px-2 py-1">收藏 {getStoryFavoriteCount(story)}</div>
         <div className="col-span-2 rounded-lg bg-zinc-950/60 px-2 py-1">平均每章 {getStoryAverageChapterWords(story) || '未知'} 字</div>
       </div>
       <div className="flex flex-wrap gap-2">
@@ -2490,13 +2753,6 @@ export default function App() {
           >
             <Sparkles className="h-4 w-4" />
             作者后台
-          </button>
-          <button
-            onClick={() => setIsAccountCenterOpen(true)}
-            className={semanticButtonClass('ghost', { compact: true })}
-          >
-            <UserIcon className="h-4 w-4" />
-            个人中心
           </button>
         </div>
       </div>
@@ -2562,38 +2818,6 @@ export default function App() {
           </section>
         )}
 
-        {mySharedStories.length > 0 && (
-          <section>
-            <div className="mb-6 flex items-center gap-3">
-              <div className="h-px flex-1 bg-zinc-800" />
-              <h3 className="text-sm font-black uppercase tracking-[0.2em] text-zinc-500">我的馆藏与分享记录</h3>
-              <div className="h-px flex-1 bg-zinc-800" />
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {mySharedStories.slice(0, 6).map((story: any) => (
-                <button
-                  key={story.id}
-                  type="button"
-                  onClick={() => openReadonlyStory(story.id, { allowBack: true })}
-                  className="rounded-[1.5rem] border border-zinc-800 bg-zinc-900/30 p-5 text-left transition-colors hover:border-zinc-600"
-                >
-                  <div className="mb-2 flex items-center justify-between gap-3">
-                    <div className="text-sm font-black text-white">{formatBookTitle(story.title)}</div>
-                    <div className={`rounded-full px-2 py-1 text-[10px] font-black ${story.visibility === 'public' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-zinc-800 text-zinc-400'}`}>
-                      {story.visibility === 'public' ? '公开分享' : '私密馆藏'}
-                    </div>
-                  </div>
-                  <div className="text-xs leading-relaxed text-zinc-500 line-clamp-3">{story.main_axis || '暂无主轴摘要。'}</div>
-                  <div className="mt-4 inline-flex items-center gap-2 text-xs font-bold text-indigo-300">
-                    <Archive className="h-3.5 w-3.5" />
-                    打开记录
-                  </div>
-                </button>
-              ))}
-            </div>
-          </section>
-        )}
-
         <section>
           <div className="mb-6 flex items-center gap-3">
             <div className="h-px flex-1 bg-zinc-800" />
@@ -2614,13 +2838,116 @@ export default function App() {
     </div>
   );
 
+  const renderArchiveView = () => {
+    const keyword = archiveSearch.trim().toLowerCase();
+    const filteredStories = mySharedStories.filter((story: any) => {
+      if (archiveFilter !== 'all' && story.visibility !== archiveFilter) return false;
+      if (!keyword) return true;
+      const haystack = `${story.title || ''}\n${story.main_axis || ''}`.toLowerCase();
+      return haystack.includes(keyword);
+    });
+    return (
+      <div className="mx-auto max-w-6xl px-6 py-12 lg:px-8">
+        <div className="mb-10 flex items-start justify-between gap-4">
+          <div>
+            <div className="text-xs font-black uppercase tracking-[0.22em] text-zinc-500">故事馆藏</div>
+            <h2 className="mt-2 text-3xl font-black text-white sm:text-4xl">保存与分享记录</h2>
+            <p className="mt-2 text-sm text-zinc-500">在这里查看你保存过的私密馆藏与公开分享记录。</p>
+          </div>
+          <BackNavButton label="返回作品库" onClick={() => setGameState('STORY_SELECT')} />
+        </div>
+
+        <div className="mb-6 space-y-3 rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4">
+          <div className="flex flex-wrap gap-2">
+            {[
+              { id: 'all', label: '全部' },
+              { id: 'private', label: '私密' },
+              { id: 'public', label: '公开' },
+            ].map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => setArchiveFilter(option.id as 'all' | 'private' | 'public')}
+                className={archiveFilter === option.id ? semanticButtonClass('primary', { compact: true }) : semanticButtonClass('ghost', { compact: true })}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <input
+            type="search"
+            value={archiveSearch}
+            onChange={(event) => setArchiveSearch(event.target.value)}
+            placeholder="搜索标题或主轴内容"
+            className="w-full rounded-xl border border-zinc-700 bg-zinc-950/70 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+          />
+        </div>
+
+        {filteredStories.length === 0 ? (
+          <div className="rounded-[2rem] border border-zinc-800 bg-zinc-900/30 p-10 text-center">
+            <div className="text-lg font-bold text-zinc-300">{mySharedStories.length === 0 ? '还没有故事记录' : '没有符合筛选条件的记录'}</div>
+            <div className="mt-2 text-sm text-zinc-500">你在游玩页点击“保存作品并返回”或“分享”后，记录会出现在这里。</div>
+          </div>
+        ) : (
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {filteredStories.map((story: any) => (
+              <div key={story.id} className="rounded-[1.5rem] border border-zinc-800 bg-zinc-900/30 p-5">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div className="line-clamp-1 text-sm font-black text-white">{formatBookTitle(story.title)}</div>
+                  <div className={`rounded-full px-2 py-1 text-[10px] font-black ${story.visibility === 'public' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-zinc-800 text-zinc-400'}`}>
+                    {story.visibility === 'public' ? '公开分享' : '私密馆藏'}
+                  </div>
+                </div>
+                <div className="line-clamp-3 text-xs leading-relaxed text-zinc-500">{story.main_axis || '暂无主轴摘要。'}</div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button type="button" onClick={() => openReadonlyStory(story.id, { allowBack: true })} className={semanticButtonClass('secondary', { compact: true })}>
+                    <BookOpen className="h-4 w-4" />
+                    打开
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const url = buildSharedStoryUrl(story.id);
+                      const copied = await writeClipboardText(url);
+                      showError(copied ? '链接已复制。' : '复制失败，请手动复制地址栏链接。');
+                    }}
+                    className={semanticButtonClass('ghost', { compact: true })}
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    复制链接
+                  </button>
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    disabled={archiveUpdatingIds[story.id] || story.visibility === 'private'}
+                    onClick={() => handleArchiveVisibilityChange(story, 'private')}
+                    className={semanticButtonClass('ghost', { compact: true })}
+                  >
+                    设为私密
+                  </button>
+                  <button
+                    type="button"
+                    disabled={archiveUpdatingIds[story.id] || story.visibility === 'public'}
+                    onClick={() => handleArchiveVisibilityChange(story, 'public')}
+                    className={semanticButtonClass('ghost', { compact: true })}
+                  >
+                    设为公开
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderThemeSelectionView = () => (
     <div className="mx-auto flex min-h-[100dvh] max-w-5xl flex-col justify-center px-6 py-20 text-center lg:px-8">
       <div className="mb-8 flex items-center justify-between">
         <BackNavButton label="返回作品库" onClick={() => setGameState('STORY_SELECT')} />
-        <button type="button" onClick={() => setIsAccountCenterOpen(true)} className={semanticIconButtonClass('ghost')}>
-          <UserIcon className="h-5 w-5" />
-        </button>
+        <div className="h-10 w-10" />
       </div>
       <div className="mx-auto max-w-2xl space-y-4">
         <div className="inline-flex items-center gap-2 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-4 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-indigo-300">
@@ -2761,50 +3088,40 @@ export default function App() {
                       </button>
                     </>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAccountCenterOpen(false);
+                      handleLogout();
+                    }}
+                    className={semanticButtonClass('danger', { fullWidth: true })}
+                  >
+                    <LogOut className="h-4 w-4" />
+                    登出
+                  </button>
                 </div>
               </section>
 
               <section className="rounded-[1.5rem] border border-zinc-800 bg-zinc-900/30 p-5">
                 <div className="mb-4 flex items-center gap-2 text-lg font-black text-white">
                   <Archive className="h-5 w-5 text-indigo-300" />
-                  我的馆藏与分享记录
+                  故事馆藏
                 </div>
-                <div className="space-y-3">
-                  {mySharedStories.length === 0 ? (
-                    <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4 text-sm text-zinc-500">
-                      还没有保存或分享过的故事记录。
-                    </div>
-                  ) : (
-                    mySharedStories.map((story: any) => (
-                      <div key={story.id} className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
-                        <div className="mb-1 flex items-center justify-between gap-3">
-                          <div className="text-sm font-black text-white">{formatBookTitle(story.title)}</div>
-                          <div className={`rounded-full px-2 py-1 text-[10px] font-black ${story.visibility === 'public' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-zinc-800 text-zinc-400'}`}>
-                            {story.visibility === 'public' ? '公开' : '私密'}
-                          </div>
-                        </div>
-                        <div className="text-xs leading-relaxed text-zinc-500 line-clamp-2">{story.main_axis || '暂无主轴摘要。'}</div>
-                        <div className="mt-3 flex gap-2">
-                          <button type="button" onClick={() => openReadonlyStory(story.id, { allowBack: true })} className={semanticButtonClass('secondary', { compact: true })}>
-                            <BookOpen className="h-4 w-4" />
-                            打开
-                          </button>
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              const url = buildSharedStoryUrl(story.id);
-                              const copied = await writeClipboardText(url);
-                              showError(copied ? '链接已复制。' : '复制失败，请手动复制地址栏链接。');
-                            }}
-                            className={semanticButtonClass('ghost', { compact: true })}
-                          >
-                            <ExternalLink className="h-4 w-4" />
-                            复制链接
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
+                <div className="space-y-3 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
+                  <div className="text-sm text-zinc-400">
+                    已保存/已分享的故事记录现在集中在独立页面管理。
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAccountCenterOpen(false);
+                      setGameState('ARCHIVE');
+                    }}
+                    className={semanticButtonClass('secondary', { fullWidth: true })}
+                  >
+                    <Archive className="h-4 w-4" />
+                    打开故事馆藏页
+                  </button>
                 </div>
               </section>
             </div>
@@ -2830,6 +3147,27 @@ export default function App() {
         <div className="mb-10 rounded-[2rem] border border-zinc-800 bg-zinc-900/30 p-6 text-sm leading-relaxed text-zinc-300">
           {story.meta?.main_axis || '暂无故事主轴摘要。'}
         </div>
+        {user && (
+          <div className="mb-10 grid gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={handleInterveneFromReadonly}
+              disabled={!story.meta?.sourceStoryId}
+              className={semanticButtonClass('primary', { compact: true })}
+            >
+              <Zap className="h-4 w-4" />
+              干涉故事
+            </button>
+            <button
+              type="button"
+              onClick={handleAdaptFromReadonly}
+              className={semanticButtonClass('secondary', { compact: true })}
+            >
+              <Wand2 className="h-4 w-4" />
+              一键改编
+            </button>
+          </div>
+        )}
         <div className="space-y-8">
           {(story.chapters || []).map((chapter) => (
             <section key={chapter.chapter_num} className="rounded-[2rem] border border-zinc-800 bg-zinc-900/20 p-8">
@@ -2970,6 +3308,14 @@ export default function App() {
         )}
         <button
           type="button"
+          onClick={() => setIsAccountCenterOpen(true)}
+          aria-label="打开个人中心"
+          className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950/80 text-zinc-200 transition-colors hover:border-zinc-600 hover:text-white backdrop-blur-md"
+        >
+          <UserIcon className="h-5 w-5" />
+        </button>
+        <button
+          type="button"
           onClick={() => setIsActionMenuOpen(true)}
           className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950/80 text-zinc-200 transition-colors hover:border-zinc-600 hover:text-white backdrop-blur-md"
         >
@@ -2978,6 +3324,27 @@ export default function App() {
       </div>
     </div>
   );
+
+  const accountEntryButton = user && gameState !== 'PLAYING' ? (
+    <div className="fixed right-4 top-[max(1rem,env(safe-area-inset-top))] z-[2100] flex items-center gap-2 sm:right-6">
+      <button
+        type="button"
+        onClick={() => setGameState('ARCHIVE')}
+        aria-label="打开故事馆藏"
+        className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950/85 text-zinc-200 transition-colors hover:border-zinc-600 hover:text-white backdrop-blur-md"
+      >
+        <Archive className="h-5 w-5" />
+      </button>
+      <button
+        type="button"
+        onClick={() => setIsAccountCenterOpen(true)}
+        aria-label="打开个人中心"
+        className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950/85 text-zinc-200 transition-colors hover:border-zinc-600 hover:text-white backdrop-blur-md"
+      >
+        <UserIcon className="h-5 w-5" />
+      </button>
+    </div>
+  ) : null;
 
   const floatingInterventionPanel = blueprint && gameState === 'PLAYING' && typeof document !== 'undefined'
     ? createPortal(
@@ -3771,6 +4138,16 @@ export default function App() {
                 <BookOpen className="h-5 w-5" />
                 故事档案
               </button>
+              <button
+                onClick={() => {
+                  setIsActionMenuOpen(false);
+                  setGameState('ARCHIVE');
+                }}
+                className={semanticMenuButtonClass('ghost')}
+              >
+                <Archive className="h-5 w-5" />
+                故事馆藏
+              </button>
               {gameState === 'PLAYING' && (
                 <button
                   onClick={() => {
@@ -3967,6 +4344,7 @@ export default function App() {
       ) : gameState === 'READONLY_STORY' && readonlyStoryData ? (
         <>
           {renderReadonlyStoryView()}
+          {accountEntryButton}
           {accountCenterModal}
         </>
       ) : !user ? (
@@ -3974,6 +4352,7 @@ export default function App() {
       ) : (
         <>
           {gameState === 'STORY_SELECT' && renderStorySelectView()}
+          {gameState === 'ARCHIVE' && renderArchiveView()}
           {gameState === 'THEME_SELECTION' && renderThemeSelectionView()}
           {gameState === 'GENERATING_BLUEPRINT' && (
             <div className="fixed inset-0 z-[5000] flex flex-col items-center justify-center bg-zinc-950 p-6 text-center">
@@ -3992,6 +4371,7 @@ export default function App() {
           {gameState === 'READONLY_STORY' && renderReadonlyStoryView()}
 
           {gameState === 'PLAYING' && actionMenuButton}
+          {accountEntryButton}
           {floatingInterventionPanel}
           {actionMenuOverlay}
           {storyInfoPanel}

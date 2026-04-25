@@ -18,7 +18,9 @@ export interface StoryMeta {
   authorId: string;
   authorName?: string;
   visibility: Visibility;
-  popularity?: number;
+  popularity?: number; // legacy field; replaced by interventionCount
+  likeCount?: number;
+  interventionCount?: number;
   favoriteCount?: number;
   reportCount?: number;
   averageChapterWords?: number;
