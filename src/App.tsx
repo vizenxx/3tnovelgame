@@ -1303,7 +1303,7 @@ export default function App() {
         savedAt: serverTimestamp(),
       });
       setShowLeaveGameModal(false);
-      resetGame();
+      await resetGame();
     } catch (e) {
       console.error(e);
       showError("保存进度失败");
@@ -1326,7 +1326,7 @@ export default function App() {
         visibility: 'private',
       });
       setShowLeaveGameModal(false);
-      resetGame();
+      await resetGame();
       showError("作品已保存至个人馆藏（私密）");
     } catch (e) {
       console.error(e);
@@ -1423,8 +1423,8 @@ export default function App() {
         userId: user.uid,
         gameState: 'STORY_SELECT',
         selectedThemes: [],
-        blueprintId: null,
-        storyId: null,
+        blueprintId: deleteField(),
+        storyId: deleteField(),
         currentChapters: [],
         interventionsLeft: 3,
         endingValue: 0,
