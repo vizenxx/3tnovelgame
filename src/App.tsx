@@ -2274,13 +2274,16 @@ export default function App() {
       const response = await apiFetch('/api/intervene', {
         method: 'POST',
         body: JSON.stringify({
-          storyId: activeStoryId,
+          blueprint,
+          chapters,
           chapterNum,
           charId,
           action,
+          currentEndingValue: endingValue,
+          currentUnlockedBranches: unlockedBranches,
+          targetWordCount,
           interventionHistory: [...interventionHistory, { chapterNum, charId, action }],
           worldState: buildWorldStateForPrompt(chapterNum, endingValue),
-          currentChapters: chapters
         })
       });
 
@@ -3491,12 +3494,10 @@ export default function App() {
                                     <div className="mb-3">
                                       <div className="text-sm font-black text-zinc-100">{char.name}</div>
                                       <div className="mt-2 space-y-1 text-xs leading-relaxed text-zinc-500">
-                                        {branchHints.length > 0 ? (
+                                        {branchHints.length > 0 && (
                                           branchHints.map((hint, hintIdx) => (
                                             <div key={`${char.id}-hint-${hintIdx}`}>{hint}</div>
                                           ))
-                                        ) : (
-                                          <div>本章暂无显性支线提示，将依故事脉络判断干涉涟漪。</div>
                                         )}
                                       </div>
                                     </div>
