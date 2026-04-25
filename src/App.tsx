@@ -1532,7 +1532,7 @@ export default function App() {
     
     try {
       setIsRewriting(true);
-      setActiveInterventionChapter(chapterNum);
+      setActiveInterventionChapter(null);
       setInterventionEffect(action);
       setActiveInterventionOverlay({ type: action, targetChapter: chapterNum, statusRaw: "因果重塑中..." });
       
@@ -2278,46 +2278,113 @@ export default function App() {
                 ))}
               </div>
 
-              {gameState === 'PLAYING' && !intervenedChapters.includes(chapter.chapter_num) && chapter.chapter_num > 1 && (
-                <div className="mt-12 flex justify-center border-t border-zinc-800/50 pt-10">
-                  <div className="flex w-full flex-col items-center gap-6">
-                    <div className="max-w-xl text-center">
-                      <div className="mb-1 text-sm font-black text-zinc-100">因果节点已就绪</div>
-                      <div className="text-xs leading-relaxed text-zinc-500">
-                        提示：选择一个登场角色，再选择「庇佑」或「磨难」。干涉会影响本章之后的故事走向，并可能触发支线。
-                      </div>
+              {(() => {
+                if (gameState !== 'PLAYING' || !blueprint) return null;
+
+                const availableCharacters: Character[] = [];
+                (chapter.present_characters || []).forEach((charIdOrName) => {
+                  const matchedCharacter = blueprint.characters.find((char) => char.id === charIdOrName || char.name === charIdOrName);
+                  if (matchedCharacter && !availableCharacters.some((char) => char.id === matchedCharacter.id)) {
+                    availableCharacters.push(matchedCharacter);
+                  }
+                });
+
+                const canInterveneInChapter =
+                  chapter.chapter_num >= 2 &&
+                  chapter.chapter_num <= 6 &&
+                  interventionsLeft > 0 &&
+                  !storyConclusion &&
+                  availableCharacters.length > 0;
+
+                if (!canInterveneInChapter) return null;
+
+                const isExpanded = activeInterventionChapter === chapter.chapter_num;
+                const isAlreadyIntervened = intervenedChapters.includes(chapter.chapter_num);
+
+                return (
+                  <div className="mt-12 border-t border-zinc-800/50 pt-8">
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setActiveInterventionChapter(isExpanded ? null : chapter.chapter_num)}
+                        disabled={isRewriting || isGeneratingConclusion || activeInterventionOverlay !== null}
+                        className={`${semanticButtonClass(isAlreadyIntervened ? 'secondary' : 'primary', { compact: true })} rounded-2xl`}
+                      >
+                        <Sparkles className="h-4 w-4" />
+                        {isAlreadyIntervened ? '再次干涉' : '干涉命运'}
+                      </button>
                     </div>
-                    <div className="grid w-full gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                      {blueprint?.characters.map(char => (
-                        <div key={char.id} className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
-                          <div className="mb-3">
-                            <div className="text-sm font-black text-zinc-100">{char.name}</div>
-                            <div className="mt-1 line-clamp-2 text-xs leading-relaxed text-zinc-500">{char.desc}</div>
+
+                    <AnimatePresence initial={false}>
+                      {isExpanded && (
+                        <motion.div
+                          key={`intervention-${chapter.chapter_num}`}
+                          initial={{ opacity: 0, height: 0, y: 8 }}
+                          animate={{ opacity: 1, height: 'auto', y: 0 }}
+                          exit={{ opacity: 0, height: 0, y: -8 }}
+                          transition={{ duration: 0.2, ease: 'easeOut' }}
+                          className="overflow-hidden"
+                        >
+                          <div className="mt-6 flex w-full flex-col items-center gap-6 rounded-[1.75rem] border border-zinc-800/70 bg-zinc-950/40 p-5 sm:p-6">
+                            <div className="max-w-xl text-center">
+                              <div className="mb-1 text-sm font-black text-zinc-100">因果节点已就绪</div>
+                              <div className="text-xs leading-relaxed text-zinc-500">
+                                请选择本章登场角色，再决定施加庇佑或磨难。支线提示只作为命运走向的参考，不会直接写进故事表面。
+                              </div>
+                            </div>
+                            <div className="grid w-full gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                              {availableCharacters.map((char) => {
+                                const branchHints = (blueprint.branches || [])
+                                  .filter((branch) => branch.condition_chapter === chapter.chapter_num && branch.condition_char === char.id)
+                                  .map((branch) => branch.hint)
+                                  .filter((hint): hint is string => Boolean(hint))
+                                  .slice(0, 2);
+
+                                return (
+                                  <div key={char.id} className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+                                    <div className="mb-3">
+                                      <div className="text-sm font-black text-zinc-100">{char.name}</div>
+                                      <div className="mt-2 space-y-1 text-xs leading-relaxed text-zinc-500">
+                                        {branchHints.length > 0 ? (
+                                          branchHints.map((hint, hintIdx) => (
+                                            <div key={`${char.id}-hint-${hintIdx}`}>{hint}</div>
+                                          ))
+                                        ) : (
+                                          <div>本章暂无显性支线提示，将依故事脉络判断干涉涟漪。</div>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleIntervene(chapter.chapter_num, char.id, 'bless')}
+                                        disabled={interventionsLeft <= 0 || isRewriting}
+                                        className="flex min-h-14 items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-3 text-sm font-black text-emerald-300 transition-colors hover:border-emerald-400/60 hover:bg-emerald-500/15 disabled:opacity-30"
+                                      >
+                                        <Zap className="h-4 w-4" />
+                                        庇佑
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleIntervene(chapter.chapter_num, char.id, 'curse')}
+                                        disabled={interventionsLeft <= 0 || isRewriting}
+                                        className="flex min-h-14 items-center justify-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-3 text-sm font-black text-rose-300 transition-colors hover:border-rose-400/60 hover:bg-rose-500/15 disabled:opacity-30"
+                                      >
+                                        <Skull className="h-4 w-4" />
+                                        磨难
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
                           </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <button
-                              onClick={() => handleIntervene(chapter.chapter_num, char.id, 'bless')}
-                              disabled={interventionsLeft <= 0 || isRewriting}
-                              className="flex min-h-14 items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-3 text-sm font-black text-emerald-300 transition-colors hover:border-emerald-400/60 hover:bg-emerald-500/15 disabled:opacity-30"
-                            >
-                              <Zap className="h-4 w-4" />
-                              庇佑
-                            </button>
-                            <button
-                              onClick={() => handleIntervene(chapter.chapter_num, char.id, 'curse')}
-                              disabled={interventionsLeft <= 0 || isRewriting}
-                              className="flex min-h-14 items-center justify-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-3 text-sm font-black text-rose-300 transition-colors hover:border-rose-400/60 hover:bg-rose-500/15 disabled:opacity-30"
-                            >
-                              <Skull className="h-4 w-4" />
-                              磨难
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
           </motion.section>
         ))}
