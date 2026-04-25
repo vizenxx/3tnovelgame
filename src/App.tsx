@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink } from 'lucide-react';
+import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp } from 'lucide-react';
 import { auth, db, firebaseInitError } from './firebase';
 import { createEmptyStory, createSharedStoryRecord, adaptBlueprintToStory, createStoryBranch, deleteStoryBranch, deleteStoryCartridge, getSharedStoryRecord, getStoryCartridge, listMySharedStories, listMyStories, listPublicStories, saveStoryMainlineBundle, saveStoryMeta, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch } from './storyStore';
 import { isBranchUnlockedByHistory, tierToScore } from './storyCartridge';
@@ -43,6 +43,8 @@ import {
 
 // --- Types ---
 type GameState = 'STORY_SELECT' | 'AUTHORING' | 'THEME_SELECTION' | 'GENERATING_BLUEPRINT' | 'PLAYING' | 'SUMMARY' | 'READONLY_STORY' | 'ARCHIVE';
+
+const safeModalBackdropClass = "fixed inset-0 flex items-center justify-center overflow-y-auto overscroll-contain px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]";
 
 enum OperationType {
   CREATE = 'create',
@@ -296,7 +298,7 @@ const GlobalError = ({ errorMsg }: { errorMsg: string | null }) => (
         exit={{ opacity: 0, y: -20 }}
         role="alert"
         aria-live="assertive"
-        className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] bg-rose-500 text-white px-6 py-3 rounded-lg shadow-lg font-medium"
+        className="fixed left-1/2 top-[max(1rem,env(safe-area-inset-top))] z-[6100] -translate-x-1/2 rounded-lg bg-rose-500 px-6 py-3 font-medium text-white shadow-lg"
       >
         {errorMsg}
       </motion.div>
@@ -379,7 +381,7 @@ const PwaUpdateModal = ({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[3600] bg-black/80 backdrop-blur-sm p-4 flex items-center justify-center"
+        className={`${safeModalBackdropClass} z-[3600] bg-black/80 backdrop-blur-sm`}
       >
         <motion.div
           initial={{ opacity: 0, scale: 0.96, y: 16 }}
@@ -447,7 +449,7 @@ const PwaUpdateModal = ({
 };
 
 const LoadingOverlay = ({ progress, status, subtext, variant = 'default' }: { progress: number, status: string, subtext?: string, variant?: 'default' | 'bless' | 'curse' | 'ending' }) => (
-  <div className={`fixed inset-0 z-[1000] backdrop-blur-xl flex flex-col items-center justify-center p-8 text-center transition-colors duration-700 ${
+  <div className={`fixed inset-0 z-[6000] backdrop-blur-xl flex flex-col items-center justify-center p-8 text-center transition-colors duration-700 ${
     variant === 'bless' ? 'bg-emerald-950/90' : 
     variant === 'curse' ? 'bg-rose-950/90' : 
     variant === 'ending' ? 'bg-amber-950/90' :
@@ -777,7 +779,7 @@ export default function App() {
   const [storyConclusion, setStoryConclusion] = useState<string | null>(null);
   const [isGeneratingConclusion, setIsGeneratingConclusion] = useState(false);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
-  const [pendingSummaryRequest, setPendingSummaryRequest] = useState<'manual' | null>(null);
+  const [pendingSummaryRequest, setPendingSummaryRequest] = useState<'auto_interventions' | 'manual' | null>(null);
   /** 总结页入口：三次干涉耗尽自动进入 vs 手动结束游玩 */
   const [summaryEntrySource, setSummaryEntrySource] = useState<'auto_interventions' | 'manual' | null>(null);
   const [uiFeedback, setUiFeedback] = useState<{leftProgress: number, rightProgress: number, endingLabel: string}>({leftProgress: 0, rightProgress: 0, endingLabel: "均衡道"});
@@ -835,6 +837,7 @@ export default function App() {
   const [archiveFilter, setArchiveFilter] = useState<'all' | 'private' | 'public'>('all');
   const [archiveSearch, setArchiveSearch] = useState('');
   const [archiveUpdatingIds, setArchiveUpdatingIds] = useState<Record<string, boolean>>({});
+  const [showScrollTopButton, setShowScrollTopButton] = useState(false);
   const [storyImportCode, setStoryImportCode] = useState('');
   const [authoringCustomTagsInput, setAuthoringCustomTagsInput] = useState('');
   const [isLoadingStories, setIsLoadingStories] = useState(false);
@@ -1627,7 +1630,8 @@ export default function App() {
     </div>
   );
 
-  const LoadingOverlay = ({ progress, status, variant }: { progress: number; status: string; variant: 'bless' | 'curse' | 'conclude' }) => (
+  /*
+  const InAppLoadingOverlay = ({ progress, status, variant }: { progress: number; status: string; variant: 'bless' | 'curse' | 'conclude' }) => (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -1672,6 +1676,7 @@ export default function App() {
       </div>
     </motion.div>
   );
+  */
 
   const showError = (msg: string) => {
     setErrorMsg(msg);
@@ -2257,6 +2262,7 @@ export default function App() {
 
   const handleIntervene = async (chapterNum: number, charId: string, action: 'bless' | 'curse') => {
     if (interventionsLeft <= 0 || isRewriting || !blueprint || !user) return;
+    let simulation: ReturnType<typeof setInterval> | null = null;
     
     try {
       setIsRewriting(true);
@@ -2265,7 +2271,7 @@ export default function App() {
       setActiveInterventionOverlay({ type: action, targetChapter: chapterNum, statusRaw: "因果重塑中..." });
       
       const charName = blueprint.characters.find(c => c.id === charId)?.name || "未知角色";
-      const simulation = startProgressSimulation(12000, [
+      simulation = startProgressSimulation(12000, [
         `正在观测 ${charName} 的命运线...`,
         `正在编织 ${action === 'bless' ? '庇佑' : '磨难'} 的因果...`,
         `正在重塑第 ${chapterNum} 章及后续情节...`,
@@ -2288,7 +2294,10 @@ export default function App() {
         })
       });
 
-      clearInterval(simulation);
+      if (simulation) {
+        clearInterval(simulation);
+        simulation = null;
+      }
 
       if (!response.ok) {
         throw new Error(await readErrorMessage(response));
@@ -2355,7 +2364,11 @@ export default function App() {
         }));
       }
 
-      setIntervenedChapters(prev => [...prev, chapterNum]);
+      const nextIntervenedChapters = [...intervenedChapters, chapterNum];
+      setIntervenedChapters(nextIntervenedChapters);
+      if (nextIntervenedChapters.length >= 3) {
+        setPendingSummaryRequest('auto_interventions');
+      }
       
       setActiveInterventionOverlay(null);
       setIsRewriting(false);
@@ -2367,6 +2380,10 @@ export default function App() {
       showError(e.message || "干涉失败，请重试");
       setIsRewriting(false);
       setActiveInterventionOverlay(null);
+    } finally {
+      if (simulation) {
+        clearInterval(simulation);
+      }
     }
   };
 
@@ -2379,13 +2396,18 @@ export default function App() {
 
   const handleGenerateSummary = async (source: 'auto_interventions' | 'manual') => {
     if (!activeStoryId || isGeneratingConclusion || !blueprint) return;
+    if (storyConclusion) {
+      setShowSummaryModal(true);
+      return;
+    }
+    let simulation: ReturnType<typeof setInterval> | null = null;
     
     try {
       setIsGeneratingConclusion(true);
       setSummaryEntrySource(source);
-      setGameState('SUMMARY');
+      setActiveInterventionOverlay({ type: 'ending', targetChapter: 7, statusRaw: '终局演绎中...' });
       
-      const simulation = startProgressSimulation(8000, [
+      simulation = startProgressSimulation(8000, [
         "正在收束因果残片...",
         "正在推演时空最终走向...",
         "正在铭刻命运总结..."
@@ -2400,7 +2422,10 @@ export default function App() {
         })
       });
 
-      clearInterval(simulation);
+      if (simulation) {
+        clearInterval(simulation);
+        simulation = null;
+      }
 
       if (!response.ok) {
         throw new Error(await readErrorMessage(response));
@@ -2419,9 +2444,20 @@ export default function App() {
       showError(e.message || "生成总结失败");
       setGameState('PLAYING');
     } finally {
+      if (simulation) {
+        clearInterval(simulation);
+      }
       setIsGeneratingConclusion(false);
+      setActiveInterventionOverlay(null);
     }
   };
+
+  useEffect(() => {
+    if (!pendingSummaryRequest || isRewriting || isGeneratingConclusion || !activeStoryId || !blueprint) return;
+    const source = pendingSummaryRequest;
+    setPendingSummaryRequest(null);
+    handleGenerateSummary(source);
+  }, [pendingSummaryRequest, isRewriting, isGeneratingConclusion, activeStoryId, blueprint, chapters]);
 
   const handleShareStory = async () => {
     if (!storyConclusion || !activeStoryId || !user) return;
@@ -2476,11 +2512,83 @@ export default function App() {
         showError('已点赞。');
         return;
       }
-      const field = kind === 'favorite' ? 'favoriteCount' : 'reportCount';
+      if (kind === 'favorite') {
+        const storyRef = doc(db, 'stories', activeStoryId);
+        const favoriteRef = doc(db, 'stories', activeStoryId, 'favorites', user.uid);
+        let alreadyFavorited = false;
+        await runTransaction(db as any, async (transaction: any) => {
+          const favoriteSnap = await transaction.get(favoriteRef);
+          if (favoriteSnap.exists()) {
+            alreadyFavorited = true;
+            return;
+          }
+          transaction.set(favoriteRef, {
+            userId: user.uid,
+            createdAt: serverTimestamp(),
+            createdAtIso: new Date().toISOString(),
+          });
+          transaction.update(storyRef, {
+            favoriteCount: increment(1),
+          });
+        });
+
+        let record = await getSharedStoryRecord(db as any, activeStoryId, user.uid);
+        if (!record) {
+          const cartridge = await getStoryCartridge(db as any, activeStoryId);
+          if (cartridge) {
+            record = {
+              storyId: activeStoryId,
+              meta: {
+                ...cartridge.meta,
+                sourceStoryId: activeStoryId,
+              },
+              chapters: cartridge.chapters,
+            };
+          }
+        }
+        const archiveSourceStoryId = record?.meta?.sourceStoryId || activeStoryId;
+        const alreadyInArchive = mySharedStories.some((story: any) => story.sourceStoryId === archiveSourceStoryId || story.sourceStoryId === activeStoryId);
+        if (!alreadyInArchive) {
+          if (record) {
+            const title = record.meta?.title || '收藏作品';
+            const mainAxis = record.meta?.main_axis || '';
+            const averageChapterWords = record.meta?.averageChapterWords || getAverageChapterWords(record.chapters as any);
+            const archiveId = await createSharedStoryRecord(db as any, {
+              authorId: user.uid,
+              authorName: getStoryAuthorName(record.meta),
+              title,
+              main_axis: mainAxis,
+              tags: record.meta?.tags || [],
+              characters: record.meta?.characters || [],
+              chapters: record.chapters as any,
+              averageChapterWords,
+              sourceStoryId: archiveSourceStoryId,
+              visibility: 'private',
+            });
+            setMySharedStories((prev) => [{
+              id: archiveId,
+              title,
+              main_axis: mainAxis,
+              tags: record.meta?.tags || [],
+              characters: record.meta?.characters || [],
+              chapters: record.chapters,
+              authorId: user.uid,
+              authorName: getStoryAuthorName(record.meta),
+              sourceStoryId: archiveSourceStoryId,
+              averageChapterWords,
+              visibility: 'private',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            }, ...prev]);
+          }
+        }
+        showError(alreadyFavorited || alreadyInArchive ? '已在馆藏中。' : '已收藏并加入馆藏。');
+        return;
+      }
       await updateDoc(doc(db, 'stories', activeStoryId), {
-        [field]: increment(1),
+        reportCount: increment(1),
       } as any);
-      showError(kind === 'favorite' ? '已收藏。' : '已收到举报。');
+      showError('已收到举报。');
       return;
     } catch (error) {
       if ((error as any)?.message === 'already-liked') {
@@ -2572,6 +2680,15 @@ export default function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowScrollTopButton(window.scrollY > Math.max(420, window.innerHeight * 0.75));
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   const renderConfirmationModal = () => (
     <AnimatePresence>
       {confirmationModal.isOpen && (
@@ -2579,7 +2696,7 @@ export default function App() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[5000] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
+          className={`${safeModalBackdropClass} z-[5000] bg-black/80 backdrop-blur-md`}
         >
           <motion.div
             initial={{ scale: 0.9, opacity: 0 }}
@@ -2620,7 +2737,7 @@ export default function App() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[5000] flex items-center justify-center bg-black/90 backdrop-blur-lg p-4"
+          className={`${safeModalBackdropClass} z-[5000] bg-black/90 backdrop-blur-lg`}
         >
           <motion.div
             initial={{ y: 20, opacity: 0 }}
@@ -2673,7 +2790,7 @@ export default function App() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[5000] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
+          className={`${safeModalBackdropClass} z-[5000] bg-black/80 backdrop-blur-md`}
         >
           <motion.div
             initial={{ scale: 0.95, opacity: 0 }}
@@ -2726,6 +2843,90 @@ export default function App() {
                 className="mt-2 w-full py-2 text-sm font-medium text-zinc-500 hover:text-zinc-300"
               >
                 继续游玩
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
+  const renderBranchUnlockModal = () => (
+    <AnimatePresence>
+      {branchUnlockNotice && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className={`${safeModalBackdropClass} z-[5200] bg-black/75 backdrop-blur-md`}
+        >
+          <motion.div
+            initial={{ y: 18, opacity: 0, scale: 0.96 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: 12, opacity: 0, scale: 0.98 }}
+            className="w-full max-w-md rounded-[2rem] border border-indigo-500/30 bg-zinc-950 p-7 text-center shadow-2xl"
+          >
+            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-500/15 text-indigo-300">
+              <Sparkles className="h-7 w-7" />
+            </div>
+            <div className="mb-2 text-xs font-black uppercase tracking-[0.22em] text-indigo-300">支线解锁</div>
+            <h3 className="text-2xl font-black text-white">{branchUnlockNotice.name || '新的命运支线'}</h3>
+            {(branchUnlockNotice.desc || branchUnlockNotice.hint) && (
+              <p className="mt-4 text-sm leading-relaxed text-zinc-400">
+                {branchUnlockNotice.desc || branchUnlockNotice.hint}
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={() => setBranchUnlockNotice(null)}
+              className={`${semanticButtonClass('primary', { fullWidth: true })} mt-7`}
+            >
+              <Check className="h-4 w-4" />
+              继续阅读
+            </button>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
+  const renderSummaryModal = () => (
+    <AnimatePresence>
+      {showSummaryModal && storyConclusion && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className={`${safeModalBackdropClass} z-[5200] bg-black/75 backdrop-blur-md`}
+        >
+          <motion.div
+            initial={{ y: 18, opacity: 0, scale: 0.96 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: 12, opacity: 0, scale: 0.98 }}
+            className="w-full max-w-2xl rounded-[2rem] border border-amber-500/25 bg-zinc-950 p-7 shadow-2xl"
+          >
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <div className="mb-2 text-xs font-black uppercase tracking-[0.22em] text-amber-300">命运结算</div>
+                <h3 className="text-3xl font-black text-white">最终命运总结</h3>
+              </div>
+              <button type="button" onClick={() => setShowSummaryModal(false)} className={semanticIconButtonClass('ghost')}>
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 text-lg font-medium leading-relaxed text-amber-100">
+              {storyConclusion.split('\n').filter(Boolean).map((paragraph, index) => (
+                <p key={index}>{paragraph}</p>
+              ))}
+            </div>
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <button type="button" onClick={() => setShowSummaryModal(false)} className={semanticButtonClass('secondary', { fullWidth: true })}>
+                <BookOpen className="h-4 w-4" />
+                回去阅读完整故事
+              </button>
+              <button type="button" onClick={handleShareStory} disabled={isSharing} className={semanticButtonClass('primary', { fullWidth: true })}>
+                {isSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
+                分享故事
               </button>
             </div>
           </motion.div>
@@ -3069,14 +3270,14 @@ export default function App() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[3200] flex items-center justify-center bg-black/80 p-4 backdrop-blur-md"
+          className={`${safeModalBackdropClass} z-[3200] bg-black/80 backdrop-blur-md`}
           onClick={() => setIsAccountCenterOpen(false)}
         >
           <motion.div
             initial={{ opacity: 0, y: 16, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 16, scale: 0.97 }}
-            className="max-h-[88vh] w-full max-w-4xl overflow-y-auto rounded-[2rem] border border-zinc-800 bg-zinc-950 p-6 shadow-2xl"
+            className="max-h-[82dvh] w-full max-w-4xl overflow-y-auto rounded-[2rem] border border-zinc-800 bg-zinc-950 p-6 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-6 flex items-center justify-between">
@@ -3535,13 +3736,13 @@ export default function App() {
                                   <div key={char.id} className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
                                     <div className="mb-3">
                                       <div className="text-sm font-black text-zinc-100">{char.name}</div>
-                                      <div className="mt-2 space-y-1 text-xs leading-relaxed text-zinc-500">
-                                        {branchHints.length > 0 && (
-                                          branchHints.map((hint, hintIdx) => (
+                                      {branchHints.length > 0 && (
+                                        <div className="mt-2 space-y-1 text-xs leading-relaxed text-zinc-500">
+                                          {branchHints.map((hint, hintIdx) => (
                                             <div key={`${char.id}-hint-${hintIdx}`}>{hint}</div>
-                                          ))
-                                        )}
-                                      </div>
+                                          ))}
+                                        </div>
+                                      )}
                                     </div>
                                     <div className="grid grid-cols-2 gap-2">
                                       <button
@@ -4151,7 +4352,7 @@ export default function App() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[2100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          className={`${safeModalBackdropClass} z-[2100] bg-black/60 backdrop-blur-sm`}
           onClick={() => setIsActionMenuOpen(false)}
         >
           <motion.div
@@ -4333,7 +4534,7 @@ export default function App() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="fixed inset-0 z-[6000] flex items-center justify-center bg-black/80 p-4 backdrop-blur-md"
+                className={`${safeModalBackdropClass} z-[6000] bg-black/80 backdrop-blur-md`}
                 onClick={() => setShowSafariGuide(false)}
               >
                 <motion.div
@@ -4370,6 +4571,28 @@ export default function App() {
     );
   };
 
+  const renderScrollToTopButton = () => (
+    <AnimatePresence>
+      {showScrollTopButton && (
+        <motion.button
+          type="button"
+          initial={{ opacity: 0, y: 12, scale: 0.92 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 12, scale: 0.92 }}
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          className={`fixed right-4 z-[1800] flex h-12 w-12 items-center justify-center rounded-2xl border border-zinc-700 bg-zinc-950/90 text-zinc-200 shadow-2xl backdrop-blur-xl transition-colors hover:border-indigo-400 hover:text-white sm:right-6 ${
+            gameState === 'PLAYING'
+              ? 'bottom-[calc(max(1rem,env(safe-area-inset-bottom))+5.75rem)]'
+              : 'bottom-[max(1rem,env(safe-area-inset-bottom))]'
+          }`}
+          aria-label="返回顶端"
+        >
+          <ArrowUp className="h-5 w-5" />
+        </motion.button>
+      )}
+    </AnimatePresence>
+  );
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 selection:bg-indigo-500/30 selection:text-indigo-200">
       <GlobalError errorMsg={errorMsg} />
@@ -4387,6 +4610,7 @@ export default function App() {
       ) : gameState === 'READONLY_STORY' && readonlyStoryData ? (
         <>
           {renderReadonlyStoryView()}
+          {renderScrollToTopButton()}
           {accountEntryButton}
           {accountCenterModal}
         </>
@@ -4414,6 +4638,7 @@ export default function App() {
           {gameState === 'READONLY_STORY' && renderReadonlyStoryView()}
 
           {gameState === 'PLAYING' && actionMenuButton}
+          {renderScrollToTopButton()}
           {accountEntryButton}
           {floatingInterventionPanel}
           {actionMenuOverlay}
@@ -4422,6 +4647,8 @@ export default function App() {
           {renderConfirmationModal()}
           {renderResumePromptModal()}
           {renderLeaveGameModal()}
+          {renderBranchUnlockModal()}
+          {renderSummaryModal()}
           
           <AnimatePresence>
             {activeInterventionOverlay && (

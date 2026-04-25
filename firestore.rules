@@ -241,6 +241,15 @@ service cloud.firestore {
           request.resource.data.userId == request.auth.uid;
         allow update, delete: if false;
       }
+      match /favorites/{userId} {
+        allow read: if isAuthenticated() && request.auth.uid == userId;
+        allow create: if isAuthenticated() &&
+          request.auth.uid == userId &&
+          !exists(/databases/$(database)/documents/stories/$(storyId)/favorites/$(userId)) &&
+          request.resource.data.keys().hasAll(['userId']) &&
+          request.resource.data.userId == request.auth.uid;
+        allow update, delete: if false;
+      }
     }
 
     match /sharedStories/{shareId} {
