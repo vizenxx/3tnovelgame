@@ -555,6 +555,17 @@ const getStoryAverageChapterWords = (story: any) => {
   return fallback > 0 ? fallback : 0;
 };
 
+const withAverageChapterWords = (story: any, averageChapterWords: number) => ({
+  ...story,
+  averageChapterWords: Number(story?.averageChapterWords || 0) > 0 ? story.averageChapterWords : averageChapterWords,
+  meta: story?.meta
+    ? {
+        ...story.meta,
+        averageChapterWords: Number(story?.meta?.averageChapterWords || 0) > 0 ? story.meta.averageChapterWords : averageChapterWords,
+      }
+    : story?.meta,
+});
+
 const getStoryLikeCount = (story: any) => Number(story?.likeCount ?? story?.meta?.likeCount ?? 0);
 const getStoryInterventionCount = (story: any) =>
   Number(story?.interventionCount ?? story?.meta?.interventionCount ?? story?.popularity ?? story?.meta?.popularity ?? 0);
@@ -838,6 +849,8 @@ export default function App() {
   const [archiveSearch, setArchiveSearch] = useState('');
   const [archiveUpdatingIds, setArchiveUpdatingIds] = useState<Record<string, boolean>>({});
   const [showScrollTopButton, setShowScrollTopButton] = useState(false);
+  const [readonlyReturnTarget, setReadonlyReturnTarget] = useState<GameState>('STORY_SELECT');
+  const storySelectScrollYRef = useRef(0);
   const [storyImportCode, setStoryImportCode] = useState('');
   const [authoringCustomTagsInput, setAuthoringCustomTagsInput] = useState('');
   const [isLoadingStories, setIsLoadingStories] = useState(false);
@@ -1159,6 +1172,21 @@ export default function App() {
     }
   };
 
+  const hydrateMissingAverageWords = async (stories: any[]) => {
+    const hydrated = await Promise.all((stories || []).map(async (story) => {
+      if (getStoryAverageChapterWords(story) > 0 || !story?.id || !db) return story;
+      try {
+        const cartridge = await getStoryCartridge(db as any, story.id);
+        const averageChapterWords = getAverageChapterWords(cartridge?.chapters as any);
+        return averageChapterWords > 0 ? withAverageChapterWords(story, averageChapterWords) : story;
+      } catch (error) {
+        console.error(error);
+        return story;
+      }
+    }));
+    return hydrated;
+  };
+
   const refreshStories = async () => {
     if (!user || !db) return;
     setIsLoadingStories(true);
@@ -1172,8 +1200,12 @@ export default function App() {
         10000,
         "连接作品档案超时，请稍后重试。"
       );
-      setPublicStories(pub);
-      setMyStories(mine);
+      const [pubWithAverages, mineWithAverages] = await Promise.all([
+        hydrateMissingAverageWords(pub),
+        hydrateMissingAverageWords(mine),
+      ]);
+      setPublicStories(pubWithAverages);
+      setMyStories(mineWithAverages);
       setMySharedStories(shared);
     } catch (error: any) {
       console.error(error);
@@ -1193,7 +1225,7 @@ export default function App() {
     ));
   };
 
-  const openReadonlyStory = async (storyId: string, options?: { allowBack?: boolean }) => {
+  const openReadonlyStory = async (storyId: string, options?: { allowBack?: boolean; returnTarget?: GameState }) => {
     if (!db) return;
     try {
       setIsLoadingStories(true);
@@ -1204,6 +1236,7 @@ export default function App() {
       }
       setReadonlyStoryData({ meta: record.meta, chapters: record.chapters as any });
       setReadonlyCanGoBack(Boolean(options?.allowBack));
+      setReadonlyReturnTarget(options?.returnTarget || 'STORY_SELECT');
       setGameState('READONLY_STORY');
       const nextUrl = buildSharedStoryUrl(storyId);
       window.history.replaceState({ internalReadonly: true }, '', nextUrl);
@@ -1216,14 +1249,10 @@ export default function App() {
   };
 
   const leaveReadonlyStory = () => {
-    if (readonlyCanGoBack && window.history.length > 1) {
-      window.history.back();
-      return;
-    }
     window.history.replaceState({}, '', window.location.pathname);
     setReadonlyStoryData(null);
     setReadonlyCanGoBack(false);
-    setGameState('STORY_SELECT');
+    setGameState(readonlyCanGoBack ? readonlyReturnTarget : 'STORY_SELECT');
   };
 
   const handleInterveneFromReadonly = async () => {
@@ -1687,6 +1716,7 @@ export default function App() {
     if (!user || !db) return;
     try {
       setShowLeaveGameModal(false);
+      const shouldRestoreStorySelectScroll = gameState === 'PLAYING';
       setGameState('STORY_SELECT');
       setSelectedThemes([]);
       setBlueprint(null);
@@ -1726,6 +1756,12 @@ export default function App() {
         deltaWorldStateByChapter: {},
         updatedAt: serverTimestamp(),
       }, { merge: true });
+      window.setTimeout(() => {
+        window.scrollTo({
+          top: shouldRestoreStorySelectScroll ? storySelectScrollYRef.current : 0,
+          behavior: 'smooth',
+        });
+      }, 0);
     } catch (e) {
       console.error(e);
       showError("重置命运失败");
@@ -1819,6 +1855,9 @@ export default function App() {
   const startStoryPlay = async (storyId: string) => {
     if (!user || !db) return;
     try {
+      if (gameState === 'STORY_SELECT') {
+        storySelectScrollYRef.current = window.scrollY;
+      }
       setIsLoadingStories(true);
       const cartridge = await getStoryCartridge(db as any, storyId);
       if (!cartridge) {
@@ -2460,7 +2499,7 @@ export default function App() {
   }, [pendingSummaryRequest, isRewriting, isGeneratingConclusion, activeStoryId, blueprint, chapters]);
 
   const handleShareStory = async () => {
-    if (!storyConclusion || !activeStoryId || !user) return;
+    if (!activeStoryId || !user) return;
     try {
       setIsSharing(true);
       const shareId = await createSharedStoryRecord(db as any, {
@@ -3146,7 +3185,7 @@ export default function App() {
                 </div>
                 <div className="line-clamp-3 text-xs leading-relaxed text-zinc-500">{story.main_axis || '暂无主轴摘要。'}</div>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <button type="button" onClick={() => openReadonlyStory(story.id, { allowBack: true })} className={semanticButtonClass('secondary', { compact: true })}>
+                  <button type="button" onClick={() => openReadonlyStory(story.id, { allowBack: true, returnTarget: 'ARCHIVE' })} className={semanticButtonClass('secondary', { compact: true })}>
                     <BookOpen className="h-4 w-4" />
                     打开
                   </button>
@@ -3807,7 +3846,7 @@ export default function App() {
             <button type="button" onClick={() => handleStoryInteraction('favorite')} className={semanticButtonClass('ghost', { compact: true })}>
               <Bookmark className="h-4 w-4" /> 收藏
             </button>
-            <button type="button" onClick={handleShareStory} disabled={isSharing || !storyConclusion} className={semanticButtonClass('secondary', { compact: true })}>
+            <button type="button" onClick={handleShareStory} disabled={isSharing || !activeStoryId} className={semanticButtonClass('secondary', { compact: true })}>
               {isSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />} 分享
             </button>
             <button type="button" onClick={() => handleStoryInteraction('report')} className={semanticButtonClass('danger', { compact: true })}>
@@ -4582,7 +4621,7 @@ export default function App() {
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
           className={`fixed right-4 z-[1800] flex h-12 w-12 items-center justify-center rounded-2xl border border-zinc-700 bg-zinc-950/90 text-zinc-200 shadow-2xl backdrop-blur-xl transition-colors hover:border-indigo-400 hover:text-white sm:right-6 ${
             gameState === 'PLAYING'
-              ? 'bottom-[calc(max(1rem,env(safe-area-inset-bottom))+5.75rem)]'
+              ? 'bottom-[calc(max(1rem,env(safe-area-inset-bottom))+7.25rem)] sm:bottom-[max(1rem,env(safe-area-inset-bottom))] sm:right-[26rem]'
               : 'bottom-[max(1rem,env(safe-area-inset-bottom))]'
           }`}
           aria-label="返回顶端"
