@@ -989,6 +989,14 @@ export default function App() {
     }, 80);
   };
 
+  const getBranchTriggerChapter = (branch: any) => {
+    const singleChapter = branch?.trigger?.type === 'single' ? branch.trigger.single?.chapterNum : undefined;
+    const firstSingleGroup = Array.isArray(branch?.triggerGroups)
+      ? branch.triggerGroups.find((group: any) => group?.type === 'single')?.single?.chapterNum
+      : undefined;
+    return Number(singleChapter || firstSingleGroup || branch?.condition_chapter || 2);
+  };
+
   const isChapterTextReady = (chapter: Chapter | undefined) => {
     return Boolean(
       chapter &&
@@ -2375,9 +2383,24 @@ export default function App() {
     }
   };
 
-  const handleIntervene = async (chapterNum: number, charId: string, action: 'bless' | 'curse') => {
+  const handleIntervene = async (chapterNum: number, charId: string, action: 'bless' | 'curse', confirmedEarlierRewrite = false) => {
     if (interventionsLeft <= 0 || isRewriting || !blueprint || !user) return;
+    const willRewriteEarlierThanPastIntervention = interventionHistory.some((item) => item.chapterNum > chapterNum);
+    if (willRewriteEarlierThanPastIntervention && !confirmedEarlierRewrite) {
+      const affectedChapters = Array.from(new Set(interventionHistory.filter((item) => item.chapterNum > chapterNum).map((item) => Number(item.chapterNum)))).sort((a, b) => Number(a) - Number(b));
+      setConfirmationModal({
+        isOpen: true,
+        title: '确认回溯干涉？',
+        message: `你正在从第 ${chapterNum} 章重新干涉命运，这会重写第 ${chapterNum} 章到第 7 章。此前在第 ${affectedChapters.join('、')} 章造成的剧情变化，以及由这些较晚章节单次触发的当前支线，可能会被取消；但“曾解锁”记录和用于累计触发支线的干涉计数会保留，已消耗的干涉次数不会返还。`,
+        onConfirm: () => { void handleIntervene(chapterNum, charId, action, true); },
+      });
+      return;
+    }
+
     let simulation: ReturnType<typeof setInterval> | null = null;
+    const effectiveUnlockedBranches = willRewriteEarlierThanPastIntervention
+      ? unlockedBranches.filter((branch: any) => getBranchTriggerChapter(branch) < chapterNum)
+      : unlockedBranches;
     
     try {
       setIsRewriting(true);
@@ -2402,7 +2425,7 @@ export default function App() {
           charId,
           action,
           currentEndingValue: endingValue,
-          currentUnlockedBranches: unlockedBranches,
+          currentUnlockedBranches: effectiveUnlockedBranches,
           targetWordCount,
           interventionHistory: [...interventionHistory, { chapterNum, charId, action }],
           worldState: buildWorldStateForPrompt(chapterNum, endingValue),

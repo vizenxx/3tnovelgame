@@ -110,13 +110,27 @@ function evalTrigger(trigger: any, fullHistory: InterventionHistoryItem[]) {
   return false;
 }
 
-function isBranchTriggered(branch: any, fullHistory: InterventionHistoryItem[]) {
+function getSingleTriggerChapter(trigger: any) {
+  if (trigger?.type === 'single' && trigger.single) {
+    return asNumber(trigger.single.chapterNum ?? trigger.single.chapter_num, 0);
+  }
+  return 0;
+}
+
+function isBranchTriggered(branch: any, fullHistory: InterventionHistoryItem[], rewriteFromChapter: number) {
   const triggerGroups = Array.isArray(branch?.triggerGroups) ? branch.triggerGroups.filter(Boolean) : [];
   if (triggerGroups.length > 0) {
+    const hasFutureSingleTrigger = triggerGroups.some((group: any) => {
+      const triggerChapter = getSingleTriggerChapter(group);
+      return triggerChapter > rewriteFromChapter;
+    });
+    if (hasFutureSingleTrigger) return false;
     return triggerGroups.slice(0, 3).every((group: any) => evalTrigger(group, fullHistory));
   }
 
   if (branch?.trigger) {
+    const triggerChapter = getSingleTriggerChapter(branch.trigger);
+    if (triggerChapter > rewriteFromChapter) return false;
     return evalTrigger(branch.trigger, fullHistory);
   }
 
@@ -128,7 +142,18 @@ function isBranchTriggered(branch: any, fullHistory: InterventionHistoryItem[]) 
       ? 'bless'
       : null;
   if (!chapterNum || !charId || !action) return false;
+  if (chapterNum > rewriteFromChapter) return false;
   return fullHistory.some((item) => item.chapterNum === chapterNum && item.charId === charId && item.action === action);
+}
+
+function uniqueBranches(branches: any[]) {
+  const seen = new Set<string>();
+  return branches.filter((branch) => {
+    const id = String(branch?.id || '');
+    if (!id || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
 }
 
 const rewriteSchema = {
@@ -235,10 +260,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       { chapterNum: safeChapterNum, charId: safeCharId, action },
     ];
 
-    const countTriggered = blueprint.branches.filter((branch: any) => isBranchTriggered(branch, justTriggeredHistory));
+    const countTriggered = blueprint.branches.filter((branch: any) => isBranchTriggered(branch, justTriggeredHistory, safeChapterNum));
     const unlocked = countTriggered[0];
     const newlyUnlocked = countTriggered.filter((branch: any) => !safeCurrentUnlockedBranches.some((existing: any) => existing.id === branch.id));
-    const newUnlockedBranches = [...safeCurrentUnlockedBranches, ...newlyUnlocked];
+    const newUnlockedBranches = uniqueBranches([...safeCurrentUnlockedBranches, ...newlyUnlocked]);
 
     const leftBranches = blueprint.branches.filter((branch: any) => branch.side === 'left');
     const rightBranches = blueprint.branches.filter((branch: any) => branch.side === 'right');
@@ -258,8 +283,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const newEndingValue = Math.max(-25, Math.min(25, asNumber(currentEndingValue, 0) + directEVChange));
     const charName = blueprint.characters.find((character: any) => character.id === safeCharId)?.name || '未知角色';
     const endingProto = blueprint?.authorAssets?.endingPrototypes;
-    const injected = newlyUnlocked.length > 0
-      ? newlyUnlocked.map((branch: any) => ({ id: branch.id, name: branch.name, inject: branch.inject, sceneText: branch.sceneText, side: branch.side }))
+    const activeInjectedBranches = uniqueBranches(newUnlockedBranches)
+      .map((branch: any) => ({ id: branch.id, name: branch.name, inject: branch.inject, sceneText: branch.sceneText, side: branch.side, desc: branch.desc }))
+      .filter((branch: any) => branch.name || branch.sceneText || branch.desc || branch.inject);
+    const injected = activeInjectedBranches.length > 0
+      ? activeInjectedBranches
       : null;
     const prevChapterText = safeChapters.find((chapter: any) => chapter.chapter_num === safeChapterNum - 1)?.text || '';
 
@@ -298,7 +326,7 @@ ${safeChapters.map((chapter: any) => `第${chapter.chapter_num}章：${chapter.s
 命运扰动参数：目标角色【${charName}】，扰动极性【${action === 'bless' ? '正向' : '逆向'}】。这是系统层参数，不是角色可直接感知的事实。
 命运倾向值（干涉前→干涉后）：${asNumber(currentEndingValue, 0)} → ${newEndingValue}。数值越大越偏向秩序/左结局，越小越偏向混沌/右结局。
 ${newlyUnlocked.length > 0 ? `本次新解锁支线：${newlyUnlocked.map((branch: any) => branch.name).join('、')}` : '本次未触发支线事件，只能做局部涟漪。'}
-${injected ? `支线注入包（必须落地）：\n${injected.map((item: any) => `- [${item.id}] ${item.name}\n  - mustHappen: ${(item.inject?.mustHappen || []).join('；')}\n  - mustReveal: ${(item.inject?.mustReveal || []).join('；')}\n  - mustChange: ${(item.inject?.mustChange || []).join('；')}\n  - sceneText: ${String(item.sceneText || '').substring(0, 400)}`).join('\n')}` : ''}
+${injected ? `当前有效支线注入包（必须综合落地，包含旧有效支线与本次新支线）：\n${injected.map((item: any, index: number) => `- [${item.id}] ${item.name}${newlyUnlocked.some((branch: any) => branch.id === item.id) ? '（本次新触发，优先级较高）' : '（此前已触发，尽量保留）'}\n  - priority: ${index + 1}\n  - desc: ${String(item.desc || '').substring(0, 260)}\n  - mustHappen: ${(item.inject?.mustHappen || []).join('；')}\n  - mustReveal: ${(item.inject?.mustReveal || []).join('；')}\n  - mustChange: ${(item.inject?.mustChange || []).join('；')}\n  - sceneText: ${String(item.sceneText || '').substring(0, 400)}`).join('\n')}` : ''}
 ${(!worldState || !worldState.canonical) && endingProto ? `作者结局原型：\n- default: ${String(endingProto.default || '').substring(0, 800)}\n- left: ${String(endingProto.left || '').substring(0, 800)}\n- right: ${String(endingProto.right || '').substring(0, 800)}` : ''}
 
 隐性干预写作规则：
@@ -306,6 +334,7 @@ ${(!worldState || !worldState.canonical) && endingProto ? `作者结局原型：
 2. 必须将干预转译为自然因果：新事件、偶发变故、灵感、启示、线索暴露、人物决策偏移等。
 3. 所有偏移都要依托原有故事与已触发支线的综合情况推进，不得突兀“神降”。
 4. 允许结果偏向左/右，但不允许角色直接宣称“被庇佑/被诅咒/被操控”。
+5. 若多个当前有效支线不冲突，必须尽量把各支线的事件、设定、伏笔都融入故事；若支线情节冲突，必须尽可能保留前次情节的痕迹与因果，但以后次/本次新触发支线为主导决定新的走向。
 
 要求：
 1. 第 ${safeChapterNum} 章到第 7 章都必须重写成完整正文，每章字数约 ${safeTargetWordCount} 字。
