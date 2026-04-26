@@ -980,6 +980,15 @@ export default function App() {
     return fetchWithTimeout(url, { ...init, headers }, ms);
   };
 
+  const scrollToChapter = (chapterNum: number) => {
+    window.setTimeout(() => {
+      const target = document.getElementById(`chapter-${chapterNum}`);
+      if (!target) return;
+      const top = target.getBoundingClientRect().top + window.scrollY - 96;
+      window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+    }, 80);
+  };
+
   const isChapterTextReady = (chapter: Chapter | undefined) => {
     return Boolean(
       chapter &&
@@ -2418,16 +2427,24 @@ export default function App() {
       
       if (Array.isArray(aiData?.chapters) && aiData.chapters.length > 0) {
         const previousByNum = new Map<number, any>((chapters || []).map((chapter) => [chapter.chapter_num, chapter as any]));
-        const mergedChapters = aiData.chapters.map((chapter: any) => {
+        const rewrittenByNum = new Map<number, any>();
+        aiData.chapters.forEach((chapter: any) => {
           const previous = (previousByNum.get(chapter.chapter_num) || {}) as any;
-          return {
+          rewrittenByNum.set(chapter.chapter_num, {
             chapter_num: chapter.chapter_num,
             title: chapter.title || previous.title || `第${chapter.chapter_num}章`,
             summary: chapter.summary || previous.summary || '',
             present_characters: Array.isArray(chapter.present_characters) ? chapter.present_characters : (previous.present_characters || []),
             text: chapter.text || previous.text || '',
-          };
+          });
         });
+        const mergedChapters = (chapters || []).map((chapter) => rewrittenByNum.get(chapter.chapter_num) || chapter);
+        rewrittenByNum.forEach((chapter, chapterNum) => {
+          if (!previousByNum.has(chapterNum)) {
+            mergedChapters.push(chapter);
+          }
+        });
+        mergedChapters.sort((a: any, b: any) => a.chapter_num - b.chapter_num);
         setChapters(mergedChapters as any);
       }
 
@@ -2480,6 +2497,7 @@ export default function App() {
       setIsRewriting(false);
       setActiveInterventionChapter(null);
       setInterventionEffect(null);
+      scrollToChapter(chapterNum);
 
     } catch (e) {
       console.error(e);
@@ -3862,7 +3880,8 @@ export default function App() {
       <div className="space-y-12">
         {chapters.map((chapter, idx) => (
           <motion.section
-            key={idx}
+            id={`chapter-${chapter.chapter_num}`}
+            key={chapter.chapter_num || idx}
             initial={{ opacity: 0, x: -20 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
