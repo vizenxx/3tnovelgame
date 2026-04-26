@@ -1542,29 +1542,50 @@ export default function App() {
     return hydrated;
   };
 
+  const storyListCacheKey = (uid: string) => `story-list-cache:${uid}`;
+
+  const getFriendlyFirebaseError = (error: any, fallback = '操作失败，请稍后重试。') => {
+    const message = String(error?.message || error || '');
+    if (/quota|RESOURCE_EXHAUSTED|exceeded/i.test(message)) {
+      return 'Firebase 今日免费读取额度已用尽。作品库会尽量显示本机缓存；需要等额度重置，或减少读取后重新部署。';
+    }
+    if (/permission|insufficient/i.test(message)) {
+      return 'Firebase 权限不足，请检查登录状态或资料权限。';
+    }
+    return message || fallback;
+  };
+
   const refreshStories = async () => {
     if (!user || !db) return;
     setIsLoadingStories(true);
     try {
       const [pub, mine, shared] = await withTimeout(
         Promise.all([
-          listPublicStories(db as any, 30),
-          listMyStories(db as any, user.uid, 50),
-          listMySharedStories(db as any, user.uid, 50),
+          listPublicStories(db as any, 18),
+          listMyStories(db as any, user.uid, 30),
+          listMySharedStories(db as any, user.uid, 30),
         ]),
         10000,
         "连接作品档案超时，请稍后重试。"
       );
-      const [pubWithAverages, mineWithAverages] = await Promise.all([
-        hydrateMissingAverageWords(pub),
-        hydrateMissingAverageWords(mine),
-      ]);
-      setPublicStories(pubWithAverages);
-      setMyStories(mineWithAverages);
+      setPublicStories(pub);
+      setMyStories(mine);
       setMySharedStories(shared);
+      window.sessionStorage?.setItem(storyListCacheKey(user.uid), JSON.stringify({ pub, mine, shared, cachedAt: Date.now() }));
     } catch (error: any) {
       console.error(error);
-      showError(error?.message || '作品库加载失败。');
+      const cached = window.sessionStorage?.getItem(storyListCacheKey(user.uid));
+      if (cached) {
+        try {
+          const data = JSON.parse(cached);
+          setPublicStories(Array.isArray(data.pub) ? data.pub : []);
+          setMyStories(Array.isArray(data.mine) ? data.mine : []);
+          setMySharedStories(Array.isArray(data.shared) ? data.shared : []);
+        } catch {
+          // Ignore broken cache and show the friendly error below.
+        }
+      }
+      showError(getFriendlyFirebaseError(error, '作品库加载失败。'));
     } finally {
       setIsLoadingStories(false);
     }
@@ -2358,7 +2379,7 @@ export default function App() {
   */
 
   const showError = (msg: string) => {
-    setErrorMsg(msg);
+    setErrorMsg(getFriendlyFirebaseError(msg, msg));
     setTimeout(() => setErrorMsg(null), 5000);
   };
 
