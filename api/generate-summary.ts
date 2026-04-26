@@ -1,7 +1,7 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './_auth.js';
-import { getGeminiApiKey } from './_gemini.js';
+import { getGeminiApiKey, parseGeminiJson } from './_gemini.js';
 
 const summarySchema = {
   type: Type.OBJECT,
@@ -57,8 +57,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     });
 
-    return res.status(200).json(JSON.parse(response.text || '{}'));
+    return res.status(200).json(parseGeminiJson(response.text));
   } catch (error) {
-    return sendInternalError(res, '生成总结失败', error);
+    console.error('生成总结失败，使用兜底结语:', error);
+    const endingValue = Number(req.body?.endingValue) || 0;
+    const text = endingValue > 5
+      ? '秩序的微光穿过裂隙，照见命运新的归途。'
+      : endingValue < -5
+        ? '混沌在余烬中低语，命运从此偏离旧轨。'
+        : '风暴归于沉默，命运在平衡处留下回声。';
+    return res.status(200).json({ text, fallback: true });
   }
 }

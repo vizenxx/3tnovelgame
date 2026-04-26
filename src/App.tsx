@@ -972,6 +972,7 @@ export default function App() {
   // World State system
   const [canonicalWorldState, setCanonicalWorldState] = useState<any>(null);
   const [deltaWorldStateByChapter, setDeltaWorldStateByChapter] = useState<Record<string, any>>({});
+  const [readingTextScale, setReadingTextScale] = useState(1);
 
   // --- Helpers ---
   const fetchWithTimeout = async (url: string, init: RequestInit, ms: number) => {
@@ -1049,6 +1050,53 @@ export default function App() {
       : undefined;
     return Number(singleChapter || firstSingleGroup || branch?.condition_chapter || 2);
   };
+
+  const todayUsageKey = () => new Date().toISOString().slice(0, 10);
+
+  const reserveCoverGenerationQuota = async () => {
+    if (!db || !user) throw new Error('请先登录后再生成封面。');
+    const dateKey = todayUsageKey();
+    const usageRef = doc(db, 'users', user.uid, 'coverGenerationUsage', dateKey);
+    return runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(usageRef);
+      const current = Number(snap.data()?.count || 0);
+      if (current >= 5) {
+        throw new Error('今天的 AI 封面生成次数已经用完。');
+      }
+      const nextCount = current + 1;
+      transaction.set(usageRef, {
+        count: nextCount,
+        date: dateKey,
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+      return Math.max(0, 5 - nextCount);
+    });
+  };
+
+  const ReadingTextControls = () => (
+    <div className="inline-flex items-center gap-2 rounded-2xl border border-zinc-800 bg-zinc-950/80 p-1 text-xs font-bold text-zinc-400">
+      <button
+        type="button"
+        onClick={() => setReadingTextScale((value) => Math.max(0.9, Number((value - 0.1).toFixed(1))))}
+        className="rounded-xl px-3 py-2 transition-colors hover:bg-zinc-800 hover:text-white active:scale-95"
+      >
+        A-
+      </button>
+      <span className="min-w-12 text-center text-zinc-500">{Math.round(readingTextScale * 100)}%</span>
+      <button
+        type="button"
+        onClick={() => setReadingTextScale((value) => Math.min(1.4, Number((value + 0.1).toFixed(1))))}
+        className="rounded-xl px-3 py-2 transition-colors hover:bg-zinc-800 hover:text-white active:scale-95"
+      >
+        A+
+      </button>
+    </div>
+  );
+
+  const readingParagraphStyle = {
+    fontSize: `${readingTextScale}rem`,
+    lineHeight: 1.85,
+  } as React.CSSProperties;
 
   const isChapterTextReady = (chapter: Chapter | undefined) => {
     return Boolean(
@@ -2400,6 +2448,7 @@ export default function App() {
     }
     try {
       setIsGeneratingCover(true);
+      const remaining = await reserveCoverGenerationQuota();
       const response = await apiFetch('/api/generate-cover', {
         method: 'POST',
         body: JSON.stringify({
@@ -2415,8 +2464,8 @@ export default function App() {
       const data = await response.json();
       const coverUrl = await compressImageToSquareDataUrl(data.imageDataUrl);
       applyAuthoringCover(coverUrl);
-      setCoverGenerationRemaining(typeof data.remaining === 'number' ? data.remaining : null);
-      showError(`AI 封面已生成，记得点击“保存更改”。${typeof data.remaining === 'number' ? `今日还可生成 ${data.remaining} 张。` : ''}`);
+      setCoverGenerationRemaining(remaining);
+      showError(`AI 封面已生成，记得点击“保存更改”。今日还可生成 ${remaining} 张。`);
     } catch (error: any) {
       console.error(error);
       showError(error?.message || 'AI 封面生成失败。');
@@ -3783,27 +3832,9 @@ export default function App() {
         <div className="mb-10 rounded-[2rem] border border-zinc-800 bg-zinc-900/30 p-6 text-sm leading-relaxed text-zinc-300">
           {story.meta?.main_axis || '暂无故事主轴摘要。'}
         </div>
-        {user && (
-          <div className="mb-10 grid gap-3 sm:grid-cols-2">
-            <button
-              type="button"
-              onClick={handleInterveneFromReadonly}
-              disabled={!story.meta?.sourceStoryId}
-              className={semanticButtonClass('primary', { compact: true })}
-            >
-              <Zap className="h-4 w-4" />
-              干涉故事
-            </button>
-            <button
-              type="button"
-              onClick={handleAdaptFromReadonly}
-              className={semanticButtonClass('secondary', { compact: true })}
-            >
-              <Wand2 className="h-4 w-4" />
-              一键改编
-            </button>
-          </div>
-        )}
+        <div className="mb-8 flex justify-end">
+          <ReadingTextControls />
+        </div>
         <div className="space-y-8">
           {(story.chapters || []).map((chapter) => (
             <section key={chapter.chapter_num} className="rounded-[2rem] border border-zinc-800 bg-zinc-900/20 p-8">
@@ -3815,11 +3846,48 @@ export default function App() {
               </div>
               <div className="space-y-4 text-zinc-300">
                 {(chapter.text || '').split('\n').filter(Boolean).map((paragraph, idx) => (
-                  <p key={idx} className="leading-relaxed">{renderParagraphWithHighlights(paragraph, story.meta?.characters || [])}</p>
+                  <p key={idx} style={readingParagraphStyle} className="leading-relaxed">{renderParagraphWithHighlights(paragraph, story.meta?.characters || [])}</p>
                 ))}
               </div>
             </section>
           ))}
+        </div>
+        <div className="mt-12 rounded-[2rem] border border-indigo-500/20 bg-indigo-500/10 p-6 text-center">
+          <h3 className="text-2xl font-black text-white">想亲手改变这条命运线吗？</h3>
+          <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-zinc-400">
+            这页是只读故事记录。注册或登录后，你可以从原版故事开始干涉命运，也可以一键改编成自己的版本。
+          </p>
+          <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            <button
+              type="button"
+              onClick={user ? handleInterveneFromReadonly : () => setIsAccountCenterOpen(true)}
+              disabled={user ? !story.meta?.sourceStoryId : false}
+              className={semanticButtonClass('primary', { compact: true })}
+            >
+              <Zap className="h-4 w-4" />
+              {user ? '干涉原版故事' : '登录后干涉'}
+            </button>
+            <button
+              type="button"
+              onClick={user ? handleAdaptFromReadonly : () => setIsAccountCenterOpen(true)}
+              className={semanticButtonClass('secondary', { compact: true })}
+            >
+              <Wand2 className="h-4 w-4" />
+              {user ? '一键改编' : '注册成用户'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setReadonlyStoryData(null);
+                window.history.replaceState({}, '', window.location.pathname);
+                setGameState('STORY_SELECT');
+              }}
+              className={semanticButtonClass('ghost', { compact: true })}
+            >
+              <BookOpen className="h-4 w-4" />
+              浏览故事库
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -4008,7 +4076,7 @@ export default function App() {
             className={`${semanticButtonClass(storyConclusion ? 'secondary' : 'primary', { compact: true })} col-span-2 rounded-2xl whitespace-nowrap sm:col-span-1`}
           >
             {isGeneratingConclusion ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            {storyConclusion ? '查看结语' : '命运确定'}
+            {storyConclusion || interventionsLeft <= 0 ? '查看最终命运' : '命运确定'}
           </button>
         </div>
       </div>,
@@ -4039,6 +4107,10 @@ export default function App() {
         </div>
       )}
 
+      <div className="mb-8 flex justify-end">
+        <ReadingTextControls />
+      </div>
+
       <div className="space-y-12">
         {chapters.map((chapter, idx) => (
           <motion.section
@@ -4060,7 +4132,7 @@ export default function App() {
             <div className="relative rounded-[2rem] border border-zinc-800 bg-zinc-900/20 p-8 leading-relaxed text-zinc-300 shadow-2xl backdrop-blur-sm sm:p-10">
               <div className="prose prose-invert max-w-none space-y-6">
                 {chapter.text.split('\n').filter(Boolean).map((p, pIdx) => (
-                  <p key={pIdx} className="text-lg leading-relaxed first-letter:text-3xl first-letter:font-black first-letter:text-indigo-400 first-letter:mr-1">
+                  <p key={pIdx} style={readingParagraphStyle} className="leading-relaxed first-letter:text-3xl first-letter:font-black first-letter:text-indigo-400 first-letter:mr-1">
                     {renderParagraphWithHighlights(p, blueprint?.characters)}
                   </p>
                 ))}

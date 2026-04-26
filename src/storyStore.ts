@@ -39,6 +39,12 @@ const calcAverageChapterWords = (chapters?: Array<{ text?: string }>) => {
   return Math.round(ready.reduce((sum, chapter) => sum + countWords(chapter.text), 0) / ready.length);
 };
 
+const canReadStoryRecord = (meta: StoryMeta, currentUserId?: string) => (
+  meta.visibility === 'public' ||
+  meta.visibility === 'unlisted' ||
+  (!!currentUserId && meta.authorId === currentUserId)
+);
+
 export type StoryListItem = {
   id: string;
   title: string;
@@ -220,6 +226,23 @@ export async function getSharedStoryRecord(db: Firestore, storyId: string, curre
       return null;
     }
 
+    let sharedChapters = Array.isArray(data.chapters) ? data.chapters : [];
+    if (sharedChapters.length < 7 && data.sourceStoryId) {
+      const sourceMetaSnap = await getDoc(doc(db, 'stories', data.sourceStoryId));
+      const sourceMeta = sourceMetaSnap.exists() ? sourceMetaSnap.data() as any as StoryMeta : null;
+      if (sourceMeta && canReadStoryRecord(sourceMeta, currentUserId)) {
+        const sourceChaptersSnap = await getDocs(
+          query(collection(db, 'stories', data.sourceStoryId, 'chapters'), orderBy('chapter_num', 'asc'))
+        );
+        const sourceByNum = new Map(sourceChaptersSnap.docs.map(d => {
+          const chapter = d.data() as any as StoryChapterDoc;
+          return [chapter.chapter_num, chapter] as const;
+        }));
+        sharedChapters.forEach((chapter) => sourceByNum.set(chapter.chapter_num, chapter));
+        sharedChapters = Array.from(sourceByNum.values()).sort((a, b) => a.chapter_num - b.chapter_num);
+      }
+    }
+
     return {
       storyId: sharedSnap.id,
       meta: {
@@ -235,7 +258,7 @@ export async function getSharedStoryRecord(db: Firestore, storyId: string, curre
         visibility: data.visibility || 'public',
         averageChapterWords: data.averageChapterWords || 0,
       },
-      chapters: Array.isArray(data.chapters) ? data.chapters : [],
+      chapters: sharedChapters,
     };
   }
 
@@ -288,7 +311,7 @@ export async function createSharedStoryRecord(db: Firestore, args: {
       summary: chapter.summary || '',
       present_characters: Array.isArray(chapter.present_characters) ? chapter.present_characters : [],
       text: chapter.text || '',
-    })),
+    })).filter((chapter) => chapter.chapter_num >= 1 && chapter.chapter_num <= 7 && chapter.text.trim().length > 0),
     authorId: args.authorId,
     authorName: args.authorName || `游客+${args.authorId.slice(0, 6).toUpperCase()}`,
     coverUrl: args.coverUrl || '',
