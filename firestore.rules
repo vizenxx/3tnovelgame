@@ -142,8 +142,9 @@ service cloud.firestore {
              data.main_axis is string && data.main_axis.size() > 0 && data.main_axis.size() < 5000 &&
              data.tags is list && data.tags.size() <= 20 &&
              data.authorId is string &&
-             (!('authorName' in data) || (data.authorName is string && data.authorName.size() <= 80)) &&
-             data.visibility in ['public', 'unlisted', 'private'] &&
+              (!('authorName' in data) || (data.authorName is string && data.authorName.size() <= 80)) &&
+              (!('coverUrl' in data) || (data.coverUrl is string && data.coverUrl.size() < 900000)) &&
+              data.visibility in ['public', 'unlisted', 'private'] &&
              (!('popularity' in data) || data.popularity is number) &&
              (!('likeCount' in data) || data.likeCount is number) &&
              (!('interventionCount' in data) || data.interventionCount is number) &&
@@ -169,9 +170,10 @@ service cloud.firestore {
              data.tags is list && data.tags.size() <= 20 &&
              data.characters is list && data.characters.size() <= 10 &&
              data.chapters is list && data.chapters.size() <= 10 &&
-             data.authorId is string &&
-             (!('authorName' in data) || (data.authorName is string && data.authorName.size() <= 80)) &&
-             (!('sourceStoryId' in data) || data.sourceStoryId is string || data.sourceStoryId == null) &&
+              data.authorId is string &&
+              (!('authorName' in data) || (data.authorName is string && data.authorName.size() <= 80)) &&
+              (!('coverUrl' in data) || (data.coverUrl is string && data.coverUrl.size() < 900000)) &&
+              (!('sourceStoryId' in data) || data.sourceStoryId is string || data.sourceStoryId == null) &&
              (!('averageChapterWords' in data) || data.averageChapterWords is number) &&
              (!('visibility' in data) || data.visibility in ['public', 'private']) &&
              (isValidDateString(data.createdAt) || isValidTimestamp(data.createdAt)) &&
@@ -198,6 +200,16 @@ service cloud.firestore {
 
     match /users/{userId}/progress/{storyId} {
       allow read, create, update, delete: if isOwner(userId);
+    }
+
+    match /users/{userId}/coverGenerationUsage/{dateKey} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId) &&
+        request.resource.data.count is number &&
+        request.resource.data.count >= 0 &&
+        request.resource.data.count <= 5 &&
+        request.resource.data.date is string;
+      allow delete: if false;
     }
 
     // ===============================================================

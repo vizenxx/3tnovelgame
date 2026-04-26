@@ -35,7 +35,7 @@ export type AuthenticatedRequest = VercelRequest & {
   };
 };
 
-function getBearerToken(req: VercelRequest) {
+export function getBearerToken(req: VercelRequest) {
   const authHeader = req.headers.authorization;
   if (!authHeader) return null;
   const match = authHeader.match(/^Bearer\s+(.+)$/i);

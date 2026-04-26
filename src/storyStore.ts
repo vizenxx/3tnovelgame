@@ -46,6 +46,7 @@ export type StoryListItem = {
   visibility: Visibility;
   authorId: string;
   authorName?: string;
+  coverUrl?: string;
   popularity?: number; // legacy field; replaced by interventionCount
   likeCount?: number;
   interventionCount?: number;
@@ -66,6 +67,7 @@ export type SharedStoryRecord = {
   chapters: StoryChapterDoc[];
   authorId: string;
   authorName?: string;
+  coverUrl?: string;
   sourceStoryId?: string | null;
   averageChapterWords?: number;
   createdAt: string;
@@ -130,7 +132,7 @@ export async function updateAuthorNameEverywhere(db: Firestore, authorId: string
 
 export async function createEmptyStory(db: Firestore, args: { authorId: string; authorName?: string; title?: string; tags?: string[] }) {
   const now = new Date().toISOString();
-  const meta: Omit<StoryMeta, 'coverUrl'> = {
+  const meta: StoryMeta = {
     title: args.title || '未命名作品',
     main_axis: '（请填写本作主轴/命题/世界观核心）',
     tags: args.tags || [],
@@ -229,6 +231,7 @@ export async function getSharedStoryRecord(db: Firestore, storyId: string, curre
         characters: data.characters || [],
         authorId: data.authorId,
         authorName: data.authorName,
+        coverUrl: (data as any).coverUrl || '',
         visibility: data.visibility || 'public',
         averageChapterWords: data.averageChapterWords || 0,
       },
@@ -252,8 +255,9 @@ export async function getSharedStoryRecord(db: Firestore, storyId: string, curre
   return {
     storyId,
     meta: {
-      ...meta,
-      sourceStoryId: storyId,
+        ...meta,
+        sourceStoryId: storyId,
+        coverUrl: meta.coverUrl || '',
     },
     chapters,
   };
@@ -269,6 +273,7 @@ export async function createSharedStoryRecord(db: Firestore, args: {
   chapters: StoryChapterDoc[];
   sourceStoryId?: string | null;
   averageChapterWords?: number;
+  coverUrl?: string;
   visibility?: 'public' | 'private';
 }) {
   const now = new Date().toISOString();
@@ -286,6 +291,7 @@ export async function createSharedStoryRecord(db: Firestore, args: {
     })),
     authorId: args.authorId,
     authorName: args.authorName || `游客+${args.authorId.slice(0, 6).toUpperCase()}`,
+    coverUrl: args.coverUrl || '',
     sourceStoryId: args.sourceStoryId || null,
     averageChapterWords: args.averageChapterWords || 0,
     createdAt: now,
@@ -323,7 +329,7 @@ export async function adaptBlueprintToStory(db: Firestore, args: { authorId: str
     normalizedChars.push({ id: 'c1', name: '角色一', desc: '（待填写简介）' });
   }
 
-  const meta: Omit<StoryMeta, 'coverUrl'> = {
+  const meta: StoryMeta = {
     title: bp.title || '从蓝图改编的作品',
     main_axis: bp.main_axis || '（无主轴记录）',
     tags: args.tags || bp.tags || [],
@@ -344,6 +350,7 @@ export async function adaptBlueprintToStory(db: Firestore, args: { authorId: str
     version: 1,
     defaults: { targetWordCount: 800, paragraphs: { min: 6, max: 10 } },
     characters: normalizedChars,
+    coverUrl: bp.coverUrl || '',
   };
 
   const ref = await addDoc(collection(db, 'stories'), {

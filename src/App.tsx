@@ -178,11 +178,6 @@ const getSharedStoryIdFromUrl = () => {
   return urlParams.get('share') || urlParams.get('story');
 };
 
-const buildStoryShareText = (title?: string) => {
-  const safeTitle = stripBookTitle(title || '未命名故事');
-  return `我在命运干涉里记录了《${safeTitle}》的时间线，来看看这篇故事会将你带到哪个结局。`;
-};
-
 const buildFacebookShareUrl = (url: string, quote: string) => {
   const shareUrl = new URL('https://www.facebook.com/sharer/sharer.php');
   shareUrl.searchParams.set('u', url);
@@ -545,6 +540,61 @@ const getStoryAuthorName = (story: any) => {
 const getStoryTitle = (story: any) => story?.meta?.title || story?.title || '未命名故事';
 const getStoryMainAxis = (story: any) => story?.meta?.main_axis || story?.main_axis || '';
 const getStoryTags = (story: any) => story?.meta?.tags || story?.tags || [];
+const getStoryCoverUrl = (story: any) => story?.meta?.coverUrl || story?.coverUrl || '';
+
+const buildStoryShareText = (title?: string, chapters?: Array<{ text?: string }>) => {
+  const safeTitle = stripBookTitle(title || '未命名故事');
+  const excerpt = (chapters || [])
+    .map((chapter) => String(chapter?.text || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim())
+    .find((text) => text.length > 40);
+  return excerpt
+    ? `《${safeTitle}》\n${excerpt.slice(0, 120)}${excerpt.length > 120 ? '...' : ''}\n\n来读这条被记录下来的命运线。`
+    : `《${safeTitle}》\n来读这条被记录下来的命运线，看看故事会把你带到哪里。`;
+};
+
+const dataUrlToFile = async (dataUrl: string, filename: string) => {
+  const response = await fetch(dataUrl);
+  const blob = await response.blob();
+  return new File([blob], filename, { type: blob.type || 'image/jpeg' });
+};
+
+const compressImageToSquareDataUrl = async (input: File | string, maxDataUrlLength = 850_000): Promise<string> => {
+  const sourceUrl = typeof input === 'string'
+    ? input
+    : await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(reader.error || new Error('Image read failed.'));
+        reader.readAsDataURL(input);
+      });
+
+  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('Image load failed.'));
+    img.src = sourceUrl;
+  });
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 1024;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas is not available.');
+
+  const width = image.naturalWidth || image.width;
+  const height = image.naturalHeight || image.height;
+  const side = Math.min(width, height);
+  ctx.drawImage(image, (width - side) / 2, (height - side) / 2, side, side, 0, 0, 1024, 1024);
+
+  for (const quality of [0.86, 0.78, 0.68, 0.58, 0.48]) {
+    const dataUrl = canvas.toDataURL('image/jpeg', quality);
+    if (dataUrl.length <= maxDataUrlLength || quality === 0.48) {
+      return dataUrl;
+    }
+  }
+
+  return canvas.toDataURL('image/jpeg', 0.48);
+};
 
 const countStoryWords = (text?: string) => {
   const value = (text || '').trim();
@@ -879,6 +929,9 @@ export default function App() {
   const [authoringStoryId, setAuthoringStoryId] = useState<string | null>(null);
   const [authoringCartridge, setAuthoringCartridge] = useState<any | null>(null);
   const [authoringSaving, setAuthoringSaving] = useState(false);
+  const [authoringCoverPrompt, setAuthoringCoverPrompt] = useState('');
+  const [isGeneratingCover, setIsGeneratingCover] = useState(false);
+  const [coverGenerationRemaining, setCoverGenerationRemaining] = useState<number | null>(null);
   const [authoringImportText, setAuthoringImportText] = useState('');
   const [authoringImportReplaceBranches, setAuthoringImportReplaceBranches] = useState(true);
   const [authoringTab, setAuthoringTab] = useState<'play' | 'mainline' | 'branches'>('play');
@@ -1066,6 +1119,7 @@ export default function App() {
       meta: {
         title: stripBookTitle(cartridge.meta?.title || ''),
         main_axis: String(cartridge.meta?.main_axis || ''),
+        coverUrl: String(cartridge.meta?.coverUrl || ''),
         visibility: cartridge.meta?.visibility || 'private',
         tags: normalizeTagList(cartridge.meta?.tags || []),
         endingMode: cartridge.meta?.endingMode || 'dual',
@@ -1141,6 +1195,7 @@ export default function App() {
         characters: blueprint.characters,
         chapters: sourceChapters as any,
         averageChapterWords: getAverageChapterWords(sourceChapters),
+        coverUrl: activeStoryMeta?.coverUrl || '',
         sourceStoryId: activeStoryId,
         visibility: 'private',
       });
@@ -1689,6 +1744,7 @@ export default function App() {
         characters: blueprint.characters,
         chapters: chapters as any,
         averageChapterWords: getAverageChapterWords(chapters),
+        coverUrl: activeStoryMeta?.coverUrl || '',
         sourceStoryId: activeStoryId,
         visibility: 'private',
       });
@@ -2310,6 +2366,65 @@ export default function App() {
     await handleSaveAuthoringMainline();
   };
 
+  const applyAuthoringCover = (coverUrl: string) => {
+    setAuthoringCartridge((prev: any) => prev ? ({
+      ...prev,
+      meta: {
+        ...prev.meta,
+        coverUrl,
+      },
+    }) : prev);
+  };
+
+  const handleAuthoringCoverUpload = async (file?: File | null) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      showError('请上传图片文件。');
+      return;
+    }
+    try {
+      const coverUrl = await compressImageToSquareDataUrl(file);
+      applyAuthoringCover(coverUrl);
+      showError('封面已载入，记得点击“保存更改”。');
+    } catch (error: any) {
+      console.error(error);
+      showError(error?.message || '封面处理失败。');
+    }
+  };
+
+  const handleGenerateAuthoringCover = async () => {
+    if (!authoringCartridge) return;
+    if (!authoringCoverPrompt.trim()) {
+      showError('请先输入封面生成提示。');
+      return;
+    }
+    try {
+      setIsGeneratingCover(true);
+      const response = await apiFetch('/api/generate-cover', {
+        method: 'POST',
+        body: JSON.stringify({
+          prompt: authoringCoverPrompt,
+          title: stripBookTitle(authoringCartridge.meta?.title || ''),
+          mainAxis: authoringCartridge.meta?.main_axis || '',
+          tags: normalizeTagList(authoringCartridge.meta?.tags || []),
+        }),
+      }, 90000);
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response));
+      }
+      const data = await response.json();
+      const coverUrl = await compressImageToSquareDataUrl(data.imageDataUrl);
+      applyAuthoringCover(coverUrl);
+      setCoverGenerationRemaining(typeof data.remaining === 'number' ? data.remaining : null);
+      showError(`AI 封面已生成，记得点击“保存更改”。${typeof data.remaining === 'number' ? `今日还可生成 ${data.remaining} 张。` : ''}`);
+    } catch (error: any) {
+      console.error(error);
+      showError(error?.message || 'AI 封面生成失败。');
+    } finally {
+      setIsGeneratingCover(false);
+    }
+  };
+
   const handleUpdateProfileDisplayName = async () => {
     if (!auth?.currentUser || auth.currentUser.isAnonymous) {
       showError('游客请先注册为正式用户后再修改名称。');
@@ -2619,15 +2734,22 @@ export default function App() {
         characters: blueprint?.characters || [],
         chapters: chapters as any,
         averageChapterWords: getAverageChapterWords(chapters),
+        coverUrl: activeStoryMeta?.coverUrl || '',
         sourceStoryId: activeStoryId,
         visibility: 'public',
       });
       setSharedStoryId(shareId);
       const shareUrl = buildSharedStoryUrl(shareId);
       const shareTitle = formatBookTitle(blueprint?.title || "未命名故事");
-      const shareText = `${shareTitle}\n${blueprint?.main_axis || '我在这里留下了一份故事记录。'}\n\n${shareUrl}`;
+      const shareText = `${buildStoryShareText(shareTitle, chapters)}\n\n${shareUrl}`;
       if (navigator.share) {
-        await navigator.share({ title: shareTitle, text: shareText, url: shareUrl });
+        const coverUrl = activeStoryMeta?.coverUrl || '';
+        const coverFile = coverUrl ? await dataUrlToFile(coverUrl, `${stripBookTitle(shareTitle) || 'story'}-cover.jpg`).catch(() => null) : null;
+        const sharePayload: ShareData = { title: shareTitle, text: shareText, url: shareUrl };
+        if (coverFile && navigator.canShare?.({ files: [coverFile] })) {
+          (sharePayload as any).files = [coverFile];
+        }
+        await navigator.share(sharePayload);
         showError("已打开系统分享。");
         return;
       }
@@ -2698,6 +2820,7 @@ export default function App() {
               storyId: activeStoryId,
               meta: {
                 ...cartridge.meta,
+                coverUrl: cartridge.meta?.coverUrl || '',
                 sourceStoryId: activeStoryId,
               },
               chapters: cartridge.chapters,
@@ -2720,6 +2843,7 @@ export default function App() {
               characters: record.meta?.characters || [],
               chapters: record.chapters as any,
               averageChapterWords,
+              coverUrl: record.meta?.coverUrl || '',
               sourceStoryId: archiveSourceStoryId,
               visibility: 'private',
             });
@@ -3093,55 +3217,65 @@ export default function App() {
     </AnimatePresence>
   );
 
-  const renderStoryCard = (story: any, isPublic: boolean) => (
-    <motion.div
-      key={story.id}
-      whileHover={{ y: -4, scale: 1.02 }}
-      className="group relative overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900/50 p-6 shadow-xl transition-all hover:border-indigo-500/50 hover:bg-zinc-900"
-    >
-      <div className="mb-4 flex items-start justify-between">
-        <div className="flex flex-wrap gap-2">
-          {(getStoryTags(story).length > 0 ? getStoryTags(story).slice(0, 3) : ['未标签']).map((tag: string) => (
-            <span key={tag} className="rounded-lg bg-indigo-500/10 px-2.5 py-1 text-xs font-black text-indigo-300">
-              {tag}
-            </span>
-          ))}
-        </div>
-        {getStoryInterventionCount(story) > 0 && (
-          <div className="flex items-center gap-1.5 rounded-full bg-zinc-800/50 px-3 py-1 text-[10px] font-bold text-zinc-400">
-            <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
-            {getStoryInterventionCount(story)}
+  const renderStoryCard = (story: any, isPublic: boolean) => {
+    const coverUrl = getStoryCoverUrl(story);
+    const tags = getStoryTags(story);
+    return (
+      <motion.div
+        key={story.id}
+        whileHover={{ y: -4, scale: 1.01 }}
+        className="group relative overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900/50 p-4 shadow-xl transition-all hover:border-indigo-500/50 hover:bg-zinc-900"
+      >
+        <div className="flex gap-4">
+          <div className="relative h-28 w-28 shrink-0 overflow-hidden rounded-2xl border border-zinc-800 bg-gradient-to-br from-zinc-800 via-zinc-950 to-indigo-950 sm:h-32 sm:w-32">
+            {coverUrl ? (
+              <img src={coverUrl} alt={`${formatBookTitle(getStoryTitle(story))} 封面`} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center p-4 text-center text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">
+                3T NOVEL
+              </div>
+            )}
           </div>
-        )}
-      </div>
-      <h3 className="mb-2 whitespace-normal break-words text-2xl font-black leading-tight text-white transition-colors group-hover:text-indigo-300">
-        {formatBookTitle(getStoryTitle(story))}
-      </h3>
-      <div className="mb-3 text-sm font-bold text-zinc-500">
-        作者：{getStoryAuthorName(story)}
-      </div>
-      <p className="mb-5 line-clamp-3 text-sm leading-relaxed text-zinc-400 transition-colors group-hover:text-zinc-300">
-        {getStoryMainAxis(story)}
-      </p>
-      <div className="mb-5 grid grid-cols-2 gap-2 text-xs font-bold text-zinc-500">
-        <div className="rounded-lg bg-zinc-950/60 px-2 py-1">点赞 {getStoryLikeCount(story)}</div>
-        <div className="rounded-lg bg-zinc-950/60 px-2 py-1">干涉 {getStoryInterventionCount(story)}</div>
-        <div className="rounded-lg bg-zinc-950/60 px-2 py-1">收藏 {getStoryFavoriteCount(story)}</div>
-        <div className="col-span-2 rounded-lg bg-zinc-950/60 px-2 py-1">平均每章 {getStoryAverageChapterWords(story) || '未知'} 字</div>
-      </div>
-      <div className="hidden">
-        {getStoryTags(story).slice(0, 3).map((tag: string) => (
-          <span key={tag} className="rounded-lg bg-zinc-800/80 px-2 py-1 text-[10px] font-medium text-zinc-400 group-hover:bg-zinc-700/80">
-            {tag}
-          </span>
-        ))}
-      </div>
-      <button type="button" onClick={() => startStoryPlay(story.id)} className={semanticButtonClass('primary', { fullWidth: true })}>
-        <Sparkles className="h-4 w-4" />
-        干涉命运
-      </button>
-    </motion.div>
-  );
+          <div className="min-w-0 flex-1">
+            <div className="mb-2 flex items-start justify-between gap-2">
+              <div className="flex min-w-0 flex-wrap gap-1.5">
+                {(tags.length > 0 ? tags.slice(0, 2) : ['未标签']).map((tag: string) => (
+                  <span key={tag} className="rounded-lg bg-indigo-500/10 px-2 py-0.5 text-[10px] font-black text-indigo-300">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+              {getStoryInterventionCount(story) > 0 && (
+                <div className="flex shrink-0 items-center gap-1 rounded-full bg-zinc-800/50 px-2 py-0.5 text-[10px] font-bold text-zinc-400">
+                  <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
+                  {getStoryInterventionCount(story)}
+                </div>
+              )}
+            </div>
+            <h3 className="mb-1 whitespace-normal break-words text-lg font-black leading-tight text-white transition-colors group-hover:text-indigo-300 sm:text-xl">
+              {formatBookTitle(getStoryTitle(story))}
+            </h3>
+            <div className="mb-2 text-xs font-bold text-zinc-500">
+              作者：{getStoryAuthorName(story)}
+            </div>
+            <p className="mb-3 line-clamp-2 text-xs leading-relaxed text-zinc-400 transition-colors group-hover:text-zinc-300">
+              {getStoryMainAxis(story)}
+            </p>
+            <div className="mb-3 grid grid-cols-2 gap-1.5 text-[10px] font-bold text-zinc-500 sm:grid-cols-4">
+              <div className="rounded-lg bg-zinc-950/60 px-2 py-1">点赞 {getStoryLikeCount(story)}</div>
+              <div className="rounded-lg bg-zinc-950/60 px-2 py-1">干涉 {getStoryInterventionCount(story)}</div>
+              <div className="rounded-lg bg-zinc-950/60 px-2 py-1">收藏 {getStoryFavoriteCount(story)}</div>
+              <div className="rounded-lg bg-zinc-950/60 px-2 py-1">均章 {getStoryAverageChapterWords(story) || '未知'} 字</div>
+            </div>
+            <button type="button" onClick={() => startStoryPlay(story.id)} className={semanticButtonClass('primary', { fullWidth: true, compact: true })}>
+              <Sparkles className="h-4 w-4" />
+              干涉命运
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    );
+  };
 
   const getVisibleStoryLibraryItems = () => {
     const source = storyLibraryTab === 'mine' ? myStories : publicStories;
@@ -3634,10 +3768,15 @@ export default function App() {
     return (
       <div className="mx-auto max-w-4xl px-6 pb-16 pt-24 sm:px-8">
         <div className="mb-10 flex items-start justify-between gap-4">
-          <div className="space-y-3">
-            <div className="text-xs font-black uppercase tracking-[0.24em] text-zinc-500">故事记录</div>
-            <h1 className="text-4xl font-black text-white">{formatBookTitle(story.meta?.title)}</h1>
-            <div className="text-sm font-bold text-zinc-500">作者：{getStoryAuthorName(story.meta)}</div>
+          <div className="flex min-w-0 gap-4">
+            {story.meta?.coverUrl && (
+              <img src={story.meta.coverUrl} alt={`${formatBookTitle(story.meta?.title)} 封面`} className="h-24 w-24 shrink-0 rounded-2xl border border-zinc-800 object-cover sm:h-32 sm:w-32" />
+            )}
+            <div className="min-w-0 space-y-3">
+              <div className="text-xs font-black uppercase tracking-[0.24em] text-zinc-500">故事记录</div>
+              <h1 className="break-words text-4xl font-black text-white">{formatBookTitle(story.meta?.title)}</h1>
+              <div className="text-sm font-bold text-zinc-500">作者：{getStoryAuthorName(story.meta)}</div>
+            </div>
           </div>
           {readonlyCanGoBack && <BackNavButton label="返回上一页" onClick={leaveReadonlyStory} />}
         </div>
@@ -4274,6 +4413,62 @@ export default function App() {
                       />
                     </label>
                   </div>
+
+                  <section className="rounded-2xl border border-zinc-800 bg-zinc-950/40 p-4">
+                    <div className="mb-4 flex flex-col gap-4 sm:flex-row">
+                      <div className="h-32 w-32 shrink-0 overflow-hidden rounded-2xl border border-zinc-800 bg-gradient-to-br from-zinc-800 via-zinc-950 to-indigo-950">
+                        {authoringCartridge.meta?.coverUrl ? (
+                          <img src={authoringCartridge.meta.coverUrl} alt="作品封面预览" className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center p-4 text-center text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">
+                            NO COVER
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1 space-y-3">
+                        <div>
+                          <h4 className="text-lg font-black text-white">作品封面</h4>
+                          <p className="mt-1 text-xs leading-relaxed text-zinc-500">默认 1:1，上传或 AI 生成后会压缩为适合作品卡与分享使用的 1024 方形图。</p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <label className={`${semanticButtonClass('secondary', { compact: true })} cursor-pointer`}>
+                            <BookOpen className="h-4 w-4" />
+                            上传封面
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(event) => {
+                                void handleAuthoringCoverUpload(event.target.files?.[0]);
+                                event.currentTarget.value = '';
+                              }}
+                            />
+                          </label>
+                          {authoringCartridge.meta?.coverUrl && (
+                            <button type="button" onClick={() => applyAuthoringCover('')} className={semanticButtonClass('ghost', { compact: true })}>
+                              <X className="h-4 w-4" />
+                              移除封面
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                      <input
+                        value={authoringCoverPrompt}
+                        onChange={(event) => setAuthoringCoverPrompt(event.target.value)}
+                        placeholder="描述你想要的封面画面，例如：雨夜、古旧列车、少女手中发光的怀表、电影感低饱和..."
+                        className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                      />
+                      <button type="button" onClick={handleGenerateAuthoringCover} disabled={isGeneratingCover} className={semanticButtonClass('primary', { compact: true })}>
+                        {isGeneratingCover ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                        AI 生成
+                      </button>
+                    </div>
+                    <div className="mt-2 text-xs text-zinc-600">
+                      每个账户每天最多生成 5 张。{coverGenerationRemaining !== null ? `今日剩余 ${coverGenerationRemaining} 张。` : ''}
+                    </div>
+                  </section>
 
                   <label className="block space-y-2 text-sm text-zinc-400">
                     <div>故事主轴</div>
