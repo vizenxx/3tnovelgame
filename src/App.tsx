@@ -181,6 +181,9 @@ type AppFeatureSettings = {
 const DEFAULT_FEATURE_SETTINGS: AppFeatureSettings = {
   coverGenerationEnabled: false,
 };
+const GUEST_ACCOUNT_RETENTION_DAYS = 180;
+const GUEST_RETENTION_NOTICE =
+  '游客账号如果连续 180 天没有登录或打开 app 保持活跃，可能会被系统自动清理。注册成正式账号后，当前作品和记录会继续保留。';
 
 const getSharedStoryIdFromUrl = () => {
   const urlParams = new URLSearchParams(window.location.search);
@@ -565,8 +568,8 @@ const buildStoryShareText = (title?: string, chapters?: Array<{ text?: string }>
     .map((chapter) => String(chapter?.text || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim())
     .find((text) => text.length > 40);
   return excerpt
-    ? `《${safeTitle}》\n${excerpt.slice(0, 120)}${excerpt.length > 120 ? '...' : ''}\n\n来读这条被记录下来的命运线。`
-    : `《${safeTitle}》\n来读这条被记录下来的命运线，看看故事会把你带到哪里。`;
+    ? `《${safeTitle}》\n${excerpt.slice(0, 120)}${excerpt.length > 120 ? '...' : ''}\n\n有人改写了命运，而这一页，留下了它偏离原轨的瞬间。`
+    : `《${safeTitle}》\n故事已经开场，命运还没有落笔。来看看它会把你带向哪里。`;
 };
 
 const dataUrlToFile = async (dataUrl: string, filename: string) => {
@@ -1747,6 +1750,23 @@ export default function App() {
   useEffect(() => {
     setProfileDisplayName(getUserAuthorName(user));
   }, [user]);
+
+  useEffect(() => {
+    if (!db || !user?.isAnonymous) return;
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + GUEST_ACCOUNT_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+    setDoc(doc(db, 'users', user.uid), {
+      userId: user.uid,
+      isAnonymous: true,
+      lastActiveAt: serverTimestamp(),
+      lastActiveAtIso: now.toISOString(),
+      anonymousExpiresAtIso: expiresAt.toISOString(),
+      anonymousRetentionDays: GUEST_ACCOUNT_RETENTION_DAYS,
+      updatedAt: serverTimestamp(),
+    }, { merge: true }).catch((error) => {
+      console.warn('Guest activity marker skipped:', error);
+    });
+  }, [user?.uid, user?.isAnonymous, db]);
 
   useEffect(() => {
     if (!db) return;
@@ -3618,10 +3638,13 @@ export default function App() {
         <div className="mb-10 rounded-3xl border border-amber-500/30 bg-amber-500/10 p-5">
           <div className="mb-4">
             <div className="text-sm font-black text-amber-100">注册成用户</div>
-            <div className="mt-1 text-xs leading-relaxed text-amber-100/70">
-              当前游客记录会保留在同一个账号下，注册后可在其他设备继续游玩和查看作品。
+              <div className="mt-1 text-xs leading-relaxed text-amber-100/70">
+                当前游客记录会保留在同一个账号下，注册后可在其他设备继续游玩和查看作品。
+              </div>
+              <div className="mt-2 rounded-2xl border border-amber-400/20 bg-amber-400/10 p-3 text-xs leading-relaxed text-amber-50/80">
+                {GUEST_RETENTION_NOTICE}
+              </div>
             </div>
-          </div>
           <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
             <input
               type="email"
@@ -3977,6 +4000,11 @@ export default function App() {
                 <div className="text-xs font-black uppercase tracking-[0.24em] text-zinc-500">个人中心</div>
                 <div className="mt-1 text-2xl font-black text-white">{getUserAuthorName(user)}</div>
                 <div className="text-sm text-zinc-500">{user?.email || '游客账号'}</div>
+                {user?.isAnonymous && (
+                  <div className="mt-3 max-w-xl rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-50/80">
+                    {GUEST_RETENTION_NOTICE}
+                  </div>
+                )}
               </div>
               <button type="button" onClick={() => setIsAccountCenterOpen(false)} className={semanticIconButtonClass('ghost')} aria-label="返回">
                 <ChevronLeft className="h-5 w-5" />

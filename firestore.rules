@@ -194,6 +194,17 @@ service cloud.firestore {
              (!('updatedAt' in data) || isValidDateString(data.updatedAt) || isValidTimestamp(data.updatedAt));
     }
 
+    function isValidUserProfile(data) {
+      return data.userId is string &&
+             data.userId == request.auth.uid &&
+             (!('isAnonymous' in data) || data.isAnonymous is bool) &&
+             (!('lastActiveAt' in data) || isValidTimestamp(data.lastActiveAt)) &&
+             (!('lastActiveAtIso' in data) || isValidDateString(data.lastActiveAtIso)) &&
+             (!('anonymousExpiresAtIso' in data) || isValidDateString(data.anonymousExpiresAtIso)) &&
+             (!('anonymousRetentionDays' in data) || data.anonymousRetentionDays is number) &&
+             (!('updatedAt' in data) || isValidTimestamp(data.updatedAt) || isValidDateString(data.updatedAt));
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
@@ -214,6 +225,12 @@ service cloud.firestore {
 
     match /users/{userId}/progress/{storyId} {
       allow read, create, update, delete: if isOwner(userId);
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create, update: if isOwner(userId) && isValidUserProfile(request.resource.data);
+      allow delete: if isOwner(userId) || isAdmin();
     }
 
     match /users/{userId}/coverGenerationUsage/{dateKey} {
