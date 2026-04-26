@@ -1073,6 +1073,21 @@ export default function App() {
     });
   };
 
+  const refundCoverGenerationQuota = async () => {
+    if (!db || !user) return;
+    const dateKey = todayUsageKey();
+    const usageRef = doc(db, 'users', user.uid, 'coverGenerationUsage', dateKey);
+    await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(usageRef);
+      const current = Number(snap.data()?.count || 0);
+      transaction.set(usageRef, {
+        count: Math.max(0, current - 1),
+        date: dateKey,
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+    });
+  };
+
   const ReadingTextControls = () => (
     <div className="inline-flex items-center gap-2 rounded-2xl border border-zinc-800 bg-zinc-950/80 p-1 text-xs font-bold text-zinc-400">
       <button
@@ -2446,9 +2461,11 @@ export default function App() {
       showError('请先输入封面生成提示。');
       return;
     }
+    let quotaReserved = false;
     try {
       setIsGeneratingCover(true);
       const remaining = await reserveCoverGenerationQuota();
+      quotaReserved = true;
       const response = await apiFetch('/api/generate-cover', {
         method: 'POST',
         body: JSON.stringify({
@@ -2465,9 +2482,13 @@ export default function App() {
       const coverUrl = await compressImageToSquareDataUrl(data.imageDataUrl);
       applyAuthoringCover(coverUrl);
       setCoverGenerationRemaining(remaining);
+      quotaReserved = false;
       showError(`AI 封面已生成，记得点击“保存更改”。今日还可生成 ${remaining} 张。`);
     } catch (error: any) {
       console.error(error);
+      if (quotaReserved) {
+        await refundCoverGenerationQuota().catch((refundError) => console.error(refundError));
+      }
       showError(error?.message || 'AI 封面生成失败。');
     } finally {
       setIsGeneratingCover(false);

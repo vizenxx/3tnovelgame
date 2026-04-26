@@ -5,6 +5,20 @@ import { getGeminiApiKey } from './_gemini.js';
 
 const DEFAULT_IMAGE_MODEL = 'gemini-3.1-flash-image-preview';
 
+function getImageModelCandidates() {
+  const configuredModels = (process.env.GEMINI_IMAGE_MODEL || process.env.GEMINI_IMAGE_MODELS || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  return Array.from(new Set([
+    ...configuredModels,
+    DEFAULT_IMAGE_MODEL,
+    'gemini-3-pro-image-preview',
+    'gemini-2.5-flash-image',
+  ]));
+}
+
 function extractInlineImageData(response: any) {
   const parts = response?.candidates?.[0]?.content?.parts || response?.parts || [];
   for (const part of parts) {
@@ -17,6 +31,36 @@ function extractInlineImageData(response: any) {
     }
   }
   throw new Error('Gemini did not return an image.');
+}
+
+async function generateCoverImage(ai: GoogleGenAI, prompt: string) {
+  let lastError: unknown = null;
+
+  for (const model of getImageModelCandidates()) {
+    for (const withImageConfig of [true, false]) {
+      try {
+        const response = await ai.models.generateContent({
+          model,
+          contents: prompt,
+          config: withImageConfig ? {
+            responseModalities: ['TEXT', 'IMAGE'],
+            imageConfig: {
+              aspectRatio: '1:1',
+              imageSize: '1K',
+            },
+          } : {
+            responseModalities: ['TEXT', 'IMAGE'],
+          },
+        } as any);
+        return { ...extractInlineImageData(response), model };
+      } catch (error) {
+        lastError = error;
+        console.error(`Cover generation failed with ${model}${withImageConfig ? ' + imageConfig' : ''}:`, error);
+      }
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error('Gemini cover generation failed.');
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -44,21 +88,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ].filter(Boolean).join('\n');
 
     const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
-    const response = await ai.models.generateContent({
-      model: process.env.GEMINI_IMAGE_MODEL || DEFAULT_IMAGE_MODEL,
-      contents: finalPrompt,
-      config: {
-        responseModalities: ['TEXT', 'IMAGE'],
-        imageConfig: {
-          aspectRatio: '1:1',
-          imageSize: '1K',
-        },
-      },
-    } as any);
-
-    const image = extractInlineImageData(response);
+    const image = await generateCoverImage(ai, finalPrompt);
     return res.status(200).json({
       imageDataUrl: `data:${image.mimeType};base64,${image.data}`,
+      model: image.model,
     });
   } catch (error) {
     return sendInternalError(res, '封面生成失败', error);
