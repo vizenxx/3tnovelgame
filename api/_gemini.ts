@@ -35,3 +35,36 @@ export function getGeminiApiKey() {
 
   return apiKeys[Math.floor(Math.random() * apiKeys.length)];
 }
+
+export function getGeminiModelCandidates() {
+  const configuredModels = (process.env.GEMINI_MODEL || process.env.GEMINI_MODELS || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  return Array.from(new Set([
+    ...configuredModels,
+    'gemini-3.1-flash-lite-preview',
+    'gemini-2.5-flash-lite',
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+  ]));
+}
+
+export function parseGeminiJson<T = any>(rawText: string | undefined): T {
+  const raw = String(rawText || '').trim();
+  if (!raw) {
+    throw new Error('Gemini returned an empty response.');
+  }
+
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    const fencedMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    const candidate = fencedMatch?.[1]?.trim() || raw.match(/\{[\s\S]*\}/)?.[0];
+    if (!candidate) {
+      throw new Error('Gemini response did not contain valid JSON.');
+    }
+    return JSON.parse(candidate) as T;
+  }
+}

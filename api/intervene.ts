@@ -1,7 +1,10 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './_auth.js';
-import { getGeminiApiKey } from './_gemini.js';
+import { getGeminiApiKey, getGeminiModelCandidates, parseGeminiJson } from './_gemini.js';
+
+type InterventionAction = 'bless' | 'curse';
+type InterventionHistoryItem = { chapterNum: number; charId: string; action: InterventionAction };
 
 function ensureParagraphing(raw: string, opts?: { minParas?: number; maxParas?: number }) {
   const minParas = opts?.minParas ?? 6;
@@ -52,6 +55,82 @@ function ensureParagraphing(raw: string, opts?: { minParas?: number; maxParas?: 
   return paragraphs.join('\n\n').trim();
 }
 
+function asNumber(value: unknown, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function normalizeChapter(chapter: any) {
+  const chapterNum = asNumber(chapter?.chapter_num ?? chapter?.chapterNum, 0);
+  return {
+    ...chapter,
+    chapter_num: chapterNum,
+    title: String(chapter?.title || (chapterNum ? `第${chapterNum}章` : '章节')),
+    text: String(chapter?.text || ''),
+    summary: String(chapter?.summary || ''),
+    present_characters: Array.isArray(chapter?.present_characters) ? chapter.present_characters : [],
+  };
+}
+
+function normalizeHistoryItem(item: any): InterventionHistoryItem | null {
+  const chapterNum = asNumber(item?.chapterNum ?? item?.chapter_num, 0);
+  const charId = String(item?.charId ?? item?.condition_char ?? '').trim();
+  const action = item?.action === 'curse' || item?.condition_action === 'curse'
+    ? 'curse'
+    : item?.action === 'bless' || item?.condition_action === 'bless'
+      ? 'bless'
+      : null;
+  if (!chapterNum || !charId || !action) return null;
+  return { chapterNum, charId, action };
+}
+
+function evalTrigger(trigger: any, fullHistory: InterventionHistoryItem[]) {
+  if (!trigger) return false;
+
+  if (trigger.type === 'single' && trigger.single) {
+    const single = trigger.single;
+    const chapterNum = asNumber(single.chapterNum ?? single.chapter_num, 0);
+    const charId = String(single.charId ?? single.condition_char ?? '').trim();
+    const action = single.action === 'curse' || single.condition_action === 'curse' ? 'curse' : 'bless';
+    if (chapterNum && (chapterNum < 2 || chapterNum > 6)) return false;
+    return fullHistory.some((item) => (!chapterNum || item.chapterNum === chapterNum) && item.charId === charId && item.action === action);
+  }
+
+  if (trigger.type === 'count' && trigger.count) {
+    const count = trigger.count;
+    const upToChapterNum = asNumber(count.upToChapterNum ?? count.up_to_chapter_num, 0);
+    const charId = String(count.charId ?? count.condition_char ?? '').trim();
+    const action = count.action === 'curse' || count.condition_action === 'curse' ? 'curse' : 'bless';
+    const minCount = Math.max(1, asNumber(count.minCount ?? count.min_count, 1));
+    const relevant = fullHistory.filter((item) => item.charId === charId && item.action === action);
+    const sliced = upToChapterNum ? relevant.filter((item) => item.chapterNum <= upToChapterNum) : relevant;
+    return sliced.length >= minCount;
+  }
+
+  return false;
+}
+
+function isBranchTriggered(branch: any, fullHistory: InterventionHistoryItem[]) {
+  const triggerGroups = Array.isArray(branch?.triggerGroups) ? branch.triggerGroups.filter(Boolean) : [];
+  if (triggerGroups.length > 0) {
+    return triggerGroups.slice(0, 3).every((group: any) => evalTrigger(group, fullHistory));
+  }
+
+  if (branch?.trigger) {
+    return evalTrigger(branch.trigger, fullHistory);
+  }
+
+  const chapterNum = asNumber(branch?.condition_chapter ?? branch?.chapterNum, 0);
+  const charId = String(branch?.condition_char ?? branch?.charId ?? '').trim();
+  const action = branch?.condition_action === 'curse' || branch?.action === 'curse'
+    ? 'curse'
+    : branch?.condition_action === 'bless' || branch?.action === 'bless'
+      ? 'bless'
+      : null;
+  if (!chapterNum || !charId || !action) return false;
+  return fullHistory.some((item) => item.chapterNum === chapterNum && item.charId === charId && item.action === action);
+}
+
 const rewriteSchema = {
   type: Type.OBJECT,
   properties: {
@@ -61,15 +140,15 @@ const rewriteSchema = {
         type: Type.OBJECT,
         properties: {
           chapter_num: { type: Type.INTEGER },
-          text: { type: Type.STRING, description: '重写后的章节内容正文（必须包含全文）' },
-          summary: { type: Type.STRING, description: '本章节的最新剧情大纲（20-40字）' },
+          text: { type: Type.STRING, description: '重写后的章节完整正文' },
+          summary: { type: Type.STRING, description: '本章节的最新剧情大纲，20-40字' },
           present_characters: {
             type: Type.ARRAY,
             items: { type: Type.STRING },
             description: '本章出场的角色ID列表',
           },
         },
-        required: ['chapter_num', 'summary', 'present_characters'],
+        required: ['chapter_num', 'text', 'summary', 'present_characters'],
       },
     },
     character_updates: {
@@ -87,6 +166,28 @@ const rewriteSchema = {
   },
   required: ['chapters', 'character_updates'],
 };
+
+async function generateWithGeminiFallback(ai: GoogleGenAI, prompt: string) {
+  let lastError: unknown = null;
+  for (const model of getGeminiModelCandidates()) {
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: rewriteSchema,
+        },
+      });
+      return parseGeminiJson(response.text);
+    } catch (error) {
+      lastError = error;
+      console.error(`Intervene generation failed with ${model}:`, error);
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error('Gemini generation failed.');
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -110,65 +211,57 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       worldState,
     } = req.body || {};
 
-    const safeChapterNum = Math.min(6, Math.max(1, Number(chapterNum) || 1));
-    const safeTargetWordCount = Math.min(1200, Math.max(400, Number(targetWordCount) || 600));
+    const safeChapterNum = Math.min(6, Math.max(2, asNumber(chapterNum, 2)));
+    const safeTargetWordCount = Math.min(1200, Math.max(400, asNumber(targetWordCount, 600)));
     const safeCurrentUnlockedBranches = Array.isArray(currentUnlockedBranches) ? currentUnlockedBranches : [];
-    const history: Array<{ chapterNum: number; charId: string; action: string }> = Array.isArray(interventionHistory) ? interventionHistory : [];
+    const safeChapters = Array.isArray(chapters) ? chapters.map(normalizeChapter).filter((chapter: any) => chapter.chapter_num >= 1) : [];
+    const history = Array.isArray(interventionHistory)
+      ? interventionHistory.map(normalizeHistoryItem).filter(Boolean) as InterventionHistoryItem[]
+      : [];
+    const safeCharId = String(charId || '').trim();
 
-    if (!blueprint || !Array.isArray(blueprint.characters) || !Array.isArray(blueprint.branches) || !Array.isArray(chapters)) {
+    if (!blueprint || !Array.isArray(blueprint.characters) || !Array.isArray(blueprint.branches) || safeChapters.length === 0) {
       return res.status(400).json({ error: '干涉请求参数不合法。' });
+    }
+    if (!safeCharId || !blueprint.characters.some((character: any) => character?.id === safeCharId)) {
+      return res.status(400).json({ error: '干涉目标角色不合法。' });
     }
     if (action !== 'bless' && action !== 'curse') {
       return res.status(400).json({ error: '干涉动作不合法。' });
     }
 
-    const justTriggeredHistory = [...history, { chapterNum: safeChapterNum, charId, action }];
-    const evalTrigger = (trigger: any, fullHistory: Array<{ chapterNum: number; charId: string; action: string }>) => {
-      if (trigger?.type === 'single' && trigger.single) {
-        const single = trigger.single;
-        if (typeof single.chapterNum === 'number' && (single.chapterNum < 2 || single.chapterNum > 6)) return false;
-        return fullHistory.some((item) => item.chapterNum === single.chapterNum && item.charId === single.charId && item.action === single.action);
-      }
-      if (trigger?.type === 'count' && trigger.count) {
-        const count = trigger.count;
-        if (typeof count.upToChapterNum === 'number' && (count.upToChapterNum < 2 || count.upToChapterNum > 6)) return false;
-        const relevant = fullHistory.filter((item) => item.charId === count.charId && item.action === count.action);
-        const sliced = typeof count.upToChapterNum === 'number' ? relevant.filter((item) => item.chapterNum <= count.upToChapterNum) : relevant;
-        return sliced.length >= count.minCount;
-      }
-      return false;
-    };
-    const isTriggered = (branch: any) => {
-      const groups = Array.isArray(branch?.triggerGroups) && branch.triggerGroups.length > 0 ? branch.triggerGroups.slice(0, 3) : [branch?.trigger];
-      return groups.every((group: any) => evalTrigger(group, justTriggeredHistory));
-    };
+    const justTriggeredHistory: InterventionHistoryItem[] = [
+      ...history.filter((item) => !(item.chapterNum === safeChapterNum && item.charId === safeCharId && item.action === action)),
+      { chapterNum: safeChapterNum, charId: safeCharId, action },
+    ];
 
-    const countTriggered = blueprint.branches.filter((branch: any) => isTriggered(branch));
+    const countTriggered = blueprint.branches.filter((branch: any) => isBranchTriggered(branch, justTriggeredHistory));
     const unlocked = countTriggered[0];
     const newlyUnlocked = countTriggered.filter((branch: any) => !safeCurrentUnlockedBranches.some((existing: any) => existing.id === branch.id));
     const newUnlockedBranches = [...safeCurrentUnlockedBranches, ...newlyUnlocked];
 
     const leftBranches = blueprint.branches.filter((branch: any) => branch.side === 'left');
     const rightBranches = blueprint.branches.filter((branch: any) => branch.side === 'right');
-    const leftTotalWeight = leftBranches.reduce((sum: number, branch: any) => sum + branch.score, 0);
-    const rightTotalWeight = rightBranches.reduce((sum: number, branch: any) => sum + branch.score, 0);
+    const leftTotalWeight = leftBranches.reduce((sum: number, branch: any) => sum + asNumber(branch.score, 0), 0);
+    const rightTotalWeight = rightBranches.reduce((sum: number, branch: any) => sum + asNumber(branch.score, 0), 0);
 
     let directEVChange = 0;
     for (const branch of newlyUnlocked) {
+      const score = asNumber(branch.score, 0);
       if (branch.side === 'left') {
-        directEVChange += (branch.score / (leftTotalWeight || 1)) * 10;
+        directEVChange += (score / (leftTotalWeight || 1)) * 10;
       } else if (branch.side === 'right') {
-        directEVChange -= (branch.score / (rightTotalWeight || 1)) * 10;
+        directEVChange -= (score / (rightTotalWeight || 1)) * 10;
       }
     }
 
-    const newEndingValue = Math.max(-25, Math.min(25, (Number(currentEndingValue) || 0) + directEVChange));
-    const charName = blueprint.characters.find((character: any) => character.id === charId)?.name || '未知角色';
+    const newEndingValue = Math.max(-25, Math.min(25, asNumber(currentEndingValue, 0) + directEVChange));
+    const charName = blueprint.characters.find((character: any) => character.id === safeCharId)?.name || '未知角色';
     const endingProto = blueprint?.authorAssets?.endingPrototypes;
     const injected = newlyUnlocked.length > 0
       ? newlyUnlocked.map((branch: any) => ({ id: branch.id, name: branch.name, inject: branch.inject, sceneText: branch.sceneText, side: branch.side }))
       : null;
-    const prevChapterText = chapters.find((chapter: any) => chapter.chapter_num === safeChapterNum - 1)?.text || '';
+    const prevChapterText = safeChapters.find((chapter: any) => chapter.chapter_num === safeChapterNum - 1)?.text || '';
 
     let worldStatePrompt = '';
     if (worldState && worldState.canonical) {
@@ -189,10 +282,10 @@ ${worldState.endingDirection && worldState.endingDirection !== 'neutral' && endi
 直接前文（第 ${safeChapterNum - 1} 章，文风锚点）：
 ${String(prevChapterText).substring(0, 400)}`;
     } else {
-      worldStatePrompt = `前置剧情摘要：${chapters.filter((chapter: any) => chapter.chapter_num < safeChapterNum).map((chapter: any) => `第${chapter.chapter_num}章：${chapter.text}`).join('\n\n')}`;
+      worldStatePrompt = `前置剧情摘要：${safeChapters.filter((chapter: any) => chapter.chapter_num < safeChapterNum).map((chapter: any) => `第${chapter.chapter_num}章：${chapter.text}`).join('\n\n')}`;
     }
 
-    const prompt = `你是一个互动小说引擎。玩家在第 ${safeChapterNum} 章进行了命运干涉。
+    const prompt = `你是一个互动小说引擎。玩家在第 ${safeChapterNum} 章进行了一次命运干涉。
 
 角色ID对照表：
 ${blueprint.characters.map((character: any) => `${character.name} (ID: ${character.id})`).join('\n')}
@@ -200,10 +293,10 @@ ${blueprint.characters.map((character: any) => `${character.name} (ID: ${charact
 ${worldStatePrompt}
 
 各章情节概况（大纲）：
-${chapters.map((chapter: any) => `第${chapter.chapter_num}章：${chapter.summary || String(chapter.text || '').substring(0, 50)}`).join('\n')}
+${safeChapters.map((chapter: any) => `第${chapter.chapter_num}章：${chapter.summary || String(chapter.text || '').substring(0, 80)}`).join('\n')}
 
 命运扰动参数：目标角色【${charName}】，扰动极性【${action === 'bless' ? '正向' : '逆向'}】。这是系统层参数，不是角色可直接感知的事实。
-命运倾向值（干涉前→干涉后）：${Number(currentEndingValue) || 0} → ${newEndingValue}。数值越大越偏向秩序/左结局，越小越偏向混沌/右结局。
+命运倾向值（干涉前→干涉后）：${asNumber(currentEndingValue, 0)} → ${newEndingValue}。数值越大越偏向秩序/左结局，越小越偏向混沌/右结局。
 ${newlyUnlocked.length > 0 ? `本次新解锁支线：${newlyUnlocked.map((branch: any) => branch.name).join('、')}` : '本次未触发支线事件，只能做局部涟漪。'}
 ${injected ? `支线注入包（必须落地）：\n${injected.map((item: any) => `- [${item.id}] ${item.name}\n  - mustHappen: ${(item.inject?.mustHappen || []).join('；')}\n  - mustReveal: ${(item.inject?.mustReveal || []).join('；')}\n  - mustChange: ${(item.inject?.mustChange || []).join('；')}\n  - sceneText: ${String(item.sceneText || '').substring(0, 400)}`).join('\n')}` : ''}
 ${(!worldState || !worldState.canonical) && endingProto ? `作者结局原型：\n- default: ${String(endingProto.default || '').substring(0, 800)}\n- left: ${String(endingProto.left || '').substring(0, 800)}\n- right: ${String(endingProto.right || '').substring(0, 800)}` : ''}
@@ -223,23 +316,29 @@ ${(!worldState || !worldState.canonical) && endingProto ? `作者结局原型：
 请严格按 JSON 输出，不要包含元数据。`;
 
     const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.1-flash-lite-preview',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: rewriteSchema,
-      },
+    const aiData = await generateWithGeminiFallback(ai, prompt);
+    if (!Array.isArray(aiData?.chapters)) {
+      throw new Error('Gemini response missed chapters array.');
+    }
+
+    aiData.chapters = aiData.chapters.map((chapter: any) => {
+      const normalized = normalizeChapter(chapter);
+      if (normalized.chapter_num >= safeChapterNum && normalized.chapter_num <= 7) {
+        return { ...normalized, text: ensureParagraphing(normalized.text, { minParas: 6, maxParas: 10 }) };
+      }
+      return normalized;
     });
 
-    const aiData = JSON.parse(response.text || '{}');
-    if (Array.isArray(aiData?.chapters)) {
-      aiData.chapters = aiData.chapters.map((chapter: any) => {
-        if (chapter?.chapter_num === safeChapterNum && typeof chapter.text === 'string') {
-          return { ...chapter, text: ensureParagraphing(chapter.text, { minParas: 6, maxParas: 10 }) };
-        }
-        return chapter;
-      });
+    const returnedChapterNums = new Set(aiData.chapters.map((chapter: any) => chapter.chapter_num));
+    const missingChapterNums = safeChapters
+      .filter((chapter: any) => chapter.chapter_num >= safeChapterNum && chapter.chapter_num <= 7 && !returnedChapterNums.has(chapter.chapter_num))
+      .map((chapter: any) => chapter.chapter_num);
+    if (missingChapterNums.length > 0) {
+      throw new Error(`Gemini response missed rewritten chapters: ${missingChapterNums.join(', ')}`);
+    }
+
+    if (!Array.isArray(aiData.character_updates)) {
+      aiData.character_updates = [];
     }
 
     const leftProgress = Math.min(100, Math.max(0, (newEndingValue / 25) * 100));
