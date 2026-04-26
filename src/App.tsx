@@ -1728,7 +1728,9 @@ export default function App() {
       setFeatureSettings(nextSettings);
       setAdminFeatureDraft(nextSettings);
     }).catch((error) => {
-      console.error(error);
+      if (error?.code !== 'permission-denied') {
+        console.warn('Unable to read app feature settings:', error);
+      }
       setFeatureSettings(DEFAULT_FEATURE_SETTINGS);
       setAdminFeatureDraft(DEFAULT_FEATURE_SETTINGS);
     });
