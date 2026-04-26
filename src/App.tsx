@@ -180,6 +180,9 @@ const endingIdToLabel = (id: 'default' | 'left' | 'right') => {
 };
 
 const buildSharedStoryUrl = (storyId: string) =>
+  `${window.location.origin}/api/share?share=${encodeURIComponent(storyId)}`;
+
+const buildAppSharedStoryUrl = (storyId: string) =>
   `${window.location.origin}${window.location.pathname}?share=${encodeURIComponent(storyId)}`;
 
 const ADMIN_USER_IDS = new Set(['LWgIE31RtCTZBiMNF7S9viNE7Aw2']);
@@ -916,7 +919,6 @@ export default function App() {
   const [showIosInstallModal, setShowIosInstallModal] = useState<boolean>(false);
   const [isStandaloneMode, setIsStandaloneMode] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
-  const [pendingSystemShare, setPendingSystemShare] = useState<ShareData | null>(null);
   const [sharedStoryId, setSharedStoryId] = useState<string | null>(null);
   const [readonlyStoryData, setReadonlyStoryData] = useState<{ meta: any, chapters: Chapter[] } | null>(null);
   const [readonlyCanGoBack, setReadonlyCanGoBack] = useState(false);
@@ -1481,7 +1483,7 @@ export default function App() {
       setReadonlyCanGoBack(Boolean(options?.allowBack));
       setReadonlyReturnTarget(options?.returnTarget || 'STORY_SELECT');
       setGameState('READONLY_STORY');
-      const nextUrl = buildSharedStoryUrl(storyId);
+      const nextUrl = buildAppSharedStoryUrl(storyId);
       window.history.replaceState({ internalReadonly: true }, '', nextUrl);
     } catch (error) {
       console.error(error);
@@ -1842,24 +1844,26 @@ export default function App() {
   };
 
   const deliverPreparedShare = async (payload: ShareData) => {
-    if (isIosDevice() && isStandaloneMode) {
-      setPendingSystemShare(payload);
-      showError('分享内容已准备好，请点击弹窗中的“打开系统分享”。');
-      return;
-    }
+    const copied = await writeClipboardText(buildShareClipboardText(String(payload.text || ''), String(payload.url || '')));
     if (!navigator.share) {
-      await copySharePayload(payload);
+      showError(copied ? '已复制分享内容到剪贴板。' : '分享链接已准备好，请手动复制浏览器地址。');
       return;
     }
     try {
       await openSystemShare(payload);
+      if (copied && isIosDevice()) {
+        showError('已打开系统分享，分享文案也已复制；如果社交 App 没带上文字，可直接粘贴。');
+      }
     } catch (error: any) {
       if (error?.name === 'AbortError') {
         showError('已取消分享。');
         return;
       }
-      setPendingSystemShare(payload);
-      showError('分享内容已准备好，请再点击一次打开系统分享。');
+      if (copied) {
+        showError('系统分享未能打开，但分享内容已复制，可直接粘贴发送。');
+        return;
+      }
+      throw error;
     }
   };
 
@@ -2244,6 +2248,36 @@ export default function App() {
     setErrorMsg(msg);
     setTimeout(() => setErrorMsg(null), 5000);
   };
+
+  const returnToStoryLibraryFallback = () => {
+    setIsSidebarOpen(false);
+    setIsActionMenuOpen(false);
+    setIsStoryInfoOpen(false);
+    setIsAccountCenterOpen(false);
+    setShowLeaveGameModal(false);
+    setPendingSummaryRequest(null);
+    setActiveInterventionOverlay(null);
+    setReadonlyStoryData(null);
+    setReadonlyCanGoBack(false);
+    setGameState('STORY_SELECT');
+    if (window.location.search) {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  };
+
+  useEffect(() => {
+    const handleFatalError = (event: ErrorEvent | PromiseRejectionEvent) => {
+      console.error('Global app error fallback:', event);
+      returnToStoryLibraryFallback();
+      showError('发生错误，已带你回到作品库。');
+    };
+    window.addEventListener('error', handleFatalError as EventListener);
+    window.addEventListener('unhandledrejection', handleFatalError as EventListener);
+    return () => {
+      window.removeEventListener('error', handleFatalError as EventListener);
+      window.removeEventListener('unhandledrejection', handleFatalError as EventListener);
+    };
+  }, []);
 
   const resetGame = async () => {
     if (!user || !db) return;
@@ -4237,80 +4271,6 @@ export default function App() {
     </div>
   );
 
-  const pendingSystemShareModal = (
-    <AnimatePresence>
-      {pendingSystemShare && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className={`${safeModalBackdropClass} z-[3300] bg-black/80 backdrop-blur-md`}
-          onClick={() => setPendingSystemShare(null)}
-        >
-          <motion.div
-            initial={{ opacity: 0, y: 16, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 16, scale: 0.97 }}
-            className="w-full max-w-md rounded-[2rem] border border-zinc-800 bg-zinc-950 p-6 text-left shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="mb-5 flex items-start justify-between gap-4">
-              <div>
-                <div className="text-xs font-black uppercase tracking-[0.22em] text-indigo-300">系统分享</div>
-                <h3 className="mt-2 text-2xl font-black text-white">分享内容已准备好</h3>
-                <p className="mt-2 text-sm leading-relaxed text-zinc-500">
-                  iOS PWA 需要你再点击一次按钮，才能调用 WhatsApp、Facebook、IG 等系统分享选项。
-                </p>
-              </div>
-              <button type="button" onClick={() => setPendingSystemShare(null)} className={semanticIconButtonClass('ghost')} aria-label="关闭">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4 text-sm leading-relaxed text-zinc-300">
-              <div className="font-black text-white">{pendingSystemShare.title}</div>
-              <div className="mt-2 line-clamp-4 whitespace-pre-line text-xs text-zinc-500">{String(pendingSystemShare.text || '')}</div>
-            </div>
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={async () => {
-                  const payload = pendingSystemShare;
-                  if (!payload) return;
-                  try {
-                    await openSystemShare(payload);
-                    setPendingSystemShare(null);
-                  } catch (error: any) {
-                    if (error?.name === 'AbortError') {
-                      showError('已取消分享。');
-                      return;
-                    }
-                    showError(error?.message || '系统分享未能打开，请改用复制分享内容。');
-                  }
-                }}
-                className={semanticButtonClass('primary', { fullWidth: true })}
-              >
-                <Copy className="h-4 w-4" />
-                打开系统分享
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  const payload = pendingSystemShare;
-                  if (!payload) return;
-                  await copySharePayload(payload);
-                  setPendingSystemShare(null);
-                }}
-                className={semanticButtonClass('ghost', { fullWidth: true })}
-              >
-                复制内容
-              </button>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-
   const accountCenterModal = (
     <AnimatePresence>
       {isAccountCenterOpen && (
@@ -5962,7 +5922,6 @@ export default function App() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100 selection:bg-indigo-500/30 selection:text-indigo-200">
       <GlobalError errorMsg={errorMsg} />
       {installGuideModal}
-      {pendingSystemShareModal}
       
       {!isSessionHydrated ? (
         <div className="fixed inset-0 z-[5000] flex flex-col items-center justify-center bg-zinc-950 p-6 text-center">
