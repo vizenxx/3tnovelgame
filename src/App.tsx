@@ -267,8 +267,8 @@ const BackNavButton = ({
   </button>
 );
 
-const renderParagraphWithHighlights = (text: string, characters: Character[] = []) => {
-  const parts = text.split(/(<mark>.*?<\/mark>)/g);
+const renderParagraphWithHighlights = (text: unknown, characters: Character[] = []) => {
+  const parts = String(text || '').split(/(<mark>.*?<\/mark>)/g);
   return parts.map((part, i) => {
     if (part.startsWith('<mark>') && part.endsWith('</mark>')) {
       return <span key={i} className="text-amber-400 font-bold bg-amber-400/10 px-1 rounded">{part.slice(6, -7)}</span>;
@@ -3508,7 +3508,7 @@ export default function App() {
               </button>
             </div>
             <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 text-lg font-medium leading-relaxed text-amber-100">
-              {storyConclusion.split('\n').filter(Boolean).map((paragraph, index) => (
+              {String(storyConclusion || '').split('\n').filter(Boolean).map((paragraph, index) => (
                 <p key={index}>{paragraph}</p>
               ))}
             </div>
@@ -4509,7 +4509,7 @@ export default function App() {
             
             <div className="relative rounded-[2rem] border border-zinc-800 bg-zinc-900/20 p-8 leading-relaxed text-zinc-300 shadow-2xl backdrop-blur-sm sm:p-10">
               <div className="prose prose-invert max-w-none space-y-6">
-                {chapter.text.split('\n').filter(Boolean).map((p, pIdx) => (
+                {String(chapter.text || '').split('\n').filter(Boolean).map((p, pIdx) => (
                   <p key={pIdx} style={readingParagraphStyle} className="leading-relaxed first-letter:text-3xl first-letter:font-black first-letter:text-indigo-400 first-letter:mr-1">
                     {renderParagraphWithHighlights(p, blueprint?.characters)}
                   </p>
@@ -4689,7 +4689,7 @@ export default function App() {
                 <div className="h-px flex-1 bg-zinc-800" />
               </div>
               <div className="prose prose-invert max-w-none text-xl font-medium leading-relaxed italic text-amber-200/90">
-                {storyConclusion?.split('\n').map((p, i) => (
+                {String(storyConclusion || '').split('\n').map((p, i) => (
                   <p key={i}>{p}</p>
                 ))}
               </div>
