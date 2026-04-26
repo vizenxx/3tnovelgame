@@ -1075,9 +1075,28 @@ export default function App() {
     }
 
     return {
-      originalAuthorId: sourceMeta?.originalAuthorId || sourceMeta?.authorId || activeStoryId || null,
-      originalAuthorName: getOriginalAuthorName(sourceMeta || { authorId: activeStoryId, authorName: '' }),
+      originalAuthorId: sourceMeta?.originalAuthorId || sourceMeta?.authorId || activeStoryId || user?.uid || null,
+      originalAuthorName: getOriginalAuthorName(sourceMeta || { authorId: activeStoryId || user?.uid, authorName: getUserAuthorName(user) }),
     };
+  };
+
+  const isGuestAuthoredMeta = (meta: any) => {
+    return String(meta?.authorName || '').startsWith('游客+') || String(meta?.originalAuthorName || '').startsWith('游客+');
+  };
+
+  const canAdaptCurrentStory = () => {
+    if (!user || !blueprint) return false;
+    if (!activeStoryId) return true;
+    if (activeStoryMeta?.authorId === user.uid) return true;
+    if (isGuestAuthoredMeta(activeStoryMeta)) return true;
+    return Boolean(activeStoryMeta?.allowAdaptation);
+  };
+
+  const canAdaptReadonlyStory = (meta: any) => {
+    if (!user || !meta) return false;
+    if (meta.authorId === user.uid || meta.originalAuthorId === user.uid) return true;
+    if (isGuestAuthoredMeta(meta)) return true;
+    return Boolean(meta.allowAdaptation);
   };
 
   const scrollToChapter = (chapterNum: number) => {
@@ -1488,6 +1507,10 @@ export default function App() {
 
   const handleAdaptFromReadonly = async () => {
     if (!readonlyStoryData?.meta || !readonlyStoryData?.chapters || !user || !db) return;
+    if (!canAdaptReadonlyStory(readonlyStoryData.meta)) {
+      showError('原作者尚未开放这篇作品的一键改编权限。');
+      return;
+    }
     try {
       setIsLoadingStories(true);
       const blueprint = {
@@ -2003,7 +2026,7 @@ export default function App() {
   };
 
   const handleSaveWorkAndReturn = async () => {
-    if (!user || !activeStoryId || !blueprint) return;
+    if (!user || !blueprint) return;
     try {
       setShowLeaveGameModal(false);
       const provenance = await resolveActiveStoryProvenance();
@@ -2017,7 +2040,7 @@ export default function App() {
         chapters: chapters as any,
         averageChapterWords: getAverageChapterWords(chapters),
         coverUrl: activeStoryMeta?.coverUrl || '',
-        sourceStoryId: activeStoryId,
+        sourceStoryId: activeStoryId || null,
         originalAuthorId: provenance.originalAuthorId,
         originalAuthorName: provenance.originalAuthorName,
         intervenerId: user.uid,
@@ -2034,14 +2057,7 @@ export default function App() {
   };
 
   const SimulatedProgressBar = () => {
-    const [percent, setPercent] = useState(0);
-    useEffect(() => {
-      const start = Date.now();
-      const interval = setInterval(() => {
-        setPercent(Math.min(95, Math.round(((Date.now() - start) / 5000) * 95)));
-      }, 180);
-      return () => clearInterval(interval);
-    }, []);
+    const percent = Math.max(0, Math.min(100, Math.round(generationProgress || 0)));
     return (
       <div className="mt-4 w-full max-w-xs">
         <div className="h-1 overflow-hidden rounded-full bg-zinc-900">
@@ -2055,6 +2071,49 @@ export default function App() {
         <div className="mt-2 text-center text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">{percent}%</div>
       </div>
     );
+  };
+
+  const handleRegenerateQuickStory = () => {
+    setBlueprint(null);
+    setChapters([]);
+    setNaturalChapters([]);
+    setInitialNaturalChapters([]);
+    setUnlockedBranches([]);
+    setHistoricallyUnlockedBranches([]);
+    setIntervenedChapters([]);
+    setInterventionHistory([]);
+    setStoryConclusion(null);
+    setActiveStoryId(null);
+    setActiveStoryMeta(null);
+    setBackgroundGeneratingChapter(null);
+    fetchingChapterRef.current = null;
+    setGameState('THEME_SELECTION');
+  };
+
+  const handleAdaptCurrentStory = async () => {
+    if (!user || !db || !blueprint) return;
+    if (!canAdaptCurrentStory()) {
+      showError('原作者尚未开放这篇作品的一键改编权限。');
+      return;
+    }
+    try {
+      setIsLoadingStories(true);
+      const storyId = await adaptBlueprintToStory(db as any, {
+        authorId: user.uid,
+        authorName: getUserAuthorName(user),
+        blueprint,
+        chapters: toDefaultArtstyleChapters(chapters),
+        tags: normalizeTagList((blueprint.tags && blueprint.tags.length > 0 ? blueprint.tags : selectedThemes) || []),
+      });
+      await refreshStories();
+      showError('已完成一键改编，并重置为默认文面风格。');
+      await startStoryPlay(storyId);
+    } catch (error) {
+      console.error(error);
+      showError('一键改编失败，请稍后再试。');
+    } finally {
+      setIsLoadingStories(false);
+    }
   };
 
   /*
@@ -4349,7 +4408,7 @@ export default function App() {
               className={semanticButtonClass('secondary', { compact: true })}
             >
               <Wand2 className="h-4 w-4" />
-              {user ? '一键改编' : '注册成用户'}
+              {user ? (canAdaptReadonlyStory(story.meta) ? '一键改编' : '未开放改编') : '注册成用户'}
             </button>
             <button
               type="button"
@@ -4763,6 +4822,15 @@ export default function App() {
             <button type="button" onClick={handleShareStory} disabled={isSharing || !activeStoryId} className={semanticButtonClass('secondary', { compact: true })}>
               {isSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />} 分享
             </button>
+            {!activeStoryId && (
+              <button type="button" onClick={handleRegenerateQuickStory} className={semanticButtonClass('ghost', { compact: true })}>
+                <RefreshCcw className="h-4 w-4" /> 重新生成
+              </button>
+            )}
+            <button type="button" onClick={handleAdaptCurrentStory} disabled={!canAdaptCurrentStory() || isLoadingStories} className={semanticButtonClass('secondary', { compact: true })}>
+              {isLoadingStories ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+              {canAdaptCurrentStory() ? '一键改编' : '未开放改编'}
+            </button>
             <button type="button" onClick={() => handleStoryInteraction('report')} className={semanticButtonClass('danger', { compact: true })}>
               <Flag className="h-4 w-4" /> 举报
             </button>
@@ -5038,6 +5106,21 @@ export default function App() {
                       onChange={(event) => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, main_axis: event.target.value } }))}
                       className="min-h-[120px] w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-white outline-none focus:border-indigo-500"
                     />
+                  </label>
+
+                  <label className="flex items-start gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4 text-sm text-zinc-400">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(authoringCartridge.meta?.allowAdaptation)}
+                      onChange={(event) => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, allowAdaptation: event.target.checked } }))}
+                      className="mt-1 h-4 w-4 accent-indigo-500"
+                    />
+                    <span>
+                      <span className="block font-black text-zinc-100">开放一键改编权限</span>
+                      <span className="mt-1 block text-xs leading-relaxed text-zinc-500">
+                        开启后，其他已登录用户可以把这篇作品改编成自己的私密作品；不开启时，只有你自己可以改编。
+                      </span>
+                    </span>
                   </label>
 
                   <div className="space-y-3">

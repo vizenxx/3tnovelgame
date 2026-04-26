@@ -155,6 +155,7 @@ service cloud.firestore {
              (!('favoriteCount' in data) || data.favoriteCount is number) &&
              (!('reportCount' in data) || data.reportCount is number) &&
              (!('averageChapterWords' in data) || data.averageChapterWords is number) &&
+              (!('allowAdaptation' in data) || data.allowAdaptation is bool) &&
              (isValidDateString(data.createdAt) || isValidTimestamp(data.createdAt)) &&
              (isValidDateString(data.updatedAt) || isValidTimestamp(data.updatedAt)) &&
              data.version is number &&
