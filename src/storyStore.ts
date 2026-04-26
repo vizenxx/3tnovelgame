@@ -39,6 +39,18 @@ const calcAverageChapterWords = (chapters?: Array<{ text?: string }>) => {
   return Math.round(ready.reduce((sum, chapter) => sum + countWords(chapter.text), 0) / ready.length);
 };
 
+const buildCardExcerpt = (mainAxis?: string, chapters?: Array<{ text?: string; summary?: string }>) => {
+  const fromChapter = (chapters || []).find((chapter) => (chapter?.text || chapter?.summary || '').trim().length > 0);
+  return String(mainAxis || fromChapter?.summary || fromChapter?.text || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 180);
+};
+
+const countReadyChapters = (chapters?: Array<{ text?: string }>) => (
+  (chapters || []).filter((chapter) => (chapter?.text || '').trim().length > 0).length
+);
+
 const canReadStoryRecord = (meta: StoryMeta, currentUserId?: string) => (
   meta.visibility === 'public' ||
   meta.visibility === 'unlisted' ||
@@ -63,6 +75,8 @@ export type StoryListItem = {
   favoriteCount?: number;
   reportCount?: number;
   averageChapterWords?: number;
+  chapterCount?: number;
+  cardExcerpt?: string;
   updatedAt: string | any;
   createdAt: string | any;
   version: number;
@@ -84,6 +98,8 @@ export type SharedStoryRecord = {
   coverUrl?: string;
   sourceStoryId?: string | null;
   averageChapterWords?: number;
+  chapterCount?: number;
+  cardExcerpt?: string;
   allowAdaptation?: boolean;
   createdAt: string;
   updatedAt: string;
@@ -169,6 +185,8 @@ export async function createEmptyStory(db: Firestore, args: { authorId: string; 
     favoriteCount: 0,
     reportCount: 0,
     averageChapterWords: 0,
+    chapterCount: 7,
+    cardExcerpt: '',
     allowAdaptation: false,
     endingMode: 'dual',
     endingRates: { left: 40, right: 40 },
@@ -292,12 +310,14 @@ export async function getSharedStoryRecord(db: Firestore, storyId: string, curre
         intervenerName: data.intervenerName || data.authorName,
         coverUrl: (data as any).coverUrl || '',
         visibility: data.visibility || 'public',
-        averageChapterWords: data.averageChapterWords || 0,
-        allowAdaptation: typeof (data as any).allowAdaptation === 'boolean'
+    averageChapterWords: data.averageChapterWords || 0,
+    chapterCount: data.chapterCount || sharedChapters.length,
+    cardExcerpt: data.cardExcerpt || buildCardExcerpt(data.main_axis, sharedChapters),
+    allowAdaptation: typeof (data as any).allowAdaptation === 'boolean'
           ? (data as any).allowAdaptation
           : Boolean(sourceMetaForSharedRecord?.allowAdaptation),
       },
-      chapters: sharedChapters,
+    chapters: sharedChapters,
     };
   }
 
@@ -368,7 +388,9 @@ export async function createSharedStoryRecord(db: Firestore, args: {
     intervenerName: args.intervenerName || args.authorName || `游客+${args.authorId.slice(0, 6).toUpperCase()}`,
     coverUrl: args.coverUrl || '',
     sourceStoryId: args.sourceStoryId || null,
-    averageChapterWords: args.averageChapterWords || 0,
+    averageChapterWords: args.averageChapterWords || calcAverageChapterWords(args.chapters),
+    chapterCount: countReadyChapters(args.chapters),
+    cardExcerpt: buildCardExcerpt(args.main_axis, args.chapters),
     allowAdaptation: Boolean(args.allowAdaptation),
     createdAt: now,
     updatedAt: now,
@@ -429,6 +451,8 @@ export async function adaptBlueprintToStory(db: Firestore, args: { authorId: str
     favoriteCount: 0,
     reportCount: 0,
     averageChapterWords: calcAverageChapterWords(args.chapters as any),
+    chapterCount: countReadyChapters(args.chapters as any),
+    cardExcerpt: buildCardExcerpt(bp.main_axis, args.chapters as any),
     allowAdaptation: Boolean(bp.allowAdaptation),
     endingMode: 'dual',
     endingRates: { left: bp.left_mainline_default || 40, right: bp.right_mainline_default || 40 },

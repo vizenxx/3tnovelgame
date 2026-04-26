@@ -5,6 +5,7 @@ import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogI
 import { auth, db, firebaseInitError } from './firebase';
 import { createEmptyStory, createSharedStoryRecord, adaptBlueprintToStory, createStoryBranch, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, getSharedStoryRecord, getStoryCartridge, listMySharedStories, listMyStories, listPublicStories, saveStoryMainlineBundle, saveStoryMeta, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch } from './storyStore';
 import { isBranchUnlockedByHistory, tierToScore } from './storyCartridge';
+import { deleteLocalCache, getLocalCache, setLocalCache } from './localCache';
 import { 
   signInWithRedirect,
   signInWithPopup,
@@ -34,11 +35,8 @@ import {
   getDoc, 
   updateDoc, 
   runTransaction,
-  collection, 
-  addDoc, 
   increment,
-  serverTimestamp,
-  deleteField
+  serverTimestamp
 } from 'firebase/firestore';
 
 // --- Types ---
@@ -193,8 +191,19 @@ const DEFAULT_FEATURE_SETTINGS: AppFeatureSettings = {
   coverGenerationEnabled: false,
 };
 const GUEST_ACCOUNT_RETENTION_DAYS = 180;
+const STORY_LIST_CACHE_TTL_MS = 10 * 60 * 1000;
 const GUEST_RETENTION_NOTICE =
   '游客账号如果连续 180 天没有登录或打开 app 保持活跃，可能会被系统自动清理。注册成正式账号后，当前作品和记录会继续保留。';
+
+const getLocalDeviceId = () => {
+  if (typeof window === 'undefined') return 'server';
+  const storageKey = '3t-local-device-id';
+  const existing = window.localStorage?.getItem(storageKey);
+  if (existing) return existing;
+  const next = `device_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+  window.localStorage?.setItem(storageKey, next);
+  return next;
+};
 
 const getSharedStoryIdFromUrl = () => {
   const urlParams = new URLSearchParams(window.location.search);
@@ -644,16 +653,17 @@ const getStoryAverageChapterWords = (story: any) => {
   return fallback > 0 ? fallback : 0;
 };
 
-const withAverageChapterWords = (story: any, averageChapterWords: number) => ({
-  ...story,
-  averageChapterWords: Number(story?.averageChapterWords || 0) > 0 ? story.averageChapterWords : averageChapterWords,
-  meta: story?.meta
-    ? {
-        ...story.meta,
-        averageChapterWords: Number(story?.meta?.averageChapterWords || 0) > 0 ? story.meta.averageChapterWords : averageChapterWords,
-      }
-    : story?.meta,
-});
+const getStoryCardExcerpt = (mainAxis?: string, chapters?: Array<{ text?: string; summary?: string }>) => {
+  const chapterSeed = (chapters || []).find((chapter) => String(chapter?.text || chapter?.summary || '').trim());
+  return String(mainAxis || chapterSeed?.summary || chapterSeed?.text || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 180);
+};
+
+const getReadyChapterCount = (chapters?: Array<{ text?: string }>) => (
+  (chapters || []).filter((chapter) => String(chapter?.text || '').trim()).length
+);
 
 const getStoryLikeCount = (story: any) => Number(story?.likeCount ?? story?.meta?.likeCount ?? 0);
 const getStoryInterventionCount = (story: any) =>
@@ -1010,6 +1020,8 @@ export default function App() {
   const [authoringSavedSnapshot, setAuthoringSavedSnapshot] = useState('');
   const [authoringDirty, setAuthoringDirty] = useState(false);
   const [interventionHistory, setInterventionHistory] = useState<Array<{ chapterNum: number; charId: string; action: 'bless' | 'curse' }>>([]);
+  const localDeviceIdRef = useRef(getLocalDeviceId());
+  const hasLoadedInitialStoryListRef = useRef(false);
   const fetchingChapterRef = useRef<number | null>(null);
   const [backgroundGeneratingChapter, setBackgroundGeneratingChapter] = useState<number | null>(null);
 
@@ -1403,19 +1415,16 @@ export default function App() {
 
 
   const handleSaveProgressAndReturnLegacy = async () => {
-    if (!user || !activeStoryId || !db) return;
+    if (!user || !activeStoryId || !db || !blueprint) return;
     try {
       setAuthoringSaving(true);
-      const sessionRef = doc(db, 'sessions', user.uid);
-      const sessionSnap = await getDoc(sessionRef);
-      if (sessionSnap.exists()) {
-        const progressRef = doc(db, 'users', user.uid, 'progress', activeStoryId);
-        await setDoc(progressRef, {
-          ...sessionSnap.data(),
-          userId: user.uid,
-          updatedAt: serverTimestamp()
-        });
-      }
+      const progressRef = doc(db, 'users', user.uid, 'progress', activeStoryId);
+      await setDoc(progressRef, {
+        ...buildCurrentRunSnapshot(),
+        userId: user.uid,
+        storyId: activeStoryId,
+        savedAt: serverTimestamp(),
+      });
       await resetGame();
       setShowLeaveGameModal(false);
     } catch (e) {
@@ -1527,23 +1536,6 @@ export default function App() {
     });
   };
 
-  const hydrateMissingAverageWords = async (stories: any[]) => {
-    const hydrated = await Promise.all((stories || []).map(async (story) => {
-      if (getStoryAverageChapterWords(story) > 0 || !story?.id || !db) return story;
-      try {
-        const cartridge = await getStoryCartridge(db as any, story.id);
-        const averageChapterWords = getAverageChapterWords(cartridge?.chapters as any);
-        return averageChapterWords > 0 ? withAverageChapterWords(story, averageChapterWords) : story;
-      } catch (error) {
-        console.error(error);
-        return story;
-      }
-    }));
-    return hydrated;
-  };
-
-  const storyListCacheKey = (uid: string) => `story-list-cache:${uid}`;
-
   const getFriendlyFirebaseError = (error: any, fallback = '操作失败，请稍后重试。') => {
     const message = String(error?.message || error || '');
     if (/quota|RESOURCE_EXHAUSTED|exceeded/i.test(message)) {
@@ -1555,10 +1547,109 @@ export default function App() {
     return message || fallback;
   };
 
-  const refreshStories = async () => {
+  const cacheScope = () => `${localDeviceIdRef.current}:${user?.uid || 'guest'}`;
+  const storyListCacheKey = () => `story-list:${cacheScope()}`;
+  const storyCartridgeCacheKey = (storyId: string) => `story-cartridge:${cacheScope()}:${storyId}`;
+  const sharedStoryCacheKey = (storyId: string) => `shared-story:${cacheScope()}:${storyId}`;
+  const activeRunCacheKey = () => `active-run:${cacheScope()}`;
+
+  const applyStoryListCache = (data: any) => {
+    setPublicStories(Array.isArray(data?.pub) ? data.pub : []);
+    setMyStories(Array.isArray(data?.mine) ? data.mine : []);
+    setMySharedStories(Array.isArray(data?.shared) ? data.shared : []);
+  };
+
+  const cacheStoryLists = async (pub: any[], mine: any[], shared: any[]) => {
+    await setLocalCache(storyListCacheKey(), { pub, mine, shared });
+  };
+
+  const getStoryListCache = async () => getLocalCache<{ pub: any[]; mine: any[]; shared: any[] }>(storyListCacheKey());
+
+  const getCachedStoryCartridge = async (storyId: string, expectedStory?: any) => {
+    const cached = await getLocalCache<any>(storyCartridgeCacheKey(storyId));
+    if (!cached?.value) return null;
+    const expectedUpdatedAt = String(expectedStory?.updatedAt || '');
+    const cachedUpdatedAt = String(cached.value?.meta?.updatedAt || '');
+    const expectedVersion = Number(expectedStory?.version || 0);
+    const cachedVersion = Number(cached.value?.meta?.version || 0);
+    if (expectedUpdatedAt && cachedUpdatedAt && expectedUpdatedAt !== cachedUpdatedAt) return null;
+    if (expectedVersion && cachedVersion && expectedVersion !== cachedVersion) return null;
+    return cached.value;
+  };
+
+  const cacheStoryCartridge = async (storyId: string, cartridge: any) => {
+    if (cartridge) await setLocalCache(storyCartridgeCacheKey(storyId), cartridge);
+  };
+
+  const getCachedSharedStory = async (storyId: string) => getLocalCache<{ meta: any; chapters: Chapter[] }>(sharedStoryCacheKey(storyId));
+
+  const cacheSharedStory = async (storyId: string, record: { meta: any; chapters: Chapter[] }) => {
+    await setLocalCache(sharedStoryCacheKey(storyId), record);
+  };
+
+  const buildCurrentRunSnapshot = () => ({
+    userId: user?.uid,
+    storyId: activeStoryId,
+    gameState,
+    selectedThemes,
+    blueprint,
+    activeStoryMeta,
+    interventionsLeft,
+    endingValue,
+    unlockedBranches,
+    historicallyUnlockedBranches,
+    intervenedChapters,
+    naturalChapters,
+    initialNaturalChapters,
+    characterStatuses,
+    storyConclusion,
+    interventionHistory,
+    canonicalWorldState,
+    deltaWorldStateByChapter,
+    currentChapters: chapters,
+    uiFeedback,
+    savedLocallyAt: Date.now(),
+  });
+
+  const applyLocalRunSnapshot = async (snapshot: any) => {
+    if (!snapshot?.blueprint) return false;
+    setGameState(snapshot.gameState === 'SUMMARY' ? 'PLAYING' : snapshot.gameState || 'PLAYING');
+    setSelectedThemes(snapshot.selectedThemes || []);
+    setBlueprint(snapshot.blueprint);
+    setChapters(snapshot.currentChapters || []);
+    setInterventionsLeft(snapshot.interventionsLeft ?? 3);
+    setEndingValue(snapshot.endingValue || 0);
+    setUnlockedBranches(snapshot.unlockedBranches || []);
+    setHistoricallyUnlockedBranches(snapshot.historicallyUnlockedBranches || []);
+    setIntervenedChapters(snapshot.intervenedChapters || []);
+    setNaturalChapters(snapshot.naturalChapters || []);
+    setInitialNaturalChapters(snapshot.initialNaturalChapters || []);
+    setCharacterStatuses(snapshot.characterStatuses || {});
+    setStoryConclusion(snapshot.storyConclusion || null);
+    setActiveStoryId(snapshot.storyId || null);
+    setActiveStoryMeta(snapshot.activeStoryMeta || null);
+    setInterventionHistory(snapshot.interventionHistory || []);
+    setCanonicalWorldState(snapshot.canonicalWorldState || null);
+    setDeltaWorldStateByChapter(snapshot.deltaWorldStateByChapter || {});
+    if (snapshot.uiFeedback) setUiFeedback(snapshot.uiFeedback);
+    if (snapshot.storyId && snapshot.cartridge) {
+      await cacheStoryCartridge(snapshot.storyId, snapshot.cartridge);
+    }
+    setSessionId(user?.uid || null);
+    return true;
+  };
+
+  const refreshStories = async (options: { force?: boolean } = {}) => {
     if (!user || !db) return;
     setIsLoadingStories(true);
     try {
+      const cached = await getStoryListCache();
+      if (cached?.value) {
+        applyStoryListCache(cached.value);
+        if (!options.force && Date.now() - cached.updatedAt < STORY_LIST_CACHE_TTL_MS) {
+          return;
+        }
+      }
       const [pub, mine, shared] = await withTimeout(
         Promise.all([
           listPublicStories(db as any, 18),
@@ -1571,20 +1662,11 @@ export default function App() {
       setPublicStories(pub);
       setMyStories(mine);
       setMySharedStories(shared);
-      window.sessionStorage?.setItem(storyListCacheKey(user.uid), JSON.stringify({ pub, mine, shared, cachedAt: Date.now() }));
+      await cacheStoryLists(pub, mine, shared);
     } catch (error: any) {
       console.error(error);
-      const cached = window.sessionStorage?.getItem(storyListCacheKey(user.uid));
-      if (cached) {
-        try {
-          const data = JSON.parse(cached);
-          setPublicStories(Array.isArray(data.pub) ? data.pub : []);
-          setMyStories(Array.isArray(data.mine) ? data.mine : []);
-          setMySharedStories(Array.isArray(data.shared) ? data.shared : []);
-        } catch {
-          // Ignore broken cache and show the friendly error below.
-        }
-      }
+      const cached = await getStoryListCache();
+      if (cached?.value) applyStoryListCache(cached.value);
       showError(getFriendlyFirebaseError(error, '作品库加载失败。'));
     } finally {
       setIsLoadingStories(false);
@@ -1605,11 +1687,19 @@ export default function App() {
     if (!db) return;
     try {
       setIsLoadingStories(true);
+      const cached = await getCachedSharedStory(storyId);
+      if (cached?.value) {
+        setReadonlyStoryData({ meta: cached.value.meta, chapters: cached.value.chapters as any });
+        setReadonlyCanGoBack(Boolean(options?.allowBack));
+        setReadonlyReturnTarget(options?.returnTarget || 'STORY_SELECT');
+        setGameState('READONLY_STORY');
+      }
       const record = await getSharedStoryRecord(db as any, storyId, user?.uid);
       if (!record) {
         showError('未找到这份故事记录，或你没有访问权限。');
         return;
       }
+      await cacheSharedStory(storyId, { meta: record.meta, chapters: record.chapters as any });
       setReadonlyStoryData({ meta: record.meta, chapters: record.chapters as any });
       setReadonlyCanGoBack(Boolean(options?.allowBack));
       setReadonlyReturnTarget(options?.returnTarget || 'STORY_SELECT');
@@ -1676,7 +1766,7 @@ export default function App() {
         chapters: resetArtstyleChapters,
         tags: readonlyStoryData.meta.tags || [],
       });
-      await refreshStories();
+      await refreshStories({ force: true });
       await selectAuthoringStory(storyId);
       setGameState('AUTHORING');
       showError('已完成一键改编，已带你进入作者编辑界面。');
@@ -2048,7 +2138,8 @@ export default function App() {
     setAuthoringDirty(buildAuthoringSnapshot(authoringCartridge) !== authoringSavedSnapshot);
   }, [authoringCartridge, authoringSavedSnapshot]);
 
-  // Sync session from Firestore
+  // Restore the current run from this device only. Firestore progress is read only when the user
+  // explicitly opens a story that has saved progress.
   useEffect(() => {
     if (!isAuthReady) return;
     if (!user || !db) {
@@ -2061,121 +2152,14 @@ export default function App() {
 
     let cancelled = false;
     const loadSessionOnce = async () => {
-      const sessionRef = doc(db, 'sessions', user.uid);
-      const snapshot = await getDoc(sessionRef);
+      const cachedRun = await getLocalCache<any>(activeRunCacheKey());
       if (cancelled) return;
-
-      if (!snapshot.exists()) {
-        setSessionId(user.uid);
-        setIsSessionHydrated(true);
-        return;
-      }
-
-      const data = snapshot.data();
-      const gs = data.gameState === 'SUMMARY'
-        ? 'PLAYING'
-        : data.gameState;
-
-      setGameState(gs);
-      setSelectedThemes(data.selectedThemes || []);
-      setChapters(data.currentChapters || []);
-      setInterventionsLeft(data.interventionsLeft ?? 3);
-      setEndingValue(data.endingValue || 0);
-      setUnlockedBranches(data.unlockedBranches || []);
-      setIntervenedChapters(data.intervenedChapters || []);
-      setNaturalChapters(data.naturalChapters || []);
-      setInitialNaturalChapters(data.initialNaturalChapters || []);
-      setCharacterStatuses(data.characterStatuses || {});
-      setStoryConclusion(data.storyConclusion || null);
-      setActiveStoryId(data.storyId || null);
-      setActiveStoryMeta(null);
-      setInterventionHistory(data.interventionHistory || []);
-      setCanonicalWorldState(data.canonicalWorldState || null);
-      setDeltaWorldStateByChapter(data.deltaWorldStateByChapter || {});
-      setSessionId(user.uid);
-
-      if (data.uiFeedback) {
-        setUiFeedback(data.uiFeedback);
-      }
-
-      let nextBlueprint: Blueprint | null = null;
-
-      if (data.blueprintId) {
-        setStartupMessage('正在整理作品档案...');
-        const bpSnap = await getDoc(doc(db, 'blueprints', data.blueprintId));
-        if (cancelled) return;
-        if (bpSnap.exists()) {
-          nextBlueprint = bpSnap.data() as Blueprint;
-        }
-      }
-
-      if (data.storyId) {
-        setStartupMessage('正在恢复上次旅程...');
-        let cartridge: any = null;
-        try {
-          cartridge = await getStoryCartridge(db as any, data.storyId);
-        } catch (error) {
-          console.error(error);
-          showError('恢复故事失败，请从作品库重新打开。');
-          setGameState('STORY_SELECT');
-          setIsSessionHydrated(true);
-          return;
-        }
-        if (cancelled) return;
-        if (cartridge) {
-          setActiveStoryMeta(cartridge.meta);
-          nextBlueprint = {
-            title: cartridge.meta.title,
-            main_axis: cartridge.meta.main_axis,
-            left_mainline_default: 80,
-            right_mainline_default: 40,
-            endingMode: cartridge.meta.endingMode,
-            endingNames: cartridge.meta.endingNames,
-            characters: cartridge.meta.characters,
-            chapters: cartridge.chapters.map((c: any) => ({
-              chapter_num: c.chapter_num,
-              title: c.title,
-              summary: c.summary,
-              present_characters: c.present_characters,
-              text: c.text,
-            })),
-            endings: [
-              { type: 'normal', title: (cartridge.endings.find((e: any) => e.id === 'default')?.title || '第七章'), text: (cartridge.endings.find((e: any) => e.id === 'default')?.text || '') },
-              { type: 'good', title: (cartridge.endings.find((e: any) => e.id === 'left')?.title || '左结局'), text: (cartridge.endings.find((e: any) => e.id === 'left')?.text || '') },
-              { type: 'bad', title: (cartridge.endings.find((e: any) => e.id === 'right')?.title || '右结局'), text: (cartridge.endings.find((e: any) => e.id === 'right')?.text || '') },
-            ],
-            tags: cartridge.meta.tags || [],
-            branches: cartridge.branches.map((b: any) => {
-              const cond = b.trigger?.type === 'single' ? b.trigger.single : { chapterNum: 2, charId: cartridge.meta.characters[0]?.id || 'c1', action: 'bless' as const };
-              return {
-                id: b.id,
-                name: b.name,
-                score: tierToScore(b.tier),
-                side: b.side,
-                condition_char: cond.charId,
-                condition_action: cond.action,
-                condition_chapter: cond.chapterNum,
-                desc: b.desc,
-                is_hidden: b.tier === 'hidden',
-                hint: b.hint,
-                trigger: b.trigger,
-                triggerGroups: b.triggerGroups,
-                tier: b.tier,
-                inject: b.inject,
-                sceneText: b.sceneText,
-              } as any;
-            }),
-          };
-        }
+      if (cachedRun?.value?.gameState === 'PLAYING') {
+        await applyLocalRunSnapshot(cachedRun.value);
       } else {
-        setActiveStoryMeta(null);
+        setSessionId(user.uid);
+        setGameState('STORY_SELECT');
       }
-
-      if (nextBlueprint) {
-        setBlueprint(nextBlueprint);
-        setStartupMessage('正在重构命运织机...');
-      }
-
       setIsSessionHydrated(true);
     };
 
@@ -2193,12 +2177,54 @@ export default function App() {
   }, [isAuthReady, user]);
 
   useEffect(() => {
+    if (!user || gameState !== 'PLAYING' || !blueprint) return;
+    const snapshot = buildCurrentRunSnapshot();
+    const timeout = window.setTimeout(() => {
+      setLocalCache(activeRunCacheKey(), snapshot).catch(() => {});
+    }, 250);
+    return () => window.clearTimeout(timeout);
+  }, [
+    user?.uid,
+    gameState,
+    blueprint,
+    activeStoryId,
+    activeStoryMeta,
+    chapters,
+    interventionsLeft,
+    endingValue,
+    unlockedBranches,
+    historicallyUnlockedBranches,
+    intervenedChapters,
+    naturalChapters,
+    initialNaturalChapters,
+    characterStatuses,
+    storyConclusion,
+    interventionHistory,
+    canonicalWorldState,
+    deltaWorldStateByChapter,
+    uiFeedback,
+  ]);
+
+  useEffect(() => {
+    hasLoadedInitialStoryListRef.current = false;
+  }, [user?.uid]);
+
+  useEffect(() => {
     if (!db || !isAuthReady) return;
     const sharedStoryIdFromUrl = getSharedStoryIdFromUrl();
     if (!sharedStoryIdFromUrl) return;
-    getSharedStoryRecord(db as any, sharedStoryIdFromUrl, user?.uid)
-      .then((record) => {
+    getCachedSharedStory(sharedStoryIdFromUrl)
+      .then((cached) => {
+        if (cached?.value) {
+          setReadonlyStoryData({ meta: cached.value.meta, chapters: cached.value.chapters as any });
+          setReadonlyCanGoBack(Boolean(document.referrer) && new URL(document.referrer).origin === window.location.origin);
+          setGameState('READONLY_STORY');
+        }
+        return getSharedStoryRecord(db as any, sharedStoryIdFromUrl, user?.uid);
+      })
+      .then(async (record) => {
         if (!record) throw new Error('not-found');
+        await cacheSharedStory(sharedStoryIdFromUrl, { meta: record.meta, chapters: record.chapters as any });
         setReadonlyStoryData({ meta: record.meta, chapters: record.chapters as any });
         setReadonlyCanGoBack(Boolean(document.referrer) && new URL(document.referrer).origin === window.location.origin);
         setGameState('READONLY_STORY');
@@ -2318,7 +2344,7 @@ export default function App() {
         chapters: toDefaultArtstyleChapters(chapters),
         tags: normalizeTagList((blueprint.tags && blueprint.tags.length > 0 ? blueprint.tags : selectedThemes) || []),
       });
-      await refreshStories();
+      await refreshStories({ force: true });
       await selectAuthoringStory(storyId);
       setGameState('AUTHORING');
       showError('已完成一键改编，已带你进入作者编辑界面。');
@@ -2435,28 +2461,7 @@ export default function App() {
       setInterventionHistory([]);
       setCanonicalWorldState(null);
       setDeltaWorldStateByChapter({});
-
-      const sessionRef = doc(db, 'sessions', user.uid);
-      await setDoc(sessionRef, {
-        userId: user.uid,
-        gameState: 'STORY_SELECT',
-        selectedThemes: [],
-        blueprintId: deleteField(),
-        storyId: deleteField(),
-        currentChapters: [],
-        interventionsLeft: 3,
-        endingValue: 0,
-        unlockedBranches: [],
-        intervenedChapters: [],
-        naturalChapters: [],
-        initialNaturalChapters: [],
-        characterStatuses: {},
-        storyConclusion: null,
-        interventionHistory: [],
-        canonicalWorldState: null,
-        deltaWorldStateByChapter: {},
-        updatedAt: serverTimestamp(),
-      }, { merge: true });
+      await deleteLocalCache(activeRunCacheKey());
       window.setTimeout(() => {
         window.scrollTo({
           top: shouldRestoreStorySelectScroll ? storySelectScrollYRef.current : 0,
@@ -2561,7 +2566,19 @@ export default function App() {
         storySelectScrollYRef.current = window.scrollY;
       }
       setIsLoadingStories(true);
-      const cartridge = await getStoryCartridge(db as any, storyId);
+      const expectedStory = [...publicStories, ...myStories].find((story: any) => story.id === storyId);
+      let cartridge = await getCachedStoryCartridge(storyId, expectedStory);
+      if (!cartridge) {
+        try {
+          cartridge = await getStoryCartridge(db as any, storyId);
+          await cacheStoryCartridge(storyId, cartridge);
+        } catch (error) {
+          const staleCartridge = await getCachedStoryCartridge(storyId);
+          if (!staleCartridge) throw error;
+          cartridge = staleCartridge;
+          showError('无法连接云端，已使用本机缓存打开故事。');
+        }
+      }
       if (!cartridge) {
         throw new Error('story-not-found-or-denied');
       }
@@ -2589,38 +2606,12 @@ export default function App() {
   const startNewStoryPlay = async (storyId: string, loadedCartridge?: any) => {
     if (!user || !db) return;
     try {
-      const cartridge = loadedCartridge || await getStoryCartridge(db as any, storyId);
+      const cartridge = loadedCartridge || await getCachedStoryCartridge(storyId) || await getStoryCartridge(db as any, storyId);
       if (!cartridge) {
         throw new Error('story-not-found-or-denied');
       }
+      await cacheStoryCartridge(storyId, cartridge);
       applyStoryCartridgeForPlay(storyId, cartridge);
-
-      const sessionRef = doc(db, 'sessions', user.uid);
-      await setDoc(sessionRef, {
-        userId: user.uid,
-        gameState: 'PLAYING',
-        storyId: storyId,
-        selectedThemes: cartridge.meta?.tags || [],
-        currentChapters: (cartridge.chapters || []).map((chapter: any) => ({
-          chapter_num: chapter.chapter_num,
-          title: chapter.title || '',
-          summary: chapter.summary || '',
-          present_characters: Array.isArray(chapter.present_characters) ? chapter.present_characters : [],
-          text: chapter.text || '',
-        })),
-        interventionsLeft: 3,
-        endingValue: 0,
-        unlockedBranches: [],
-        intervenedChapters: [],
-        naturalChapters: (cartridge.chapters || []),
-        initialNaturalChapters: (cartridge.chapters || []),
-        characterStatuses: {},
-        storyConclusion: null,
-        interventionHistory: [],
-        canonicalWorldState: null,
-        deltaWorldStateByChapter: {},
-        updatedAt: serverTimestamp(),
-      });
     } catch (e) {
       console.error(e);
       showError("初始化故事失败");
@@ -2630,18 +2621,12 @@ export default function App() {
   const resumeStoryPlay = async (storyId: string, progressData: any) => {
     if (!user || !db) return;
     try {
-      const cartridge = progressData.cartridge || await getStoryCartridge(db as any, storyId);
+      const cartridge = progressData.cartridge || await getCachedStoryCartridge(storyId) || await getStoryCartridge(db as any, storyId);
       if (!cartridge) {
         throw new Error('story-not-found-or-denied');
       }
+      await cacheStoryCartridge(storyId, cartridge);
       applyStoryCartridgeForPlay(storyId, cartridge, progressData);
-      const sessionRef = doc(db, 'sessions', user.uid);
-      const { cartridge: _cartridge, ...sessionProgress } = progressData;
-      await setDoc(sessionRef, {
-        ...sessionProgress,
-        userId: user.uid,
-        updatedAt: serverTimestamp(),
-      });
       setPendingProgressToLoad(null);
     } catch (e) {
       console.error(e);
@@ -2716,34 +2701,10 @@ export default function App() {
         },
       }));
 
-      const blueprintRef = await addDoc(collection(db, 'blueprints'), {
-        ...data,
-        userId: user.uid,
-        createdAt: new Date().toISOString(),
-      });
-
       const initialStatuses: Record<string, { status: string; isDead: boolean }> = {};
       (data.characters || []).forEach((character: any) => {
         initialStatuses[character.id] = { status: '存活', isDead: false };
       });
-
-      await setDoc(doc(db, 'sessions', user.uid), {
-        userId: user.uid,
-        blueprintId: blueprintRef.id,
-        gameState: 'PLAYING',
-        selectedThemes,
-        currentChapters: data.chapters || [],
-        naturalChapters: data.chapters || [],
-        initialNaturalChapters: data.chapters || [],
-        interventionsLeft: 3,
-        endingValue: 0,
-        unlockedBranches: [],
-        intervenedChapters: [],
-        characterStatuses: initialStatuses,
-        storyConclusion: null,
-        uiFeedback: { leftProgress: 0, rightProgress: 0, endingLabel: '均衡道' },
-        updatedAt: serverTimestamp(),
-      }, { merge: true });
 
       setBlueprint(data);
       setChapters(data.chapters || []);
@@ -2837,12 +2798,6 @@ export default function App() {
             ...chapter,
             present_characters: Array.isArray(chapter.present_characters) ? [...chapter.present_characters] : [],
           })) as any);
-          updateDoc(doc(db, 'sessions', user.uid), {
-            currentChapters: nextChapters,
-            naturalChapters: nextChapters,
-            initialNaturalChapters: nextChapters,
-            updatedAt: serverTimestamp(),
-          }).catch((error) => console.warn('Background chapter session update skipped:', error));
           return nextChapters as any;
         });
       } catch (error) {
@@ -2907,7 +2862,7 @@ export default function App() {
         title: '未命名作品',
         tags: [],
       });
-      await refreshStories();
+      await refreshStories({ force: true });
       await selectAuthoringStory(storyId);
       showError('新作品已创建。');
     } catch (error: any) {
@@ -2938,7 +2893,7 @@ export default function App() {
       setExpandedBranchId(null);
       setAuthoringSavedSnapshot('');
       setAuthoringDirty(false);
-      await refreshStories();
+      await refreshStories({ force: true });
       showError('作品已删除。');
     } catch (error: any) {
       console.error(error);
@@ -2990,22 +2945,26 @@ export default function App() {
       setAuthoringSaving(true);
       const normalizedCharacters = normalizeCharacters(authoringCartridge.meta?.characters || []);
       const normalizedTags = parseTagInput(authoringCustomTagsInput || (authoringCartridge.meta?.tags || []).join('，'));
+      const normalizedChapters = (authoringCartridge.chapters || []).map((chapter: any) => ({
+        chapter_num: chapter.chapter_num,
+        title: chapter.title || `第${chapter.chapter_num}章`,
+        summary: chapter.summary || '',
+        present_characters: Array.isArray(chapter.present_characters) && chapter.present_characters.length > 0
+          ? chapter.present_characters
+          : normalizedCharacters.map((character: any) => character.id),
+        text: chapter.text || '',
+      }));
       await saveStoryMainlineBundle(db as any, authoringStoryId, {
         metaPatch: {
           ...authoringCartridge.meta,
           title: stripBookTitle(authoringCartridge.meta?.title || ''),
           tags: normalizedTags,
           characters: normalizedCharacters,
+          averageChapterWords: getAverageChapterWords(normalizedChapters),
+          chapterCount: getReadyChapterCount(normalizedChapters),
+          cardExcerpt: getStoryCardExcerpt(authoringCartridge.meta?.main_axis, normalizedChapters),
         } as any,
-        chapters: (authoringCartridge.chapters || []).map((chapter: any) => ({
-          chapter_num: chapter.chapter_num,
-          title: chapter.title || `第${chapter.chapter_num}章`,
-          summary: chapter.summary || '',
-          present_characters: Array.isArray(chapter.present_characters) && chapter.present_characters.length > 0
-            ? chapter.present_characters
-            : normalizedCharacters.map((character: any) => character.id),
-          text: chapter.text || '',
-        })),
+        chapters: normalizedChapters,
         endings: (authoringCartridge.endings || []).map((ending: any) => ({
           id: ending.id,
           title: ending.title || endingIdToLabel(ending.id),
@@ -3016,7 +2975,7 @@ export default function App() {
       setAuthoringCartridge(latest);
       setAuthoringCustomTagsInput(normalizedTags.join('，'));
       markAuthoringSaved(latest);
-      await refreshStories();
+      await refreshStories({ force: true });
       showError('作品更改已保存。');
     } catch (error: any) {
       console.error(error);
@@ -3141,7 +3100,7 @@ export default function App() {
       await updateProfile(auth.currentUser, { displayName: nextName });
       setUser({ ...auth.currentUser } as FirebaseUser);
       await syncCurrentAuthorName(auth.currentUser);
-      await refreshStories();
+      await refreshStories({ force: true });
       showError('显示名称已更新。');
     } catch (error: any) {
       console.error(error);
@@ -3656,6 +3615,8 @@ export default function App() {
         metaPatch: {
           ...authoringCartridge.meta,
           averageChapterWords: getAverageChapterWords(authoringCartridge.chapters),
+          chapterCount: getReadyChapterCount(authoringCartridge.chapters),
+          cardExcerpt: getStoryCardExcerpt(authoringCartridge.meta?.main_axis, authoringCartridge.chapters),
         },
         chapters: authoringCartridge.chapters,
         endings: authoringCartridge.endings,
@@ -3715,6 +3676,8 @@ export default function App() {
 
   useEffect(() => {
     if (gameState === 'STORY_SELECT' && user && db) {
+      if (hasLoadedInitialStoryListRef.current) return;
+      hasLoadedInitialStoryListRef.current = true;
       refreshStories().catch(() => {});
     }
   }, [gameState, user, db]);
@@ -5369,7 +5332,7 @@ export default function App() {
             <Trash2 className="h-4 w-4" />
             删除当前
           </button>
-          <button type="button" onClick={() => refreshStories()} disabled={authoringSaving} className={semanticButtonClass('ghost', { compact: true })}>
+          <button type="button" onClick={() => refreshStories({ force: true })} disabled={authoringSaving} className={semanticButtonClass('ghost', { compact: true })}>
             <RefreshCcw className="h-4 w-4" />
             刷新列表
           </button>

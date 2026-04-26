@@ -30,6 +30,8 @@ export interface StoryMeta {
   favoriteCount?: number;
   reportCount?: number;
   averageChapterWords?: number;
+  chapterCount?: number;
+  cardExcerpt?: string;
   allowAdaptation?: boolean;
   endingMode?: EndingMode; // default: dual
   endingRates?: { left: number; right: number }; // 0-80, only meaningful in dual mode

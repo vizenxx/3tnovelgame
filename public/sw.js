@@ -34,15 +34,11 @@ self.addEventListener('fetch', (event) => {
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request)
-        .then((networkResponse) => {
-          const responseClone = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
-          return networkResponse;
-        })
+        .then((networkResponse) => networkResponse)
         .catch(() => {
-          return caches.match(event.request).then((cachedResponse) => {
-            return cachedResponse || caches.match('/');
-          });
+          return caches.match('/').then((cachedResponse) => (
+            cachedResponse || new Response('', { status: 504, statusText: 'Offline' })
+          ));
         })
     );
     return;
