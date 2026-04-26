@@ -1682,14 +1682,14 @@ export default function App() {
     try {
       const currentUser = auth.currentUser;
       if (currentUser?.isAnonymous) {
-        if (isTallNarrowViewport) {
+        if (isIosDevice()) {
           await linkWithRedirect(currentUser, provider);
           return;
         }
         const result = await linkWithPopup(currentUser, provider);
         await syncCurrentAuthorName(result.user);
       } else {
-        if (isTallNarrowViewport) {
+        if (isIosDevice()) {
           await signInWithRedirect(auth, provider);
           return;
         }
@@ -1702,7 +1702,11 @@ export default function App() {
         return;
       }
       if (code.includes('popup') || code.includes('blocked')) {
-        await signInWithRedirect(auth, provider);
+        if (auth.currentUser?.isAnonymous) {
+          await linkWithRedirect(auth.currentUser, provider);
+        } else {
+          await signInWithRedirect(auth, provider);
+        }
         return;
       }
       if (code === 'auth/credential-already-in-use' || code === 'auth/email-already-in-use') {
