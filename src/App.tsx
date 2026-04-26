@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp, Download } from 'lucide-react';
+import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp, Download, Sun, Moon } from 'lucide-react';
 import { auth, db, firebaseInitError } from './firebase';
 import { createEmptyStory, createSharedStoryRecord, adaptBlueprintToStory, createStoryBranch, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, getSharedStoryRecord, getStoryCartridge, listMySharedStories, listMyStories, listPublicStories, saveStoryMainlineBundle, saveStoryMeta, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch } from './storyStore';
 import { isBranchUnlockedByHistory, tierToScore } from './storyCartridge';
@@ -45,6 +45,7 @@ import {
 // --- Types ---
 type GameState = 'STORY_SELECT' | 'AUTHORING' | 'THEME_SELECTION' | 'GENERATING_BLUEPRINT' | 'PLAYING' | 'SUMMARY' | 'READONLY_STORY' | 'ARCHIVE';
 type NarrativePerson = 'first' | 'second' | 'third';
+type AppTheme = 'dark' | 'light';
 
 const safeModalBackdropClass = "fixed inset-0 flex items-center justify-center overflow-y-auto overscroll-contain px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]";
 
@@ -950,6 +951,7 @@ export default function App() {
   const [storyLibrarySearch, setStoryLibrarySearch] = useState('');
   const [storyLibraryVisibilityFilter, setStoryLibraryVisibilityFilter] = useState<'all' | 'public' | 'private' | 'unlisted'>('all');
   const [storyLibrarySort, setStoryLibrarySort] = useState<'updated' | 'likes' | 'interventions' | 'favorites' | 'words'>('updated');
+  const [storyDetailStory, setStoryDetailStory] = useState<any | null>(null);
   const storySelectScrollYRef = useRef(0);
   const [storyImportCode, setStoryImportCode] = useState('');
   const [authoringCustomTagsInput, setAuthoringCustomTagsInput] = useState('');
@@ -966,6 +968,11 @@ export default function App() {
   const [authoringImportText, setAuthoringImportText] = useState('');
   const [authoringImportReplaceBranches, setAuthoringImportReplaceBranches] = useState(true);
   const [authoringTab, setAuthoringTab] = useState<'play' | 'mainline' | 'branches'>('play');
+  const [appTheme, setAppTheme] = useState<AppTheme>(() => (
+    typeof window !== 'undefined' && window.localStorage?.getItem('app-theme') === 'light'
+      ? 'light'
+      : 'dark'
+  ));
   const [branchForm, setBranchForm] = useState({
     id: '',
     name: '',
@@ -1008,6 +1015,12 @@ export default function App() {
   const [readingTextScale, setReadingTextScale] = useState(1);
   const isAdminUser = Boolean(user && ADMIN_USER_IDS.has(user.uid));
   const canUseCoverGeneration = isAdminUser || featureSettings.coverGenerationEnabled;
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = appTheme;
+    document.documentElement.style.colorScheme = appTheme;
+    window.localStorage?.setItem('app-theme', appTheme);
+  }, [appTheme]);
 
   // --- Helpers ---
   const fetchWithTimeout = async (url: string, init: RequestInit, ms: number) => {
@@ -3845,13 +3858,113 @@ export default function App() {
             <p className="mb-3 line-clamp-3 text-sm leading-relaxed text-zinc-400 transition-colors group-hover:text-zinc-300">
               {getStoryMainAxis(story)}
             </p>
-            <button type="button" onClick={() => startStoryPlay(story.id)} className={`${semanticButtonClass('primary', { fullWidth: true, compact: true })} mt-auto text-sm`}>
-              <Sparkles className="h-4 w-4" />
-              干涉命运
-            </button>
+            <div className="mt-auto grid gap-2 sm:grid-cols-2">
+              <button type="button" onClick={() => setStoryDetailStory(story)} className={`${semanticButtonClass('secondary', { fullWidth: true, compact: true })} text-sm`}>
+                <BookOpen className="h-4 w-4" />
+                查看详情
+              </button>
+              <button type="button" onClick={() => startStoryPlay(story.id)} className={`${semanticButtonClass('primary', { fullWidth: true, compact: true })} text-sm`}>
+                <Sparkles className="h-4 w-4" />
+                干涉命运
+              </button>
+            </div>
           </div>
         </div>
       </motion.div>
+    );
+  };
+
+  const renderStoryDetailModal = () => {
+    const coverUrl = storyDetailStory ? getStoryCoverUrl(storyDetailStory) : '';
+    const tags = storyDetailStory ? getStoryTags(storyDetailStory) : [];
+    const title = storyDetailStory ? formatBookTitle(getStoryTitle(storyDetailStory)) : '';
+    const stats = [
+      { label: '点赞', value: storyDetailStory ? getStoryLikeCount(storyDetailStory) : 0 },
+      { label: '干涉', value: storyDetailStory ? getStoryInterventionCount(storyDetailStory) : 0 },
+      { label: '收藏', value: storyDetailStory ? getStoryFavoriteCount(storyDetailStory) : 0 },
+      { label: '均章字数', value: `${storyDetailStory ? getStoryAverageChapterWords(storyDetailStory) || '未知' : '未知'} 字` },
+    ];
+    const handlePlayFromDetail = () => {
+      const targetStoryId = storyDetailStory?.id || storyDetailStory?.storyId;
+      if (!targetStoryId) return;
+      setStoryDetailStory(null);
+      void startStoryPlay(targetStoryId);
+    };
+
+    return (
+      <AnimatePresence>
+        {storyDetailStory && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className={`${safeModalBackdropClass} z-[5400] bg-black/75 backdrop-blur-md`}
+        >
+          <motion.div
+            initial={{ y: 18, opacity: 0, scale: 0.96 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: 12, opacity: 0, scale: 0.98 }}
+            className="relative w-full max-w-3xl rounded-[2rem] border border-zinc-800 bg-zinc-950 p-5 shadow-2xl sm:p-7"
+          >
+            <button
+              type="button"
+              onClick={() => setStoryDetailStory(null)}
+              className={`${semanticIconButtonClass('ghost')} absolute right-4 top-4 z-10`}
+              aria-label="关闭作品详情"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <div className="grid gap-5 pr-10 sm:grid-cols-[180px_minmax(0,1fr)] sm:pr-0">
+              <div>
+                <div className="aspect-square overflow-hidden rounded-3xl border border-zinc-800 bg-gradient-to-br from-zinc-800 via-zinc-950 to-indigo-950 shadow-xl">
+                  {coverUrl ? (
+                    <img src={coverUrl} alt={`${title} 封面`} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center p-5 text-center text-xs font-black uppercase tracking-[0.2em] text-zinc-500">
+                      3T NOVEL
+                    </div>
+                  )}
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-1">
+                  {stats.map((stat) => (
+                    <div key={stat.label} className="rounded-2xl border border-zinc-800 bg-zinc-900/60 px-3 py-2">
+                      <div className="text-[11px] font-black text-zinc-500">{stat.label}</div>
+                      <div className="mt-0.5 text-sm font-black text-zinc-100">{stat.value}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="min-w-0">
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {(tags.length > 0 ? tags : ['未标签']).map((tag: string) => (
+                    <span key={tag} className="rounded-lg bg-indigo-500/10 px-2.5 py-1 text-xs font-black text-indigo-300">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+                <h3 className="break-words text-3xl font-black leading-tight text-white">{title}</h3>
+                <div className="mt-2 text-sm font-bold text-zinc-500">作者：{getStoryAuthorName(storyDetailStory)}</div>
+                <div className="mt-5 max-h-[40vh] overflow-y-auto rounded-3xl border border-zinc-800 bg-zinc-900/45 p-4 text-base leading-relaxed text-zinc-300">
+                  {getStoryMainAxis(storyDetailStory) || '这部作品暂时还没有填写完整介绍。'}
+                </div>
+                <div className="mt-5 grid gap-3 sm:grid-cols-[1fr_1.4fr]">
+                  <button type="button" onClick={() => setStoryDetailStory(null)} className={semanticButtonClass('secondary', { fullWidth: true })}>
+                    <X className="h-4 w-4" />
+                    关闭
+                  </button>
+                  <button type="button" onClick={handlePlayFromDetail} className={semanticButtonClass('primary', { fullWidth: true })}>
+                    <Sparkles className="h-4 w-4" />
+                    干涉命运
+                  </button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+        )}
+      </AnimatePresence>
     );
   };
 
@@ -4322,6 +4435,36 @@ export default function App() {
                   账号设置
                 </div>
                 <div className="space-y-3">
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-black text-zinc-100">界面主题</div>
+                        <div className="mt-1 text-xs leading-relaxed text-zinc-500">
+                          浅色主题使用柔和低疲劳配色，暗色主题保留原本氛围。
+                        </div>
+                      </div>
+                      {appTheme === 'light' ? <Sun className="h-5 w-5 text-amber-500" /> : <Moon className="h-5 w-5 text-indigo-300" />}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { value: 'dark' as const, label: '暗色' },
+                        { value: 'light' as const, label: '浅色' },
+                      ].map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => setAppTheme(option.value)}
+                          className={`rounded-xl border px-3 py-2 text-sm font-black transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
+                            appTheme === option.value
+                              ? 'border-indigo-400 bg-indigo-500/15 text-indigo-100'
+                              : 'border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <input
                     value={profileDisplayName}
                     onChange={(event) => setProfileDisplayName(event.target.value)}
@@ -5930,7 +6073,7 @@ export default function App() {
   );
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 selection:bg-indigo-500/30 selection:text-indigo-200">
+    <div data-theme={appTheme} className="min-h-screen bg-zinc-950 text-zinc-100 selection:bg-indigo-500/30 selection:text-indigo-200">
       <GlobalError errorMsg={errorMsg} />
       {installGuideModal}
       
@@ -5980,6 +6123,7 @@ export default function App() {
           {floatingInterventionPanel}
           {actionMenuOverlay}
           {storyInfoPanel}
+          {renderStoryDetailModal()}
           {accountCenterModal}
           {renderConfirmationModal()}
           {renderResumePromptModal()}
