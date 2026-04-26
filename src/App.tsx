@@ -38,7 +38,6 @@ import {
   addDoc, 
   increment,
   serverTimestamp,
-  onSnapshot,
   deleteField
 } from 'firebase/firestore';
 
@@ -973,6 +972,7 @@ export default function App() {
       ? 'light'
       : 'dark'
   ));
+  const [readingTextOpacity, setReadingTextOpacity] = useState(1);
   const [branchForm, setBranchForm] = useState({
     id: '',
     name: '',
@@ -1141,6 +1141,45 @@ export default function App() {
     return Number(singleChapter || firstSingleGroup || branch?.condition_chapter || 2);
   };
 
+  const getChapterAvailableCharacters = (chapter: Chapter, sourceBlueprint: Blueprint | null = blueprint) => {
+    if (!sourceBlueprint) return [] as Character[];
+    const availableCharacters: Character[] = [];
+    const addCharacter = (character?: Character) => {
+      if (character && !availableCharacters.some((item) => item.id === character.id)) {
+        availableCharacters.push(character);
+      }
+    };
+
+    (chapter.present_characters || []).forEach((charIdOrName) => {
+      addCharacter(sourceBlueprint.characters.find((char) => char.id === charIdOrName || char.name === charIdOrName));
+    });
+
+    const chapterText = String(chapter.text || '');
+    sourceBlueprint.characters.forEach((char) => {
+      if (char.name && chapterText.includes(char.name)) addCharacter(char);
+    });
+
+    (sourceBlueprint.branches || []).forEach((branch: any) => {
+      const groups = Array.isArray(branch.triggerGroups) && branch.triggerGroups.length > 0
+        ? branch.triggerGroups
+        : branch.trigger
+          ? [branch.trigger]
+          : [];
+      groups.forEach((group: any) => {
+        const single = group?.type === 'single' ? group.single : null;
+        const count = group?.type === 'count' ? group.count : null;
+        if (Number(single?.chapterNum) === Number(chapter.chapter_num)) {
+          addCharacter(sourceBlueprint.characters.find((char) => char.id === single.charId || char.name === single.charId));
+        }
+        if (count && Number(count.upToChapterNum) >= Number(chapter.chapter_num)) {
+          addCharacter(sourceBlueprint.characters.find((char) => char.id === count.charId || char.name === count.charId));
+        }
+      });
+    });
+
+    return availableCharacters;
+  };
+
   const todayUsageKey = () => new Date().toISOString().slice(0, 10);
 
   const reserveCoverGenerationQuota = async () => {
@@ -1179,7 +1218,7 @@ export default function App() {
   };
 
   const ReadingTextControls = () => (
-    <div className="inline-flex items-center gap-2 rounded-2xl border border-zinc-800 bg-zinc-950/80 p-1 text-xs font-bold text-zinc-400">
+    <div className="inline-flex flex-wrap items-center gap-2 rounded-2xl border border-zinc-800 bg-zinc-950/80 p-1 text-xs font-bold text-zinc-400">
       <button
         type="button"
         onClick={() => setReadingTextScale((value) => Math.max(0.9, Number((value - 0.1).toFixed(1))))}
@@ -1195,12 +1234,29 @@ export default function App() {
       >
         A+
       </button>
+      <span className="mx-1 h-5 w-px bg-zinc-800" />
+      <button
+        type="button"
+        onClick={() => setReadingTextOpacity((value) => Math.max(0.7, Number((value - 0.05).toFixed(2))))}
+        className="rounded-xl px-3 py-2 transition-colors hover:bg-zinc-800 hover:text-white active:scale-95"
+      >
+        亮-
+      </button>
+      <span className="min-w-12 text-center text-zinc-500">{Math.round(readingTextOpacity * 100)}%</span>
+      <button
+        type="button"
+        onClick={() => setReadingTextOpacity((value) => Math.min(1, Number((value + 0.05).toFixed(2))))}
+        className="rounded-xl px-3 py-2 transition-colors hover:bg-zinc-800 hover:text-white active:scale-95"
+      >
+        亮+
+      </button>
     </div>
   );
 
   const readingParagraphStyle = {
     fontSize: `${readingTextScale}rem`,
     lineHeight: 1.85,
+    opacity: readingTextOpacity,
   } as React.CSSProperties;
 
   const isChapterTextReady = (chapter: Chapter | undefined) => {
@@ -1947,8 +2003,9 @@ export default function App() {
     setStartupMessage('正在同步命运记录...');
 
     let cancelled = false;
-    const sessionRef = doc(db, 'sessions', user.uid);
-    const unsubscribe = onSnapshot(sessionRef, async (snapshot) => {
+    const loadSessionOnce = async () => {
+      const sessionRef = doc(db, 'sessions', user.uid);
+      const snapshot = await getDoc(sessionRef);
       if (cancelled) return;
 
       if (!snapshot.exists()) {
@@ -2063,7 +2120,9 @@ export default function App() {
       }
 
       setIsSessionHydrated(true);
-    }, (error) => {
+    };
+
+    loadSessionOnce().catch((error) => {
       if (cancelled) return;
       console.error(error);
       setIsSessionHydrated(true);
@@ -2073,7 +2132,6 @@ export default function App() {
 
     return () => {
       cancelled = true;
-      unsubscribe();
     };
   }, [isAuthReady, user]);
 
@@ -3387,6 +3445,63 @@ export default function App() {
           });
         });
 
+        const cartridge = await getStoryCartridge(db as any, activeStoryId);
+        if (!cartridge) {
+          throw new Error('story-not-found-or-denied');
+        }
+        const archiveSourceStoryId = activeStoryId;
+        const alreadyInArchive = mySharedStories.some((story: any) => (
+          story.sourceStoryId === archiveSourceStoryId ||
+          story.sourceStoryId === activeStoryId ||
+          story.id === archiveSourceStoryId
+        ));
+        if (!alreadyInArchive) {
+          const title = cartridge.meta?.title || '收藏作品';
+          const mainAxis = cartridge.meta?.main_axis || '';
+          const averageChapterWords = cartridge.meta?.averageChapterWords || getAverageChapterWords(cartridge.chapters as any);
+          const archiveId = await createSharedStoryRecord(db as any, {
+            authorId: user.uid,
+            authorName: getUserAuthorName(user),
+            title,
+            main_axis: mainAxis,
+            tags: cartridge.meta?.tags || [],
+            characters: cartridge.meta?.characters || [],
+            chapters: cartridge.chapters as any,
+            averageChapterWords,
+            coverUrl: cartridge.meta?.coverUrl || '',
+            sourceStoryId: archiveSourceStoryId,
+            originalAuthorId: cartridge.meta?.authorId || archiveSourceStoryId,
+            originalAuthorName: getStoryAuthorName(cartridge.meta),
+            intervenerId: null,
+            intervenerName: '',
+            allowAdaptation: Boolean(cartridge.meta?.allowAdaptation),
+            visibility: 'private',
+          });
+          setMySharedStories((prev) => [{
+            id: archiveId,
+            title,
+            main_axis: mainAxis,
+            tags: cartridge.meta?.tags || [],
+            characters: cartridge.meta?.characters || [],
+            chapters: cartridge.chapters,
+            authorId: user.uid,
+            authorName: getUserAuthorName(user),
+            originalAuthorId: cartridge.meta?.authorId || archiveSourceStoryId,
+            originalAuthorName: getStoryAuthorName(cartridge.meta),
+            intervenerId: null,
+            intervenerName: '',
+            sourceStoryId: archiveSourceStoryId,
+            averageChapterWords,
+            allowAdaptation: Boolean(cartridge.meta?.allowAdaptation),
+            visibility: 'private',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }, ...prev]);
+        }
+        showError(alreadyFavorited || alreadyInArchive ? '已在馆藏中。' : '已收藏并加入馆藏。');
+        return;
+
+        if (false) {
         let record = await getSharedStoryRecord(db as any, activeStoryId, user.uid);
         if (!record) {
           const cartridge = await getStoryCartridge(db as any, activeStoryId);
@@ -3455,6 +3570,7 @@ export default function App() {
         }
         showError(alreadyFavorited || alreadyInArchive ? '已在馆藏中。' : '已收藏并加入馆藏。');
         return;
+      }
       }
       await updateDoc(doc(db, 'stories', activeStoryId), {
         reportCount: increment(1),
@@ -3904,18 +4020,9 @@ export default function App() {
             initial={{ y: 18, opacity: 0, scale: 0.96 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 12, opacity: 0, scale: 0.98 }}
-            className="relative w-full max-w-3xl rounded-[2rem] border border-zinc-800 bg-zinc-950 p-5 shadow-2xl sm:p-7"
+            className="relative mt-[env(safe-area-inset-top)] max-h-[calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-full max-w-3xl overflow-y-auto rounded-[2rem] border border-zinc-800 bg-zinc-950 p-5 shadow-2xl sm:p-7"
           >
-            <button
-              type="button"
-              onClick={() => setStoryDetailStory(null)}
-              className={`${semanticIconButtonClass('ghost')} absolute right-4 top-4 z-10`}
-              aria-label="关闭作品详情"
-            >
-              <X className="h-5 w-5" />
-            </button>
-
-            <div className="grid gap-5 pr-10 sm:grid-cols-[180px_minmax(0,1fr)] sm:pr-0">
+            <div className="grid gap-5 sm:grid-cols-[180px_minmax(0,1fr)]">
               <div>
                 <div className="aspect-square overflow-hidden rounded-3xl border border-zinc-800 bg-gradient-to-br from-zinc-800 via-zinc-950 to-indigo-950 shadow-xl">
                   {coverUrl ? (
@@ -3949,14 +4056,13 @@ export default function App() {
                 <div className="mt-5 max-h-[40vh] overflow-y-auto rounded-3xl border border-zinc-800 bg-zinc-900/45 p-4 text-base leading-relaxed text-zinc-300">
                   {getStoryMainAxis(storyDetailStory) || '这部作品暂时还没有填写完整介绍。'}
                 </div>
-                <div className="mt-5 grid gap-3 sm:grid-cols-[1fr_1.4fr]">
-                  <button type="button" onClick={() => setStoryDetailStory(null)} className={semanticButtonClass('secondary', { fullWidth: true })}>
-                    <X className="h-4 w-4" />
-                    关闭
-                  </button>
+                <div className="mt-5 grid gap-3">
                   <button type="button" onClick={handlePlayFromDetail} className={semanticButtonClass('primary', { fullWidth: true })}>
                     <Sparkles className="h-4 w-4" />
                     干涉命运
+                  </button>
+                  <button type="button" onClick={() => setStoryDetailStory(null)} className={semanticButtonClass('secondary', { fullWidth: true })}>
+                    关闭
                   </button>
                 </div>
               </div>
@@ -4093,7 +4199,7 @@ export default function App() {
               </button>
             ))}
           </div>
-          <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+          <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto_auto]">
             <input
               type="search"
               value={storyLibrarySearch}
@@ -4124,6 +4230,15 @@ export default function App() {
               <option value="favorites">收藏最多</option>
               <option value="words">平均字数</option>
             </select>
+            <button
+              type="button"
+              onClick={refreshStories}
+              disabled={isLoadingStories}
+              className={semanticButtonClass('ghost', { compact: true })}
+            >
+              <RefreshCcw className={`h-4 w-4 ${isLoadingStories ? 'animate-spin' : ''}`} />
+              刷新
+            </button>
           </div>
         </div>
         {isLoadingStories ? (
@@ -4975,13 +5090,7 @@ export default function App() {
               {(() => {
                 if (gameState !== 'PLAYING' || !blueprint) return null;
 
-                const availableCharacters: Character[] = [];
-                (chapter.present_characters || []).forEach((charIdOrName) => {
-                  const matchedCharacter = blueprint.characters.find((char) => char.id === charIdOrName || char.name === charIdOrName);
-                  if (matchedCharacter && !availableCharacters.some((char) => char.id === matchedCharacter.id)) {
-                    availableCharacters.push(matchedCharacter);
-                  }
-                });
+                const availableCharacters = getChapterAvailableCharacters(chapter, blueprint);
 
                 const canInterveneInChapter =
                   chapter.chapter_num >= 2 &&
@@ -5111,6 +5220,9 @@ export default function App() {
             </button>
             <button type="button" onClick={handleShareStory} disabled={isSharing || !activeStoryId} className={semanticButtonClass('secondary', { compact: true })}>
               {isSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />} 分享
+            </button>
+            <button type="button" onClick={handleSaveWorkAndReturn} className={semanticButtonClass('secondary', { compact: true })}>
+              <Archive className="h-4 w-4" /> 保存当前故事
             </button>
             {!activeStoryId && (
               <button type="button" onClick={handleRegenerateQuickStory} className={semanticButtonClass('ghost', { compact: true })}>
@@ -5593,6 +5705,19 @@ export default function App() {
                       <div className="text-sm font-black text-white">触发条件</div>
                       {branchConditions.map((condition, idx) => (
                         <div key={idx} className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 space-y-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-xs font-black text-zinc-500">条件组 {idx + 1}</div>
+                            {branchConditions.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => setBranchConditions((prev) => prev.filter((_, itemIdx) => itemIdx !== idx))}
+                                className={semanticButtonClass('danger', { compact: true })}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                删除条件
+                              </button>
+                            )}
+                          </div>
                           <div className="grid gap-3 md:grid-cols-4">
                             <select value={condition.kind} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, kind: event.target.value as 'single' | 'count' } : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500">
                               <option value="single">单次判定</option>

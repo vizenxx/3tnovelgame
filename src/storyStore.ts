@@ -120,7 +120,13 @@ export async function listMySharedStories(db: Firestore, authorId: string, pageS
     limit(pageSize)
   );
   const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as SharedStoryRecord[];
+  const records = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as SharedStoryRecord[];
+  const deduped = new Map<string, SharedStoryRecord>();
+  records.forEach((record) => {
+    const key = record.sourceStoryId || record.id;
+    if (!deduped.has(key)) deduped.set(key, record);
+  });
+  return Array.from(deduped.values());
 }
 
 export async function updateAuthorNameEverywhere(db: Firestore, authorId: string, authorName: string) {
