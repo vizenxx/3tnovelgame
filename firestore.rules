@@ -171,7 +171,9 @@ service cloud.firestore {
              data.chapters is list && data.chapters.size() <= 10 &&
              data.authorId is string &&
              (!('authorName' in data) || (data.authorName is string && data.authorName.size() <= 80)) &&
+             (!('sourceStoryId' in data) || data.sourceStoryId is string || data.sourceStoryId == null) &&
              (!('averageChapterWords' in data) || data.averageChapterWords is number) &&
+             (!('visibility' in data) || data.visibility in ['public', 'private']) &&
              (isValidDateString(data.createdAt) || isValidTimestamp(data.createdAt)) &&
              (isValidDateString(data.updatedAt) || isValidTimestamp(data.updatedAt));
     }
@@ -210,6 +212,7 @@ service cloud.firestore {
         resource.data.authorId == request.auth.uid &&
         isValidStoryMeta(request.resource.data)
       ) || (
+        isAuthenticated() &&
         canReadStoryData(resource.data) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['popularity', 'likeCount', 'interventionCount', 'favoriteCount', 'reportCount']) &&
         (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['popularity']) || request.resource.data.popularity == (storyPopularity(resource.data) + 1)) &&
@@ -253,9 +256,13 @@ service cloud.firestore {
     }
 
     match /sharedStories/{shareId} {
-      allow read: if true;
+      allow read: if resource.data.visibility == 'public' || (isAuthenticated() && resource.data.authorId == request.auth.uid);
       allow create: if isAuthenticated() && isValidSharedStory(request.resource.data) && request.resource.data.authorId == request.auth.uid;
-      allow update, delete: if isAuthenticated() && resource.data.authorId == request.auth.uid;
+      allow update: if isAuthenticated() &&
+        resource.data.authorId == request.auth.uid &&
+        request.resource.data.authorId == request.auth.uid &&
+        isValidSharedStory(request.resource.data);
+      allow delete: if isAuthenticated() && resource.data.authorId == request.auth.uid;
     }
 
     // Default deny

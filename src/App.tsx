@@ -208,14 +208,14 @@ const semanticButtonClass = (
   variant: 'primary' | 'secondary' | 'danger' | 'ghost',
   options?: { fullWidth?: boolean; compact?: boolean }
 ) => {
-  const base = `inline-flex items-center justify-center gap-2 rounded-xl transition-colors disabled:opacity-50 ${
+  const base = `inline-flex items-center justify-center gap-2 rounded-xl transition-all duration-150 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 disabled:pointer-events-none disabled:opacity-50 ${
     options?.compact ? 'px-3 py-2 text-xs font-bold' : 'px-4 py-3 text-sm font-bold'
   } ${options?.fullWidth ? 'w-full' : ''}`;
   const variants = {
-    primary: 'bg-white text-black hover:bg-zinc-200 shadow-lg',
-    secondary: 'bg-zinc-900 border border-zinc-700 text-zinc-100 hover:border-zinc-500',
-    danger: 'bg-rose-500/90 text-white hover:bg-rose-500',
-    ghost: 'bg-zinc-800 text-zinc-200 hover:bg-zinc-700',
+    primary: 'bg-white text-black shadow-lg hover:bg-zinc-200 hover:shadow-xl',
+    secondary: 'bg-zinc-900 border border-zinc-700 text-zinc-100 hover:border-zinc-500 hover:bg-zinc-800/90',
+    danger: 'bg-rose-500/90 text-white hover:bg-rose-500 hover:shadow-lg hover:shadow-rose-950/30',
+    ghost: 'bg-zinc-800 text-zinc-200 hover:bg-zinc-700 hover:text-white',
   };
   return `${base} ${variants[variant]}`;
 };
@@ -226,7 +226,7 @@ const semanticIconButtonClass = (variant: 'secondary' | 'danger' | 'ghost' = 'gh
     danger: 'border-rose-500/40 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 hover:border-rose-400/60',
     ghost: 'border-zinc-800 bg-zinc-900 text-zinc-300 hover:border-zinc-600 hover:text-white',
   };
-  return `inline-flex h-10 w-10 items-center justify-center rounded-xl border transition-colors ${variants[variant]}`;
+  return `inline-flex h-10 w-10 items-center justify-center rounded-xl border transition-all duration-150 hover:-translate-y-0.5 active:translate-y-0 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 ${variants[variant]}`;
 };
 
 const semanticMenuButtonClass = (variant: 'primary' | 'secondary' | 'danger' | 'ghost' = 'ghost') => {
@@ -236,7 +236,7 @@ const semanticMenuButtonClass = (variant: 'primary' | 'secondary' | 'danger' | '
     danger: 'text-rose-100 hover:bg-rose-950/60',
     ghost: 'text-zinc-100 hover:bg-zinc-900',
   };
-  return `flex w-full items-center gap-2 rounded-xl px-3 py-3 text-left text-sm transition-colors disabled:opacity-50 ${variants[variant]}`;
+  return `flex w-full items-center gap-2 rounded-xl px-3 py-3 text-left text-sm transition-all duration-150 hover:translate-x-1 active:translate-x-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 disabled:pointer-events-none disabled:opacity-50 ${variants[variant]}`;
 };
 
 const BackNavButton = ({
@@ -253,7 +253,7 @@ const BackNavButton = ({
     onClick={onClick}
     aria-label={label}
     title={label}
-    className={`fixed left-4 top-[max(1rem,env(safe-area-inset-top))] z-[2300] inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950/85 text-zinc-200 shadow-xl backdrop-blur-md transition-colors hover:border-zinc-600 hover:text-white sm:left-6 ${className}`}
+    className={`fixed left-4 top-[max(1rem,env(safe-area-inset-top))] z-[2300] inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950/85 text-zinc-200 shadow-xl backdrop-blur-md transition-all duration-150 hover:-translate-y-0.5 hover:border-zinc-600 hover:text-white active:translate-y-0 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 sm:left-6 ${className}`}
   >
     <ChevronLeft className="h-5 w-5" />
     <span className="sr-only">{label}</span>
@@ -1085,10 +1085,6 @@ export default function App() {
     setAuthoringDirty(false);
   };
 
-  const confirmDiscardAuthoringChanges = (targetLabel: string) => {
-    if (!authoringDirty) return true;
-    return window.confirm(`当前有未保存更改，确定要放弃并${targetLabel}吗？`);
-  };
 
   const handleSaveProgressAndReturnLegacy = async () => {
     if (!user || !activeStoryId || !db) return;
@@ -2149,9 +2145,19 @@ export default function App() {
     markAuthoringSaved(cartridge);
   };
 
-  const handleCreateAuthoringStory = async () => {
+  const handleCreateAuthoringStory = async (confirmed = false) => {
     if (!db || !user) return;
-    if (!confirmDiscardAuthoringChanges('创建并切换到新作品')) return;
+    if (authoringDirty && !confirmed) {
+      setConfirmationModal({
+        isOpen: true,
+        title: 'Discard unsaved changes',
+        message: 'Create a new story and discard current unsaved changes?',
+        onConfirm: () => {
+          void handleCreateAuthoringStory(true);
+        },
+      });
+      return;
+    }
     try {
       setAuthoringSaving(true);
       const storyId = await createEmptyStory(db as any, {
@@ -2171,9 +2177,17 @@ export default function App() {
     }
   };
 
-  const handleDeleteAuthoringStory = async () => {
+  const handleDeleteAuthoringStory = async (confirmed = false) => {
     if (!db || !authoringStoryId) return;
-    if (!window.confirm('确定删除当前作品吗？此操作不可撤销。')) return;
+    if (!confirmed) {
+      setConfirmationModal({
+        isOpen: true,
+        title: 'Delete story',
+        message: 'This story will be permanently deleted. This action cannot be undone.',
+        onConfirm: () => { void handleDeleteAuthoringStory(true); },
+      });
+      return;
+    }
     try {
       setAuthoringSaving(true);
       await deleteStoryCartridge(db as any, authoringStoryId);
@@ -2582,6 +2596,10 @@ export default function App() {
       }
     } catch (e) {
       console.error(e);
+      if ((e as any)?.name === 'AbortError') {
+        showError('已取消分享。');
+        return;
+      }
       showError("分享失败");
     } finally {
       setIsSharing(false);
@@ -3055,7 +3073,7 @@ export default function App() {
           </div>
         )}
       </div>
-      <h3 className="mb-2 line-clamp-1 text-2xl font-black text-white transition-colors group-hover:text-indigo-300">
+      <h3 className="mb-2 whitespace-normal break-words text-2xl font-black leading-tight text-white transition-colors group-hover:text-indigo-300">
         {formatBookTitle(getStoryTitle(story))}
       </h3>
       <div className="mb-3 text-sm font-bold text-zinc-500">
@@ -3188,8 +3206,8 @@ export default function App() {
                 key={tab.id}
                 type="button"
                 onClick={() => setStoryLibraryTab(tab.id as 'public' | 'mine')}
-                className={`rounded-xl px-4 py-2 text-sm font-black transition-colors ${
-                  storyLibraryTab === tab.id ? 'bg-indigo-600 text-white' : 'text-zinc-500 hover:text-zinc-200'
+                className={`rounded-xl px-4 py-2 text-sm font-black transition-all duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 ${
+                  storyLibraryTab === tab.id ? 'bg-indigo-600 text-white shadow-lg' : 'text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200'
                 }`}
               >
                 {tab.label} <span className="ml-1 text-[10px] opacity-70">{tab.count}</span>
@@ -3288,7 +3306,7 @@ export default function App() {
       return haystack.includes(keyword);
     });
     return (
-      <div className="mx-auto max-w-6xl px-6 py-12 lg:px-8">
+      <div className="mx-auto max-w-6xl px-6 pb-12 pt-24 lg:px-8">
         <div className="mb-10 flex items-start justify-between gap-4">
           <div>
             <div className="text-xs font-black uppercase tracking-[0.22em] text-zinc-500">故事馆藏</div>
@@ -3385,7 +3403,7 @@ export default function App() {
   };
 
   const renderThemeSelectionView = () => (
-    <div className="mx-auto flex min-h-[100dvh] max-w-5xl flex-col justify-center px-6 py-20 text-center lg:px-8">
+    <div className="mx-auto flex min-h-[100dvh] max-w-5xl flex-col justify-center px-6 pb-20 pt-28 text-center lg:px-8">
       <div className="mb-8 flex items-center justify-between">
         <BackNavButton label="返回作品库" onClick={() => setGameState('STORY_SELECT')} />
         <div className="h-10 w-10" />
@@ -3573,7 +3591,7 @@ export default function App() {
     const story = readonlyStoryData;
     if (!story) return null;
     return (
-      <div className="mx-auto max-w-4xl px-6 py-16 sm:px-8">
+      <div className="mx-auto max-w-4xl px-6 pb-16 pt-24 sm:px-8">
         <div className="mb-10 flex items-start justify-between gap-4">
           <div className="space-y-3">
             <div className="text-xs font-black uppercase tracking-[0.24em] text-zinc-500">故事记录</div>
@@ -4017,7 +4035,7 @@ export default function App() {
   );
 
   const renderSummaryView = () => (
-    <div className="mx-auto max-w-4xl px-6 py-24 sm:px-8">
+    <div className="mx-auto max-w-4xl px-6 pb-24 pt-28 sm:px-8">
       <div className="mb-16 text-center space-y-4">
         <div className="inline-block rounded-full bg-amber-500/10 px-4 py-1 text-[10px] font-bold tracking-[0.2em] text-amber-500 uppercase">
           命运之卷已封存
@@ -4070,15 +4088,15 @@ export default function App() {
   );
 
   const renderAuthoringView = () => (
-    <div className="mx-auto max-w-7xl px-6 py-12 lg:px-8">
+    <div className="mx-auto max-w-7xl px-6 pb-12 pt-24 lg:px-8">
       <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
         <BackNavButton label="返回作品库" onClick={() => setGameState('STORY_SELECT')} />
         <div className="flex flex-wrap gap-3">
-          <button type="button" onClick={handleCreateAuthoringStory} disabled={authoringSaving} className={semanticButtonClass('secondary', { compact: true })}>
+          <button type="button" onClick={() => handleCreateAuthoringStory()} disabled={authoringSaving} className={semanticButtonClass('secondary', { compact: true })}>
             <Sparkles className="h-4 w-4" />
             新建作品
           </button>
-          <button type="button" onClick={handleDeleteAuthoringStory} disabled={authoringSaving || !authoringStoryId} className={semanticButtonClass('danger', { compact: true })}>
+          <button type="button" onClick={() => handleDeleteAuthoringStory()} disabled={authoringSaving || !authoringStoryId} className={semanticButtonClass('danger', { compact: true })}>
             <Trash2 className="h-4 w-4" />
             删除当前
           </button>
@@ -4108,7 +4126,18 @@ export default function App() {
                     key={story.id}
                     type="button"
                     onClick={async () => {
-                      if (authoringStoryId !== story.id && !confirmDiscardAuthoringChanges('切换到其他作品')) return;
+                      if (authoringStoryId !== story.id && authoringDirty) {
+                        setConfirmationModal({
+                          isOpen: true,
+                          title: 'Discard unsaved changes',
+                          message: 'Switch stories and discard current unsaved changes?',
+                          onConfirm: () => {
+                            setAuthoringDirty(false);
+                            void selectAuthoringStory(story.id);
+                          },
+                        });
+                        return;
+                      }
                       await selectAuthoringStory(story.id);
                     }}
                     className={`w-full rounded-2xl border p-4 text-left transition-colors ${
