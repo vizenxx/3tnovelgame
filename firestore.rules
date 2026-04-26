@@ -172,6 +172,10 @@ service cloud.firestore {
              data.chapters is list && data.chapters.size() <= 10 &&
               data.authorId is string &&
               (!('authorName' in data) || (data.authorName is string && data.authorName.size() <= 80)) &&
+              (!('originalAuthorId' in data) || data.originalAuthorId is string || data.originalAuthorId == null) &&
+              (!('originalAuthorName' in data) || (data.originalAuthorName is string && data.originalAuthorName.size() <= 80)) &&
+              (!('intervenerId' in data) || data.intervenerId is string || data.intervenerId == null) &&
+              (!('intervenerName' in data) || (data.intervenerName is string && data.intervenerName.size() <= 80)) &&
               (!('coverUrl' in data) || (data.coverUrl is string && data.coverUrl.size() < 900000)) &&
               (!('sourceStoryId' in data) || data.sourceStoryId is string || data.sourceStoryId == null) &&
              (!('averageChapterWords' in data) || data.averageChapterWords is number) &&

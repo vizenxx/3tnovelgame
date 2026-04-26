@@ -4,6 +4,22 @@ import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './
 import { getGeminiApiKey } from './_gemini.js';
 
 const DEFAULT_IMAGE_MODEL = 'gemini-3.1-flash-image-preview';
+const MAX_IMAGE_DATA_CHARS = 3_600_000;
+
+function safeErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error || 'Unknown error');
+}
+
+function sendCoverError(res: VercelResponse, status: number, code: string, message: string, error?: unknown) {
+  if (error) {
+    console.error(`[generate-cover:${code}]`, error);
+  }
+  return res.status(status).json({
+    error: message,
+    code,
+    detail: process.env.NODE_ENV === 'production' ? undefined : safeErrorMessage(error),
+  });
+}
 
 function getImageModelCandidates() {
   const configuredModels = (process.env.GEMINI_IMAGE_MODEL || process.env.GEMINI_IMAGE_MODELS || '')
@@ -52,7 +68,11 @@ async function generateCoverImage(ai: GoogleGenAI, prompt: string) {
             responseModalities: ['TEXT', 'IMAGE'],
           },
         } as any);
-        return { ...extractInlineImageData(response), model };
+        const image = extractInlineImageData(response);
+        if (String(image.data || '').length > MAX_IMAGE_DATA_CHARS) {
+          throw new Error(`Generated image payload is too large: ${String(image.data || '').length} chars.`);
+        }
+        return { ...image, model };
       } catch (error) {
         lastError = error;
         console.error(`Cover generation failed with ${model}${withImageConfig ? ' + imageConfig' : ''}:`, error);
@@ -60,7 +80,9 @@ async function generateCoverImage(ai: GoogleGenAI, prompt: string) {
     }
   }
 
-  throw lastError instanceof Error ? lastError : new Error('Gemini cover generation failed.');
+  const wrapped = new Error(safeErrorMessage(lastError));
+  (wrapped as any).cause = lastError;
+  throw wrapped;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -94,6 +116,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       model: image.model,
     });
   } catch (error) {
+    const message = safeErrorMessage(error);
+    if (message.includes('Missing valid Gemini API key') || message.includes('API key not valid') || message.includes('API_KEY_INVALID')) {
+      return sendCoverError(res, 503, 'gemini-api-key', 'AI 服务 API key 配置异常。', error);
+    }
+    if (message.includes('payload is too large')) {
+      return sendCoverError(res, 413, 'image-too-large', '生成图片过大，暂时无法作为作品封面保存。请换一个更简洁的画面提示再试。', error);
+    }
+    if (message.includes('did not return an image')) {
+      return sendCoverError(res, 502, 'no-inline-image', 'AI 服务没有返回图片。请调整提示词后重试。', error);
+    }
     return sendInternalError(res, '封面生成失败', error);
   }
 }

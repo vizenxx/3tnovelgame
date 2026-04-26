@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp } from 'lucide-react';
 import { auth, db, firebaseInitError } from './firebase';
-import { createEmptyStory, createSharedStoryRecord, adaptBlueprintToStory, createStoryBranch, deleteStoryBranch, deleteStoryCartridge, getSharedStoryRecord, getStoryCartridge, listMySharedStories, listMyStories, listPublicStories, saveStoryMainlineBundle, saveStoryMeta, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch } from './storyStore';
+import { createEmptyStory, createSharedStoryRecord, adaptBlueprintToStory, createStoryBranch, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, getSharedStoryRecord, getStoryCartridge, listMySharedStories, listMyStories, listPublicStories, saveStoryMainlineBundle, saveStoryMeta, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch } from './storyStore';
 import { isBranchUnlockedByHistory, tierToScore } from './storyCartridge';
 import { 
   signInWithRedirect,
@@ -536,6 +536,14 @@ const getStoryAuthorName = (story: any) => {
   const meta = story?.meta || story || {};
   return meta.authorName || meta.authorDisplayName || (meta.authorId ? `游客+${shortUserId(meta.authorId)}` : '未知作者');
 };
+const getOriginalAuthorName = (story: any) => {
+  const meta = story?.meta || story || {};
+  return meta.originalAuthorName || meta.sourceAuthorName || meta.authorName || (meta.originalAuthorId ? `游客+${shortUserId(meta.originalAuthorId)}` : getStoryAuthorName(story));
+};
+const getIntervenerName = (story: any) => {
+  const meta = story?.meta || story || {};
+  return meta.intervenerName || meta.recordOwnerName || meta.authorName || (meta.intervenerId ? `游客+${shortUserId(meta.intervenerId)}` : '');
+};
 
 const getStoryTitle = (story: any) => story?.meta?.title || story?.title || '未命名故事';
 const getStoryMainAxis = (story: any) => story?.meta?.main_axis || story?.main_axis || '';
@@ -1008,7 +1016,7 @@ export default function App() {
   const readErrorMessage = async (response: Response) => {
     try {
       const data = await response.json();
-      return data?.error || `请求失败（${response.status}）`;
+      return [data?.error, data?.code ? `(${data.code})` : '', data?.detail ? `：${data.detail}` : ''].filter(Boolean).join(' ') || `请求失败（${response.status}）`;
     } catch {
       return await response.text() || `请求失败（${response.status}）`;
     }
@@ -1260,6 +1268,10 @@ export default function App() {
         averageChapterWords: getAverageChapterWords(sourceChapters),
         coverUrl: activeStoryMeta?.coverUrl || '',
         sourceStoryId: activeStoryId,
+        originalAuthorId: activeStoryMeta?.authorId || user.uid,
+        originalAuthorName: getStoryAuthorName(activeStoryMeta || { authorId: user.uid, authorName: getUserAuthorName(user) }),
+        intervenerId: user.uid,
+        intervenerName: getUserAuthorName(user),
         visibility: 'private',
       });
       await resetGame();
@@ -1480,6 +1492,28 @@ export default function App() {
     } finally {
       setArchiveUpdatingIds((prev) => ({ ...prev, [story.id]: false }));
     }
+  };
+
+  const handleDeleteArchiveStory = (story: any) => {
+    if (!db || !user || !story?.id) return;
+    setConfirmationModal({
+      isOpen: true,
+      title: '删除馆藏记录？',
+      message: `这只会删除你馆藏里的《${stripBookTitle(story.title || '未命名故事')}》记录，不会删除原作者的作品，也不会影响其他人已拥有的分享链接记录。此操作无法撤销。`,
+      onConfirm: async () => {
+        try {
+          setArchiveUpdatingIds((prev) => ({ ...prev, [story.id]: true }));
+          await deleteSharedStoryRecord(db as any, story.id, user.uid);
+          setMySharedStories((prev) => prev.filter((item: any) => item.id !== story.id));
+          showError('馆藏记录已删除。');
+        } catch (error: any) {
+          console.error(error);
+          showError(error?.message || '删除馆藏记录失败。');
+        } finally {
+          setArchiveUpdatingIds((prev) => ({ ...prev, [story.id]: false }));
+        }
+      },
+    });
   };
 
   const openArchiveView = (returnTarget: GameState = gameState === 'PLAYING' ? 'PLAYING' : 'STORY_SELECT') => {
@@ -1809,6 +1843,10 @@ export default function App() {
         averageChapterWords: getAverageChapterWords(chapters),
         coverUrl: activeStoryMeta?.coverUrl || '',
         sourceStoryId: activeStoryId,
+        originalAuthorId: activeStoryMeta?.authorId || user.uid,
+        originalAuthorName: getStoryAuthorName(activeStoryMeta || { authorId: user.uid, authorName: getUserAuthorName(user) }),
+        intervenerId: user.uid,
+        intervenerName: getUserAuthorName(user),
         visibility: 'private',
       });
       await resetGame();
@@ -2806,6 +2844,10 @@ export default function App() {
         averageChapterWords: getAverageChapterWords(chapters),
         coverUrl: activeStoryMeta?.coverUrl || '',
         sourceStoryId: activeStoryId,
+        originalAuthorId: activeStoryMeta?.authorId || user.uid,
+        originalAuthorName: getStoryAuthorName(activeStoryMeta || { authorId: user.uid, authorName: getUserAuthorName(user) }),
+        intervenerId: user.uid,
+        intervenerName: getUserAuthorName(user),
         visibility: 'public',
       });
       setSharedStoryId(shareId);
@@ -2892,6 +2934,10 @@ export default function App() {
                 ...cartridge.meta,
                 coverUrl: cartridge.meta?.coverUrl || '',
                 sourceStoryId: activeStoryId,
+                originalAuthorId: cartridge.meta?.authorId || activeStoryId,
+                originalAuthorName: getStoryAuthorName(cartridge.meta),
+                intervenerId: user.uid,
+                intervenerName: getUserAuthorName(user),
               },
               chapters: cartridge.chapters,
             };
@@ -2906,7 +2952,7 @@ export default function App() {
             const averageChapterWords = record.meta?.averageChapterWords || getAverageChapterWords(record.chapters as any);
             const archiveId = await createSharedStoryRecord(db as any, {
               authorId: user.uid,
-              authorName: getStoryAuthorName(record.meta),
+              authorName: getUserAuthorName(user),
               title,
               main_axis: mainAxis,
               tags: record.meta?.tags || [],
@@ -2915,6 +2961,10 @@ export default function App() {
               averageChapterWords,
               coverUrl: record.meta?.coverUrl || '',
               sourceStoryId: archiveSourceStoryId,
+              originalAuthorId: record.meta?.originalAuthorId || record.meta?.authorId || archiveSourceStoryId,
+              originalAuthorName: getOriginalAuthorName(record.meta),
+              intervenerId: user.uid,
+              intervenerName: getUserAuthorName(user),
               visibility: 'private',
             });
             setMySharedStories((prev) => [{
@@ -2925,7 +2975,11 @@ export default function App() {
               characters: record.meta?.characters || [],
               chapters: record.chapters,
               authorId: user.uid,
-              authorName: getStoryAuthorName(record.meta),
+              authorName: getUserAuthorName(user),
+              originalAuthorId: record.meta?.originalAuthorId || record.meta?.authorId || archiveSourceStoryId,
+              originalAuthorName: getOriginalAuthorName(record.meta),
+              intervenerId: user.uid,
+              intervenerName: getUserAuthorName(user),
               sourceStoryId: archiveSourceStoryId,
               averageChapterWords,
               visibility: 'private',
@@ -3602,6 +3656,10 @@ export default function App() {
                     {story.visibility === 'public' ? '公开分享' : '私密馆藏'}
                   </div>
                 </div>
+                <div className="mb-3 grid gap-1 text-[11px] font-bold text-zinc-500">
+                  <div>原作者：{getOriginalAuthorName(story)}</div>
+                  {getIntervenerName(story) && <div>干涉者：{getIntervenerName(story)}</div>}
+                </div>
                 <div className="line-clamp-3 text-xs leading-relaxed text-zinc-500">{story.main_axis || '暂无主轴摘要。'}</div>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <button type="button" onClick={() => openReadonlyStory(story.id, { allowBack: true, returnTarget: 'ARCHIVE' })} className={semanticButtonClass('secondary', { compact: true })}>
@@ -3619,6 +3677,15 @@ export default function App() {
                   >
                     <ExternalLink className="h-4 w-4" />
                     复制链接
+                  </button>
+                  <button
+                    type="button"
+                    disabled={archiveUpdatingIds[story.id]}
+                    onClick={() => handleDeleteArchiveStory(story)}
+                    className={semanticButtonClass('danger', { compact: true })}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    删除
                   </button>
                 </div>
                 <div className="mt-3 flex gap-2">
@@ -3744,8 +3811,8 @@ export default function App() {
                 <div className="mt-1 text-2xl font-black text-white">{getUserAuthorName(user)}</div>
                 <div className="text-sm text-zinc-500">{user?.email || '游客账号'}</div>
               </div>
-              <button type="button" onClick={() => setIsAccountCenterOpen(false)} className={semanticIconButtonClass('ghost')}>
-                <X className="h-5 w-5" />
+              <button type="button" onClick={() => setIsAccountCenterOpen(false)} className={semanticIconButtonClass('ghost')} aria-label="返回">
+                <ChevronLeft className="h-5 w-5" />
               </button>
             </div>
 
@@ -3845,7 +3912,10 @@ export default function App() {
             <div className="min-w-0 space-y-3">
               <div className="text-xs font-black uppercase tracking-[0.24em] text-zinc-500">故事记录</div>
               <h1 className="break-words text-4xl font-black text-white">{formatBookTitle(story.meta?.title)}</h1>
-              <div className="text-sm font-bold text-zinc-500">作者：{getStoryAuthorName(story.meta)}</div>
+              <div className="space-y-1 text-sm font-bold text-zinc-500">
+                <div>原作者：{getOriginalAuthorName(story.meta)}</div>
+                {getIntervenerName(story.meta) && <div>干涉者：{getIntervenerName(story.meta)}</div>}
+              </div>
             </div>
           </div>
           {readonlyCanGoBack && <BackNavButton label="返回上一页" onClick={leaveReadonlyStory} />}

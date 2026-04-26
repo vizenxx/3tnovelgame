@@ -15,6 +15,12 @@ export interface StoryMeta {
   main_axis: string;
   tags: string[];
   coverUrl?: string;
+  sharedStoryId?: string;
+  sourceStoryId?: string | null;
+  originalAuthorId?: string | null;
+  originalAuthorName?: string;
+  intervenerId?: string | null;
+  intervenerName?: string;
   authorId: string;
   authorName?: string;
   visibility: Visibility;

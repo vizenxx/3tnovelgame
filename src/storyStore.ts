@@ -52,6 +52,10 @@ export type StoryListItem = {
   visibility: Visibility;
   authorId: string;
   authorName?: string;
+  originalAuthorId?: string | null;
+  originalAuthorName?: string;
+  intervenerId?: string | null;
+  intervenerName?: string;
   coverUrl?: string;
   popularity?: number; // legacy field; replaced by interventionCount
   likeCount?: number;
@@ -73,6 +77,10 @@ export type SharedStoryRecord = {
   chapters: StoryChapterDoc[];
   authorId: string;
   authorName?: string;
+  originalAuthorId?: string | null;
+  originalAuthorName?: string;
+  intervenerId?: string | null;
+  intervenerName?: string;
   coverUrl?: string;
   sourceStoryId?: string | null;
   averageChapterWords?: number;
@@ -128,8 +136,11 @@ export async function updateAuthorNameEverywhere(db: Firestore, authorId: string
     });
   });
   sharedStories.forEach((story) => {
+    const provenancePatch = story.originalAuthorId === authorId ? { originalAuthorName: authorName } : {};
     batch.update(doc(db, 'sharedStories', story.id), {
       authorName,
+      intervenerName: authorName,
+      ...provenancePatch,
       updatedAt: new Date().toISOString(),
     });
   });
@@ -254,6 +265,10 @@ export async function getSharedStoryRecord(db: Firestore, storyId: string, curre
         characters: data.characters || [],
         authorId: data.authorId,
         authorName: data.authorName,
+        originalAuthorId: data.originalAuthorId || data.sourceStoryId || null,
+        originalAuthorName: data.originalAuthorName || data.authorName,
+        intervenerId: data.intervenerId || data.authorId,
+        intervenerName: data.intervenerName || data.authorName,
         coverUrl: (data as any).coverUrl || '',
         visibility: data.visibility || 'public',
         averageChapterWords: data.averageChapterWords || 0,
@@ -281,6 +296,10 @@ export async function getSharedStoryRecord(db: Firestore, storyId: string, curre
         ...meta,
         sourceStoryId: storyId,
         coverUrl: meta.coverUrl || '',
+        originalAuthorId: meta.authorId,
+        originalAuthorName: meta.authorName,
+        intervenerId: null,
+        intervenerName: '',
     },
     chapters,
   };
@@ -295,6 +314,10 @@ export async function createSharedStoryRecord(db: Firestore, args: {
   characters?: StoryCharacter[];
   chapters: StoryChapterDoc[];
   sourceStoryId?: string | null;
+  originalAuthorId?: string | null;
+  originalAuthorName?: string;
+  intervenerId?: string | null;
+  intervenerName?: string;
   averageChapterWords?: number;
   coverUrl?: string;
   visibility?: 'public' | 'private';
@@ -314,6 +337,10 @@ export async function createSharedStoryRecord(db: Firestore, args: {
     })).filter((chapter) => chapter.chapter_num >= 1 && chapter.chapter_num <= 7 && chapter.text.trim().length > 0),
     authorId: args.authorId,
     authorName: args.authorName || `游客+${args.authorId.slice(0, 6).toUpperCase()}`,
+    originalAuthorId: args.originalAuthorId || args.sourceStoryId || null,
+    originalAuthorName: args.originalAuthorName || args.authorName || `游客+${args.authorId.slice(0, 6).toUpperCase()}`,
+    intervenerId: args.intervenerId || args.authorId,
+    intervenerName: args.intervenerName || args.authorName || `游客+${args.authorId.slice(0, 6).toUpperCase()}`,
     coverUrl: args.coverUrl || '',
     sourceStoryId: args.sourceStoryId || null,
     averageChapterWords: args.averageChapterWords || 0,
@@ -324,6 +351,17 @@ export async function createSharedStoryRecord(db: Firestore, args: {
 
   const ref = await addDoc(collection(db, 'sharedStories'), payload);
   return ref.id;
+}
+
+export async function deleteSharedStoryRecord(db: Firestore, sharedStoryId: string, authorId: string) {
+  const ref = doc(db, 'sharedStories', sharedStoryId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return;
+  const data = snap.data() as any;
+  if (data.authorId !== authorId) {
+    throw new Error('无权删除这条馆藏记录。');
+  }
+  await deleteDoc(ref);
 }
 
 export async function updateSharedStoryVisibility(
