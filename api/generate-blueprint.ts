@@ -3,6 +3,17 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './_auth.js';
 import { getGeminiApiKey } from './_gemini.js';
 
+function getNarrativePersonInstruction(value: unknown) {
+  const key = String(value || 'third');
+  if (key === 'first') {
+    return '第一人称：全文必须以“我/我们”的叙事视角推进，严禁在章节之间切换成第三人称旁白。';
+  }
+  if (key === 'second') {
+    return '第二人称：全文必须以“你”的沉浸式叙事视角推进，严禁在章节之间切换成第一或第三人称。';
+  }
+  return '第三人称：全文必须以“他/她/他们/角色姓名”的叙事视角推进，严禁突然切换成第一人称自述。';
+}
+
 const blueprintSchema = {
   type: Type.OBJECT,
   properties: {
@@ -82,7 +93,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const user = await requireFirebaseAuth(req, res);
     if (!user) return;
 
-    const { selectedThemes, customOutline, targetWordCount } = req.body || {};
+    const { selectedThemes, customOutline, targetWordCount, narrativePerson } = req.body || {};
 
     if (!Array.isArray(selectedThemes) && !customOutline) {
       return res.status(400).json({ error: '必须选择至少一个主题或提供大纲' });
@@ -94,6 +105,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const prompt = `你是一个互动小说世界构建师。
 已知主题：${Array.isArray(selectedThemes) ? selectedThemes.join(', ') : '无'}。
 用户提供的故事大纲/期望：${customOutline ? customOutline : '无'}。
+叙事人称硬约束：${getNarrativePersonInstruction(narrativePerson)}
 
 任务：生成一个完整的首篇章（7章）的故事蓝图骨架。
 
@@ -110,6 +122,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 10. condition_char 只能使用已创建的角色ID；condition_chapter 必须是 2 到 6 的整数；condition_action 只能是 bless 或 curse。
 11. desc 必须写清该支线发生时的具体剧情变化和隐藏内幕。
 12. name 字段只能是角色姓名，所有背景描述全部放进 desc。
+13. chapters 的 title/summary 必须与上述叙事人称相容，避免设计会迫使正文切换人称的章节视角。
 
 请严格按 JSON 输出，不要包含元数据。字数参考值：${safeTargetWordCount}。`;
 

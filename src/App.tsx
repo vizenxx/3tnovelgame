@@ -44,6 +44,7 @@ import {
 
 // --- Types ---
 type GameState = 'STORY_SELECT' | 'AUTHORING' | 'THEME_SELECTION' | 'GENERATING_BLUEPRINT' | 'PLAYING' | 'SUMMARY' | 'READONLY_STORY' | 'ARCHIVE';
+type NarrativePerson = 'first' | 'second' | 'third';
 
 const safeModalBackdropClass = "fixed inset-0 flex items-center justify-center overflow-y-auto overscroll-contain px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]";
 
@@ -123,6 +124,7 @@ interface Blueprint {
   title: string;
   main_axis: string;
   tags?: string[];
+  narrative_person?: NarrativePerson;
   left_mainline_default: number; // e.g., 80
   right_mainline_default: number; // e.g., 40
   characters: Character[];
@@ -141,6 +143,12 @@ const THEMES = [
   "赛博朋克", "克苏鲁", "神话", "修仙", "末日", "废土", "中世纪", "奇幻",
   "校园", "恋爱", "悬疑", "推理", "星际", "科幻", "武侠", "江湖",
   "现代", "都市", "恐怖", "战争"
+];
+
+const NARRATIVE_PERSON_OPTIONS: Array<{ value: NarrativePerson; label: string; hint: string }> = [
+  { value: 'third', label: '第三人称', hint: '以他/她/他们叙述，适合群像与史诗感。' },
+  { value: 'first', label: '第一人称', hint: '以我/我们叙述，更贴近主角内心。' },
+  { value: 'second', label: '第二人称', hint: '以你叙述，适合沉浸式命运体验。' },
 ];
 
 const DISPLAY_TAG_LIMIT = 3;
@@ -905,6 +913,7 @@ export default function App() {
     onConfirm: () => {}
   });
   const [targetWordCount, setTargetWordCount] = useState(600);
+  const [narrativePerson, setNarrativePerson] = useState<NarrativePerson>('third');
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationStatus, setGenerationStatus] = useState("");
   const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
@@ -2102,16 +2111,14 @@ export default function App() {
     }
   };
 
-  const SimulatedProgressBar = () => {
+  const GenerationProgressBar = () => {
     const percent = Math.max(0, Math.min(100, Math.round(generationProgress || 0)));
     return (
       <div className="mt-4 w-full max-w-xs">
         <div className="h-1 overflow-hidden rounded-full bg-zinc-900">
-          <motion.div
-            initial={{ width: 0 }}
-            animate={{ width: `${percent}%` }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
-            className="h-full bg-indigo-500"
+          <div
+            className="h-full rounded-full bg-indigo-500 transition-[width] duration-300 ease-out"
+            style={{ width: `${percent}%` }}
           />
         </div>
         <div className="mt-2 text-center text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">{percent}%</div>
@@ -2472,10 +2479,11 @@ export default function App() {
     try {
       const response = await apiFetch('/api/generate-blueprint', {
         method: 'POST',
-        body: JSON.stringify({ selectedThemes, customOutline, targetWordCount }),
+        body: JSON.stringify({ selectedThemes, customOutline, targetWordCount, narrativePerson }),
       }, 90000);
       if (!response.ok) throw new Error(await readErrorMessage(response));
       let data = await response.json();
+      data.narrative_person = narrativePerson;
       data.chapters = ensureSevenChapterShells(data.chapters || []);
 
       const prefetchChapters = [1, 2, 3];
@@ -2489,6 +2497,7 @@ export default function App() {
             currentChapters: data.chapters,
             targetChapterNum: chapterNum,
             targetWordCount,
+            narrativePerson,
           }),
         }, 90000), 3, 2500);
         if (!chapterResponse.ok) throw new Error(await readErrorMessage(chapterResponse));
@@ -2606,6 +2615,7 @@ export default function App() {
             currentChapters: chapters,
             targetChapterNum: missingChapter.chapter_num,
             targetWordCount,
+            narrativePerson: blueprint.narrative_person || narrativePerson,
           }),
         }, 90000), 3, 2500);
         if (!chapterResponse.ok) throw new Error(await readErrorMessage(chapterResponse));
@@ -2649,7 +2659,7 @@ export default function App() {
     };
 
     void generateRemainingChapter();
-  }, [gameState, blueprint, chapters, interventionsLeft, isRewriting, activeInterventionOverlay, user, db, targetWordCount]);
+  }, [gameState, blueprint, chapters, interventionsLeft, isRewriting, activeInterventionOverlay, user, db, targetWordCount, narrativePerson]);
 
   const enterAuthoring = async () => {
     setGameState('AUTHORING');
@@ -4159,6 +4169,33 @@ export default function App() {
           placeholder="例如：一位在现代都市经营神秘书店的青年，某夜遇见来自未来的顾客，自此被卷入一场会改写现实的命运试炼。"
           className="min-h-[140px] w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-sm text-zinc-200 outline-none transition-colors focus:border-indigo-500"
         />
+        <div className="mt-6 space-y-3">
+          <div className="space-y-3 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm font-bold text-zinc-400">叙事人称</span>
+              <span className="text-xs font-black text-indigo-300">
+                {NARRATIVE_PERSON_OPTIONS.find((option) => option.value === narrativePerson)?.label}
+              </span>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-3">
+              {NARRATIVE_PERSON_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setNarrativePerson(option.value)}
+                  className={`rounded-2xl border px-3 py-3 text-left transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
+                    narrativePerson === option.value
+                      ? 'border-indigo-400 bg-indigo-500/15 text-indigo-100 shadow-lg shadow-indigo-950/30'
+                      : 'border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
+                  }`}
+                >
+                  <div className="text-sm font-black">{option.label}</div>
+                  <div className="mt-1 text-[11px] leading-relaxed opacity-70">{option.hint}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
         <div className="mt-6 space-y-3">
           <div className="flex items-center justify-between text-sm">
             <span className="font-bold text-zinc-400">每章目标字数</span>
@@ -5839,7 +5876,7 @@ export default function App() {
                 className="mb-8 h-12 w-12 rounded-2xl border-2 border-indigo-500/20 border-t-indigo-500"
               />
               <h2 className="text-2xl font-black text-white">{generationStatus || '正在生成世界蓝图...'}</h2>
-              <SimulatedProgressBar />
+              <GenerationProgressBar />
             </div>
           )}
           {gameState === 'PLAYING' && renderPlayingView()}
