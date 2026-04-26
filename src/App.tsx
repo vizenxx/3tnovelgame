@@ -580,6 +580,8 @@ const buildStoryShareText = (title?: string, chapters?: Array<{ text?: string }>
     : `《${safeTitle}》\n故事已经开场，命运还没有落笔。来看看它会把你带向哪里。`;
 };
 
+const buildShareClipboardText = (shareText: string, shareUrl: string) => `${shareText}\n\n${shareUrl}`;
+
 const dataUrlToFile = async (dataUrl: string, filename: string) => {
   const response = await fetch(dataUrl);
   const blob = await response.blob();
@@ -1547,11 +1549,12 @@ export default function App() {
         tags: readonlyStoryData.meta.tags || [],
       });
       await refreshStories();
-      showError('已完成一键改编，并重置为默认文面风格。');
+      await selectAuthoringStory(storyId);
+      setGameState('AUTHORING');
+      showError('已完成一键改编，已带你进入作者编辑界面。');
       setReadonlyStoryData(null);
       setReadonlyCanGoBack(false);
       window.history.replaceState({}, '', window.location.pathname);
-      await startStoryPlay(storyId);
     } catch (error) {
       console.error(error);
       showError('一键改编失败，请稍后再试。');
@@ -1615,7 +1618,7 @@ export default function App() {
       }
       const shareUrl = buildSharedStoryUrl(archiveId);
       const shareTitle = formatBookTitle(story.meta?.title || '未命名故事');
-      const shareText = `${buildStoryShareText(shareTitle, story.chapters)}\n\n${shareUrl}`;
+      const shareText = buildStoryShareText(shareTitle, story.chapters);
       if (navigator.share) {
         const coverUrl = story.meta?.coverUrl || '';
         const coverFile = coverUrl ? await dataUrlToFile(coverUrl, `${stripBookTitle(shareTitle) || 'story'}-cover.jpg`).catch(() => null) : null;
@@ -1627,7 +1630,7 @@ export default function App() {
         showError('已打开系统分享。');
         return;
       }
-      const copied = await writeClipboardText(shareText);
+      const copied = await writeClipboardText(buildShareClipboardText(shareText, shareUrl));
       showError(copied ? '已复制分享内容到剪贴板。' : '分享链接已准备好，请手动复制浏览器地址。');
     } catch (error: any) {
       console.error(error);
@@ -2159,8 +2162,9 @@ export default function App() {
         tags: normalizeTagList((blueprint.tags && blueprint.tags.length > 0 ? blueprint.tags : selectedThemes) || []),
       });
       await refreshStories();
-      showError('已完成一键改编，并重置为默认文面风格。');
-      await startStoryPlay(storyId);
+      await selectAuthoringStory(storyId);
+      setGameState('AUTHORING');
+      showError('已完成一键改编，已带你进入作者编辑界面。');
     } catch (error) {
       console.error(error);
       showError('一键改编失败，请稍后再试。');
@@ -3253,7 +3257,7 @@ export default function App() {
       setSharedStoryId(shareId);
       const shareUrl = buildSharedStoryUrl(shareId);
       const shareTitle = formatBookTitle(blueprint?.title || "未命名故事");
-      const shareText = `${buildStoryShareText(shareTitle, chapters)}\n\n${shareUrl}`;
+      const shareText = buildStoryShareText(shareTitle, chapters);
       if (navigator.share) {
         const coverUrl = activeStoryMeta?.coverUrl || '';
         const coverFile = coverUrl ? await dataUrlToFile(coverUrl, `${stripBookTitle(shareTitle) || 'story'}-cover.jpg`).catch(() => null) : null;
@@ -3265,7 +3269,7 @@ export default function App() {
         showError("已打开系统分享。");
         return;
       }
-      const success = await writeClipboardText(shareText);
+      const success = await writeClipboardText(buildShareClipboardText(shareText, shareUrl));
       if (success) {
         showError("已复制分享链接到剪贴板");
       }
@@ -5200,6 +5204,42 @@ export default function App() {
                       className="min-h-[120px] w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-white outline-none focus:border-indigo-500"
                     />
                   </label>
+
+                  <section className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
+                    <div className="mb-3">
+                      <div className="text-sm font-black text-zinc-100">作品可见性</div>
+                      <div className="mt-1 text-xs leading-relaxed text-zinc-500">
+                        这只决定作品是否出现在作品库或可被链接访问；它和“开放一键改编权限”是两件事。
+                      </div>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      {[
+                        { value: 'private', label: '私人', hint: '只有作者自己可见。' },
+                        { value: 'public', label: '公开', hint: '会出现在公开作品库。' },
+                        { value: 'unlisted', label: '非公开链接', hint: '不进公开列表，但链接可读。' },
+                      ].map((option) => {
+                        const selected = (authoringCartridge.meta?.visibility || 'private') === option.value;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => setAuthoringCartridge((prev: any) => ({
+                              ...prev,
+                              meta: { ...prev.meta, visibility: option.value },
+                            }))}
+                            className={`rounded-2xl border px-3 py-3 text-left transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
+                              selected
+                                ? 'border-emerald-400 bg-emerald-500/10 text-emerald-100'
+                                : 'border-zinc-800 bg-zinc-900/40 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
+                            }`}
+                          >
+                            <div className="text-sm font-black">{option.label}</div>
+                            <div className="mt-1 text-[11px] leading-relaxed opacity-70">{option.hint}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
 
                   <label className="flex items-start gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4 text-sm text-zinc-400">
                     <input
