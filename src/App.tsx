@@ -252,10 +252,11 @@ const BackNavButton = ({
     type="button"
     onClick={onClick}
     aria-label={label}
-    className={`inline-flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-950/80 px-3 py-2 text-sm font-bold text-zinc-200 transition-colors hover:border-zinc-600 hover:text-white ${className}`}
+    title={label}
+    className={`fixed left-4 top-[max(1rem,env(safe-area-inset-top))] z-[2300] inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950/85 text-zinc-200 shadow-xl backdrop-blur-md transition-colors hover:border-zinc-600 hover:text-white sm:left-6 ${className}`}
   >
-    <ChevronLeft className="h-4 w-4" />
-    <span>{label}</span>
+    <ChevronLeft className="h-5 w-5" />
+    <span className="sr-only">{label}</span>
   </button>
 );
 
@@ -345,19 +346,30 @@ const InstallAppBanner = ({
 
 const SimulatedProgressBar = () => {
   const [width, setWidth] = useState("0%");
+  const [percent, setPercent] = useState(0);
   useEffect(() => {
-    // Mount to 85% smoothly
     const frame = requestAnimationFrame(() => {
       setTimeout(() => setWidth("85%"), 50);
     });
-    return () => cancelAnimationFrame(frame);
+    const start = Date.now();
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - start;
+      setPercent(Math.min(85, Math.round((elapsed / 6000) * 85)));
+    }, 180);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearInterval(interval);
+    };
   }, []);
   return (
-    <div className="w-48 sm:w-64 h-1.5 bg-zinc-800/80 rounded-full overflow-hidden mt-6 relative border border-white/5 shadow-inner">
-      <div 
-        className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-rose-500 rounded-full transition-all ease-out" 
-        style={{ width, transitionDuration: '6000ms' }} 
-      />
+    <div className="mt-6 w-48 sm:w-64">
+      <div className="relative h-1.5 overflow-hidden rounded-full border border-white/5 bg-zinc-800/80 shadow-inner">
+        <div
+          className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-rose-500 transition-all ease-out"
+          style={{ width, transitionDuration: '6000ms' }}
+        />
+      </div>
+      <div className="mt-2 text-center text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">{percent}%</div>
     </div>
   );
 };
@@ -1368,7 +1380,11 @@ export default function App() {
       }
     } catch (error: any) {
       const code = error?.code || '';
-      if (code.includes('popup') || code.includes('cancelled') || code.includes('blocked')) {
+      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+        showError('Google 登录窗口已关闭，请重新操作。');
+        return;
+      }
+      if (code.includes('popup') || code.includes('blocked')) {
         await signInWithRedirect(auth, provider);
         return;
       }
@@ -1672,16 +1688,29 @@ export default function App() {
     }
   };
 
-  const SimulatedProgressBar = () => (
-    <div className="w-full max-w-xs h-1 bg-zinc-900 rounded-full overflow-hidden mt-4">
-      <motion.div
-        initial={{ width: 0 }}
-        animate={{ width: "100%" }}
-        transition={{ duration: 5, ease: "easeInOut" }}
-        className="h-full bg-indigo-500"
-      />
-    </div>
-  );
+  const SimulatedProgressBar = () => {
+    const [percent, setPercent] = useState(0);
+    useEffect(() => {
+      const start = Date.now();
+      const interval = setInterval(() => {
+        setPercent(Math.min(95, Math.round(((Date.now() - start) / 5000) * 95)));
+      }, 180);
+      return () => clearInterval(interval);
+    }, []);
+    return (
+      <div className="mt-4 w-full max-w-xs">
+        <div className="h-1 overflow-hidden rounded-full bg-zinc-900">
+          <motion.div
+            initial={{ width: 0 }}
+            animate={{ width: `${percent}%` }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="h-full bg-indigo-500"
+          />
+        </div>
+        <div className="mt-2 text-center text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">{percent}%</div>
+      </div>
+    );
+  };
 
   /*
   const InAppLoadingOverlay = ({ progress, status, variant }: { progress: number; status: string; variant: 'bless' | 'curse' | 'conclude' }) => (
@@ -2540,7 +2569,14 @@ export default function App() {
       });
       setSharedStoryId(shareId);
       const shareUrl = buildSharedStoryUrl(shareId);
-      const success = await writeClipboardText(shareUrl);
+      const shareTitle = formatBookTitle(blueprint?.title || "未命名故事");
+      const shareText = `${shareTitle}\n${blueprint?.main_axis || '我在这里留下了一份故事记录。'}\n\n${shareUrl}`;
+      if (navigator.share) {
+        await navigator.share({ title: shareTitle, text: shareText, url: shareUrl });
+        showError("已打开系统分享。");
+        return;
+      }
+      const success = await writeClipboardText(shareText);
       if (success) {
         showError("已复制分享链接到剪贴板");
       }
@@ -3002,12 +3038,15 @@ export default function App() {
     <motion.div
       key={story.id}
       whileHover={{ y: -4, scale: 1.02 }}
-      className="group relative overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900/50 p-6 transition-all hover:border-indigo-500/50 hover:bg-zinc-900 shadow-xl"
-      onClick={() => startStoryPlay(story.id)}
+      className="group relative overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900/50 p-6 shadow-xl transition-all hover:border-indigo-500/50 hover:bg-zinc-900"
     >
       <div className="mb-4 flex items-start justify-between">
-        <div className="rounded-xl bg-indigo-500/10 p-2.5 text-indigo-400 group-hover:bg-indigo-500 group-hover:text-white transition-colors">
-          <BookOpen className="h-6 w-6" />
+        <div className="flex flex-wrap gap-2">
+          {(getStoryTags(story).length > 0 ? getStoryTags(story).slice(0, 3) : ['未标签']).map((tag: string) => (
+            <span key={tag} className="rounded-lg bg-indigo-500/10 px-2.5 py-1 text-xs font-black text-indigo-300">
+              {tag}
+            </span>
+          ))}
         </div>
         {getStoryInterventionCount(story) > 0 && (
           <div className="flex items-center gap-1.5 rounded-full bg-zinc-800/50 px-3 py-1 text-[10px] font-bold text-zinc-400">
@@ -3016,28 +3055,32 @@ export default function App() {
           </div>
         )}
       </div>
-      <h3 className="mb-2 line-clamp-1 text-lg font-black text-white group-hover:text-indigo-300 transition-colors">
+      <h3 className="mb-2 line-clamp-1 text-2xl font-black text-white transition-colors group-hover:text-indigo-300">
         {formatBookTitle(getStoryTitle(story))}
       </h3>
-      <div className="mb-3 text-[11px] font-bold text-zinc-500">
+      <div className="mb-3 text-sm font-bold text-zinc-500">
         作者：{getStoryAuthorName(story)}
       </div>
-      <p className="mb-4 line-clamp-2 text-xs leading-relaxed text-zinc-500 group-hover:text-zinc-400 transition-colors">
+      <p className="mb-5 line-clamp-3 text-sm leading-relaxed text-zinc-400 transition-colors group-hover:text-zinc-300">
         {getStoryMainAxis(story)}
       </p>
-      <div className="mb-4 grid grid-cols-2 gap-2 text-[11px] font-bold text-zinc-500">
+      <div className="mb-5 grid grid-cols-2 gap-2 text-xs font-bold text-zinc-500">
         <div className="rounded-lg bg-zinc-950/60 px-2 py-1">点赞 {getStoryLikeCount(story)}</div>
         <div className="rounded-lg bg-zinc-950/60 px-2 py-1">干涉 {getStoryInterventionCount(story)}</div>
         <div className="rounded-lg bg-zinc-950/60 px-2 py-1">收藏 {getStoryFavoriteCount(story)}</div>
         <div className="col-span-2 rounded-lg bg-zinc-950/60 px-2 py-1">平均每章 {getStoryAverageChapterWords(story) || '未知'} 字</div>
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div className="hidden">
         {getStoryTags(story).slice(0, 3).map((tag: string) => (
           <span key={tag} className="rounded-lg bg-zinc-800/80 px-2 py-1 text-[10px] font-medium text-zinc-400 group-hover:bg-zinc-700/80">
             {tag}
           </span>
         ))}
       </div>
+      <button type="button" onClick={() => startStoryPlay(story.id)} className={semanticButtonClass('primary', { fullWidth: true })}>
+        <Sparkles className="h-4 w-4" />
+        干涉命运
+      </button>
     </motion.div>
   );
 
@@ -4733,7 +4776,7 @@ export default function App() {
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
           className={`fixed right-4 z-[1800] flex h-12 w-12 items-center justify-center rounded-2xl border border-zinc-700 bg-zinc-950/90 text-zinc-200 shadow-2xl backdrop-blur-xl transition-colors hover:border-indigo-400 hover:text-white sm:right-6 ${
             gameState === 'PLAYING'
-              ? 'bottom-[calc(max(1rem,env(safe-area-inset-bottom))+7.25rem)] sm:bottom-[max(1rem,env(safe-area-inset-bottom))] sm:right-[26rem]'
+              ? 'bottom-[calc(max(1rem,env(safe-area-inset-bottom))+9.25rem)] sm:bottom-[calc(max(1rem,env(safe-area-inset-bottom))+1rem)] sm:right-[27.5rem]'
               : 'bottom-[max(1rem,env(safe-area-inset-bottom))]'
           }`}
           aria-label="返回顶端"
