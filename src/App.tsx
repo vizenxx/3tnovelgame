@@ -1107,6 +1107,10 @@ export default function App() {
     return Boolean(meta.allowAdaptation);
   };
 
+  const getActiveStoryAllowAdaptation = () => (
+    Boolean(activeStoryMeta?.allowAdaptation || (blueprint as any)?.allowAdaptation)
+  );
+
   const scrollToChapter = (chapterNum: number) => {
     window.setTimeout(() => {
       const target = document.getElementById(`chapter-${chapterNum}`);
@@ -1338,6 +1342,7 @@ export default function App() {
         originalAuthorName: provenance.originalAuthorName,
         intervenerId: user.uid,
         intervenerName: getUserAuthorName(user),
+        allowAdaptation: getActiveStoryAllowAdaptation(),
         visibility: 'private',
       });
       await resetGame();
@@ -2126,6 +2131,7 @@ export default function App() {
         originalAuthorName: provenance.originalAuthorName,
         intervenerId: user.uid,
         intervenerName: getUserAuthorName(user),
+        allowAdaptation: getActiveStoryAllowAdaptation(),
         visibility: 'private',
       });
       await resetGame();
@@ -3305,6 +3311,7 @@ export default function App() {
         originalAuthorName: provenance.originalAuthorName,
         intervenerId: user.uid,
         intervenerName: getUserAuthorName(user),
+        allowAdaptation: getActiveStoryAllowAdaptation(),
         visibility: 'public',
       });
       setSharedStoryId(shareId);
@@ -3408,6 +3415,7 @@ export default function App() {
               originalAuthorName: getOriginalAuthorName(record.meta),
               intervenerId: user.uid,
               intervenerName: getUserAuthorName(user),
+              allowAdaptation: Boolean(record.meta?.allowAdaptation),
               visibility: 'private',
             });
             setMySharedStories((prev) => [{
@@ -3425,6 +3433,7 @@ export default function App() {
               intervenerName: getUserAuthorName(user),
               sourceStoryId: archiveSourceStoryId,
               averageChapterWords,
+              allowAdaptation: Boolean(record.meta?.allowAdaptation),
               visibility: 'private',
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString(),

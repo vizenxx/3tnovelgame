@@ -84,6 +84,7 @@ export type SharedStoryRecord = {
   coverUrl?: string;
   sourceStoryId?: string | null;
   averageChapterWords?: number;
+  allowAdaptation?: boolean;
   createdAt: string;
   updatedAt: string;
   visibility: 'public' | 'private';
@@ -239,19 +240,32 @@ export async function getSharedStoryRecord(db: Firestore, storyId: string, curre
     }
 
     let sharedChapters = Array.isArray(data.chapters) ? data.chapters : [];
+    let sourceMetaForSharedRecord: StoryMeta | null = null;
     if (sharedChapters.length < 7 && data.sourceStoryId) {
-      const sourceMetaSnap = await getDoc(doc(db, 'stories', data.sourceStoryId));
-      const sourceMeta = sourceMetaSnap.exists() ? sourceMetaSnap.data() as any as StoryMeta : null;
-      if (sourceMeta && canReadStoryRecord(sourceMeta, currentUserId)) {
-        const sourceChaptersSnap = await getDocs(
-          query(collection(db, 'stories', data.sourceStoryId, 'chapters'), orderBy('chapter_num', 'asc'))
-        );
-        const sourceByNum = new Map(sourceChaptersSnap.docs.map(d => {
-          const chapter = d.data() as any as StoryChapterDoc;
-          return [chapter.chapter_num, chapter] as const;
-        }));
-        sharedChapters.forEach((chapter) => sourceByNum.set(chapter.chapter_num, chapter));
-        sharedChapters = Array.from(sourceByNum.values()).sort((a, b) => a.chapter_num - b.chapter_num);
+      try {
+        const sourceMetaSnap = await getDoc(doc(db, 'stories', data.sourceStoryId));
+        sourceMetaForSharedRecord = sourceMetaSnap.exists() ? sourceMetaSnap.data() as any as StoryMeta : null;
+        if (sourceMetaForSharedRecord && canReadStoryRecord(sourceMetaForSharedRecord, currentUserId)) {
+          const sourceChaptersSnap = await getDocs(
+            query(collection(db, 'stories', data.sourceStoryId, 'chapters'), orderBy('chapter_num', 'asc'))
+          );
+          const sourceByNum = new Map(sourceChaptersSnap.docs.map(d => {
+            const chapter = d.data() as any as StoryChapterDoc;
+            return [chapter.chapter_num, chapter] as const;
+          }));
+          sharedChapters.forEach((chapter) => sourceByNum.set(chapter.chapter_num, chapter));
+          sharedChapters = Array.from(sourceByNum.values()).sort((a, b) => a.chapter_num - b.chapter_num);
+        }
+      } catch {
+        sourceMetaForSharedRecord = null;
+      }
+    }
+    if (typeof (data as any).allowAdaptation !== 'boolean' && data.sourceStoryId && !sourceMetaForSharedRecord) {
+      try {
+        const sourceMetaSnap = await getDoc(doc(db, 'stories', data.sourceStoryId));
+        sourceMetaForSharedRecord = sourceMetaSnap.exists() ? sourceMetaSnap.data() as any as StoryMeta : null;
+      } catch {
+        sourceMetaForSharedRecord = null;
       }
     }
 
@@ -273,6 +287,9 @@ export async function getSharedStoryRecord(db: Firestore, storyId: string, curre
         coverUrl: (data as any).coverUrl || '',
         visibility: data.visibility || 'public',
         averageChapterWords: data.averageChapterWords || 0,
+        allowAdaptation: typeof (data as any).allowAdaptation === 'boolean'
+          ? (data as any).allowAdaptation
+          : Boolean(sourceMetaForSharedRecord?.allowAdaptation),
       },
       chapters: sharedChapters,
     };
@@ -320,6 +337,7 @@ export async function createSharedStoryRecord(db: Firestore, args: {
   intervenerId?: string | null;
   intervenerName?: string;
   averageChapterWords?: number;
+  allowAdaptation?: boolean;
   coverUrl?: string;
   visibility?: 'public' | 'private';
 }) {
@@ -345,6 +363,7 @@ export async function createSharedStoryRecord(db: Firestore, args: {
     coverUrl: args.coverUrl || '',
     sourceStoryId: args.sourceStoryId || null,
     averageChapterWords: args.averageChapterWords || 0,
+    allowAdaptation: Boolean(args.allowAdaptation),
     createdAt: now,
     updatedAt: now,
     visibility: args.visibility || 'public',

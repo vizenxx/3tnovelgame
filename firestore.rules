@@ -181,9 +181,10 @@ service cloud.firestore {
               (!('originalAuthorName' in data) || (data.originalAuthorName is string && data.originalAuthorName.size() <= 80)) &&
               (!('intervenerId' in data) || data.intervenerId is string || data.intervenerId == null) &&
               (!('intervenerName' in data) || (data.intervenerName is string && data.intervenerName.size() <= 80)) &&
-              (!('coverUrl' in data) || (data.coverUrl is string && data.coverUrl.size() < 900000)) &&
-              (!('sourceStoryId' in data) || data.sourceStoryId is string || data.sourceStoryId == null) &&
+             (!('coverUrl' in data) || (data.coverUrl is string && data.coverUrl.size() < 900000)) &&
+             (!('sourceStoryId' in data) || data.sourceStoryId is string || data.sourceStoryId == null) &&
              (!('averageChapterWords' in data) || data.averageChapterWords is number) &&
+             (!('allowAdaptation' in data) || data.allowAdaptation is bool) &&
              (!('visibility' in data) || data.visibility in ['public', 'private']) &&
              (isValidDateString(data.createdAt) || isValidTimestamp(data.createdAt)) &&
              (isValidDateString(data.updatedAt) || isValidTimestamp(data.updatedAt));
