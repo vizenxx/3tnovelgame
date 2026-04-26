@@ -3787,6 +3787,12 @@ export default function App() {
   const renderStoryCard = (story: any, isPublic: boolean) => {
     const coverUrl = getStoryCoverUrl(story);
     const tags = getStoryTags(story);
+    const storyStats = [
+      { label: '点赞', value: getStoryLikeCount(story) },
+      { label: '干涉', value: getStoryInterventionCount(story) },
+      { label: '收藏', value: getStoryFavoriteCount(story) },
+      { label: '均章', value: `${getStoryAverageChapterWords(story) || '未知'} 字` },
+    ];
     return (
       <motion.div
         key={story.id}
@@ -3794,47 +3800,43 @@ export default function App() {
         className="group relative overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900/50 p-4 shadow-xl transition-all hover:border-indigo-500/50 hover:bg-zinc-900"
       >
         <div className="flex gap-4">
-          <div className="relative h-28 w-28 shrink-0 overflow-hidden rounded-2xl border border-zinc-800 bg-gradient-to-br from-zinc-800 via-zinc-950 to-indigo-950 sm:h-32 sm:w-32">
-            {coverUrl ? (
-              <img src={coverUrl} alt={`${formatBookTitle(getStoryTitle(story))} 封面`} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center p-4 text-center text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">
-                3T NOVEL
-              </div>
-            )}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="mb-2 flex items-start justify-between gap-2">
-              <div className="flex min-w-0 flex-wrap gap-1.5">
-                {(tags.length > 0 ? tags.slice(0, 2) : ['未标签']).map((tag: string) => (
-                  <span key={tag} className="rounded-lg bg-indigo-500/10 px-2 py-0.5 text-[10px] font-black text-indigo-300">
-                    {tag}
-                  </span>
-                ))}
-              </div>
-              {getStoryInterventionCount(story) > 0 && (
-                <div className="flex shrink-0 items-center gap-1 rounded-full bg-zinc-800/50 px-2 py-0.5 text-[10px] font-bold text-zinc-400">
-                  <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
-                  {getStoryInterventionCount(story)}
+          <div className="w-28 shrink-0 sm:w-32">
+            <div className="relative h-28 w-28 overflow-hidden rounded-2xl border border-zinc-800 bg-gradient-to-br from-zinc-800 via-zinc-950 to-indigo-950 sm:h-32 sm:w-32">
+              {coverUrl ? (
+                <img src={coverUrl} alt={`${formatBookTitle(getStoryTitle(story))} 封面`} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center p-4 text-center text-[11px] font-black uppercase tracking-[0.18em] text-zinc-500">
+                  3T NOVEL
                 </div>
               )}
             </div>
-            <h3 className="mb-1 whitespace-normal break-words text-lg font-black leading-tight text-white transition-colors group-hover:text-indigo-300 sm:text-xl">
+            <div className="mt-2 grid gap-1.5 text-[11px] font-black text-zinc-400">
+              {storyStats.map((stat) => (
+                <div key={stat.label} className="flex items-center justify-between rounded-xl border border-zinc-800/70 bg-zinc-950/70 px-2 py-1.5">
+                  <span>{stat.label}</span>
+                  <span className="text-zinc-200">{stat.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="flex min-w-0 flex-1 flex-col">
+            <div className="mb-2 flex min-w-0 flex-wrap gap-1.5">
+              {(tags.length > 0 ? tags.slice(0, 2) : ['未标签']).map((tag: string) => (
+                <span key={tag} className="rounded-lg bg-indigo-500/10 px-2.5 py-1 text-[11px] font-black text-indigo-300">
+                  {tag}
+                </span>
+              ))}
+            </div>
+            <h3 className="mb-1 whitespace-normal break-words text-xl font-black leading-tight text-white transition-colors group-hover:text-indigo-300 sm:text-2xl">
               {formatBookTitle(getStoryTitle(story))}
             </h3>
-            <div className="mb-2 text-xs font-bold text-zinc-500">
+            <div className="mb-2 text-sm font-bold text-zinc-500">
               作者：{getStoryAuthorName(story)}
             </div>
-            <p className="mb-3 line-clamp-2 text-xs leading-relaxed text-zinc-400 transition-colors group-hover:text-zinc-300">
+            <p className="mb-3 line-clamp-3 text-sm leading-relaxed text-zinc-400 transition-colors group-hover:text-zinc-300">
               {getStoryMainAxis(story)}
             </p>
-            <div className="mb-3 grid grid-cols-2 gap-1.5 text-[10px] font-bold text-zinc-500 sm:grid-cols-4">
-              <div className="rounded-lg bg-zinc-950/60 px-2 py-1">点赞 {getStoryLikeCount(story)}</div>
-              <div className="rounded-lg bg-zinc-950/60 px-2 py-1">干涉 {getStoryInterventionCount(story)}</div>
-              <div className="rounded-lg bg-zinc-950/60 px-2 py-1">收藏 {getStoryFavoriteCount(story)}</div>
-              <div className="rounded-lg bg-zinc-950/60 px-2 py-1">均章 {getStoryAverageChapterWords(story) || '未知'} 字</div>
-            </div>
-            <button type="button" onClick={() => startStoryPlay(story.id)} className={semanticButtonClass('primary', { fullWidth: true, compact: true })}>
+            <button type="button" onClick={() => startStoryPlay(story.id)} className={`${semanticButtonClass('primary', { fullWidth: true, compact: true })} mt-auto text-sm`}>
               <Sparkles className="h-4 w-4" />
               干涉命运
             </button>
