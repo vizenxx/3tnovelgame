@@ -955,6 +955,7 @@ export default function App() {
   const [storyImportCode, setStoryImportCode] = useState('');
   const [authoringCustomTagsInput, setAuthoringCustomTagsInput] = useState('');
   const [isLoadingStories, setIsLoadingStories] = useState(false);
+  const [storyLaunchOverlay, setStoryLaunchOverlay] = useState<{ progress: number; status: string } | null>(null);
   const [authoringStoryId, setAuthoringStoryId] = useState<string | null>(null);
   const [authoringCartridge, setAuthoringCartridge] = useState<any | null>(null);
   const [authoringSaving, setAuthoringSaving] = useState(false);
@@ -972,7 +973,10 @@ export default function App() {
       ? 'light'
       : 'dark'
   ));
-  const [readingTextOpacity, setReadingTextOpacity] = useState(1);
+  const [readingTextOpacity, setReadingTextOpacity] = useState(() => {
+    const saved = typeof window !== 'undefined' ? Number(window.localStorage?.getItem('reading-text-brightness')) : 1;
+    return Number.isFinite(saved) ? Math.max(0.7, Math.min(1, saved)) : 1;
+  });
   const [branchForm, setBranchForm] = useState({
     id: '',
     name: '',
@@ -1012,7 +1016,10 @@ export default function App() {
   // World State system
   const [canonicalWorldState, setCanonicalWorldState] = useState<any>(null);
   const [deltaWorldStateByChapter, setDeltaWorldStateByChapter] = useState<Record<string, any>>({});
-  const [readingTextScale, setReadingTextScale] = useState(1);
+  const [readingTextScale, setReadingTextScale] = useState(() => {
+    const saved = typeof window !== 'undefined' ? Number(window.localStorage?.getItem('reading-text-scale')) : 1;
+    return Number.isFinite(saved) ? Math.max(0.9, Math.min(1.4, saved)) : 1;
+  });
   const isAdminUser = Boolean(user && ADMIN_USER_IDS.has(user.uid));
   const canUseCoverGeneration = isAdminUser || featureSettings.coverGenerationEnabled;
 
@@ -1021,6 +1028,18 @@ export default function App() {
     document.documentElement.style.colorScheme = appTheme;
     window.localStorage?.setItem('app-theme', appTheme);
   }, [appTheme]);
+
+  useEffect(() => {
+    const brightness = Math.max(0.7, Math.min(1, readingTextOpacity));
+    document.documentElement.style.setProperty('--app-reading-brightness', String(brightness));
+    window.localStorage?.setItem('reading-text-brightness', String(brightness));
+  }, [readingTextOpacity]);
+
+  useEffect(() => {
+    const scale = Math.max(0.9, Math.min(1.4, readingTextScale));
+    document.documentElement.style.setProperty('--app-reading-scale', String(scale));
+    window.localStorage?.setItem('reading-text-scale', String(scale));
+  }, [readingTextScale]);
 
   // --- Helpers ---
   const fetchWithTimeout = async (url: string, init: RequestInit, ms: number) => {
@@ -1296,6 +1315,23 @@ export default function App() {
     }, 200);
     
     return interval;
+  };
+
+  const startStoryLaunchProgress = () => {
+    const messages = [
+      '正在打开命运档案...',
+      '正在读取章节与支线...',
+      '正在检查已保存进度...',
+      '即将进入故事...',
+    ];
+    const startTime = Date.now();
+    setStoryLaunchOverlay({ progress: 6, status: messages[0] });
+    return window.setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(92, 6 + (elapsed / 2600) * 86);
+      const index = Math.min(messages.length - 1, Math.floor((progress / 100) * messages.length));
+      setStoryLaunchOverlay({ progress, status: messages[index] });
+    }, 180);
   };
 
   const normalizeBranchConditionsForStorage = (conditions: ConditionForm[] = []) => (
@@ -2498,6 +2534,7 @@ export default function App() {
 
   const startStoryPlay = async (storyId: string) => {
     if (!user || !db) return;
+    const launchProgress = startStoryLaunchProgress();
     try {
       if (gameState === 'STORY_SELECT') {
         storySelectScrollYRef.current = window.scrollY;
@@ -2521,6 +2558,9 @@ export default function App() {
       console.error(e);
       showError("无法开启故事");
     } finally {
+      window.clearInterval(launchProgress);
+      setStoryLaunchOverlay((prev) => prev ? { progress: 100, status: '故事已就绪' } : prev);
+      window.setTimeout(() => setStoryLaunchOverlay(null), 180);
       setIsLoadingStories(false);
     }
   };
@@ -6257,6 +6297,13 @@ export default function App() {
           {renderSummaryModal()}
           
           <AnimatePresence>
+            {storyLaunchOverlay && (
+              <LoadingOverlay
+                progress={storyLaunchOverlay.progress}
+                status={storyLaunchOverlay.status}
+                subtext="正在准备可干涉的故事页面"
+              />
+            )}
             {activeInterventionOverlay && (
               <LoadingOverlay 
                 progress={generationProgress}
