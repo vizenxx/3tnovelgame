@@ -173,6 +173,14 @@ const endingIdToLabel = (id: 'default' | 'left' | 'right') => {
 const buildSharedStoryUrl = (storyId: string) =>
   `${window.location.origin}${window.location.pathname}?share=${encodeURIComponent(storyId)}`;
 
+const ADMIN_USER_IDS = new Set(['LWgIE31RtCTZBiMNF7S9viNE7Aw2']);
+type AppFeatureSettings = {
+  coverGenerationEnabled: boolean;
+};
+const DEFAULT_FEATURE_SETTINGS: AppFeatureSettings = {
+  coverGenerationEnabled: false,
+};
+
 const getSharedStoryIdFromUrl = () => {
   const urlParams = new URLSearchParams(window.location.search);
   return urlParams.get('share') || urlParams.get('story');
@@ -940,6 +948,9 @@ export default function App() {
   const [authoringCoverPrompt, setAuthoringCoverPrompt] = useState('');
   const [isGeneratingCover, setIsGeneratingCover] = useState(false);
   const [coverGenerationRemaining, setCoverGenerationRemaining] = useState<number | null>(null);
+  const [featureSettings, setFeatureSettings] = useState<AppFeatureSettings>(DEFAULT_FEATURE_SETTINGS);
+  const [adminFeatureDraft, setAdminFeatureDraft] = useState<AppFeatureSettings>(DEFAULT_FEATURE_SETTINGS);
+  const [isSavingAdminSettings, setIsSavingAdminSettings] = useState(false);
   const [authoringImportText, setAuthoringImportText] = useState('');
   const [authoringImportReplaceBranches, setAuthoringImportReplaceBranches] = useState(true);
   const [authoringTab, setAuthoringTab] = useState<'play' | 'mainline' | 'branches'>('play');
@@ -981,6 +992,8 @@ export default function App() {
   const [canonicalWorldState, setCanonicalWorldState] = useState<any>(null);
   const [deltaWorldStateByChapter, setDeltaWorldStateByChapter] = useState<Record<string, any>>({});
   const [readingTextScale, setReadingTextScale] = useState(1);
+  const isAdminUser = Boolean(user && ADMIN_USER_IDS.has(user.uid));
+  const canUseCoverGeneration = isAdminUser || featureSettings.coverGenerationEnabled;
 
   // --- Helpers ---
   const fetchWithTimeout = async (url: string, init: RequestInit, ms: number) => {
@@ -1486,6 +1499,9 @@ export default function App() {
       setMySharedStories((prev) =>
         prev.map((item) => (item.id === story.id ? { ...item, visibility } : item))
       );
+      if (readonlyStoryData?.meta?.sharedStoryId === story.id) {
+        setReadonlyStoryData((prev) => prev ? { ...prev, meta: { ...prev.meta, visibility } } : prev);
+      }
     } catch (error) {
       console.error(error);
       showError('更新公开设置失败，请稍后再试。');
@@ -1511,6 +1527,71 @@ export default function App() {
           showError(error?.message || '删除馆藏记录失败。');
         } finally {
           setArchiveUpdatingIds((prev) => ({ ...prev, [story.id]: false }));
+        }
+      },
+    });
+  };
+
+  const shareExistingArchiveStory = async () => {
+    const story = readonlyStoryData;
+    const archiveId = story?.meta?.sharedStoryId;
+    if (!story || !archiveId || !user || story.meta?.authorId !== user.uid) return;
+    try {
+      setIsSharing(true);
+      if (story.meta?.visibility !== 'public') {
+        await handleArchiveVisibilityChange({ id: archiveId }, 'public');
+      }
+      const shareUrl = buildSharedStoryUrl(archiveId);
+      const shareTitle = formatBookTitle(story.meta?.title || '未命名故事');
+      const shareText = `${buildStoryShareText(shareTitle, story.chapters)}\n\n${shareUrl}`;
+      if (navigator.share) {
+        const coverUrl = story.meta?.coverUrl || '';
+        const coverFile = coverUrl ? await dataUrlToFile(coverUrl, `${stripBookTitle(shareTitle) || 'story'}-cover.jpg`).catch(() => null) : null;
+        const sharePayload: ShareData = { title: shareTitle, text: shareText, url: shareUrl };
+        if (coverFile && navigator.canShare?.({ files: [coverFile] })) {
+          (sharePayload as any).files = [coverFile];
+        }
+        await navigator.share(sharePayload);
+        showError('已打开系统分享。');
+        return;
+      }
+      const copied = await writeClipboardText(shareText);
+      showError(copied ? '已复制分享内容到剪贴板。' : '分享链接已准备好，请手动复制浏览器地址。');
+    } catch (error: any) {
+      console.error(error);
+      if (error?.name === 'AbortError') {
+        showError('已取消分享。');
+        return;
+      }
+      showError(error?.message || '分享失败。');
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+  const deleteReadonlyArchiveStory = () => {
+    const story = readonlyStoryData;
+    const archiveId = story?.meta?.sharedStoryId;
+    if (!db || !user || !story || !archiveId || story.meta?.authorId !== user.uid) return;
+    setConfirmationModal({
+      isOpen: true,
+      title: '删除馆藏记录？',
+      message: `这会删除你馆藏里的《${stripBookTitle(story.meta?.title || '未命名故事')}》记录。原作者作品不会被删除，但这条记录的分享链接将无法继续访问。此操作无法撤销。`,
+      onConfirm: async () => {
+        try {
+          setArchiveUpdatingIds((prev) => ({ ...prev, [archiveId]: true }));
+          await deleteSharedStoryRecord(db as any, archiveId, user.uid);
+          setMySharedStories((prev) => prev.filter((item: any) => item.id !== archiveId));
+          setReadonlyStoryData(null);
+          setReadonlyCanGoBack(false);
+          window.history.replaceState({}, '', window.location.pathname);
+          setGameState(readonlyReturnTarget === 'ARCHIVE' ? 'ARCHIVE' : 'STORY_SELECT');
+          showError('馆藏记录已删除。');
+        } catch (error: any) {
+          console.error(error);
+          showError(error?.message || '删除馆藏记录失败。');
+        } finally {
+          setArchiveUpdatingIds((prev) => ({ ...prev, [archiveId]: false }));
         }
       },
     });
@@ -1633,6 +1714,28 @@ export default function App() {
   useEffect(() => {
     setProfileDisplayName(getUserAuthorName(user));
   }, [user]);
+
+  useEffect(() => {
+    if (!db) return;
+    let cancelled = false;
+    getDoc(doc(db, 'appSettings', 'global')).then((snapshot) => {
+      if (cancelled) return;
+      const data = snapshot.exists() ? snapshot.data() as Partial<AppFeatureSettings> : {};
+      const nextSettings = {
+        ...DEFAULT_FEATURE_SETTINGS,
+        coverGenerationEnabled: Boolean(data.coverGenerationEnabled),
+      };
+      setFeatureSettings(nextSettings);
+      setAdminFeatureDraft(nextSettings);
+    }).catch((error) => {
+      console.error(error);
+      setFeatureSettings(DEFAULT_FEATURE_SETTINGS);
+      setAdminFeatureDraft(DEFAULT_FEATURE_SETTINGS);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [db]);
 
   useEffect(() => {
     if (!authoringCartridge) return;
@@ -2495,6 +2598,10 @@ export default function App() {
 
   const handleGenerateAuthoringCover = async () => {
     if (!authoringCartridge) return;
+    if (!canUseCoverGeneration) {
+      showError('AI 图片生成暂未开放。');
+      return;
+    }
     if (!authoringCoverPrompt.trim()) {
       showError('请先输入封面生成提示。');
       return;
@@ -2530,6 +2637,29 @@ export default function App() {
       showError(error?.message || 'AI 封面生成失败。');
     } finally {
       setIsGeneratingCover(false);
+    }
+  };
+
+  const handleSaveAdminSettings = async () => {
+    if (!db || !user || !isAdminUser) return;
+    try {
+      setIsSavingAdminSettings(true);
+      const nextSettings = {
+        coverGenerationEnabled: Boolean(adminFeatureDraft.coverGenerationEnabled),
+      };
+      await setDoc(doc(db, 'appSettings', 'global'), {
+        ...nextSettings,
+        updatedAt: new Date().toISOString(),
+        updatedBy: user.uid,
+      }, { merge: true });
+      setFeatureSettings(nextSettings);
+      setAdminFeatureDraft(nextSettings);
+      showError('管理设置已保存。');
+    } catch (error: any) {
+      console.error(error);
+      showError(error?.message || '保存管理设置失败。');
+    } finally {
+      setIsSavingAdminSettings(false);
     }
   };
 
@@ -3892,6 +4022,42 @@ export default function App() {
                   </button>
                 </div>
               </section>
+
+              {isAdminUser && (
+                <section className="rounded-[1.5rem] border border-amber-500/25 bg-amber-500/10 p-5 lg:col-span-2">
+                  <div className="mb-4 flex items-center gap-2 text-lg font-black text-white">
+                    <Settings className="h-5 w-5 text-amber-300" />
+                    管理目录
+                  </div>
+                  <div className="space-y-4 rounded-2xl border border-amber-500/20 bg-zinc-950/60 p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <div className="text-sm font-black text-white">AI 图片生成功能</div>
+                        <div className="mt-1 text-xs leading-relaxed text-zinc-500">
+                          关闭时，普通用户不会看到封面 AI 生成入口；管理员自己始终保留最新功能入口。
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setAdminFeatureDraft((prev) => ({ ...prev, coverGenerationEnabled: !prev.coverGenerationEnabled }))}
+                        className={adminFeatureDraft.coverGenerationEnabled ? semanticButtonClass('primary', { compact: true }) : semanticButtonClass('ghost', { compact: true })}
+                      >
+                        {adminFeatureDraft.coverGenerationEnabled ? <Check className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+                        {adminFeatureDraft.coverGenerationEnabled ? '已开放给所有用户' : '仅管理员可见'}
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleSaveAdminSettings}
+                      disabled={isSavingAdminSettings}
+                      className={semanticButtonClass('secondary', { fullWidth: true })}
+                    >
+                      {isSavingAdminSettings ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                      保存管理设置
+                    </button>
+                  </div>
+                </section>
+              )}
             </div>
           </motion.div>
         </motion.div>
@@ -3902,6 +4068,9 @@ export default function App() {
   const renderReadonlyStoryView = () => {
     const story = readonlyStoryData;
     if (!story) return null;
+    const readonlyArchiveId = story.meta?.sharedStoryId;
+    const isReadonlyOwner = Boolean(user && readonlyArchiveId && story.meta?.authorId === user.uid);
+    const isReadonlyUpdating = Boolean(readonlyArchiveId && archiveUpdatingIds[readonlyArchiveId]);
     return (
       <div className="mx-auto max-w-4xl px-6 pb-16 pt-24 sm:px-8">
         <div className="mb-10 flex items-start justify-between gap-4">
@@ -3926,6 +4095,59 @@ export default function App() {
         <div className="mb-8 flex justify-end">
           <ReadingTextControls />
         </div>
+        {isReadonlyOwner && (
+          <div className="mb-8 rounded-[2rem] border border-zinc-800 bg-zinc-900/35 p-5">
+            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="text-xs font-black uppercase tracking-[0.22em] text-zinc-500">馆藏管理</div>
+                <div className="mt-1 text-sm font-bold text-zinc-300">
+                  当前状态：{story.meta?.visibility === 'public' ? '公开，可通过链接访问' : '私人，仅你可见'}
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={isReadonlyUpdating || story.meta?.visibility === 'private'}
+                  onClick={() => handleArchiveVisibilityChange({ id: readonlyArchiveId }, 'private')}
+                  className={semanticButtonClass('ghost', { compact: true })}
+                >
+                  <Lock className="h-4 w-4" />
+                  设为私人
+                </button>
+                <button
+                  type="button"
+                  disabled={isReadonlyUpdating || story.meta?.visibility === 'public'}
+                  onClick={() => handleArchiveVisibilityChange({ id: readonlyArchiveId }, 'public')}
+                  className={semanticButtonClass('secondary', { compact: true })}
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  设为公开
+                </button>
+                <button
+                  type="button"
+                  disabled={isSharing || isReadonlyUpdating}
+                  onClick={shareExistingArchiveStory}
+                  className={semanticButtonClass('primary', { compact: true })}
+                >
+                  {isSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
+                  分享
+                </button>
+                <button
+                  type="button"
+                  disabled={isReadonlyUpdating}
+                  onClick={deleteReadonlyArchiveStory}
+                  className={semanticButtonClass('danger', { compact: true })}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  删除
+                </button>
+              </div>
+            </div>
+            <p className="text-xs leading-relaxed text-zinc-500">
+              分享会使用当前这条馆藏记录本身，不会重复创建新的通篇馆藏作品。
+            </p>
+          </div>
+        )}
         <div className="space-y-8">
           {(story.chapters || []).map((chapter) => (
             <section key={chapter.chapter_num} className="rounded-[2rem] border border-zinc-800 bg-zinc-900/20 p-8">
@@ -4616,21 +4838,25 @@ export default function App() {
                         </div>
                       </div>
                     </div>
-                    <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-                      <input
-                        value={authoringCoverPrompt}
-                        onChange={(event) => setAuthoringCoverPrompt(event.target.value)}
-                        placeholder="描述你想要的封面画面，例如：雨夜、古旧列车、少女手中发光的怀表、电影感低饱和..."
-                        className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
-                      />
-                      <button type="button" onClick={handleGenerateAuthoringCover} disabled={isGeneratingCover} className={semanticButtonClass('primary', { compact: true })}>
-                        {isGeneratingCover ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                        AI 生成
-                      </button>
-                    </div>
-                    <div className="mt-2 text-xs text-zinc-600">
-                      每个账户每天最多生成 5 张。{coverGenerationRemaining !== null ? `今日剩余 ${coverGenerationRemaining} 张。` : ''}
-                    </div>
+                    {canUseCoverGeneration && (
+                      <>
+                        <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                          <input
+                            value={authoringCoverPrompt}
+                            onChange={(event) => setAuthoringCoverPrompt(event.target.value)}
+                            placeholder="描述你想要的封面画面，例如：雨夜、古旧列车、少女手中发光的怀表、电影感低饱和..."
+                            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                          />
+                          <button type="button" onClick={handleGenerateAuthoringCover} disabled={isGeneratingCover} className={semanticButtonClass('primary', { compact: true })}>
+                            {isGeneratingCover ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                            AI 生成
+                          </button>
+                        </div>
+                        <div className="mt-2 text-xs text-zinc-600">
+                          每个账户每天最多生成 5 张。{coverGenerationRemaining !== null ? `今日剩余 ${coverGenerationRemaining} 张。` : ''}
+                        </div>
+                      </>
+                    )}
                   </section>
 
                   <label className="block space-y-2 text-sm text-zinc-400">

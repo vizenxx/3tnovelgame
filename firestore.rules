@@ -50,6 +50,10 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    function isAdmin() {
+      return isAuthenticated() && request.auth.uid in ['LWgIE31RtCTZBiMNF7S9viNE7Aw2'];
+    }
+
     function isDocOwner() {
       return isAuthenticated() && request.auth.uid == resource.data.userId;
     }
@@ -184,6 +188,12 @@ service cloud.firestore {
              (isValidDateString(data.updatedAt) || isValidTimestamp(data.updatedAt));
     }
 
+    function isValidAppSettings(data) {
+      return data.coverGenerationEnabled is bool &&
+             (!('updatedBy' in data) || data.updatedBy is string) &&
+             (!('updatedAt' in data) || isValidDateString(data.updatedAt) || isValidTimestamp(data.updatedAt));
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
@@ -279,6 +289,12 @@ service cloud.firestore {
         request.resource.data.authorId == request.auth.uid &&
         isValidSharedStory(request.resource.data);
       allow delete: if isAuthenticated() && resource.data.authorId == request.auth.uid;
+    }
+
+    match /appSettings/{settingsId} {
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidAppSettings(request.resource.data);
+      allow delete: if isAdmin();
     }
 
     // Default deny
