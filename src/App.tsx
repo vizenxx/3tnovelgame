@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp } from 'lucide-react';
+import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp, Download } from 'lucide-react';
 import { auth, db, firebaseInitError } from './firebase';
 import { createEmptyStory, createSharedStoryRecord, adaptBlueprintToStory, createStoryBranch, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, getSharedStoryRecord, getStoryCartridge, listMySharedStories, listMyStories, listPublicStories, saveStoryMainlineBundle, saveStoryMeta, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch } from './storyStore';
 import { isBranchUnlockedByHistory, tierToScore } from './storyCartridge';
@@ -1785,6 +1785,48 @@ export default function App() {
     });
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    const detectStandalone = () => {
+      setIsStandaloneMode(
+        window.matchMedia?.('(display-mode: standalone)').matches ||
+        (window.navigator as any).standalone === true
+      );
+    };
+    const handleBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPromptEvent(event as BeforeInstallPromptEvent);
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', detectStandalone);
+    detectStandalone();
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', detectStandalone);
+    };
+  }, []);
+
+  const handleInstallApp = async () => {
+    if (isStandaloneMode) {
+      showError('你已经在 App 模式中使用。');
+      return;
+    }
+    if (isIosDevice()) {
+      setShowIosInstallModal(true);
+      return;
+    }
+    if (!installPromptEvent) {
+      showError('如果浏览器没有弹出安装提示，请从浏览器菜单选择“安装应用”或“添加到主屏幕”。');
+      return;
+    }
+    await installPromptEvent.prompt();
+    const choice = await installPromptEvent.userChoice.catch(() => null);
+    if (choice?.outcome === 'accepted') {
+      setInstallPromptEvent(null);
+      setIsStandaloneMode(true);
+      showError('已开始安装 App。');
+    }
+  };
 
   useEffect(() => {
     setProfileDisplayName(getUserAuthorName(user));
@@ -3774,6 +3816,16 @@ export default function App() {
           <p className="mt-2 text-zinc-500">挑选一个世界，或直接生成新世界、进入作者后台与个人馆藏。</p>
         </div>
         <div className="flex flex-wrap gap-3">
+          {!isStandaloneMode && (
+            <button
+              type="button"
+              onClick={handleInstallApp}
+              className={semanticButtonClass('ghost', { compact: true })}
+            >
+              <Download className="h-4 w-4" />
+              下载 App
+            </button>
+          )}
           <button
             onClick={() => setGameState('THEME_SELECTION')}
             className={semanticButtonClass('primary', { compact: true })}
@@ -5540,6 +5592,16 @@ export default function App() {
                 使用邮箱和密码创建账户，之后在手机、PWA、桌面浏览器都能用同一方式进入。
               </p>
             </div>
+            {!isStandaloneMode && (
+              <button
+                type="button"
+                onClick={handleInstallApp}
+                className={`${semanticButtonClass('secondary', { compact: true })} mx-auto`}
+              >
+                <Download className="h-4 w-4" />
+                下载 App 到桌面
+              </button>
+            )}
           </div>
 
           <div className="space-y-4 rounded-3xl border border-zinc-800 bg-zinc-900/40 p-5">
@@ -5697,9 +5759,49 @@ export default function App() {
     </AnimatePresence>
   );
 
+  const installGuideModal = (
+    <AnimatePresence>
+      {showIosInstallModal && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className={`${safeModalBackdropClass} z-[6200] bg-black/80 backdrop-blur-md`}
+          onClick={() => setShowIosInstallModal(false)}
+        >
+          <motion.div
+            initial={{ y: 16, opacity: 0, scale: 0.97 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: 16, opacity: 0, scale: 0.97 }}
+            className="w-full max-w-sm rounded-3xl border border-zinc-800 bg-zinc-950 p-6 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <div>
+                <div className="text-xs font-black uppercase tracking-[0.22em] text-zinc-500">下载 App</div>
+                <h2 className="mt-1 text-xl font-black text-white">添加到手机桌面</h2>
+              </div>
+              <button type="button" onClick={() => setShowIosInstallModal(false)} className={semanticIconButtonClass('ghost')}>
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="space-y-3 text-sm leading-relaxed text-zinc-400">
+              <p>在 iPhone/iPad：点击浏览器底部的分享按钮，然后选择“添加到主屏幕”。</p>
+              <p>在 Android/桌面浏览器：如果没有自动弹出安装窗口，请打开浏览器菜单，选择“安装应用”或“添加到主屏幕”。</p>
+            </div>
+            <button type="button" onClick={() => setShowIosInstallModal(false)} className={`${semanticButtonClass('primary', { fullWidth: true })} mt-6`}>
+              明白了
+            </button>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 selection:bg-indigo-500/30 selection:text-indigo-200">
       <GlobalError errorMsg={errorMsg} />
+      {installGuideModal}
       
       {!isSessionHydrated ? (
         <div className="fixed inset-0 z-[5000] flex flex-col items-center justify-center bg-zinc-950 p-6 text-center">
