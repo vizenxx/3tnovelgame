@@ -582,12 +582,6 @@ const buildStoryShareText = (title?: string, chapters?: Array<{ text?: string }>
 
 const buildShareClipboardText = (shareText: string, shareUrl: string) => `${shareText}\n\n${shareUrl}`;
 
-const dataUrlToFile = async (dataUrl: string, filename: string) => {
-  const response = await fetch(dataUrl);
-  const blob = await response.blob();
-  return new File([blob], filename, { type: blob.type || 'image/jpeg' });
-};
-
 const compressImageToSquareDataUrl = async (input: File | string, maxDataUrlLength = 850_000): Promise<string> => {
   const sourceUrl = typeof input === 'string'
     ? input
@@ -1620,12 +1614,7 @@ export default function App() {
       const shareTitle = formatBookTitle(story.meta?.title || '未命名故事');
       const shareText = buildStoryShareText(shareTitle, story.chapters);
       if (navigator.share) {
-        const coverUrl = story.meta?.coverUrl || '';
-        const coverFile = coverUrl ? await dataUrlToFile(coverUrl, `${stripBookTitle(shareTitle) || 'story'}-cover.jpg`).catch(() => null) : null;
         const sharePayload: ShareData = { title: shareTitle, text: shareText, url: shareUrl };
-        if (coverFile && navigator.canShare?.({ files: [coverFile] })) {
-          (sharePayload as any).files = [coverFile];
-        }
         await navigator.share(sharePayload);
         showError('已打开系统分享。');
         return;
@@ -3259,12 +3248,7 @@ export default function App() {
       const shareTitle = formatBookTitle(blueprint?.title || "未命名故事");
       const shareText = buildStoryShareText(shareTitle, chapters);
       if (navigator.share) {
-        const coverUrl = activeStoryMeta?.coverUrl || '';
-        const coverFile = coverUrl ? await dataUrlToFile(coverUrl, `${stripBookTitle(shareTitle) || 'story'}-cover.jpg`).catch(() => null) : null;
         const sharePayload: ShareData = { title: shareTitle, text: shareText, url: shareUrl };
-        if (coverFile && navigator.canShare?.({ files: [coverFile] })) {
-          (sharePayload as any).files = [coverFile];
-        }
         await navigator.share(sharePayload);
         showError("已打开系统分享。");
         return;
