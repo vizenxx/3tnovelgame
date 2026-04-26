@@ -546,7 +546,7 @@ const getStoryAuthorName = (story: any) => {
 };
 const getOriginalAuthorName = (story: any) => {
   const meta = story?.meta || story || {};
-  return meta.originalAuthorName || meta.sourceAuthorName || meta.authorName || (meta.originalAuthorId ? `游客+${shortUserId(meta.originalAuthorId)}` : getStoryAuthorName(story));
+  return meta.originalAuthorName || meta.sourceAuthorName || (meta.originalAuthorId ? `游客+${shortUserId(meta.originalAuthorId)}` : meta.authorName || getStoryAuthorName(story));
 };
 const getIntervenerName = (story: any) => {
   const meta = story?.meta || story || {};
@@ -1055,6 +1055,25 @@ export default function App() {
     return fetchWithTimeout(url, { ...init, headers }, ms);
   };
 
+  const resolveActiveStoryProvenance = async () => {
+    let sourceMeta = activeStoryMeta || null;
+    if (db && activeStoryId && (!sourceMeta?.authorId || sourceMeta.authorId === user?.uid)) {
+      try {
+        const storySnap = await getDoc(doc(db, 'stories', activeStoryId));
+        if (storySnap.exists()) {
+          sourceMeta = { id: activeStoryId, ...storySnap.data() };
+        }
+      } catch (error) {
+        console.warn('Unable to resolve original story author:', error);
+      }
+    }
+
+    return {
+      originalAuthorId: sourceMeta?.originalAuthorId || sourceMeta?.authorId || activeStoryId || null,
+      originalAuthorName: getOriginalAuthorName(sourceMeta || { authorId: activeStoryId, authorName: '' }),
+    };
+  };
+
   const scrollToChapter = (chapterNum: number) => {
     window.setTimeout(() => {
       const target = document.getElementById(`chapter-${chapterNum}`);
@@ -1270,6 +1289,7 @@ export default function App() {
     try {
       setAuthoringSaving(true);
       const sourceChapters = naturalChapters.length > 0 ? naturalChapters : chapters;
+      const provenance = await resolveActiveStoryProvenance();
       await createSharedStoryRecord(db as any, {
         authorId: user.uid,
         authorName: getUserAuthorName(user),
@@ -1281,8 +1301,8 @@ export default function App() {
         averageChapterWords: getAverageChapterWords(sourceChapters),
         coverUrl: activeStoryMeta?.coverUrl || '',
         sourceStoryId: activeStoryId,
-        originalAuthorId: activeStoryMeta?.authorId || user.uid,
-        originalAuthorName: getStoryAuthorName(activeStoryMeta || { authorId: user.uid, authorName: getUserAuthorName(user) }),
+        originalAuthorId: provenance.originalAuthorId,
+        originalAuthorName: provenance.originalAuthorName,
         intervenerId: user.uid,
         intervenerName: getUserAuthorName(user),
         visibility: 'private',
@@ -1937,6 +1957,7 @@ export default function App() {
     if (!user || !activeStoryId || !blueprint) return;
     try {
       setShowLeaveGameModal(false);
+      const provenance = await resolveActiveStoryProvenance();
       await createSharedStoryRecord(db as any, {
         authorId: user.uid,
         authorName: getUserAuthorName(user),
@@ -1948,8 +1969,8 @@ export default function App() {
         averageChapterWords: getAverageChapterWords(chapters),
         coverUrl: activeStoryMeta?.coverUrl || '',
         sourceStoryId: activeStoryId,
-        originalAuthorId: activeStoryMeta?.authorId || user.uid,
-        originalAuthorName: getStoryAuthorName(activeStoryMeta || { authorId: user.uid, authorName: getUserAuthorName(user) }),
+        originalAuthorId: provenance.originalAuthorId,
+        originalAuthorName: provenance.originalAuthorName,
         intervenerId: user.uid,
         intervenerName: getUserAuthorName(user),
         visibility: 'private',
@@ -2965,6 +2986,7 @@ export default function App() {
     if (!activeStoryId || !user) return;
     try {
       setIsSharing(true);
+      const provenance = await resolveActiveStoryProvenance();
       const shareId = await createSharedStoryRecord(db as any, {
         authorId: user.uid,
         authorName: getUserAuthorName(user),
@@ -2976,8 +2998,8 @@ export default function App() {
         averageChapterWords: getAverageChapterWords(chapters),
         coverUrl: activeStoryMeta?.coverUrl || '',
         sourceStoryId: activeStoryId,
-        originalAuthorId: activeStoryMeta?.authorId || user.uid,
-        originalAuthorName: getStoryAuthorName(activeStoryMeta || { authorId: user.uid, authorName: getUserAuthorName(user) }),
+        originalAuthorId: provenance.originalAuthorId,
+        originalAuthorName: provenance.originalAuthorName,
         intervenerId: user.uid,
         intervenerName: getUserAuthorName(user),
         visibility: 'public',
