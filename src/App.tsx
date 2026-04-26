@@ -9,6 +9,7 @@ import {
   signInWithRedirect,
   signInWithPopup,
   linkWithPopup,
+  linkWithRedirect,
   getRedirectResult,
   GoogleAuthProvider,
   EmailAuthProvider,
@@ -1366,7 +1367,7 @@ export default function App() {
       setActiveStoryMeta((prev: any) => prev ? { ...prev, authorName } : prev);
       setProfileDisplayName(authorName);
     } catch (error) {
-      console.error(error);
+      console.warn('Author name sync skipped:', error);
     }
   };
 
@@ -1639,9 +1640,17 @@ export default function App() {
     try {
       const currentUser = auth.currentUser;
       if (currentUser?.isAnonymous) {
+        if (isTallNarrowViewport) {
+          await linkWithRedirect(currentUser, provider);
+          return;
+        }
         const result = await linkWithPopup(currentUser, provider);
         await syncCurrentAuthorName(result.user);
       } else {
+        if (isTallNarrowViewport) {
+          await signInWithRedirect(auth, provider);
+          return;
+        }
         await signInWithPopup(auth, provider);
       }
     } catch (error: any) {
@@ -1718,8 +1727,12 @@ export default function App() {
       setIsSessionHydrated(true);
       return;
     }
-    getRedirectResult(auth).catch((error) => {
-      console.error(error);
+    getRedirectResult(auth).then((result) => {
+      if (result?.user) {
+        void syncCurrentAuthorName(result.user);
+      }
+    }).catch((error) => {
+      console.warn('Google redirect callback failed:', error);
       showError('Google 登录回调失败，请重试。');
     });
     const unsubscribe = onAuthStateChanged(auth, (u) => {
