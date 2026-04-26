@@ -991,6 +991,8 @@ export default function App() {
   const [authoringSavedSnapshot, setAuthoringSavedSnapshot] = useState('');
   const [authoringDirty, setAuthoringDirty] = useState(false);
   const [interventionHistory, setInterventionHistory] = useState<Array<{ chapterNum: number; charId: string; action: 'bless' | 'curse' }>>([]);
+  const fetchingChapterRef = useRef<number | null>(null);
+  const [backgroundGeneratingChapter, setBackgroundGeneratingChapter] = useState<number | null>(null);
 
   // World State system
   const [canonicalWorldState, setCanonicalWorldState] = useState<any>(null);
@@ -1372,6 +1374,20 @@ export default function App() {
     } catch (error) {
       console.warn('Author name sync skipped:', error);
     }
+  };
+
+  const ensureSevenChapterShells = (sourceChapters: any[] = []) => {
+    return Array.from({ length: 7 }, (_, index) => {
+      const chapterNum = index + 1;
+      const existing = sourceChapters.find((chapter) => Number(chapter?.chapter_num) === chapterNum);
+      return {
+        chapter_num: chapterNum,
+        title: existing?.title || `第${chapterNum}章`,
+        summary: existing?.summary || '',
+        present_characters: Array.isArray(existing?.present_characters) ? existing.present_characters : [],
+        text: existing?.text || '',
+      };
+    });
   };
 
   const hydrateMissingAverageWords = async (stories: any[]) => {
@@ -2355,6 +2371,7 @@ export default function App() {
       }, 90000);
       if (!response.ok) throw new Error(await readErrorMessage(response));
       let data = await response.json();
+      data.chapters = ensureSevenChapterShells(data.chapters || []);
 
       const prefetchChapters = [1, 2, 3];
       for (const chapterNum of prefetchChapters) {
@@ -2447,6 +2464,87 @@ export default function App() {
       setGenerationProgress(100);
     }
   };
+
+  useEffect(() => {
+    if (
+      gameState !== 'PLAYING' ||
+      !blueprint ||
+      interventionsLeft < 3 ||
+      isRewriting ||
+      activeInterventionOverlay ||
+      !user ||
+      !db
+    ) {
+      return;
+    }
+
+    const missingChapter = chapters
+      .filter((chapter) => Number(chapter.chapter_num) > 3)
+      .sort((a, b) => Number(a.chapter_num) - Number(b.chapter_num))
+      .find((chapter) => !isChapterTextReady(chapter));
+
+    if (!missingChapter) {
+      setBackgroundGeneratingChapter(null);
+      return;
+    }
+    if (fetchingChapterRef.current === missingChapter.chapter_num) return;
+
+    fetchingChapterRef.current = missingChapter.chapter_num;
+    setBackgroundGeneratingChapter(missingChapter.chapter_num);
+
+    const generateRemainingChapter = async () => {
+      try {
+        const chapterResponse = await withRetry(() => apiFetch('/api/generate-next-chapter', {
+          method: 'POST',
+          body: JSON.stringify({
+            blueprint,
+            currentChapters: chapters,
+            targetChapterNum: missingChapter.chapter_num,
+            targetWordCount,
+          }),
+        }, 90000), 3, 2500);
+        if (!chapterResponse.ok) throw new Error(await readErrorMessage(chapterResponse));
+        const chapterData = await chapterResponse.json();
+        if (!chapterData?.text || typeof chapterData.text !== 'string' || chapterData.text.trim().length < 50) {
+          throw new Error('Invalid generated chapter text');
+        }
+
+        setChapters((prev) => {
+          if (interventionsLeft < 3) return prev;
+          const nextChapters = ensureSevenChapterShells(prev).map((chapter) => (
+            chapter.chapter_num === missingChapter.chapter_num
+              ? {
+                  ...chapter,
+                  title: chapterData.title || chapter.title,
+                  summary: chapterData.summary || chapter.summary,
+                  present_characters: Array.isArray(chapterData.present_characters) ? chapterData.present_characters : chapter.present_characters,
+                  text: chapterData.text,
+                }
+              : chapter
+          ));
+          setNaturalChapters(nextChapters as any);
+          setInitialNaturalChapters(nextChapters.map((chapter: any) => ({
+            ...chapter,
+            present_characters: Array.isArray(chapter.present_characters) ? [...chapter.present_characters] : [],
+          })) as any);
+          updateDoc(doc(db, 'sessions', user.uid), {
+            currentChapters: nextChapters,
+            naturalChapters: nextChapters,
+            initialNaturalChapters: nextChapters,
+            updatedAt: serverTimestamp(),
+          }).catch((error) => console.warn('Background chapter session update skipped:', error));
+          return nextChapters as any;
+        });
+      } catch (error) {
+        console.warn('Background generation failed for chapter', missingChapter.chapter_num, error);
+      } finally {
+        fetchingChapterRef.current = null;
+        setBackgroundGeneratingChapter(null);
+      }
+    };
+
+    void generateRemainingChapter();
+  }, [gameState, blueprint, chapters, interventionsLeft, isRewriting, activeInterventionOverlay, user, db, targetWordCount]);
 
   const enterAuthoring = async () => {
     setGameState('AUTHORING');
@@ -4509,11 +4607,20 @@ export default function App() {
             
             <div className="relative rounded-[2rem] border border-zinc-800 bg-zinc-900/20 p-8 leading-relaxed text-zinc-300 shadow-2xl backdrop-blur-sm sm:p-10">
               <div className="prose prose-invert max-w-none space-y-6">
-                {String(chapter.text || '').split('\n').filter(Boolean).map((p, pIdx) => (
-                  <p key={pIdx} style={readingParagraphStyle} className="leading-relaxed first-letter:text-3xl first-letter:font-black first-letter:text-indigo-400 first-letter:mr-1">
-                    {renderParagraphWithHighlights(p, blueprint?.characters)}
-                  </p>
-                ))}
+                {isChapterTextReady(chapter) ? (
+                  String(chapter.text || '').split('\n').filter(Boolean).map((p, pIdx) => (
+                    <p key={pIdx} style={readingParagraphStyle} className="leading-relaxed first-letter:text-3xl first-letter:font-black first-letter:text-indigo-400 first-letter:mr-1">
+                      {renderParagraphWithHighlights(p, blueprint?.characters)}
+                    </p>
+                  ))
+                ) : (
+                  <div className="flex items-center gap-3 rounded-2xl border border-indigo-500/20 bg-indigo-500/10 p-5 text-sm font-bold text-indigo-100">
+                    <Loader2 className={`h-5 w-5 ${backgroundGeneratingChapter === chapter.chapter_num ? 'animate-spin' : ''}`} />
+                    {backgroundGeneratingChapter === chapter.chapter_num
+                      ? `第${chapter.chapter_num}章正在生成中，完成后会自动出现。`
+                      : `第${chapter.chapter_num}章已排入生成队列。`}
+                  </div>
+                )}
               </div>
 
               {(() => {
