@@ -2,6 +2,7 @@ import { GoogleGenAI, Type } from '@google/genai';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './_auth.js';
 import { getGeminiApiKey, getGeminiModelCandidates, parseGeminiJson } from './_gemini.js';
+import { getRequestLogContext, logGenerationError, logGenerationInfo } from './_log.js';
 
 type InterventionAction = 'bless' | 'curse';
 type InterventionHistoryItem = { chapterNum: number; charId: string; action: InterventionAction };
@@ -215,6 +216,7 @@ async function generateWithGeminiFallback(ai: GoogleGenAI, prompt: string) {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const logContext = getRequestLogContext(req, 'intervene');
   if (req.method !== 'POST') {
     return sendMethodNotAllowed(res);
   }
@@ -235,6 +237,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       interventionHistory,
       worldState,
     } = req.body || {};
+    logGenerationInfo(logContext, 'request', {
+      uid: user.uid,
+      chapterNum,
+      charId,
+      action,
+      currentEndingValue,
+      targetWordCount,
+      chapterCount: Array.isArray(chapters) ? chapters.length : 0,
+      historyCount: Array.isArray(interventionHistory) ? interventionHistory.length : 0,
+      hasWorldState: Boolean(worldState),
+    });
 
     const safeChapterNum = Math.min(6, Math.max(2, asNumber(chapterNum, 2)));
     const safeTargetWordCount = Math.min(1200, Math.max(400, asNumber(targetWordCount, 600)));
@@ -376,6 +389,12 @@ ${(!worldState || !worldState.canonical) && endingProto ? `作者结局原型：
     if (newEndingValue > 5) endingLabel = '秩序律';
     if (newEndingValue < -5) endingLabel = '混沌终';
 
+    logGenerationInfo(logContext, 'success', {
+      chapterNum: safeChapterNum,
+      newEndingValue,
+      unlockedBranchId: unlocked?.id || null,
+      returnedChapters: Array.isArray(aiData.chapters) ? aiData.chapters.length : 0,
+    });
     return res.status(200).json({
       aiData,
       newEndingValue,
@@ -388,6 +407,7 @@ ${(!worldState || !worldState.canonical) && endingProto ? `作者结局原型：
       },
     });
   } catch (error) {
+    logGenerationError(logContext, 'failed', error);
     return sendInternalError(res, '干涉处理失败', error);
   }
 }

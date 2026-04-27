@@ -1,7 +1,8 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './_auth.js';
-import { getGeminiApiKey } from './_gemini.js';
+import { getGeminiApiKey, getGeminiModelCandidates, parseGeminiJson } from './_gemini.js';
+import { getRequestLogContext, logGenerationError, logGenerationInfo } from './_log.js';
 
 function getNarrativePersonInstruction(value: unknown) {
   const key = String(value || 'third');
@@ -77,7 +78,61 @@ const chapterSchema = {
   required: ['chapter_num', 'text', 'present_characters'],
 };
 
+function normalizeGeneratedChapter(raw: any, chapterNum: number) {
+  if (!raw || typeof raw !== 'object') {
+    throw new Error('AI_RESPONSE_INVALID: chapter response is not an object.');
+  }
+  const text = String(raw.text || '').trim();
+  if (text.length < 50) {
+    throw new Error('AI_RESPONSE_INVALID: chapter text is empty or too short.');
+  }
+  return {
+    ...raw,
+    chapter_num: Math.min(7, Math.max(1, Number(raw.chapter_num) || chapterNum)),
+    text: ensureParagraphing(text, { minParas: 6, maxParas: 10 }),
+    present_characters: Array.isArray(raw.present_characters)
+      ? raw.present_characters.map((id: any) => String(id)).filter(Boolean)
+      : [],
+  };
+}
+
+async function generateChapterWithFallback(
+  ai: GoogleGenAI,
+  prompt: string,
+  chapterNum: number,
+  logContext: { flow: string; requestId: string }
+) {
+  let lastError: unknown = null;
+  for (const model of getGeminiModelCandidates()) {
+    try {
+      logGenerationInfo(logContext, 'model-start', { model, chapterNum });
+      const response = await ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: chapterSchema,
+        },
+      });
+      const data = normalizeGeneratedChapter(parseGeminiJson(response.text), chapterNum);
+      logGenerationInfo(logContext, 'model-success', {
+        model,
+        chapterNum: data.chapter_num,
+        textLength: data.text.length,
+        presentCharacters: data.present_characters.length,
+      });
+      return data;
+    } catch (error) {
+      lastError = error;
+      logGenerationError(logContext, 'model-failed', error, { model, chapterNum });
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error('AI_GENERATION_FAILED: Gemini chapter generation failed.');
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const logContext = getRequestLogContext(req, 'generate-next-chapter');
   if (req.method !== 'POST') {
     return sendMethodNotAllowed(res);
   }
@@ -92,6 +147,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const allChapters: any[] = Array.isArray(chaptersBody) && chaptersBody.length
       ? chaptersBody.slice(0, 7)
       : (Array.isArray(currentChapters) ? currentChapters.slice(0, 7) : []);
+    logGenerationInfo(logContext, 'request', {
+      uid: user.uid,
+      chapterNum: safeTargetChapterNum,
+      targetWordCount: safeTargetWordCount,
+      chapterCount: allChapters.length,
+      hasWorldState: Boolean(worldState),
+      narrativePerson: narrativePerson || blueprint?.narrative_person || 'third',
+    });
 
     if (!blueprint || typeof blueprint.main_axis !== 'string' || !Array.isArray(blueprint.characters)) {
       return res.status(400).json({ error: '蓝图参数不合法。' });
@@ -157,22 +220,19 @@ ${(!worldState || !worldState.canonical) && endingProto ? `作者结局原型：
 请严格按照 JSON Schema 输出，不要包含图片 Prompt 或元注释。`;
 
     const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.1-flash-lite-preview',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: chapterSchema,
-      },
-    });
+    const data = await generateChapterWithFallback(ai, prompt, safeTargetChapterNum, logContext);
 
-    const data = JSON.parse(response.text || '{}');
-    if (data && typeof data.text === 'string') {
-      data.text = ensureParagraphing(data.text, { minParas: 6, maxParas: 10 });
-    }
-
+    logGenerationInfo(logContext, 'success', { chapterNum: data.chapter_num, textLength: data.text.length });
     return res.status(200).json(data);
   } catch (error) {
+    logGenerationError(logContext, 'failed', error);
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('Missing valid Gemini API key.') || message.includes('API key not valid') || message.includes('API_KEY_INVALID')) {
+      return res.status(503).json({ error: 'AI 服务配置未完成，请稍后再试。', code: 'AI_CONFIG_MISSING' });
+    }
+    if (message.includes('AI_RESPONSE_INVALID') || message.includes('JSON')) {
+      return res.status(502).json({ error: 'AI 返回的章节格式不完整，请重新生成一次。', code: 'AI_RESPONSE_INVALID' });
+    }
     return sendInternalError(res, '生成章节失败', error);
   }
 }

@@ -2,6 +2,7 @@ import { GoogleGenAI } from '@google/genai';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './_auth.js';
 import { getGeminiApiKey } from './_gemini.js';
+import { getRequestLogContext, logGenerationError, logGenerationInfo } from './_log.js';
 
 const DEFAULT_IMAGE_MODEL = 'gemini-3.1-flash-image-preview';
 const MAX_IMAGE_DATA_CHARS = 3_600_000;
@@ -113,6 +114,7 @@ async function generateCoverImage(ai: GoogleGenAI, prompt: string) {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const logContext = getRequestLogContext(req, 'generate-cover');
   if (req.method !== 'POST') {
     return sendMethodNotAllowed(res);
   }
@@ -123,6 +125,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const { prompt, title, mainAxis, tags } = req.body || {};
     const cleanPrompt = String(prompt || '').trim();
+    logGenerationInfo(logContext, 'request', {
+      uid: user.uid,
+      hasTitle: Boolean(String(title || '').trim()),
+      hasMainAxis: Boolean(String(mainAxis || '').trim()),
+      tagCount: Array.isArray(tags) ? tags.length : 0,
+      promptLength: cleanPrompt.length,
+    });
     if (cleanPrompt.length < 8) {
       return res.status(400).json({ error: '请先输入更具体的封面生成提示。' });
     }
@@ -138,11 +147,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
     const image = await generateCoverImage(ai, finalPrompt);
+    logGenerationInfo(logContext, 'success', { model: image.model, mimeType: image.mimeType, dataLength: String(image.data || '').length });
     return res.status(200).json({
       imageDataUrl: `data:${image.mimeType};base64,${image.data}`,
       model: image.model,
     });
   } catch (error) {
+    logGenerationError(logContext, 'failed', error);
     const message = safeErrorMessage(error);
     if (message.includes('Missing valid Gemini API key') || message.includes('API key not valid') || message.includes('API_KEY_INVALID')) {
       return sendCoverError(res, 503, 'gemini-api-key', 'AI 服务 API key 配置异常。', error);

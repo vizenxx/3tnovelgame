@@ -2,6 +2,7 @@ import { GoogleGenAI, Type } from '@google/genai';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './_auth.js';
 import { getGeminiApiKey, getGeminiModelCandidates, parseGeminiJson } from './_gemini.js';
+import { getRequestLogContext, logGenerationError, logGenerationInfo } from './_log.js';
 
 function getNarrativePersonInstruction(value: unknown) {
   const key = String(value || 'third');
@@ -150,10 +151,11 @@ function normalizeBlueprint(raw: any) {
   };
 }
 
-async function generateBlueprintWithFallback(ai: GoogleGenAI, prompt: string) {
+async function generateBlueprintWithFallback(ai: GoogleGenAI, prompt: string, logContext: { flow: string; requestId: string }) {
   let lastError: unknown = null;
   for (const model of getGeminiModelCandidates()) {
     try {
+      logGenerationInfo(logContext, 'model-start', { model });
       const response = await ai.models.generateContent({
         model,
         contents: prompt,
@@ -162,10 +164,17 @@ async function generateBlueprintWithFallback(ai: GoogleGenAI, prompt: string) {
           responseSchema: blueprintSchema,
         },
       });
-      return normalizeBlueprint(parseGeminiJson(response.text));
+      const data = normalizeBlueprint(parseGeminiJson(response.text));
+      logGenerationInfo(logContext, 'model-success', {
+        model,
+        chapters: data.chapters.length,
+        branches: data.branches.length,
+        endings: data.endings.length,
+      });
+      return data;
     } catch (error) {
       lastError = error;
-      console.error(`Blueprint generation failed with ${model}:`, error);
+      logGenerationError(logContext, 'model-failed', error, { model });
     }
   }
 
@@ -173,6 +182,7 @@ async function generateBlueprintWithFallback(ai: GoogleGenAI, prompt: string) {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const logContext = getRequestLogContext(req, 'generate-blueprint');
   if (req.method !== 'POST') {
     return sendMethodNotAllowed(res);
   }
@@ -182,6 +192,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!user) return;
 
     const { selectedThemes, customOutline, targetWordCount, narrativePerson } = req.body || {};
+    logGenerationInfo(logContext, 'request', {
+      uid: user.uid,
+      themeCount: Array.isArray(selectedThemes) ? selectedThemes.length : 0,
+      hasOutline: Boolean(String(customOutline || '').trim()),
+      targetWordCount,
+      narrativePerson,
+    });
 
     if (!Array.isArray(selectedThemes) && !customOutline) {
       return res.status(400).json({ error: '必须选择至少一个主题或提供大纲' });
@@ -214,9 +231,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
 请严格按 JSON 输出，不要包含元数据。字数参考值：${safeTargetWordCount}。`;
 
-    const data = await generateBlueprintWithFallback(ai, prompt);
+    const data = await generateBlueprintWithFallback(ai, prompt, logContext);
+    logGenerationInfo(logContext, 'success', { title: data.title });
     return res.status(200).json(data);
   } catch (error) {
+    logGenerationError(logContext, 'failed', error);
     const message = error instanceof Error ? error.message : String(error);
     if (message.includes('Missing valid Gemini API key.') || message.includes('API key not valid') || message.includes('API_KEY_INVALID')) {
       return res.status(503).json({ error: 'AI 服务配置未完成，请稍后再试。', code: 'AI_CONFIG_MISSING' });
