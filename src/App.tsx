@@ -2727,7 +2727,7 @@ export default function App() {
       setGameState('PLAYING');
     } catch (error) {
       console.error(error);
-      showError('生成失败，请检查网络或稍后重试。');
+      showError(error instanceof Error && error.message ? error.message : '生成失败，请检查网络或稍后重试。');
       setGameState('THEME_SELECTION');
     } finally {
       clearInterval(progressInterval);

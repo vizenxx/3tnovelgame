@@ -1,7 +1,7 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './_auth.js';
-import { getGeminiApiKey } from './_gemini.js';
+import { getGeminiApiKey, getGeminiModelCandidates, parseGeminiJson } from './_gemini.js';
 
 function getNarrativePersonInstruction(value: unknown) {
   const key = String(value || 'third');
@@ -84,6 +84,94 @@ const blueprintSchema = {
   required: ['title', 'main_axis', 'left_mainline_default', 'right_mainline_default', 'characters', 'chapters', 'endings', 'branches'],
 };
 
+function normalizeBlueprint(raw: any) {
+  if (!raw || typeof raw !== 'object') {
+    throw new Error('AI_RESPONSE_INVALID: blueprint response is not an object.');
+  }
+
+  const characters = Array.isArray(raw.characters)
+    ? raw.characters.slice(0, 5).map((character: any, index: number) => ({
+        id: String(character?.id || `c${index + 1}`).trim() || `c${index + 1}`,
+        name: String(character?.name || `角色${index + 1}`).trim(),
+        desc: String(character?.desc || '尚待命运揭示的关键人物').trim(),
+      })).filter((character: any) => character.name)
+    : [];
+
+  const chapters = Array.isArray(raw.chapters)
+    ? raw.chapters.slice(0, 7).map((chapter: any, index: number) => ({
+        chapter_num: Math.min(7, Math.max(1, Number(chapter?.chapter_num) || index + 1)),
+        title: String(chapter?.title || `第${index + 1}章`).trim(),
+        summary: String(chapter?.summary || '命运仍在雾中等待成形。').trim(),
+        present_characters: Array.isArray(chapter?.present_characters)
+          ? chapter.present_characters.map((id: any) => String(id)).filter(Boolean)
+          : characters.map((character: any) => character.id).slice(0, 3),
+      }))
+    : [];
+
+  const endings = Array.isArray(raw.endings)
+    ? raw.endings.slice(0, 3).map((ending: any, index: number) => ({
+        type: ['good', 'normal', 'bad'].includes(String(ending?.type)) ? String(ending.type) : ['normal', 'good', 'bad'][index] || 'normal',
+        text: String(ending?.text || '命运在终章留下尚未命名的回声。').trim(),
+      }))
+    : [];
+
+  const branches = Array.isArray(raw.branches)
+    ? raw.branches.slice(0, 10).map((branch: any, index: number) => ({
+        id: String(branch?.id || `b_${index + 1}`).trim(),
+        name: String(branch?.name || characters[index % Math.max(1, characters.length)]?.name || `角色${index + 1}`).trim(),
+        score: Math.min(5, Math.max(1, Number(branch?.score) || 1)),
+        side: String(branch?.side) === 'right' ? 'right' : 'left',
+        condition_char: String(branch?.condition_char || characters[index % Math.max(1, characters.length)]?.id || 'c1'),
+        condition_action: String(branch?.condition_action) === 'curse' ? 'curse' : 'bless',
+        condition_chapter: Math.min(6, Math.max(2, Number(branch?.condition_chapter) || 2)),
+        desc: String(branch?.desc || '一次干涉会令潜藏的命运分歧浮现。').trim(),
+        is_hidden: Boolean(branch?.is_hidden),
+        hint: String(branch?.hint || '命运有细微回声').trim(),
+      }))
+    : [];
+
+  if (!String(raw.title || '').trim() || !String(raw.main_axis || '').trim()) {
+    throw new Error('AI_RESPONSE_INVALID: blueprint missed title or main_axis.');
+  }
+  if (characters.length === 0 || chapters.length === 0 || endings.length === 0 || branches.length === 0) {
+    throw new Error('AI_RESPONSE_INVALID: blueprint missed required arrays.');
+  }
+
+  return {
+    ...raw,
+    title: String(raw.title).trim(),
+    main_axis: String(raw.main_axis).trim(),
+    left_mainline_default: Math.min(100, Math.max(0, Number(raw.left_mainline_default) || 40)),
+    right_mainline_default: Math.min(100, Math.max(0, Number(raw.right_mainline_default) || 40)),
+    characters,
+    chapters,
+    endings,
+    branches,
+  };
+}
+
+async function generateBlueprintWithFallback(ai: GoogleGenAI, prompt: string) {
+  let lastError: unknown = null;
+  for (const model of getGeminiModelCandidates()) {
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: blueprintSchema,
+        },
+      });
+      return normalizeBlueprint(parseGeminiJson(response.text));
+    } catch (error) {
+      lastError = error;
+      console.error(`Blueprint generation failed with ${model}:`, error);
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error('AI_GENERATION_FAILED: Gemini blueprint generation failed.');
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return sendMethodNotAllowed(res);
@@ -126,17 +214,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
 请严格按 JSON 输出，不要包含元数据。字数参考值：${safeTargetWordCount}。`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.1-flash-lite-preview',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: blueprintSchema,
-      },
-    });
-
-    return res.status(200).json(JSON.parse(response.text || '{}'));
+    const data = await generateBlueprintWithFallback(ai, prompt);
+    return res.status(200).json(data);
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('Missing valid Gemini API key.') || message.includes('API key not valid') || message.includes('API_KEY_INVALID')) {
+      return res.status(503).json({ error: 'AI 服务配置未完成，请稍后再试。', code: 'AI_CONFIG_MISSING' });
+    }
+    if (message.includes('AI_RESPONSE_INVALID') || message.includes('JSON')) {
+      console.error('生成蓝图失败', error);
+      return res.status(502).json({ error: 'AI 返回的蓝图格式不完整，请重新生成一次。', code: 'AI_RESPONSE_INVALID' });
+    }
     return sendInternalError(res, '生成蓝图失败', error);
   }
 }
