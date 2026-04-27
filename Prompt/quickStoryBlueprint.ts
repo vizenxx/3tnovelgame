@@ -15,7 +15,7 @@ export function buildQuickStoryBlueprintPrompt(args: {
 
 要求（极度重要）：
 1. 由于性能限制，严禁在 chapters 中生成章节全文。
-2. 每一章必须提供一个 summary（简短情节大纲，60-100字）。
+2. 每一章必须提供一个 summary（简短情节大纲，60-80字）。
 3. 每一章的情节必须对上下章节有适当联系且重点不重复。
 4. 每一章必须提供一个 title（6-12字），与该章大纲一致。
 5. 设定 3-5 个角色，ID 必须为 c1, c2 ...
