@@ -2,6 +2,7 @@ import { GoogleGenAI, Type } from '@google/genai';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './_auth.js';
 import { getGeminiApiKey } from './_gemini.js';
+import { buildCanonicalWorldStatePrompt, buildDeltaWorldStatePrompt } from '../Prompt/storyStateDigest.js';
 
 const canonicalSchema = {
   type: Type.OBJECT,
@@ -150,28 +151,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const styleAnchorFallback = String((chapters || []).find((chapter: any) => chapter.chapter_num === 1)?.text || '').substring(0, 150);
 
-      const prompt = `你是一个互动小说故事解析专家。你的任务是从故事初版全文中，提取“不可违背的世界状态基准”(canonicalWorldState)。
-
-故事主轴：${blueprint?.main_axis || '（未提供）'}
-角色列表：${(blueprint?.characters || []).map((character: any) => `${character.id}:${character.name}（${character.desc}）`).join('; ')}
-
-初版章节内容：
-${chaptersText}
-
-初版结局原型：
-${endingsText || '（未提供）'}
-
-支线事件：
-${branchesText || '（未提供）'}
-
-规则：
-1. 人物只记录永久特质，不记录可变状态。
-2. 物件只记录对情节有明确意义的物件。
-3. 场景只记录多次出现或有决定性作用的场景。
-4. 核心规则只记录已发生且不可逆的事实。
-5. 禁止推断，所有内容必须有原文依据。
-
-请严格按 JSON 输出。`;
+      const prompt = buildCanonicalWorldStatePrompt({
+        blueprint,
+        fullText: [
+          `初版章节内容：\n${chaptersText}`,
+          `初版结局原型：\n${endingsText || '（未提供）'}`,
+          `支线事件：\n${branchesText || '（未提供）'}`,
+        ].join('\n\n'),
+      });
 
       const response = await ai.models.generateContent({
         model: 'gemini-3.1-flash-lite-preview',
@@ -195,30 +182,14 @@ ${branchesText || '（未提供）'}
         return res.status(400).json({ error: 'delta 模式缺少 canonicalWorldState 或 rewrittenChapter。' });
       }
 
-      const evAbs = Math.abs(Number(endingValue) || 0);
-      const deviationHint = evAbs < 5 ? '轻微涟漪' : evAbs < 15 ? '可感知偏移' : '方向性改变';
-
-      const prompt = `你是一个互动小说故事状态分析师。玩家对第${rewrittenChapter.chapter_num}章施加了【${interventionAction === 'bless' ? '庇佑' : '磨难'}】，章节内容已被重写。
-
-故事初版世界状态基准：
-人物：${JSON.stringify(canonicalWorldState.characters || [])}
-物件：${JSON.stringify(canonicalWorldState.objects || [])}
-核心规则：${(canonicalWorldState.core_rules || []).join('；')}
-
-重写后的第${rewrittenChapter.chapter_num}章内容：
-${String(rewrittenChapter.text || '').substring(0, 800)}
-
-命运偏移强度：${evAbs}（${deviationHint}）
-
-任务：对比 canonicalWorldState，找出重写后章节中实际发生偏移的部分。
-
-规则：
-1. 只记录与 canonical 明确不同的内容。
-2. 没有偏移的数组必须返回 []。
-3. 禁止推断，只记录文本中明确体现的变化。
-4. deviation_level 按偏移数量和严重性判断为 low / medium / high。
-
-请严格按 JSON 输出。`;
+      const prompt = buildDeltaWorldStatePrompt({
+        canonicalWorldState,
+        rewrittenChapter: {
+          ...rewrittenChapter,
+          text: String(rewrittenChapter.text || '').substring(0, 800),
+        },
+        interventionAction,
+      });
 
       const response = await ai.models.generateContent({
         model: 'gemini-3.1-flash-lite-preview',

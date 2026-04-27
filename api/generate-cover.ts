@@ -3,6 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './_auth.js';
 import { getGeminiApiKey } from './_gemini.js';
 import { getRequestLogContext, logGenerationError, logGenerationInfo } from './_log.js';
+import { buildCoverImagePrompt } from '../Prompt/coverImage.js';
 
 const DEFAULT_IMAGE_MODEL = 'gemini-3.1-flash-image-preview';
 const MAX_IMAGE_DATA_CHARS = 3_600_000;
@@ -136,14 +137,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: '请先输入更具体的封面生成提示。' });
     }
 
-    const finalPrompt = [
-      '为互动小说生成一张 1:1 方形作品封面，1024x1024，适合移动端作品卡展示。',
-      '画面需要有强烈叙事氛围、明确视觉焦点、电影感构图，不要出现水印、二维码、UI 边框或多余文字。',
-      title ? `作品名：${String(title).slice(0, 80)}` : '',
-      mainAxis ? `故事主轴：${String(mainAxis).slice(0, 600)}` : '',
-      Array.isArray(tags) && tags.length > 0 ? `标签：${tags.slice(0, 6).join('、')}` : '',
-      `作者提示：${cleanPrompt}`,
-    ].filter(Boolean).join('\n');
+    const finalPrompt = buildCoverImagePrompt({
+      cleanPrompt,
+      title,
+      mainAxis,
+      tags,
+    });
 
     const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
     const image = await generateCoverImage(ai, finalPrompt);

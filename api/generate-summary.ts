@@ -3,6 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './_auth.js';
 import { getGeminiApiKey, parseGeminiJson } from './_gemini.js';
 import { getRequestLogContext, logGenerationError, logGenerationInfo } from './_log.js';
+import { buildFinalSummaryPrompt } from '../Prompt/finalSummary.js';
 
 const summarySchema = {
   type: Type.OBJECT,
@@ -35,25 +36,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const safeChapters = chapters.slice(0, 7);
     const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
 
-    const prompt = `你是一个互动小说编年史家。
-小说主轴：${blueprint.main_axis}
-章节历史：${safeChapters.map((chapter: any) => `
---- 第${chapter.chapter_num}章：${chapter.title} ---
-情节摘要：${chapter.summary}
-详细文本：${String(chapter.text || '').substring(0, 500)}...
-进展结果：${chapter.unlocked_branch ? `解锁支线 ${chapter.unlocked_branch}` : '主线推进'}
-`).join('\n\n')}
-
-最终命运天平：${Number(endingValue) || 0}
-
-任务：为这段史诗般的冒险撰写一句如诗般的结语。
-
-要求：
-1. 只写一句话或一句短语。
-2. 长度控制在 15-30 字左右。
-3. 必须能体现秩序、混沌或平衡的最终归宿。
-
-请严格按 JSON 输出，不要包含元数据。`;
+    const prompt = buildFinalSummaryPrompt({ blueprint, safeChapters, endingValue });
 
     const response = await ai.models.generateContent({
       model: 'gemini-3.1-flash-lite-preview',

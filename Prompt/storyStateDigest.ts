@@ -1,0 +1,35 @@
+export function buildCanonicalWorldStatePrompt(args: { blueprint?: any; fullText: string }) {
+  return `你是一个互动小说故事解析专家。你的任务是从故事初版全文中，提取“不可违背的世界状态基准”(canonicalWorldState)。
+
+故事主轴：${args.blueprint?.main_axis || '（未提供）'}
+角色列表：${(args.blueprint?.characters || []).map((character: any) => `${character.id}:${character.name}（${character.desc}）`).join('; ')}
+
+故事全文：
+${args.fullText}
+
+请只提取已经在文本中明确建立的事实，不要脑补。`;
+}
+
+export function buildDeltaWorldStatePrompt(args: {
+  canonicalWorldState: any;
+  rewrittenChapter: any;
+  interventionAction: 'bless' | 'curse';
+}) {
+  return `你是一个互动小说故事状态分析师。玩家对第${args.rewrittenChapter.chapter_num}章施加了【${args.interventionAction === 'bless' ? '庇佑' : '磨难'}】，章节内容已被重写。
+
+故事初版世界状态基准：
+人物：${JSON.stringify(args.canonicalWorldState.characters || [])}
+物件：${JSON.stringify(args.canonicalWorldState.objects || [])}
+场景：${JSON.stringify(args.canonicalWorldState.scenes || [])}
+核心规则：${(args.canonicalWorldState.core_rules || []).join('；')}
+
+重写后章节：
+${args.rewrittenChapter.text}
+
+任务：对比 canonicalWorldState，找出重写后章节中实际发生偏移的部分。
+
+规则：
+1. 只记录与 canonical 明确不同的内容。
+2. 不要记录纯粹的措辞变化。
+3. 偏移描述要短而具体。`;
+}

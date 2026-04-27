@@ -3,17 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './_auth.js';
 import { getGeminiApiKey, getGeminiModelCandidates, parseGeminiJson } from './_gemini.js';
 import { getRequestLogContext, logGenerationError, logGenerationInfo } from './_log.js';
-
-function getNarrativePersonInstruction(value: unknown) {
-  const key = String(value || 'third');
-  if (key === 'first') {
-    return '第一人称硬约束：全文必须以“我/我们”的叙事视角书写，所有心理、见闻与行动都必须从该叙述者视角自然展开；严禁在本章或后续章节突然切换成第三人称旁白。';
-  }
-  if (key === 'second') {
-    return '第二人称硬约束：全文必须以“你”的沉浸式叙事视角书写；严禁在本章或后续章节突然切换成第一人称或第三人称。';
-  }
-  return '第三人称硬约束：全文必须以“他/她/他们/角色姓名”的第三人称叙事视角书写；严禁突然切换成“我”的第一人称自述。';
-}
+import { buildChapterContinuationPrompt, buildChapterWorldStatePrompt } from '../Prompt/chapterContinuation.js';
 
 function ensureParagraphing(raw: string, opts?: { minParas?: number; maxParas?: number }) {
   const minParas = opts?.minParas ?? 6;
@@ -175,49 +165,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const endingProto = blueprint?.authorAssets?.endingPrototypes;
     const prevChapterText = allChapters.find((chapter: any) => chapter.chapter_num === safeTargetChapterNum - 1)?.text || '';
 
-    let worldStatePrompt = '';
-    if (worldState && worldState.canonical) {
-      worldStatePrompt = `故事基准（硬约束，不可违背）：
-人物：${JSON.stringify(worldState.canonical.characters || [])}
-物件：${JSON.stringify(worldState.canonical.objects || [])}
-场景：${JSON.stringify(worldState.canonical.scenes || [])}
-核心规则：${(worldState.canonical.core_rules || []).join('；')}
-
-干涉偏移记录（软参考，当前权重 ${Math.round((worldState.deltaWeight || 0) * 100)}%）：
-${(worldState.deltas || []).map((delta: any) => delta.characters_changed?.map((item: any) => item.delta_description).join('；')).filter(Boolean).join('\n') || '无显著偏移。'}
-
-结尾方向引导：${worldState.endingDirection || 'neutral'}
-${worldState.endingDirection && worldState.endingDirection !== 'neutral' && endingProto ? `结局原型参考：\n${String(endingProto[worldState.endingDirection] || '').substring(0, 400)}` : ''}
-
-直接前文（第 ${safeTargetChapterNum - 1} 章，文风锚点）：
-${String(prevChapterText).substring(0, 400)}`;
-    } else {
-      worldStatePrompt = `历史剧情回忆：${historyChapters.map((chapter: any) => `[${chapter.chapter_num}] ${String(chapter.text || '').substring(0, 200)}...`).join('\n')}`;
-    }
-
-    const prompt = `你是一个互动小说引擎的织梦者。
-小说大纲/主轴：${blueprint.main_axis}
-叙事人称：${getNarrativePersonInstruction(narrativePerson || blueprint.narrative_person)}
-角色列表：${blueprint.characters.map((character: any) => `${character.id}:${character.name}(${character.desc})`).join('; ')}
-${worldStatePrompt}
-当前章节大纲指引：${outlineSummary}
-${futureOutlines ? `后续章节走向备忘：\n${futureOutlines}` : ''}
-${defaultText ? `作者默认主线原文（第${safeTargetChapterNum}章，作为优先参考原型）：\n${String(defaultText).substring(0, 1200)}` : ''}
-${(!worldState || !worldState.canonical) && endingProto ? `作者结局原型：\n- default: ${String(endingProto.default || '').substring(0, 400)}\n- left: ${String(endingProto.left || '').substring(0, 400)}\n- right: ${String(endingProto.right || '').substring(0, 400)}` : ''}
-
-任务：续写第 ${safeTargetChapterNum} 章全文内容。
-
-要求（必须绝对服从）：
-1. 必须顺接前文剧情，延续文风。
-2. 章节号必须设置为 ${safeTargetChapterNum}。
-3. 每章字数在 ${safeTargetWordCount} 左右。
-4. 全文必须拆成 6-10 段，每段 2-4 句，段落之间用两个换行符。段落之间要自然衔接，避免跳跃叙述。
-5. 必须严格遵守小说大纲/主轴和各角色的性格设定，人物互动必须符合前期建立的逻辑关系。
-6. 必须与“后续章节走向备忘”中的主线发展保持严密的铺垫和连贯性，不能在当前章引入与后续大纲冲突的设定。
-7. 如果有干涉偏移记录或支线触发设定，必须在文风和剧情逻辑上隐晦地体现这些涟漪效应。
-8. 必须从本章开头到结尾严格保持指定叙事人称，不得段落间混用第一/第二/第三人称，也不得用“镜头切换”当作理由改变叙述视角。
-
-请严格按照 JSON Schema 输出，不要包含图片 Prompt 或元注释。`;
+    const worldStatePrompt = buildChapterWorldStatePrompt({
+      worldState,
+      endingProto,
+      prevChapterText,
+      historyChapters,
+      targetChapterNum: safeTargetChapterNum,
+    });
+    const prompt = buildChapterContinuationPrompt({
+      blueprint,
+      narrativePerson,
+      worldStatePrompt,
+      outlineSummary,
+      futureOutlines,
+      defaultText,
+      endingProto,
+      targetChapterNum: safeTargetChapterNum,
+      targetWordCount: safeTargetWordCount,
+    });
 
     const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
     const data = await generateChapterWithFallback(ai, prompt, safeTargetChapterNum, logContext);
