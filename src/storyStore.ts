@@ -9,13 +9,16 @@ import {
   limit,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   updateDoc,
   where,
   writeBatch,
+  increment,
 } from 'firebase/firestore';
 import type { Firestore } from 'firebase/firestore';
+import { auth } from './firebase';
 import type {
   StoryBranchDoc,
   StoryChapterDoc,
@@ -56,6 +59,27 @@ const canReadStoryRecord = (meta: StoryMeta, currentUserId?: string) => (
   meta.visibility === 'unlisted' ||
   (!!currentUserId && meta.authorId === currentUserId)
 );
+
+const useSupabaseStories = () => import.meta.env.VITE_STORY_BACKEND === 'supabase';
+
+async function storyApi<T = any>(action: string, payload: Record<string, any> = {}, options: { auth?: boolean } = {}) {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const currentUser = auth?.currentUser;
+  if (options.auth || currentUser) {
+    const token = await currentUser?.getIdToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+  }
+  const response = await fetch('/api/story-store', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ action, ...payload }),
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(data?.error || `story-store ${action} failed`);
+  }
+  return data as T;
+}
 
 export type StoryListItem = {
   id: string;
@@ -107,6 +131,9 @@ export type SharedStoryRecord = {
 };
 
 export async function listPublicStories(db: Firestore, pageSize = 20) {
+  if (useSupabaseStories()) {
+    return storyApi<StoryListItem[]>('listPublicStories', { pageSize });
+  }
   const q = query(
     collection(db, 'stories'),
     where('visibility', '==', 'public'),
@@ -117,7 +144,149 @@ export async function listPublicStories(db: Firestore, pageSize = 20) {
   return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as StoryListItem[];
 }
 
+export async function getUserProgress(db: Firestore, userId: string, storyId: string) {
+  if (useSupabaseStories()) {
+    return storyApi<any | null>('getUserProgress', { storyId }, { auth: true });
+  }
+  const progressSnap = await getDoc(doc(db, 'users', userId, 'progress', storyId));
+  return progressSnap.exists() ? progressSnap.data() : null;
+}
+
+export async function saveUserProgress(db: Firestore, userId: string, storyId: string, payload: Record<string, any>) {
+  if (useSupabaseStories()) {
+    return storyApi('saveUserProgress', { storyId, payload }, { auth: true });
+  }
+  await setDoc(doc(db, 'users', userId, 'progress', storyId), {
+    ...payload,
+    userId,
+    storyId,
+    savedAt: serverTimestamp(),
+  });
+}
+
+export async function getAppSettings(db: Firestore) {
+  if (useSupabaseStories()) {
+    return storyApi<Record<string, any>>('getAppSettings');
+  }
+  const snapshot = await getDoc(doc(db, 'appSettings', 'global'));
+  return snapshot.exists() ? snapshot.data() : {};
+}
+
+export async function saveAppSettings(db: Firestore, userId: string, settings: Record<string, any>, isAdmin: boolean) {
+  if (useSupabaseStories()) {
+    return storyApi('saveAppSettings', { settings, isAdmin }, { auth: true });
+  }
+  await setDoc(doc(db, 'appSettings', 'global'), {
+    ...settings,
+    updatedAt: new Date().toISOString(),
+    updatedBy: userId,
+  }, { merge: true });
+}
+
+export async function reserveCoverGenerationUsage(db: Firestore, userId: string, dateKey: string, dailyLimit = 5) {
+  if (useSupabaseStories()) {
+    return storyApi<number>('reserveCoverUsage', { dateKey }, { auth: true });
+  }
+  const usageRef = doc(db, 'users', userId, 'coverGenerationUsage', dateKey);
+  return runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(usageRef);
+    const current = Number(snap.data()?.count || 0);
+    if (current >= dailyLimit) {
+      throw new Error('ä»Šå¤©çš„ AI å°é¢ç”Ÿæˆæ¬¡æ•°å·²ç»ç”¨å®Œã€‚');
+    }
+    const nextCount = current + 1;
+    transaction.set(usageRef, {
+      count: nextCount,
+      date: dateKey,
+      updatedAt: new Date().toISOString(),
+    }, { merge: true });
+    return Math.max(0, dailyLimit - nextCount);
+  });
+}
+
+export async function refundCoverGenerationUsage(db: Firestore, userId: string, dateKey: string) {
+  if (useSupabaseStories()) {
+    return storyApi('refundCoverUsage', { dateKey }, { auth: true });
+  }
+  const usageRef = doc(db, 'users', userId, 'coverGenerationUsage', dateKey);
+  await runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(usageRef);
+    const current = Number(snap.data()?.count || 0);
+    transaction.set(usageRef, {
+      count: Math.max(0, current - 1),
+      date: dateKey,
+      updatedAt: new Date().toISOString(),
+    }, { merge: true });
+  });
+}
+
+export async function incrementStoryMetric(db: Firestore, storyId: string, field: 'favoriteCount' | 'reportCount' | 'interventionCount') {
+  if (useSupabaseStories()) {
+    return storyApi('incrementStoryMetric', { storyId, field }, { auth: true });
+  }
+  await updateDoc(doc(db, 'stories', storyId), { [field]: increment(1) } as any);
+}
+
+export async function likeStory(db: Firestore, storyId: string, userId: string) {
+  if (useSupabaseStories()) {
+    return storyApi<{ alreadyExists: boolean }>('likeStory', { storyId }, { auth: true });
+  }
+  const storyRef = doc(db, 'stories', storyId);
+  const likeRef = doc(db, 'stories', storyId, 'likes', userId);
+  let alreadyExists = false;
+  await runTransaction(db as any, async (transaction: any) => {
+    const likeSnap = await transaction.get(likeRef);
+    if (likeSnap.exists()) {
+      alreadyExists = true;
+      return;
+    }
+    transaction.set(likeRef, {
+      userId,
+      createdAt: serverTimestamp(),
+      createdAtIso: new Date().toISOString(),
+    });
+    transaction.update(storyRef, { likeCount: increment(1) });
+  });
+  return { alreadyExists };
+}
+
+export async function favoriteStory(db: Firestore, storyId: string, userId: string) {
+  if (useSupabaseStories()) {
+    return storyApi<{ alreadyExists: boolean }>('favoriteStory', { storyId }, { auth: true });
+  }
+  const storyRef = doc(db, 'stories', storyId);
+  const favoriteRef = doc(db, 'stories', storyId, 'favorites', userId);
+  let alreadyExists = false;
+  await runTransaction(db as any, async (transaction: any) => {
+    const favoriteSnap = await transaction.get(favoriteRef);
+    if (favoriteSnap.exists()) {
+      alreadyExists = true;
+      return;
+    }
+    transaction.set(favoriteRef, {
+      userId,
+      createdAt: serverTimestamp(),
+      createdAtIso: new Date().toISOString(),
+    });
+    transaction.update(storyRef, { favoriteCount: increment(1) });
+  });
+  return { alreadyExists };
+}
+
+export async function reportStory(db: Firestore, storyId: string, userId: string, reason = '') {
+  if (useSupabaseStories()) {
+    return storyApi<{ alreadyExists: boolean }>('reportStory', { storyId, reason }, { auth: true });
+  }
+  await updateDoc(doc(db, 'stories', storyId), {
+    reportCount: increment(1),
+  } as any);
+  return { alreadyExists: false };
+}
+
 export async function listMyStories(db: Firestore, authorId: string, pageSize = 50) {
+  if (useSupabaseStories()) {
+    return storyApi<StoryListItem[]>('listMyStories', { pageSize }, { auth: true });
+  }
   const q = query(
     collection(db, 'stories'),
     where('authorId', '==', authorId),
@@ -129,6 +298,9 @@ export async function listMyStories(db: Firestore, authorId: string, pageSize = 
 }
 
 export async function listMySharedStories(db: Firestore, authorId: string, pageSize = 50) {
+  if (useSupabaseStories()) {
+    return storyApi<SharedStoryRecord[]>('listMySharedStories', { pageSize }, { auth: true });
+  }
   const q = query(
     collection(db, 'sharedStories'),
     where('authorId', '==', authorId),
@@ -146,6 +318,9 @@ export async function listMySharedStories(db: Firestore, authorId: string, pageS
 }
 
 export async function updateAuthorNameEverywhere(db: Firestore, authorId: string, authorName: string) {
+  if (useSupabaseStories()) {
+    return storyApi('updateAuthorNameEverywhere', { authorName }, { auth: true });
+  }
   const [stories, sharedStories] = await Promise.all([
     listMyStories(db, authorId, 100),
     listMySharedStories(db, authorId, 100),
@@ -171,6 +346,9 @@ export async function updateAuthorNameEverywhere(db: Firestore, authorId: string
 }
 
 export async function createEmptyStory(db: Firestore, args: { authorId: string; authorName?: string; title?: string; tags?: string[] }) {
+  if (useSupabaseStories()) {
+    return storyApi<string>('createEmptyStory', { args }, { auth: true });
+  }
   const now = new Date().toISOString();
   const meta: StoryMeta = {
     title: args.title || '未命名作品',
@@ -231,12 +409,18 @@ export async function createEmptyStory(db: Firestore, args: { authorId: string; 
 }
 
 export async function getStoryMeta(db: Firestore, storyId: string) {
+  if (useSupabaseStories()) {
+    return storyApi<(StoryListItem & StoryMeta) | null>('getStoryMeta', { storyId });
+  }
   const snap = await getDoc(doc(db, 'stories', storyId));
   if (!snap.exists()) return null;
   return { id: snap.id, ...(snap.data() as any) } as StoryListItem & StoryMeta;
 }
 
 export async function getStoryCartridge(db: Firestore, storyId: string) {
+  if (useSupabaseStories()) {
+    return storyApi('getStoryCartridge', { storyId });
+  }
   const metaSnap = await getDoc(doc(db, 'stories', storyId));
   if (!metaSnap.exists()) return null;
   const meta = metaSnap.data() as any as StoryMeta;
@@ -254,6 +438,9 @@ export async function getStoryCartridge(db: Firestore, storyId: string) {
 }
 
 export async function getSharedStoryRecord(db: Firestore, storyId: string, currentUserId?: string) {
+  if (useSupabaseStories()) {
+    return storyApi('getSharedStoryRecord', { storyId });
+  }
   const sharedSnap = await getDoc(doc(db, 'sharedStories', storyId));
   if (sharedSnap.exists()) {
     const data = sharedSnap.data() as SharedStoryRecord;
@@ -367,6 +554,9 @@ export async function createSharedStoryRecord(db: Firestore, args: {
   coverUrl?: string;
   visibility?: 'public' | 'private';
 }) {
+  if (useSupabaseStories()) {
+    return storyApi<string>('createSharedStoryRecord', { args }, { auth: true });
+  }
   const now = new Date().toISOString();
   const payload: Omit<SharedStoryRecord, 'id'> = {
     title: args.title,
@@ -402,6 +592,9 @@ export async function createSharedStoryRecord(db: Firestore, args: {
 }
 
 export async function deleteSharedStoryRecord(db: Firestore, sharedStoryId: string, authorId: string) {
+  if (useSupabaseStories()) {
+    return storyApi('deleteSharedStoryRecord', { sharedStoryId }, { auth: true });
+  }
   const ref = doc(db, 'sharedStories', sharedStoryId);
   const snap = await getDoc(ref);
   if (!snap.exists()) return;
@@ -417,6 +610,9 @@ export async function updateSharedStoryVisibility(
   sharedStoryId: string,
   args: { authorId: string; visibility: 'public' | 'private' }
 ) {
+  if (useSupabaseStories()) {
+    return storyApi('updateSharedStoryVisibility', { sharedStoryId, visibility: args.visibility }, { auth: true });
+  }
   await updateDoc(doc(db, 'sharedStories', sharedStoryId), {
     authorId: args.authorId,
     visibility: args.visibility,
@@ -426,6 +622,9 @@ export async function updateSharedStoryVisibility(
 }
 
 export async function adaptBlueprintToStory(db: Firestore, args: { authorId: string; authorName?: string; blueprint: any; chapters: any[]; conclusionText?: string; tags?: string[] }) {
+  if (useSupabaseStories()) {
+    return storyApi<string>('adaptBlueprintToStory', { args }, { auth: true });
+  }
   const now = new Date().toISOString();
   const bp = args.blueprint;
 
@@ -530,6 +729,9 @@ export async function adaptBlueprintToStory(db: Firestore, args: { authorId: str
 }
 
 export async function saveStoryMeta(db: Firestore, storyId: string, patch: Partial<StoryMeta>) {
+  if (useSupabaseStories()) {
+    return storyApi('saveStoryMeta', { storyId, patch }, { auth: true });
+  }
   await updateDoc(doc(db, 'stories', storyId), {
     ...patch,
     updatedAt: new Date().toISOString(),
@@ -538,6 +740,9 @@ export async function saveStoryMeta(db: Firestore, storyId: string, patch: Parti
 }
 
 export async function saveStoryChapter(db: Firestore, storyId: string, chapterNum: number, patch: Partial<StoryChapterDoc>) {
+  if (useSupabaseStories()) {
+    return storyApi('saveStoryChapter', { storyId, chapterNum, patch }, { auth: true });
+  }
   await setDoc(doc(db, 'stories', storyId, 'chapters', String(chapterNum)), {
     ...patch,
     chapter_num: chapterNum,
@@ -546,6 +751,9 @@ export async function saveStoryChapter(db: Firestore, storyId: string, chapterNu
 }
 
 export async function saveStoryEnding(db: Firestore, storyId: string, id: 'default' | 'left' | 'right', patch: Partial<StoryEndingDoc>) {
+  if (useSupabaseStories()) {
+    return storyApi('saveStoryEnding', { storyId, endingId: id, patch }, { auth: true });
+  }
   await setDoc(doc(db, 'stories', storyId, 'endings', id), { id, chapter_num: 7, title: patch.title || '', ...patch } as any, { merge: true });
   await updateDoc(doc(db, 'stories', storyId), { updatedAt: new Date().toISOString(), updatedAtServer: serverTimestamp() } as any);
 }
@@ -555,6 +763,9 @@ export async function saveStoryMainlineBundle(db: Firestore, storyId: string, ar
   chapters: Array<Pick<StoryChapterDoc, 'chapter_num' | 'title' | 'summary' | 'present_characters' | 'text'>>;
   endings: Array<Pick<StoryEndingDoc, 'id' | 'title' | 'text'>>;
 }) {
+  if (useSupabaseStories()) {
+    return storyApi('saveStoryMainlineBundle', { storyId, args }, { auth: true });
+  }
   const batch = writeBatch(db);
   batch.update(doc(db, 'stories', storyId), {
     ...args.metaPatch,
@@ -573,11 +784,17 @@ export async function saveStoryMainlineBundle(db: Firestore, storyId: string, ar
 }
 
 export async function upsertStoryBranch(db: Firestore, storyId: string, branchId: string, branch: StoryBranchDoc) {
+  if (useSupabaseStories()) {
+    return storyApi('upsertStoryBranch', { storyId, branchId, branch }, { auth: true });
+  }
   await setDoc(doc(db, 'stories', storyId, 'branches', branchId), branch as any, { merge: true });
   await updateDoc(doc(db, 'stories', storyId), { updatedAt: new Date().toISOString(), updatedAtServer: serverTimestamp() } as any);
 }
 
 export async function createStoryBranch(db: Firestore, storyId: string, branch: Omit<StoryBranchDoc, 'id'>) {
+  if (useSupabaseStories()) {
+    return storyApi<string>('createStoryBranch', { storyId, branch }, { auth: true });
+  }
   const ref = await addDoc(collection(db, 'stories', storyId, 'branches'), { ...branch, id: '' } as any);
   // Persist id field for easier export/compat
   await updateDoc(doc(db, 'stories', storyId, 'branches', ref.id), { id: ref.id } as any);
@@ -586,11 +803,17 @@ export async function createStoryBranch(db: Firestore, storyId: string, branch: 
 }
 
 export async function deleteStoryBranch(db: Firestore, storyId: string, branchId: string) {
+  if (useSupabaseStories()) {
+    return storyApi('deleteStoryBranch', { storyId, branchId }, { auth: true });
+  }
   await deleteDoc(doc(db, 'stories', storyId, 'branches', branchId));
   await updateDoc(doc(db, 'stories', storyId), { updatedAt: new Date().toISOString(), updatedAtServer: serverTimestamp() } as any);
 }
 
 export async function deleteStoryCartridge(db: Firestore, storyId: string) {
+  if (useSupabaseStories()) {
+    return storyApi('deleteStoryCartridge', { storyId }, { auth: true });
+  }
   const batch = writeBatch(db);
   const chaptersSnap = await getDocs(collection(db, 'stories', storyId, 'chapters'));
   chaptersSnap.docs.forEach(d => batch.delete(d.ref));

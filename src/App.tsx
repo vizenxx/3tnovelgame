@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp, Download, Sun, Moon } from 'lucide-react';
 import { auth, db, firebaseInitError } from './firebase';
-import { createEmptyStory, createSharedStoryRecord, adaptBlueprintToStory, createStoryBranch, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, getSharedStoryRecord, getStoryCartridge, listMySharedStories, listMyStories, listPublicStories, saveStoryMainlineBundle, saveStoryMeta, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch } from './storyStore';
+import { createEmptyStory, createSharedStoryRecord, adaptBlueprintToStory, createStoryBranch, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, favoriteStory, getAppSettings, getSharedStoryRecord, getStoryCartridge, getUserProgress, incrementStoryMetric, likeStory, listMySharedStories, listMyStories, listPublicStories, refundCoverGenerationUsage, reportStory, reserveCoverGenerationUsage, saveAppSettings, saveStoryMainlineBundle, saveStoryMeta, saveUserProgress, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch } from './storyStore';
 import { isBranchUnlockedByHistory, tierToScore } from './storyCartridge';
 import { deleteLocalCache, getLocalCache, setLocalCache } from './localCache';
 import { 
@@ -33,7 +33,7 @@ import {
   doc, 
   setDoc, 
   getDoc, 
-  updateDoc, 
+  updateDoc,
   runTransaction,
   increment,
   serverTimestamp
@@ -1216,6 +1216,7 @@ export default function App() {
   const reserveCoverGenerationQuota = async () => {
     if (!db || !user) throw new Error('请先登录后再生成封面。');
     const dateKey = todayUsageKey();
+    return reserveCoverGenerationUsage(db as any, user.uid, dateKey);
     const usageRef = doc(db, 'users', user.uid, 'coverGenerationUsage', dateKey);
     return runTransaction(db, async (transaction) => {
       const snap = await transaction.get(usageRef);
@@ -1236,6 +1237,8 @@ export default function App() {
   const refundCoverGenerationQuota = async () => {
     if (!db || !user) return;
     const dateKey = todayUsageKey();
+    await refundCoverGenerationUsage(db as any, user.uid, dateKey);
+    return;
     const usageRef = doc(db, 'users', user.uid, 'coverGenerationUsage', dateKey);
     await runTransaction(db, async (transaction) => {
       const snap = await transaction.get(usageRef);
@@ -1418,12 +1421,10 @@ export default function App() {
     if (!user || !activeStoryId || !db || !blueprint) return;
     try {
       setAuthoringSaving(true);
-      const progressRef = doc(db, 'users', user.uid, 'progress', activeStoryId);
-      await setDoc(progressRef, {
+      await saveUserProgress(db as any, user.uid, activeStoryId, {
         ...buildCurrentRunSnapshot(),
         userId: user.uid,
         storyId: activeStoryId,
-        savedAt: serverTimestamp(),
       });
       await resetGame();
       setShowLeaveGameModal(false);
@@ -1552,6 +1553,13 @@ export default function App() {
   const storyCartridgeCacheKey = (storyId: string) => `story-cartridge:${cacheScope()}:${storyId}`;
   const sharedStoryCacheKey = (storyId: string) => `shared-story:${cacheScope()}:${storyId}`;
   const activeRunCacheKey = () => `active-run:${cacheScope()}`;
+  const quickGenerationDraftCacheKey = () => `quick-generation-draft:${cacheScope()}`;
+  const quickGenerationSignature = () => JSON.stringify({
+    selectedThemes,
+    customOutline: customOutline.trim(),
+    targetWordCount,
+    narrativePerson,
+  });
 
   const applyStoryListCache = (data: any) => {
     setPublicStories(Array.isArray(data?.pub) ? data.pub : []);
@@ -2112,12 +2120,12 @@ export default function App() {
   useEffect(() => {
     if (!db) return;
     let cancelled = false;
-    getDoc(doc(db, 'appSettings', 'global')).then((snapshot) => {
+    getAppSettings(db as any).then((data) => {
       if (cancelled) return;
-      const data = snapshot.exists() ? snapshot.data() as Partial<AppFeatureSettings> : {};
+      const settings = (data || {}) as Partial<AppFeatureSettings>;
       const nextSettings = {
         ...DEFAULT_FEATURE_SETTINGS,
-        coverGenerationEnabled: Boolean(data.coverGenerationEnabled),
+        coverGenerationEnabled: Boolean(settings.coverGenerationEnabled),
       };
       setFeatureSettings(nextSettings);
       setAdminFeatureDraft(nextSettings);
@@ -2238,8 +2246,7 @@ export default function App() {
     if (!user || !activeStoryId || !blueprint) return;
     try {
       setShowLeaveGameModal(false);
-      const progressRef = doc(db, 'users', user.uid, 'progress', activeStoryId);
-      await setDoc(progressRef, {
+      await saveUserProgress(db as any, user.uid, activeStoryId, {
         userId: user.uid,
         storyId: activeStoryId,
         gameState: 'PLAYING',
@@ -2255,7 +2262,6 @@ export default function App() {
         canonicalWorldState,
         deltaWorldStateByChapter,
         currentChapters: chapters,
-        savedAt: serverTimestamp(),
       });
       await resetGame();
     } catch (e) {
@@ -2583,11 +2589,10 @@ export default function App() {
         throw new Error('story-not-found-or-denied');
       }
       
-      const progressRef = doc(db, 'users', user.uid, 'progress', storyId);
-      const progressSnap = await getDoc(progressRef);
+      const progressData = await getUserProgress(db as any, user.uid, storyId);
       
-      if (progressSnap.exists()) {
-        setPendingProgressToLoad({ id: storyId, data: { ...progressSnap.data(), cartridge } });
+      if (progressData) {
+        setPendingProgressToLoad({ id: storyId, data: { ...progressData, cartridge } });
         return;
       }
       
@@ -2657,17 +2662,28 @@ export default function App() {
     ]);
 
     try {
+      const draftSignature = quickGenerationSignature();
+      const cachedDraft = await getLocalCache<any>(quickGenerationDraftCacheKey());
+      let data = cachedDraft?.value?.signature === draftSignature && cachedDraft.value?.blueprint
+        ? cachedDraft.value.blueprint
+        : null;
+      if (!data) {
       const response = await apiFetch('/api/generate-blueprint', {
         method: 'POST',
         body: JSON.stringify({ selectedThemes, customOutline, targetWordCount, narrativePerson }),
       }, 90000);
       if (!response.ok) throw new Error(await readErrorMessage(response));
-      let data = await response.json();
+      data = await response.json();
+      }
       data.narrative_person = narrativePerson;
       data.chapters = ensureSevenChapterShells(data.chapters || []);
+      await setLocalCache(quickGenerationDraftCacheKey(), { signature: draftSignature, blueprint: data });
 
       const prefetchChapters = [1, 2, 3];
       for (const chapterNum of prefetchChapters) {
+        if (isChapterTextReady((data.chapters || []).find((chapter: any) => chapter.chapter_num === chapterNum))) {
+          continue;
+        }
         setGenerationStatus(`正在具象化世界细节 (${chapterNum}/3)...`);
         setGenerationProgress(72 + chapterNum * 7);
         const chapterResponse = await withRetry(() => apiFetch('/api/generate-next-chapter', {
@@ -2685,6 +2701,7 @@ export default function App() {
         data.chapters = (data.chapters || []).map((chapter: any) => (
           chapter.chapter_num === chapterNum ? { ...chapter, text: chapterData.text || '' } : chapter
         ));
+        await setLocalCache(quickGenerationDraftCacheKey(), { signature: draftSignature, blueprint: data });
       }
 
       data.branches = (data.branches || []).map((branch: any) => ({
@@ -2724,6 +2741,7 @@ export default function App() {
       setInterventionHistory([]);
       setActiveStoryId(null);
       setActiveStoryMeta(null);
+      await deleteLocalCache(quickGenerationDraftCacheKey());
       setGameState('PLAYING');
     } catch (error) {
       console.error(error);
@@ -2798,6 +2816,10 @@ export default function App() {
             ...chapter,
             present_characters: Array.isArray(chapter.present_characters) ? [...chapter.present_characters] : [],
           })) as any);
+          setLocalCache(quickGenerationDraftCacheKey(), {
+            signature: quickGenerationSignature(),
+            blueprint: { ...blueprint, chapters: nextChapters },
+          }).catch(() => {});
           return nextChapters as any;
         });
       } catch (error) {
@@ -3070,11 +3092,7 @@ export default function App() {
       const nextSettings = {
         coverGenerationEnabled: Boolean(adminFeatureDraft.coverGenerationEnabled),
       };
-      await setDoc(doc(db, 'appSettings', 'global'), {
-        ...nextSettings,
-        updatedAt: new Date().toISOString(),
-        updatedBy: user.uid,
-      }, { merge: true });
+      await saveAppSettings(db as any, user.uid, nextSettings, isAdminUser);
       setFeatureSettings(nextSettings);
       setAdminFeatureDraft(nextSettings);
       showError('管理设置已保存。');
@@ -3312,9 +3330,7 @@ export default function App() {
 
   const incrementStoryCounter = async (storyId: string, field: 'favoriteCount' | 'reportCount' | 'interventionCount') => {
     if (!db) return;
-    await updateDoc(doc(db, 'stories', storyId), {
-      [field]: increment(1),
-    } as any);
+    await incrementStoryMetric(db as any, storyId, field);
   };
 
   const handleGenerateSummary = async (source: 'auto_interventions' | 'manual') => {
@@ -3426,6 +3442,10 @@ export default function App() {
     if (!activeStoryId || !db || !user) return;
     try {
       if (kind === 'like') {
+        const result = await likeStory(db as any, activeStoryId, user.uid);
+        if (result?.alreadyExists) throw new Error('already-liked');
+        showError('å·²ç‚¹èµžã€‚');
+        return;
         const storyRef = doc(db, 'stories', activeStoryId);
         const likeRef = doc(db, 'stories', activeStoryId, 'likes', user.uid);
         await runTransaction(db as any, async (transaction: any) => {
@@ -3446,13 +3466,16 @@ export default function App() {
         return;
       }
       if (kind === 'favorite') {
+        const favoriteResult = await favoriteStory(db as any, activeStoryId, user.uid);
+        const alreadyFavorited = Boolean(favoriteResult?.alreadyExists);
         const storyRef = doc(db, 'stories', activeStoryId);
         const favoriteRef = doc(db, 'stories', activeStoryId, 'favorites', user.uid);
-        let alreadyFavorited = false;
+        if (false) {
+        let alreadyFavoritedLegacy = false;
         await runTransaction(db as any, async (transaction: any) => {
           const favoriteSnap = await transaction.get(favoriteRef);
           if (favoriteSnap.exists()) {
-            alreadyFavorited = true;
+            alreadyFavoritedLegacy = true;
             return;
           }
           transaction.set(favoriteRef, {
@@ -3464,6 +3487,7 @@ export default function App() {
             favoriteCount: increment(1),
           });
         });
+        }
 
         const cartridge = await getStoryCartridge(db as any, activeStoryId);
         if (!cartridge) {
@@ -3592,6 +3616,9 @@ export default function App() {
         return;
       }
       }
+      await reportStory(db as any, activeStoryId, user.uid);
+      showError('å·²æ”¶åˆ°ä¸¾æŠ¥ã€‚');
+      return;
       await updateDoc(doc(db, 'stories', activeStoryId), {
         reportCount: increment(1),
       } as any);
@@ -4256,7 +4283,7 @@ export default function App() {
             </select>
             <button
               type="button"
-              onClick={refreshStories}
+              onClick={() => refreshStories({ force: true })}
               disabled={isLoadingStories}
               className={semanticButtonClass('ghost', { compact: true })}
             >

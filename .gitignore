@@ -12,6 +12,9 @@ coverage/
 
 # API Configs and Secrets
 firebase-applet-config.json
+firebase-service-account*.json
+*-service-account*.json
+tmp/
 
 # Scratch and test files
 test-*.js

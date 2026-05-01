@@ -11,7 +11,10 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "migrate:firestore:export": "node scripts/export-firestore.mjs",
+    "migrate:supabase:dry-run": "node scripts/import-supabase.mjs --dry-run",
+    "migrate:supabase:import": "node scripts/import-supabase.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.46.0",
