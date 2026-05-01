@@ -1,7 +1,7 @@
-import { GoogleGenAI, Type } from '@google/genai';
+import { Type } from '@google/genai';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './_auth.js';
-import { getGeminiApiKey, getGeminiModelCandidates, parseGeminiJson } from './_gemini.js';
+import { generateGeminiJsonWithFallback, parseGeminiJson } from './_gemini.js';
 import { getRequestLogContext, logGenerationError, logGenerationInfo } from './_log.js';
 import { buildChapterContinuationPrompt, buildChapterWorldStatePrompt } from '../Prompt/chapterContinuation.js';
 
@@ -87,38 +87,30 @@ function normalizeGeneratedChapter(raw: any, chapterNum: number) {
 }
 
 async function generateChapterWithFallback(
-  ai: GoogleGenAI,
   prompt: string,
   chapterNum: number,
   logContext: { flow: string; requestId: string }
 ) {
-  let lastError: unknown = null;
-  for (const model of getGeminiModelCandidates()) {
-    try {
-      logGenerationInfo(logContext, 'model-start', { model, chapterNum });
-      const response = await ai.models.generateContent({
-        model,
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: chapterSchema,
-        },
-      });
-      const data = normalizeGeneratedChapter(parseGeminiJson(response.text), chapterNum);
-      logGenerationInfo(logContext, 'model-success', {
-        model,
-        chapterNum: data.chapter_num,
-        textLength: data.text.length,
-        presentCharacters: data.present_characters.length,
-      });
-      return data;
-    } catch (error) {
-      lastError = error;
-      logGenerationError(logContext, 'model-failed', error, { model, chapterNum });
-    }
-  }
-
-  throw lastError instanceof Error ? lastError : new Error('AI_GENERATION_FAILED: Gemini chapter generation failed.');
+  const { data, model, keyIndex } = await generateGeminiJsonWithFallback({
+    contents: prompt,
+    config: {
+      responseMimeType: 'application/json',
+      responseSchema: chapterSchema,
+    },
+    parseResponse: (rawText) => normalizeGeneratedChapter(parseGeminiJson(rawText), chapterNum),
+    logContext,
+    logInfo: logGenerationInfo,
+    logError: logGenerationError,
+    metadata: { chapterNum },
+  });
+  logGenerationInfo(logContext, 'model-success', {
+    model,
+    keyIndex,
+    chapterNum: data.chapter_num,
+    textLength: data.text.length,
+    presentCharacters: data.present_characters.length,
+  });
+  return data;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -184,14 +176,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       targetWordCount: safeTargetWordCount,
     });
 
-    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
-    const data = await generateChapterWithFallback(ai, prompt, safeTargetChapterNum, logContext);
+    const data = await generateChapterWithFallback(prompt, safeTargetChapterNum, logContext);
 
     logGenerationInfo(logContext, 'success', { chapterNum: data.chapter_num, textLength: data.text.length });
     return res.status(200).json(data);
   } catch (error) {
     logGenerationError(logContext, 'failed', error);
     const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('GEMINI_QUOTA_EXHAUSTED')) {
+      return res.status(429).json({ error: 'AI 额度暂时用尽，多个 API key 都已触发限制，请更换 key 或稍后再试。', code: 'GEMINI_QUOTA_EXHAUSTED' });
+    }
     if (message.includes('Missing valid Gemini API key.') || message.includes('API key not valid') || message.includes('API_KEY_INVALID')) {
       return res.status(503).json({ error: 'AI 服务配置未完成，请稍后再试。', code: 'AI_CONFIG_MISSING' });
     }

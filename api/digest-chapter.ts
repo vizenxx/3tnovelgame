@@ -1,7 +1,8 @@
-import { GoogleGenAI, Type } from '@google/genai';
+import { Type } from '@google/genai';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './_auth.js';
-import { getGeminiApiKey } from './_gemini.js';
+import { generateGeminiJsonWithFallback, parseGeminiJson } from './_gemini.js';
+import { getRequestLogContext, logGenerationError, logGenerationInfo } from './_log.js';
 import { buildCanonicalWorldStatePrompt, buildDeltaWorldStatePrompt } from '../Prompt/storyStateDigest.js';
 
 const canonicalSchema = {
@@ -104,6 +105,7 @@ const deltaSchema = {
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const logContext = getRequestLogContext(req, 'digest-chapter');
   if (req.method !== 'POST') {
     return sendMethodNotAllowed(res);
   }
@@ -123,9 +125,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       endingValue,
       interventionAction,
     } = req.body || {};
-
-    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
-
     if (mode === 'canonical') {
       if (!Array.isArray(chapters) || !blueprint) {
         return res.status(400).json({ error: 'canonical 模式参数不合法。' });
@@ -160,16 +159,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ].join('\n\n'),
       });
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.1-flash-lite-preview',
+      const { data: result } = await generateGeminiJsonWithFallback({
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
           responseSchema: canonicalSchema,
         },
+        parseResponse: (rawText) => parseGeminiJson(rawText),
+        logContext,
+        logInfo: logGenerationInfo,
+        logError: logGenerationError,
+        metadata: { mode },
       });
 
-      const result = JSON.parse(response.text || '{}');
       if (!result.style_anchor && styleAnchorFallback) {
         result.style_anchor = styleAnchorFallback;
       }
@@ -191,20 +193,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         interventionAction,
       });
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.1-flash-lite-preview',
+      const { data } = await generateGeminiJsonWithFallback({
         contents: prompt,
         config: {
           responseMimeType: 'application/json',
           responseSchema: deltaSchema,
         },
+        parseResponse: (rawText) => parseGeminiJson(rawText),
+        logContext,
+        logInfo: logGenerationInfo,
+        logError: logGenerationError,
+        metadata: { mode },
       });
 
-      return res.status(200).json({ deltaWorldState: JSON.parse(response.text || '{}') });
+      return res.status(200).json({ deltaWorldState: data });
     }
 
     return res.status(400).json({ error: '无效的 mode，请使用 canonical 或 delta。' });
   } catch (error) {
+    logGenerationError(logContext, 'failed', error);
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('GEMINI_QUOTA_EXHAUSTED')) {
+      return res.status(429).json({ error: 'AI 额度暂时用尽，多个 API key 都已触发限制，请更换 key 或稍后再试。', code: 'GEMINI_QUOTA_EXHAUSTED' });
+    }
     return sendInternalError(res, 'digest 处理失败', error);
   }
 }

@@ -1,7 +1,7 @@
-import { GoogleGenAI, Type } from '@google/genai';
+import { Type } from '@google/genai';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './_auth.js';
-import { getGeminiApiKey, getGeminiModelCandidates, parseGeminiJson } from './_gemini.js';
+import { generateGeminiJsonWithFallback, parseGeminiJson } from './_gemini.js';
 import { getRequestLogContext, logGenerationError, logGenerationInfo } from './_log.js';
 import { buildInterventionRewritePrompt, buildInterventionWorldStatePrompt } from '../Prompt/interventionRewrite.js';
 
@@ -194,26 +194,21 @@ const rewriteSchema = {
   required: ['chapters', 'character_updates'],
 };
 
-async function generateWithGeminiFallback(ai: GoogleGenAI, prompt: string) {
-  let lastError: unknown = null;
-  for (const model of getGeminiModelCandidates()) {
-    try {
-      const response = await ai.models.generateContent({
-        model,
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: rewriteSchema,
-        },
-      });
-      return parseGeminiJson(response.text);
-    } catch (error) {
-      lastError = error;
-      console.error(`Intervene generation failed with ${model}:`, error);
-    }
-  }
-
-  throw lastError instanceof Error ? lastError : new Error('Gemini generation failed.');
+async function generateWithGeminiFallback(prompt: string, logContext: { flow: string; requestId: string }, chapterNum: number) {
+  const { data, model, keyIndex } = await generateGeminiJsonWithFallback({
+    contents: prompt,
+    config: {
+      responseMimeType: 'application/json',
+      responseSchema: rewriteSchema,
+    },
+    parseResponse: (rawText) => parseGeminiJson(rawText),
+    logContext,
+    logInfo: logGenerationInfo,
+    logError: logGenerationError,
+    metadata: { chapterNum },
+  });
+  logGenerationInfo(logContext, 'model-success', { model, keyIndex, chapterNum });
+  return data;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -329,8 +324,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       targetWordCount: safeTargetWordCount,
     });
 
-    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
-    const aiData = await generateWithGeminiFallback(ai, prompt);
+    const aiData = await generateWithGeminiFallback(prompt, logContext, safeChapterNum);
     if (!Array.isArray(aiData?.chapters)) {
       throw new Error('Gemini response missed chapters array.');
     }
@@ -380,6 +374,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   } catch (error) {
     logGenerationError(logContext, 'failed', error);
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('GEMINI_QUOTA_EXHAUSTED')) {
+      return res.status(429).json({ error: 'AI 额度暂时用尽，多个 API key 都已触发限制，请更换 key 或稍后再试。', code: 'GEMINI_QUOTA_EXHAUSTED' });
+    }
     return sendInternalError(res, '干涉处理失败', error);
   }
 }

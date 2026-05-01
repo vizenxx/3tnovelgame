@@ -1,7 +1,7 @@
-import { GoogleGenAI, Type } from '@google/genai';
+import { Type } from '@google/genai';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './_auth.js';
-import { getGeminiApiKey, getGeminiModelCandidates, parseGeminiJson } from './_gemini.js';
+import { generateGeminiJsonWithFallback, parseGeminiJson } from './_gemini.js';
 import { getRequestLogContext, logGenerationError, logGenerationInfo } from './_log.js';
 import { buildQuickStoryBlueprintPrompt } from '../Prompt/quickStoryBlueprint.js';
 
@@ -141,34 +141,26 @@ function normalizeBlueprint(raw: any) {
   };
 }
 
-async function generateBlueprintWithFallback(ai: GoogleGenAI, prompt: string, logContext: { flow: string; requestId: string }) {
-  let lastError: unknown = null;
-  for (const model of getGeminiModelCandidates()) {
-    try {
-      logGenerationInfo(logContext, 'model-start', { model });
-      const response = await ai.models.generateContent({
-        model,
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: blueprintSchema,
-        },
-      });
-      const data = normalizeBlueprint(parseGeminiJson(response.text));
-      logGenerationInfo(logContext, 'model-success', {
-        model,
-        chapters: data.chapters.length,
-        branches: data.branches.length,
-        endings: data.endings.length,
-      });
-      return data;
-    } catch (error) {
-      lastError = error;
-      logGenerationError(logContext, 'model-failed', error, { model });
-    }
-  }
-
-  throw lastError instanceof Error ? lastError : new Error('AI_GENERATION_FAILED: Gemini blueprint generation failed.');
+async function generateBlueprintWithFallback(prompt: string, logContext: { flow: string; requestId: string }) {
+  const { data, model, keyIndex } = await generateGeminiJsonWithFallback({
+    contents: prompt,
+    config: {
+      responseMimeType: 'application/json',
+      responseSchema: blueprintSchema,
+    },
+    parseResponse: (rawText) => normalizeBlueprint(parseGeminiJson(rawText)),
+    logContext,
+    logInfo: logGenerationInfo,
+    logError: logGenerationError,
+  });
+  logGenerationInfo(logContext, 'model-success', {
+    model,
+    keyIndex,
+    chapters: data.chapters.length,
+    branches: data.branches.length,
+    endings: data.endings.length,
+  });
+  return data;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -195,7 +187,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const safeTargetWordCount = Math.min(1200, Math.max(600, Number(targetWordCount) || 600));
-    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
 
     const prompt = buildQuickStoryBlueprintPrompt({
       selectedThemes,
@@ -204,12 +195,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       narrativePerson,
     });
 
-    const data = await generateBlueprintWithFallback(ai, prompt, logContext);
+    const data = await generateBlueprintWithFallback(prompt, logContext);
     logGenerationInfo(logContext, 'success', { title: data.title });
     return res.status(200).json(data);
   } catch (error) {
     logGenerationError(logContext, 'failed', error);
     const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('GEMINI_QUOTA_EXHAUSTED')) {
+      return res.status(429).json({ error: 'AI 额度暂时用尽，多个 API key 都已触发限制，请更换 key 或稍后再试。', code: 'GEMINI_QUOTA_EXHAUSTED' });
+    }
     if (message.includes('Missing valid Gemini API key.') || message.includes('API key not valid') || message.includes('API_KEY_INVALID')) {
       return res.status(503).json({ error: 'AI 服务配置未完成，请稍后再试。', code: 'AI_CONFIG_MISSING' });
     }

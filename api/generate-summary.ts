@@ -1,7 +1,7 @@
-import { GoogleGenAI, Type } from '@google/genai';
+import { Type } from '@google/genai';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './_auth.js';
-import { getGeminiApiKey, parseGeminiJson } from './_gemini.js';
+import { generateGeminiJsonWithFallback, parseGeminiJson } from './_gemini.js';
 import { getRequestLogContext, logGenerationError, logGenerationInfo } from './_log.js';
 import { buildFinalSummaryPrompt } from '../Prompt/finalSummary.js';
 
@@ -34,24 +34,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const safeChapters = chapters.slice(0, 7);
-    const ai = new GoogleGenAI({ apiKey: getGeminiApiKey() });
-
     const prompt = buildFinalSummaryPrompt({ blueprint, safeChapters, endingValue });
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.1-flash-lite-preview',
+    const { data } = await generateGeminiJsonWithFallback({
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
         responseSchema: summarySchema,
       },
+      parseResponse: (rawText) => parseGeminiJson(rawText),
+      logContext,
+      logInfo: logGenerationInfo,
+      logError: logGenerationError,
     });
-
-    const data = parseGeminiJson(response.text);
     logGenerationInfo(logContext, 'success', { fallback: false });
     return res.status(200).json(data);
   } catch (error) {
     logGenerationError(logContext, 'failed-using-fallback', error);
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('GEMINI_QUOTA_EXHAUSTED')) {
+      return res.status(429).json({ error: 'AI 额度暂时用尽，多个 API key 都已触发限制，请更换 key 或稍后再试。', code: 'GEMINI_QUOTA_EXHAUSTED' });
+    }
     const endingValue = Number(req.body?.endingValue) || 0;
     const text = endingValue > 5
       ? '秩序的微光穿过裂隙，照见命运新的归途。'
