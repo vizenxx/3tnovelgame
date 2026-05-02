@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp, Download, Sun, Moon } from 'lucide-react';
 import { auth, db, firebaseInitError } from './firebase';
-import { createEmptyStory, createSharedStoryRecord, adaptBlueprintToStory, createStoryBranch, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, favoriteStory, getAppSettings, getSharedStoryRecord, getStoryCartridge, getUserProgress, incrementStoryMetric, likeStory, listMySharedStories, listMyStories, listPublicStories, refundCoverGenerationUsage, reportStory, reserveCoverGenerationUsage, saveAppSettings, saveStoryMainlineBundle, saveStoryMeta, saveUserProgress, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch } from './storyStore';
+import { createEmptyStory, createSharedStoryRecord, adaptBlueprintToStory, createStoryBranch, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, favoriteStory, getAppSettings, getSharedStoryRecord, getStoryCartridge, getStoryMeta, getUserProgress, incrementStoryMetric, likeStory, listMySharedStories, listMyStories, listPublicStories, refundCoverGenerationUsage, reportStory, reserveCoverGenerationUsage, saveAppSettings, saveStoryMainlineBundle, saveStoryMeta, saveUserProgress, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch } from './storyStore';
 import { isBranchUnlockedByHistory, tierToScore } from './storyCartridge';
 import { deleteLocalCache, getLocalCache, setLocalCache } from './localCache';
 import { 
@@ -32,10 +32,6 @@ import {
 import { 
   doc, 
   setDoc, 
-  getDoc, 
-  updateDoc,
-  runTransaction,
-  increment,
   serverTimestamp
 } from 'firebase/firestore';
 
@@ -1117,10 +1113,7 @@ export default function App() {
     let sourceMeta = activeStoryMeta || null;
     if (db && activeStoryId && (!sourceMeta?.authorId || sourceMeta.authorId === user?.uid)) {
       try {
-        const storySnap = await getDoc(doc(db, 'stories', activeStoryId));
-        if (storySnap.exists()) {
-          sourceMeta = { id: activeStoryId, ...storySnap.data() };
-        }
+        sourceMeta = await getStoryMeta(db as any, activeStoryId);
       } catch (error) {
         console.warn('Unable to resolve original story author:', error);
       }
@@ -1217,21 +1210,6 @@ export default function App() {
     if (!db || !user) throw new Error('请先登录后再生成封面。');
     const dateKey = todayUsageKey();
     return reserveCoverGenerationUsage(db as any, user.uid, dateKey);
-    const usageRef = doc(db, 'users', user.uid, 'coverGenerationUsage', dateKey);
-    return runTransaction(db, async (transaction) => {
-      const snap = await transaction.get(usageRef);
-      const current = Number(snap.data()?.count || 0);
-      if (current >= 5) {
-        throw new Error('今天的 AI 封面生成次数已经用完。');
-      }
-      const nextCount = current + 1;
-      transaction.set(usageRef, {
-        count: nextCount,
-        date: dateKey,
-        updatedAt: new Date().toISOString(),
-      }, { merge: true });
-      return Math.max(0, 5 - nextCount);
-    });
   };
 
   const refundCoverGenerationQuota = async () => {
@@ -1239,16 +1217,6 @@ export default function App() {
     const dateKey = todayUsageKey();
     await refundCoverGenerationUsage(db as any, user.uid, dateKey);
     return;
-    const usageRef = doc(db, 'users', user.uid, 'coverGenerationUsage', dateKey);
-    await runTransaction(db, async (transaction) => {
-      const snap = await transaction.get(usageRef);
-      const current = Number(snap.data()?.count || 0);
-      transaction.set(usageRef, {
-        count: Math.max(0, current - 1),
-        date: dateKey,
-        updatedAt: new Date().toISOString(),
-      }, { merge: true });
-    });
   };
 
   const ReadingTextControls = () => (
@@ -3472,48 +3440,10 @@ export default function App() {
         if (result?.alreadyExists) throw new Error('already-liked');
         showError('å·²ç‚¹èµžã€‚');
         return;
-        const storyRef = doc(db, 'stories', activeStoryId);
-        const likeRef = doc(db, 'stories', activeStoryId, 'likes', user.uid);
-        await runTransaction(db as any, async (transaction: any) => {
-          const likeSnap = await transaction.get(likeRef);
-          if (likeSnap.exists()) {
-            throw new Error('already-liked');
-          }
-          transaction.set(likeRef, {
-            userId: user.uid,
-            createdAt: serverTimestamp(),
-            createdAtIso: new Date().toISOString(),
-          });
-          transaction.update(storyRef, {
-            likeCount: increment(1),
-          });
-        });
-        showError('已点赞。');
-        return;
       }
       if (kind === 'favorite') {
         const favoriteResult = await favoriteStory(db as any, activeStoryId, user.uid);
         const alreadyFavorited = Boolean(favoriteResult?.alreadyExists);
-        const storyRef = doc(db, 'stories', activeStoryId);
-        const favoriteRef = doc(db, 'stories', activeStoryId, 'favorites', user.uid);
-        if (false) {
-        let alreadyFavoritedLegacy = false;
-        await runTransaction(db as any, async (transaction: any) => {
-          const favoriteSnap = await transaction.get(favoriteRef);
-          if (favoriteSnap.exists()) {
-            alreadyFavoritedLegacy = true;
-            return;
-          }
-          transaction.set(favoriteRef, {
-            userId: user.uid,
-            createdAt: serverTimestamp(),
-            createdAtIso: new Date().toISOString(),
-          });
-          transaction.update(storyRef, {
-            favoriteCount: increment(1),
-          });
-        });
-        }
 
         const cartridge = await getStoryCartridge(db as any, activeStoryId);
         if (!cartridge) {
@@ -3570,85 +3500,9 @@ export default function App() {
         }
         showError(alreadyFavorited || alreadyInArchive ? '已在馆藏中。' : '已收藏并加入馆藏。');
         return;
-
-        if (false) {
-        let record = await getSharedStoryRecord(db as any, activeStoryId, user.uid);
-        if (!record) {
-          const cartridge = await getStoryCartridge(db as any, activeStoryId);
-          if (cartridge) {
-            record = {
-              storyId: activeStoryId,
-              meta: {
-                ...cartridge.meta,
-                coverUrl: cartridge.meta?.coverUrl || '',
-                sourceStoryId: activeStoryId,
-                originalAuthorId: cartridge.meta?.authorId || activeStoryId,
-                originalAuthorName: getStoryAuthorName(cartridge.meta),
-                intervenerId: user.uid,
-                intervenerName: getUserAuthorName(user),
-              },
-              chapters: cartridge.chapters,
-            };
-          }
-        }
-        const archiveSourceStoryId = record?.meta?.sourceStoryId || activeStoryId;
-        const alreadyInArchive = mySharedStories.some((story: any) => story.sourceStoryId === archiveSourceStoryId || story.sourceStoryId === activeStoryId);
-        if (!alreadyInArchive) {
-          if (record) {
-            const title = record.meta?.title || '收藏作品';
-            const mainAxis = record.meta?.main_axis || '';
-            const averageChapterWords = record.meta?.averageChapterWords || getAverageChapterWords(record.chapters as any);
-            const archiveId = await createSharedStoryRecord(db as any, {
-              authorId: user.uid,
-              authorName: getUserAuthorName(user),
-              title,
-              main_axis: mainAxis,
-              tags: record.meta?.tags || [],
-              characters: record.meta?.characters || [],
-              chapters: record.chapters as any,
-              averageChapterWords,
-              coverUrl: record.meta?.coverUrl || '',
-              sourceStoryId: archiveSourceStoryId,
-              originalAuthorId: record.meta?.originalAuthorId || record.meta?.authorId || archiveSourceStoryId,
-              originalAuthorName: getOriginalAuthorName(record.meta),
-              intervenerId: user.uid,
-              intervenerName: getUserAuthorName(user),
-              allowAdaptation: Boolean(record.meta?.allowAdaptation),
-              visibility: 'private',
-            });
-            setMySharedStories((prev) => [{
-              id: archiveId,
-              title,
-              main_axis: mainAxis,
-              tags: record.meta?.tags || [],
-              characters: record.meta?.characters || [],
-              chapters: record.chapters,
-              authorId: user.uid,
-              authorName: getUserAuthorName(user),
-              originalAuthorId: record.meta?.originalAuthorId || record.meta?.authorId || archiveSourceStoryId,
-              originalAuthorName: getOriginalAuthorName(record.meta),
-              intervenerId: user.uid,
-              intervenerName: getUserAuthorName(user),
-              sourceStoryId: archiveSourceStoryId,
-              averageChapterWords,
-              allowAdaptation: Boolean(record.meta?.allowAdaptation),
-              visibility: 'private',
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            }, ...prev]);
-          }
-        }
-        showError(alreadyFavorited || alreadyInArchive ? '已在馆藏中。' : '已收藏并加入馆藏。');
-        return;
-      }
       }
       await reportStory(db as any, activeStoryId, user.uid);
       showError('å·²æ”¶åˆ°ä¸¾æŠ¥ã€‚');
-      return;
-      await updateDoc(doc(db, 'stories', activeStoryId), {
-        reportCount: increment(1),
-      } as any);
-      showError('已收到举报。');
       return;
     } catch (error) {
       if ((error as any)?.message === 'already-liked') {

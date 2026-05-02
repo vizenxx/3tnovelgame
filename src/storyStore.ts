@@ -60,7 +60,9 @@ const canReadStoryRecord = (meta: StoryMeta, currentUserId?: string) => (
   (!!currentUserId && meta.authorId === currentUserId)
 );
 
-const useSupabaseStories = () => import.meta.env.VITE_STORY_BACKEND === 'supabase';
+// Story data is Supabase-first now. Firebase is retained only as an explicit
+// emergency fallback when VITE_STORY_BACKEND is set to "firebase".
+const useSupabaseStories = () => import.meta.env.VITE_STORY_BACKEND !== 'firebase';
 
 async function storyApi<T = any>(action: string, payload: Record<string, any> = {}, options: { auth?: boolean } = {}) {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
