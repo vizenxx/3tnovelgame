@@ -3421,6 +3421,32 @@ export default function App() {
         allowAdaptation: getActiveStoryAllowAdaptation(),
         visibility: 'public',
       });
+      const sharedRecord = {
+        id: shareId,
+        title: blueprint?.title || "æœªå‘½åæ•…äº‹",
+        main_axis: blueprint?.main_axis || "",
+        tags: selectedThemes,
+        characters: blueprint?.characters || [],
+        chapters,
+        authorId: user.uid,
+        authorName: getUserAuthorName(user),
+        originalAuthorId: provenance.originalAuthorId,
+        originalAuthorName: provenance.originalAuthorName,
+        intervenerId: user.uid,
+        intervenerName: getUserAuthorName(user),
+        coverUrl: activeStoryMeta?.coverUrl || '',
+        sourceStoryId: activeStoryId,
+        averageChapterWords: getAverageChapterWords(chapters),
+        chapterCount: getReadyChapterCount(chapters),
+        cardExcerpt: getStoryCardExcerpt(blueprint?.main_axis || '', chapters),
+        allowAdaptation: getActiveStoryAllowAdaptation(),
+        visibility: 'public',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      setMySharedStories((prev) => [sharedRecord, ...prev.filter((story: any) => story.id !== shareId)]);
+      await cacheSharedStory(shareId, { meta: { ...sharedRecord, sharedStoryId: shareId }, chapters: chapters as any });
+      await cacheStoryLists(publicStories, myStories, [sharedRecord, ...mySharedStories.filter((story: any) => story.id !== shareId)]);
       setSharedStoryId(shareId);
       const shareUrl = buildSharedStoryUrl(shareId);
       const shareTitle = formatBookTitle(blueprint?.title || "未命名故事");

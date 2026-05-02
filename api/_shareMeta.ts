@@ -11,6 +11,7 @@ type FirestoreValue = {
 };
 
 const getEnv = (name: string) => process.env[name] || '';
+const getSupabaseKey = () => getEnv('SUPABASE_SECRET_KEY') || getEnv('SUPABASE_SERVICE_ROLE_KEY');
 
 export function escapeHtml(value: string) {
   return String(value || '')
@@ -51,6 +52,16 @@ function firstChapterExcerpt(field?: FirestoreValue) {
   return '';
 }
 
+function firstJsonChapterExcerpt(chapters: any[]) {
+  for (const chapter of Array.isArray(chapters) ? chapters : []) {
+    const text = String(chapter?.text || '').replace(/\s+/g, ' ').trim();
+    if (text.length > 40) {
+      return `${text.slice(0, 120)}${text.length > 120 ? '...' : ''}`;
+    }
+  }
+  return '';
+}
+
 export type SharedStoryMeta = {
   id: string;
   title: string;
@@ -60,6 +71,37 @@ export type SharedStoryMeta = {
 };
 
 export async function fetchSharedStoryMeta(shareId: string): Promise<SharedStoryMeta | null> {
+  const supabaseUrl = getEnv('SUPABASE_URL') || getEnv('VITE_SUPABASE_URL');
+  const supabaseKey = getSupabaseKey();
+  if (supabaseUrl && supabaseKey && shareId) {
+    const url = `${supabaseUrl}/rest/v1/shared_stories?id=eq.${encodeURIComponent(shareId)}&select=id,title,main_axis,tags,chapters,cover_url,visibility&limit=1`;
+    const response = await fetch(url, {
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+      },
+    });
+    if (response.ok) {
+      const rows = await response.json();
+      const row = rows?.[0];
+      if (row?.visibility === 'public') {
+        const rawTitle = String(row.title || DEFAULT_TITLE);
+        const title = rawTitle.replace(/[《》]/g, '').trim() || DEFAULT_TITLE;
+        const tags = Array.isArray(row.tags) ? row.tags.filter(Boolean) : [];
+        const excerpt = firstJsonChapterExcerpt(row.chapters);
+        const description = excerpt || String(row.main_axis || '') || (tags.length ? `一段关于${tags.slice(0, 3).join('、')}的命运记录。` : DEFAULT_DESCRIPTION);
+        return {
+          id: shareId,
+          title: `《${title}》｜命运干涉`,
+          description,
+          coverUrl: String(row.cover_url || ''),
+          visibility: row.visibility,
+        };
+      }
+      return null;
+    }
+  }
+
   const projectId = getEnv('VITE_FIREBASE_PROJECT_ID') || getEnv('FIREBASE_PROJECT_ID');
   const apiKey = getEnv('VITE_FIREBASE_API_KEY') || getEnv('FIREBASE_API_KEY');
   const databaseId = getEnv('VITE_FIREBASE_FIRESTORE_DATABASE_ID') || getEnv('FIRESTORE_DATABASE_ID') || '(default)';
