@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { defaultShareMeta, escapeHtml, fetchSharedStoryMeta, getShareId } from './_shareMeta.js';
+import { defaultShareMeta, escapeHtml, fetchOriginalStoryMeta, fetchSharedStoryMeta, getShareId } from './_shareMeta.js';
 
 const absoluteUrl = (req: VercelRequest, path: string) => {
   const proto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0];
@@ -9,10 +9,19 @@ const absoluteUrl = (req: VercelRequest, path: string) => {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const shareId = getShareId(req.query.share || req.query.id);
-  const meta = (shareId ? await fetchSharedStoryMeta(shareId).catch(() => null) : null) || defaultShareMeta(shareId);
-  const appUrl = absoluteUrl(req, `/?share=${encodeURIComponent(shareId)}`);
-  const pageUrl = absoluteUrl(req, `/api/share?share=${encodeURIComponent(shareId)}`);
-  const imageUrl = absoluteUrl(req, `/api/share-image?share=${encodeURIComponent(shareId)}`);
+  const storyId = getShareId(req.query.story);
+  const meta = shareId
+    ? (await fetchSharedStoryMeta(shareId).catch(() => null)) || defaultShareMeta(shareId)
+    : (await fetchOriginalStoryMeta(storyId).catch(() => null)) || defaultShareMeta(storyId);
+  const appUrl = shareId
+    ? absoluteUrl(req, `/?share=${encodeURIComponent(shareId)}`)
+    : absoluteUrl(req, `/?story=${encodeURIComponent(storyId)}`);
+  const pageUrl = shareId
+    ? absoluteUrl(req, `/api/share?share=${encodeURIComponent(shareId)}`)
+    : absoluteUrl(req, `/api/share?story=${encodeURIComponent(storyId)}`);
+  const imageUrl = shareId
+    ? absoluteUrl(req, `/api/share-image?share=${encodeURIComponent(shareId)}`)
+    : absoluteUrl(req, `/api/share-image?story=${encodeURIComponent(storyId)}`);
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=300');

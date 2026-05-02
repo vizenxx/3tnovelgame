@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp, Download, Sun, Moon } from 'lucide-react';
 import { auth, db, firebaseInitError } from './firebase';
-import { createEmptyStory, createSharedStoryRecord, adaptBlueprintToStory, createStoryBranch, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, favoriteStory, getAppSettings, getSharedStoryRecord, getStoryCartridge, getStoryMeta, getUserProgress, incrementStoryMetric, likeStory, listMySharedStories, listMyStories, listPublicStories, refundCoverGenerationUsage, reportStory, reserveCoverGenerationUsage, saveAppSettings, saveStoryMainlineBundle, saveStoryMeta, saveUserProgress, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch } from './storyStore';
+import { createEmptyStory, createSharedStoryRecord, createStorySnapshot, adaptBlueprintToStory, createStoryBranch, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, favoriteStory, unfavoriteStory, getAppSettings, getSharedStoryRecord, getStoryCartridge, getStoryMeta, getUserProgress, incrementStoryMetric, likeStory, listMySharedStories, listMyStories, listPublicStories, refundCoverGenerationUsage, reportStory, reserveCoverGenerationUsage, saveAppSettings, saveStoryMainlineBundle, saveStoryMeta, saveUserProgress, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch } from './storyStore';
 import { isBranchUnlockedByHistory, tierToScore } from './storyCartridge';
 import { deleteLocalCache, getLocalCache, setLocalCache } from './localCache';
 import { 
@@ -176,8 +176,14 @@ const endingIdToLabel = (id: 'default' | 'left' | 'right') => {
 const buildSharedStoryUrl = (storyId: string) =>
   `${window.location.origin}/api/share?share=${encodeURIComponent(storyId)}`;
 
+const buildOriginalStoryUrl = (storyId: string) =>
+  `${window.location.origin}/api/share?story=${encodeURIComponent(storyId)}`;
+
 const buildAppSharedStoryUrl = (storyId: string) =>
   `${window.location.origin}${window.location.pathname}?share=${encodeURIComponent(storyId)}`;
+
+const buildAppOriginalStoryUrl = (storyId: string) =>
+  `${window.location.origin}${window.location.pathname}?story=${encodeURIComponent(storyId)}`;
 
 const ADMIN_USER_IDS = new Set(['LWgIE31RtCTZBiMNF7S9viNE7Aw2']);
 type AppFeatureSettings = {
@@ -226,6 +232,33 @@ const writeClipboardText = async (value: string) => {
     return false;
   }
 };
+
+const normalizeStoryChaptersForHash = (chapters?: Array<{ chapter_num?: number; title?: string; summary?: string; text?: string }>) => (
+  (chapters || [])
+    .map((chapter) => ({
+      chapter_num: Number(chapter?.chapter_num || 0),
+      title: String(chapter?.title || '').trim(),
+      summary: String(chapter?.summary || '').trim(),
+      text: String(chapter?.text || '').replace(/\s+/g, ' ').trim(),
+    }))
+    .filter((chapter) => chapter.chapter_num >= 1 && chapter.chapter_num <= 7)
+    .sort((a, b) => a.chapter_num - b.chapter_num)
+);
+
+const hashStoryChapters = (chapters?: Array<{ chapter_num?: number; title?: string; summary?: string; text?: string }>) => {
+  const value = JSON.stringify(normalizeStoryChaptersForHash(chapters));
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
+};
+
+const areStoryChaptersEquivalent = (
+  a?: Array<{ chapter_num?: number; title?: string; summary?: string; text?: string }>,
+  b?: Array<{ chapter_num?: number; title?: string; summary?: string; text?: string }>
+) => hashStoryChapters(a) === hashStoryChapters(b);
 
 const semanticButtonClass = (
   variant: 'primary' | 'secondary' | 'danger' | 'ghost',
@@ -1125,6 +1158,87 @@ export default function App() {
     };
   };
 
+  const currentRunContentHash = () => hashStoryChapters(chapters);
+
+  const currentRunMatchesOriginal = () => (
+    Boolean(activeStoryId) &&
+    initialNaturalChapters.length > 0 &&
+    areStoryChaptersEquivalent(chapters, initialNaturalChapters)
+  );
+
+  const cacheSharedSnapshotAfterCreate = (shareId: string, sharedRecord: any) => {
+    void cacheSharedStory(shareId, { meta: { ...sharedRecord, sharedStoryId: shareId }, chapters: chapters as any })
+      .catch((error) => console.warn('share cacheSharedStory failed:', error));
+    void cacheStoryLists(publicStories, myStories, [sharedRecord, ...mySharedStories.filter((story: any) => story.id !== shareId)])
+      .catch((error) => console.warn('share cacheStoryLists failed:', error));
+  };
+
+  const createCurrentStorySnapshot = async (visibility: 'public' | 'private', snapshotKind: 'intervened' | 'saved_run') => {
+    if (!user || !blueprint) throw new Error('请先进入故事后再继续。');
+    const provenance = await resolveActiveStoryProvenance();
+    const contentHash = currentRunContentHash();
+    const shareId = await createStorySnapshot(db as any, {
+      authorId: user.uid,
+      authorName: getUserAuthorName(user),
+      title: blueprint.title || '未命名故事',
+      main_axis: blueprint.main_axis || '',
+      tags: selectedThemes,
+      characters: blueprint.characters || [],
+      chapters: chapters as any,
+      averageChapterWords: getAverageChapterWords(chapters),
+      coverUrl: activeStoryMeta?.coverUrl || '',
+      sourceStoryId: activeStoryId || null,
+      originalAuthorId: provenance.originalAuthorId,
+      originalAuthorName: provenance.originalAuthorName,
+      intervenerId: user.uid,
+      intervenerName: getUserAuthorName(user),
+      allowAdaptation: getActiveStoryAllowAdaptation(),
+      visibility,
+      snapshotKind,
+      contentHash,
+    });
+    const sharedRecord = {
+      id: shareId,
+      archiveKind: 'snapshot',
+      snapshotKind,
+      contentHash,
+      title: blueprint.title || '未命名故事',
+      main_axis: blueprint.main_axis || '',
+      tags: selectedThemes,
+      characters: blueprint.characters || [],
+      chapters,
+      authorId: user.uid,
+      authorName: getUserAuthorName(user),
+      originalAuthorId: provenance.originalAuthorId,
+      originalAuthorName: provenance.originalAuthorName,
+      intervenerId: user.uid,
+      intervenerName: getUserAuthorName(user),
+      coverUrl: activeStoryMeta?.coverUrl || '',
+      sourceStoryId: activeStoryId,
+      averageChapterWords: getAverageChapterWords(chapters),
+      chapterCount: getReadyChapterCount(chapters),
+      cardExcerpt: getStoryCardExcerpt(blueprint.main_axis || '', chapters),
+      allowAdaptation: getActiveStoryAllowAdaptation(),
+      visibility,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setMySharedStories((prev) => [sharedRecord, ...prev.filter((story: any) => story.id !== shareId)]);
+    return { shareId, sharedRecord };
+  };
+
+  const sharePayload = async (payload: ShareData) => {
+    await deliverPreparedShare(payload);
+  };
+
+  const shareOriginalStoryByCard = async (story: any) => {
+    const storyId = story?.id || story?.storyId || story?.sourceStoryId;
+    if (!storyId) throw new Error('找不到作品 ID。');
+    const shareTitle = formatBookTitle(getStoryTitle(story));
+    const shareText = buildStoryShareText(shareTitle, []);
+    await sharePayload({ title: shareTitle, text: shareText, url: buildOriginalStoryUrl(storyId) });
+  };
+
   const isGuestAuthoredMeta = (meta: any) => {
     return String(meta?.authorName || '').startsWith('游客+') || String(meta?.originalAuthorName || '').startsWith('游客+');
   };
@@ -1759,6 +1873,10 @@ export default function App() {
 
   const handleArchiveVisibilityChange = async (story: any, visibility: 'public' | 'private') => {
     if (!db || !user || !story?.id) return;
+    if (story.archiveKind === 'favorite') {
+      showError('收藏原作的公开状态由原作者决定。');
+      return;
+    }
     try {
       setArchiveUpdatingIds((prev) => ({ ...prev, [story.id]: true }));
       await updateSharedStoryVisibility(db as any, story.id, {
@@ -1788,7 +1906,11 @@ export default function App() {
       onConfirm: async () => {
         try {
           setArchiveUpdatingIds((prev) => ({ ...prev, [story.id]: true }));
-          await deleteSharedStoryRecord(db as any, story.id, user.uid);
+          if (story.archiveKind === 'favorite') {
+            await unfavoriteStory(db as any, story.sourceStoryId || story.id, user.uid);
+          } else {
+            await deleteSharedStoryRecord(db as any, story.id, user.uid);
+          }
           setMySharedStories((prev) => prev.filter((item: any) => item.id !== story.id));
           showError('馆藏记录已删除。');
         } catch (error: any) {
@@ -1804,16 +1926,17 @@ export default function App() {
   const shareExistingArchiveStory = async () => {
     const story = readonlyStoryData;
     const archiveId = story?.meta?.sharedStoryId;
-    if (!story || !archiveId || !user || story.meta?.authorId !== user.uid) return;
+    const sourceStoryId = story?.meta?.sourceStoryId || story?.storyId;
+    if (!story || !user || (!archiveId && !sourceStoryId)) return;
     try {
       setIsSharing(true);
-      if (story.meta?.visibility !== 'public') {
+      if (archiveId && story.meta?.visibility !== 'public') {
         await handleArchiveVisibilityChange({ id: archiveId }, 'public');
       }
-      const shareUrl = buildSharedStoryUrl(archiveId);
+      const shareUrl = archiveId ? buildSharedStoryUrl(archiveId) : buildOriginalStoryUrl(sourceStoryId);
       const shareTitle = formatBookTitle(story.meta?.title || '未命名故事');
       const shareText = buildStoryShareText(shareTitle, story.chapters);
-      await deliverPreparedShare({ title: shareTitle, text: shareText, url: shareUrl });
+      await sharePayload({ title: shareTitle, text: shareText, url: shareUrl });
     } catch (error: any) {
       console.error(error);
       if (error?.name === 'AbortError') {
@@ -2041,26 +2164,51 @@ export default function App() {
   };
 
   const deliverPreparedShare = async (payload: ShareData) => {
-    const copied = await writeClipboardText(buildShareClipboardText(String(payload.text || ''), String(payload.url || '')));
     if (!navigator.share) {
+      const copied = await writeClipboardText(buildShareClipboardText(String(payload.text || ''), String(payload.url || '')));
       showError(copied ? '已复制分享内容到剪贴板。' : '分享链接已准备好，请手动复制浏览器地址。');
       return;
     }
     try {
       await openSystemShare(payload);
-      if (copied && isIosDevice()) {
-        showError('已打开系统分享，分享文案也已复制；如果社交 App 没带上文字，可直接粘贴。');
+      if (isIosDevice()) {
+        void writeClipboardText(buildShareClipboardText(String(payload.text || ''), String(payload.url || '')));
       }
     } catch (error: any) {
       if (error?.name === 'AbortError') {
         showError('已取消分享。');
         return;
       }
+      const copied = await writeClipboardText(buildShareClipboardText(String(payload.text || ''), String(payload.url || '')));
       if (copied) {
         showError('系统分享未能打开，但分享内容已复制，可直接粘贴发送。');
         return;
       }
       throw error;
+    }
+  };
+
+  const shareArchiveListStory = async (story: any) => {
+    if (!story) return;
+    try {
+      setIsSharing(true);
+      if (story.archiveKind !== 'favorite' && story.visibility !== 'public') {
+        await handleArchiveVisibilityChange(story, 'public');
+      }
+      const storyId = story.archiveKind === 'favorite' ? (story.sourceStoryId || story.id) : story.id;
+      const shareUrl = story.archiveKind === 'favorite' ? buildOriginalStoryUrl(storyId) : buildSharedStoryUrl(storyId);
+      const shareTitle = formatBookTitle(story.title || '未命名故事');
+      const shareText = buildStoryShareText(shareTitle, story.chapters || []);
+      await sharePayload({ title: shareTitle, text: shareText, url: shareUrl });
+    } catch (error: any) {
+      console.error(error);
+      if (error?.name === 'AbortError') {
+        showError('已取消分享。');
+        return;
+      }
+      showError(error?.message || '分享失败。');
+    } finally {
+      setIsSharing(false);
     }
   };
 
@@ -2243,26 +2391,16 @@ export default function App() {
     if (!user || !blueprint) return;
     try {
       setShowLeaveGameModal(false);
-      const provenance = await resolveActiveStoryProvenance();
-      await createSharedStoryRecord(db as any, {
-        authorId: user.uid,
-        authorName: getUserAuthorName(user),
-        title: blueprint.title,
-        main_axis: blueprint.main_axis,
-        tags: selectedThemes,
-        characters: blueprint.characters,
-        chapters: chapters as any,
-        averageChapterWords: getAverageChapterWords(chapters),
-        coverUrl: activeStoryMeta?.coverUrl || '',
-        sourceStoryId: activeStoryId || null,
-        originalAuthorId: provenance.originalAuthorId,
-        originalAuthorName: provenance.originalAuthorName,
-        intervenerId: user.uid,
-        intervenerName: getUserAuthorName(user),
-        allowAdaptation: getActiveStoryAllowAdaptation(),
-        visibility: 'private',
-      });
+      if (activeStoryId && currentRunMatchesOriginal()) {
+        await favoriteStory(db as any, activeStoryId, user.uid);
+        showError('原作已加入馆藏，不会重复保存一份相同文本。');
+      } else {
+        const { shareId, sharedRecord } = await createCurrentStorySnapshot('private', 'saved_run');
+        cacheSharedSnapshotAfterCreate(shareId, sharedRecord);
+        showError('当前故事已保存至个人馆藏（私密）。');
+      }
       await resetGame();
+      return;
       showError("作品已保存至个人馆藏（私密）");
     } catch (e) {
       console.error(e);
@@ -3367,11 +3505,26 @@ export default function App() {
   }, [pendingSummaryRequest, isRewriting, isGeneratingConclusion, activeStoryId, blueprint, chapters]);
 
   const handleShareStory = async () => {
-    if (!activeStoryId || !user) return;
+    if (!user || !blueprint) return;
     let shareStage = 'start';
     let createdShareId = '';
     try {
       setIsSharing(true);
+      const shareTitle = formatBookTitle(blueprint?.title || "未命名故事");
+      const shareText = buildStoryShareText(shareTitle, chapters);
+      if (activeStoryId && currentRunMatchesOriginal()) {
+        shareStage = 'deliverOriginalShare';
+        await sharePayload({ title: shareTitle, text: shareText, url: buildOriginalStoryUrl(activeStoryId) });
+        return;
+      }
+      shareStage = 'createStorySnapshot';
+      const { shareId, sharedRecord } = await createCurrentStorySnapshot('public', 'intervened');
+      createdShareId = shareId;
+      setSharedStoryId(shareId);
+      shareStage = 'deliverPreparedShare';
+      await sharePayload({ title: shareTitle, text: shareText, url: buildSharedStoryUrl(shareId) });
+      cacheSharedSnapshotAfterCreate(shareId, sharedRecord);
+      if ((globalThis as any).__legacyShareRecord__) {
       shareStage = 'resolveProvenance';
       const provenance = await resolveActiveStoryProvenance();
       shareStage = 'createSharedStoryRecord';
@@ -3430,6 +3583,7 @@ export default function App() {
       const shareText = buildStoryShareText(shareTitle, chapters);
       shareStage = 'deliverPreparedShare';
       await deliverPreparedShare({ title: shareTitle, text: shareText, url: shareUrl });
+      }
     } catch (e) {
       const error = e as any;
       console.error('share story failed:', {
@@ -3446,9 +3600,11 @@ export default function App() {
       const hasShareId = Boolean(createdShareId);
       const stageLabel = ({
         resolveProvenance: '确认原作者',
+        createStorySnapshot: '创建故事快照',
         createSharedStoryRecord: '创建分享记录',
         cacheSharedStory: '缓存分享故事',
         cacheStoryLists: '更新本机列表缓存',
+        deliverOriginalShare: '打开原作分享',
         deliverPreparedShare: '打开系统分享',
       } as Record<string, string>)[shareStage] || '准备分享';
       showError(`${hasShareId ? '分享记录已创建，但' : ''}${stageLabel}失败：${error?.name || error?.message || '未知错误'}`);
@@ -3469,6 +3625,26 @@ export default function App() {
       if (kind === 'favorite') {
         const favoriteResult = await favoriteStory(db as any, activeStoryId, user.uid);
         const alreadyFavorited = Boolean(favoriteResult?.alreadyExists);
+        const sourceMeta = activeStoryMeta || await getStoryMeta(db as any, activeStoryId).catch(() => null);
+        if (sourceMeta) {
+          setMySharedStories((prev) => {
+            if (prev.some((story: any) => story.archiveKind === 'favorite' && (story.id === activeStoryId || story.sourceStoryId === activeStoryId))) return prev;
+            return [{
+              ...sourceMeta,
+              id: activeStoryId,
+              archiveKind: 'favorite',
+              sourceStoryId: activeStoryId,
+              originalAuthorId: sourceMeta.authorId,
+              originalAuthorName: sourceMeta.authorName,
+              intervenerId: null,
+              intervenerName: '',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            }, ...prev];
+          });
+        }
+        showError(alreadyFavorited ? '已在馆藏中。' : '已收藏并加入馆藏。');
+        if ((globalThis as any).__legacyFavoriteArchive__) {
 
         const cartridge = await getStoryCartridge(db as any, activeStoryId);
         if (!cartridge) {
@@ -3524,6 +3700,8 @@ export default function App() {
           }, ...prev]);
         }
         showError(alreadyFavorited || alreadyInArchive ? '已在馆藏中。' : '已收藏并加入馆藏。');
+        return;
+        }
         return;
       }
       await reportStory(db as any, activeStoryId, user.uid);
@@ -3962,6 +4140,18 @@ export default function App() {
       setStoryDetailStory(null);
       void startStoryPlay(targetStoryId);
     };
+    const handleShareFromDetail = async () => {
+      if (!storyDetailStory) return;
+      try {
+        setIsSharing(true);
+        await shareOriginalStoryByCard(storyDetailStory);
+      } catch (error: any) {
+        console.error(error);
+        showError(error?.message || '分享失败。');
+      } finally {
+        setIsSharing(false);
+      }
+    };
 
     return (
       <AnimatePresence>
@@ -4016,6 +4206,10 @@ export default function App() {
                   <button type="button" onClick={handlePlayFromDetail} className={semanticButtonClass('primary', { fullWidth: true })}>
                     <Sparkles className="h-4 w-4" />
                     干涉命运
+                  </button>
+                  <button type="button" onClick={handleShareFromDetail} disabled={isSharing} className={semanticButtonClass('secondary', { fullWidth: true })}>
+                    {isSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
+                    分享作品
                   </button>
                   <button type="button" onClick={() => setStoryDetailStory(null)} className={semanticButtonClass('secondary', { fullWidth: true })}>
                     关闭
@@ -4303,8 +4497,8 @@ export default function App() {
               <div key={story.id} className="rounded-[1.5rem] border border-zinc-800 bg-zinc-900/30 p-5">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <div className="line-clamp-1 text-sm font-black text-white">{formatBookTitle(story.title)}</div>
-                  <div className={`rounded-full px-2 py-1 text-[10px] font-black ${story.visibility === 'public' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-zinc-800 text-zinc-400'}`}>
-                    {story.visibility === 'public' ? '公开分享' : '私密馆藏'}
+                  <div className={`rounded-full px-2 py-1 text-[10px] font-black ${story.archiveKind === 'favorite' ? 'bg-indigo-500/10 text-indigo-300' : story.visibility === 'public' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-zinc-800 text-zinc-400'}`}>
+                    {story.archiveKind === 'favorite' ? '收藏原作' : story.visibility === 'public' ? '公开分享' : '保存故事'}
                   </div>
                 </div>
                 <div className="mb-3 grid gap-1 text-[11px] font-bold text-zinc-500">
@@ -4313,21 +4507,18 @@ export default function App() {
                 </div>
                 <div className="line-clamp-3 text-xs leading-relaxed text-zinc-500">{story.main_axis || '暂无主轴摘要。'}</div>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <button type="button" onClick={() => openReadonlyStory(story.id, { allowBack: true, returnTarget: 'ARCHIVE' })} className={semanticButtonClass('secondary', { compact: true })}>
+                  <button type="button" onClick={() => openReadonlyStory(story.archiveKind === 'favorite' ? (story.sourceStoryId || story.id) : story.id, { allowBack: true, returnTarget: 'ARCHIVE' })} className={semanticButtonClass('secondary', { compact: true })}>
                     <BookOpen className="h-4 w-4" />
                     打开
                   </button>
                   <button
                     type="button"
-                    onClick={async () => {
-                      const url = buildSharedStoryUrl(story.id);
-                      const copied = await writeClipboardText(url);
-                      showError(copied ? '链接已复制。' : '复制失败，请手动复制地址栏链接。');
-                    }}
+                    onClick={() => shareArchiveListStory(story)}
+                    disabled={isSharing || archiveUpdatingIds[story.id]}
                     className={semanticButtonClass('ghost', { compact: true })}
                   >
-                    <ExternalLink className="h-4 w-4" />
-                    复制链接
+                    {isSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+                    分享
                   </button>
                   <button
                     type="button"
@@ -4339,7 +4530,7 @@ export default function App() {
                     删除
                   </button>
                 </div>
-                <div className="mt-3 flex gap-2">
+                {story.archiveKind !== 'favorite' && <div className="mt-3 flex gap-2">
                   <button
                     type="button"
                     disabled={archiveUpdatingIds[story.id] || story.visibility === 'private'}
@@ -4356,7 +4547,7 @@ export default function App() {
                   >
                     设为公开
                   </button>
-                </div>
+                </div>}
               </div>
             ))}
           </div>
@@ -5903,6 +6094,19 @@ export default function App() {
                 <Archive className="h-5 w-5" />
                 故事馆藏
               </button>
+              {gameState === 'PLAYING' && (
+                <button
+                  onClick={() => {
+                    setIsActionMenuOpen(false);
+                    void handleShareStory();
+                  }}
+                  disabled={isSharing}
+                  className={semanticMenuButtonClass('secondary')}
+                >
+                  {isSharing ? <Loader2 className="h-5 w-5 animate-spin" /> : <Copy className="h-5 w-5" />}
+                  分享故事
+                </button>
+              )}
               {gameState === 'PLAYING' && (
                 <button
                   onClick={() => {

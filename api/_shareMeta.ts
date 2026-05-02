@@ -69,6 +69,38 @@ export async function fetchSharedStoryMeta(shareId: string): Promise<SharedStory
   };
 }
 
+export async function fetchOriginalStoryMeta(storyId: string): Promise<SharedStoryMeta | null> {
+  const supabaseUrl = getEnv('SUPABASE_URL') || getEnv('VITE_SUPABASE_URL');
+  const supabaseKey = getSupabaseKey();
+  if (!supabaseUrl || !supabaseKey || !storyId) return null;
+
+  const url = `${supabaseUrl}/rest/v1/stories?id=eq.${encodeURIComponent(storyId)}&visibility=in.(public,unlisted)&select=id,title,main_axis,tags,card_excerpt,cover_url,visibility&limit=1`;
+  const response = await fetch(url, {
+    headers: {
+      apikey: supabaseKey,
+      Authorization: `Bearer ${supabaseKey}`,
+    },
+  });
+  if (!response.ok) return null;
+
+  const rows = await response.json();
+  const row = rows?.[0];
+  if (!row) return null;
+
+  const rawTitle = String(row.title || DEFAULT_TITLE);
+  const title = rawTitle.replace(/[ã€Šã€‹]/g, '').trim() || DEFAULT_TITLE;
+  const tags = Array.isArray(row.tags) ? row.tags.filter(Boolean) : [];
+  const description = String(row.card_excerpt || row.main_axis || '') || (tags.length ? `一段关于${tags.slice(0, 3).join('、')}的命运记录。` : DEFAULT_DESCRIPTION);
+
+  return {
+    id: storyId,
+    title: `《${title}》｜命运干涉`,
+    description,
+    coverUrl: String(row.cover_url || ''),
+    visibility: row.visibility,
+  };
+}
+
 export function defaultShareMeta(shareId: string): SharedStoryMeta {
   return {
     id: shareId,

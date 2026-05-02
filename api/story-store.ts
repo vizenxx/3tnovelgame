@@ -7,6 +7,7 @@ const ADMIN_USER_IDS = new Set(['LWgIE31RtCTZBiMNF7S9viNE7Aw2']);
 const STORY_CARD_SELECT = [
   'id',
   'title',
+  'main_axis',
   'tags',
   'visibility',
   'author_id',
@@ -27,6 +28,8 @@ const STORY_CARD_SELECT = [
 ].join(',');
 const SHARED_CARD_SELECT = [
   'id',
+  'snapshot_kind',
+  'content_hash',
   'title',
   'main_axis',
   'tags',
@@ -78,6 +81,7 @@ function storyListItem(row: any) {
   return {
     id: row.id,
     title: row.title,
+    main_axis: row.main_axis,
     tags: row.tags || [],
     visibility: row.visibility,
     authorId: row.author_id,
@@ -113,6 +117,9 @@ function storyMeta(row: any) {
 function sharedRecord(row: any) {
   return {
     id: row.id,
+    archiveKind: row.archive_kind || 'snapshot',
+    snapshotKind: row.snapshot_kind || 'intervened',
+    contentHash: row.content_hash || '',
     title: row.title,
     main_axis: row.main_axis,
     tags: row.tags || [],
@@ -296,9 +303,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const authUser = await requireUser(req, res);
       if (!authUser) return;
       const rows = await supabaseRequest<any[]>('shared_stories', { query: { author_id: `eq.${authUser.uid}`, select: SHARED_CARD_SELECT, order: 'updated_at.desc', limit: body.pageSize || 50 } });
+      const favoriteRows = await supabaseRequest<any[]>('story_favorites', { query: { user_id: `eq.${authUser.uid}`, select: 'story_id,created_at', order: 'created_at.desc', limit: body.pageSize || 50 } });
+      const favoriteIds = favoriteRows.map((row) => String(row.story_id || '')).filter(Boolean);
+      const favoriteStories = favoriteIds.length
+        ? await supabaseRequest<any[]>('stories', { query: { id: `in.(${favoriteIds.join(',')})`, select: STORY_CARD_SELECT } })
+        : [];
       const deduped = new Map<string, any>();
+      favoriteStories.map(storyListItem).forEach((story) => {
+        const favorite = favoriteRows.find((row) => row.story_id === story.id);
+        deduped.set(`favorite:${story.id}`, {
+          ...story,
+          archiveKind: 'favorite',
+          sourceStoryId: story.id,
+          originalAuthorId: story.authorId,
+          originalAuthorName: story.authorName,
+          intervenerId: null,
+          intervenerName: '',
+          createdAt: favorite?.created_at || story.updatedAt,
+          updatedAt: favorite?.created_at || story.updatedAt,
+        });
+      });
       rows.map(sharedRecord).forEach((record) => {
-        const key = record.sourceStoryId || record.id;
+        const key = `snapshot:${record.sourceStoryId || record.id}:${record.contentHash || record.id}:${record.snapshotKind || ''}`;
         if (!deduped.has(key)) deduped.set(key, record);
       });
       return res.status(200).json(Array.from(deduped.values()));
@@ -322,6 +348,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(200).json({
           storyId: record.id,
           meta: {
+            archiveKind: record.archiveKind,
+            snapshotKind: record.snapshotKind,
+            contentHash: record.contentHash,
             sharedStoryId: record.id,
             sourceStoryId: record.sourceStoryId || null,
             title: record.title,
@@ -416,6 +445,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json(await supabaseRpc('favorite_story_once', { p_story_id: body.storyId, p_user_id: authUser.uid }));
     }
 
+    if (action === 'unfavoriteStory') {
+      return res.status(200).json(await supabaseRpc('unfavorite_story_once', { p_story_id: body.storyId, p_user_id: authUser.uid }));
+    }
+
     if (action === 'reportStory') {
       return res.status(200).json(await supabaseRpc('report_story_once', { p_story_id: body.storyId, p_user_id: authUser.uid, p_reason: body.reason || '' }));
     }
@@ -423,6 +456,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (action === 'createSharedStoryRecord') {
       const args = body.args || {};
       const payload = {
+        snapshot_kind: args.snapshotKind || (args.visibility === 'private' ? 'saved_run' : 'intervened'),
+        content_hash: args.contentHash || '',
         title: args.title,
         main_axis: args.main_axis || '',
         tags: asArray(args.tags),
@@ -444,6 +479,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         created_at: nowIso(),
         updated_at: nowIso(),
       };
+      if (payload.source_story_id && payload.content_hash) {
+        const [existing] = await supabaseRequest<any[]>('shared_stories', {
+          query: {
+            author_id: `eq.${authUser.uid}`,
+            source_story_id: `eq.${payload.source_story_id}`,
+            content_hash: `eq.${payload.content_hash}`,
+            snapshot_kind: `eq.${payload.snapshot_kind}`,
+            select: 'id,visibility',
+            limit: 1,
+          },
+        });
+        if (existing?.id) {
+          if (payload.visibility === 'public' && existing.visibility !== 'public') {
+            await supabaseRequest('shared_stories', {
+              method: 'PATCH',
+              query: { id: `eq.${existing.id}`, author_id: `eq.${authUser.uid}` },
+              body: { visibility: 'public', updated_at: nowIso() },
+            });
+          }
+          return res.status(200).json(existing.id);
+        }
+      }
       const [created] = await supabaseInsert<any[]>('shared_stories', [payload]);
       return res.status(200).json(created.id);
     }

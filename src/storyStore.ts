@@ -86,6 +86,7 @@ async function storyApi<T = any>(action: string, payload: Record<string, any> = 
 export type StoryListItem = {
   id: string;
   title: string;
+  main_axis?: string;
   tags: string[];
   visibility: Visibility;
   authorId: string;
@@ -110,6 +111,9 @@ export type StoryListItem = {
 
 export type SharedStoryRecord = {
   id: string;
+  archiveKind?: 'favorite' | 'snapshot';
+  snapshotKind?: 'intervened' | 'saved_run';
+  contentHash?: string;
   title: string;
   main_axis: string;
   tags: string[];
@@ -273,6 +277,13 @@ export async function favoriteStory(db: Firestore, storyId: string, userId: stri
     transaction.update(storyRef, { favoriteCount: increment(1) });
   });
   return { alreadyExists };
+}
+
+export async function unfavoriteStory(db: Firestore, storyId: string, userId: string) {
+  if (useSupabaseStories()) {
+    return storyApi<{ removed: boolean }>('unfavoriteStory', { storyId }, { auth: true });
+  }
+  await deleteDoc(doc(db, 'stories', storyId, 'favorites', userId));
 }
 
 export async function reportStory(db: Firestore, storyId: string, userId: string, reason = '') {
@@ -555,12 +566,17 @@ export async function createSharedStoryRecord(db: Firestore, args: {
   allowAdaptation?: boolean;
   coverUrl?: string;
   visibility?: 'public' | 'private';
+  snapshotKind?: 'intervened' | 'saved_run';
+  contentHash?: string;
 }) {
   if (useSupabaseStories()) {
     return storyApi<string>('createSharedStoryRecord', { args }, { auth: true });
   }
   const now = new Date().toISOString();
   const payload: Omit<SharedStoryRecord, 'id'> = {
+    archiveKind: 'snapshot',
+    snapshotKind: args.snapshotKind || (args.visibility === 'private' ? 'saved_run' : 'intervened'),
+    contentHash: args.contentHash || '',
     title: args.title,
     main_axis: args.main_axis,
     tags: args.tags || [],
@@ -591,6 +607,10 @@ export async function createSharedStoryRecord(db: Firestore, args: {
 
   const ref = await addDoc(collection(db, 'sharedStories'), payload);
   return ref.id;
+}
+
+export async function createStorySnapshot(db: Firestore, args: Parameters<typeof createSharedStoryRecord>[1]) {
+  return createSharedStoryRecord(db, args);
 }
 
 export async function deleteSharedStoryRecord(db: Firestore, sharedStoryId: string, authorId: string) {
