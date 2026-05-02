@@ -1010,6 +1010,7 @@ export default function App() {
   const [authoringImportText, setAuthoringImportText] = useState('');
   const [authoringImportReplaceBranches, setAuthoringImportReplaceBranches] = useState(true);
   const [authoringTab, setAuthoringTab] = useState<'settings' | 'mainline' | 'branches'>('settings');
+  const [authoringTocOpen, setAuthoringTocOpen] = useState(false);
   const [appTheme, setAppTheme] = useState<AppTheme>(() => (
     typeof window !== 'undefined' && window.localStorage?.getItem('app-theme') === 'light'
       ? 'light'
@@ -4072,7 +4073,7 @@ export default function App() {
       >
         <div className="flex gap-4">
           <div className="w-28 shrink-0 sm:w-32">
-            <div className="relative h-28 w-28 overflow-hidden rounded-2xl border border-zinc-800 bg-gradient-to-br from-zinc-800 via-zinc-950 to-indigo-950 sm:h-32 sm:w-32">
+            <button type="button" onClick={() => setStoryDetailStory(story)} className="relative h-28 w-28 overflow-hidden rounded-2xl border border-zinc-800 bg-gradient-to-br from-zinc-800 via-zinc-950 to-indigo-950 sm:h-32 sm:w-32 cursor-pointer transition-all hover:ring-2 hover:ring-indigo-500 hover:ring-offset-2 hover:ring-offset-zinc-950">
               {coverUrl ? (
                 <img src={coverUrl} alt={`${formatBookTitle(getStoryTitle(story))} 封面`} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
               ) : (
@@ -4080,7 +4081,7 @@ export default function App() {
                   3T NOVEL
                 </div>
               )}
-            </div>
+            </button>
             <div className="mt-2 grid gap-1.5 text-[11px] font-black text-zinc-400">
               {storyStats.map((stat) => (
                 <div key={stat.label} className="flex items-center justify-between rounded-xl border border-zinc-800/70 bg-zinc-950/70 px-2 py-1.5">
@@ -5445,7 +5446,14 @@ export default function App() {
                                 return (
                                   <div key={char.id} className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
                                     <div className="mb-3">
-                                      <div className="text-sm font-black text-zinc-100">{char.name}</div>
+                                      <div className="flex items-start justify-between">
+                                        <div className="text-sm font-black text-zinc-100">{char.name}</div>
+                                        {characterStatuses[char.id] && (
+                                          <div className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${characterStatuses[char.id].isDead ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                                            {characterStatuses[char.id].status || '在场'}
+                                          </div>
+                                        )}
+                                      </div>
                                       {branchHints.length > 0 && (
                                         <div className="mt-2 space-y-1 text-xs leading-relaxed text-zinc-500">
                                           {branchHints.map((hint, hintIdx) => (
@@ -5804,14 +5812,14 @@ export default function App() {
           </div>
 
           <div className="mb-6 flex flex-wrap gap-2 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-1">
-            <button type="button" onClick={() => setAuthoringTab('settings')} className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-black transition-colors ${authoringTab === 'settings' ? 'bg-indigo-600 text-white shadow-md' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'}`}>
-              <Copy className="mr-2 inline-block h-4 w-4 -translate-y-0.5" />作品设置
+            <button type="button" onClick={() => setAuthoringTab('settings')} className={`flex-1 flex flex-col items-center justify-center rounded-xl px-2 py-2 text-[11px] font-black transition-colors ${authoringTab === 'settings' ? 'bg-indigo-600 text-white shadow-md' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'}`}>
+              <Copy className="mb-1 h-4 w-4" />作品设置
             </button>
-            <button type="button" onClick={() => setAuthoringTab('mainline')} className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-black transition-colors ${authoringTab === 'mainline' ? 'bg-indigo-600 text-white shadow-md' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'}`}>
-              <BookOpen className="mr-2 inline-block h-4 w-4 -translate-y-0.5" />主线和结局
+            <button type="button" onClick={() => setAuthoringTab('mainline')} className={`flex-1 flex flex-col items-center justify-center rounded-xl px-2 py-2 text-[11px] font-black transition-colors ${authoringTab === 'mainline' ? 'bg-indigo-600 text-white shadow-md' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'}`}>
+              <BookOpen className="mb-1 h-4 w-4" />主线和结局
             </button>
-            <button type="button" onClick={() => setAuthoringTab('branches')} className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-black transition-colors ${authoringTab === 'branches' ? 'bg-indigo-600 text-white shadow-md' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'}`}>
-              <Sparkles className="mr-2 inline-block h-4 w-4 -translate-y-0.5" />角色和支线
+            <button type="button" onClick={() => setAuthoringTab('branches')} className={`flex-1 flex flex-col items-center justify-center rounded-xl px-2 py-2 text-[11px] font-black transition-colors ${authoringTab === 'branches' ? 'bg-indigo-600 text-white shadow-md' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'}`}>
+              <Sparkles className="mb-1 h-4 w-4" />角色和支线
             </button>
           </div>
 
@@ -5819,28 +5827,7 @@ export default function App() {
             <div className="space-y-8">
               {authoringTab === 'settings' && (
                 <section className="space-y-4">
-                  <div>
-                    <h3 className="text-xl font-black text-white">一键导入</h3>
-                    <p className="mt-1 text-xs leading-relaxed text-zinc-500">支持按“主线设置 / 支线设置”范本格式自动解析并写入当前作品。</p>
-                  </div>
-                  <textarea
-                    value={authoringImportText}
-                    onChange={(event) => setAuthoringImportText(event.target.value)}
-                    placeholder="把其他 AI 生成的完整文本粘贴到这里..."
-                    className="min-h-[320px] w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-950 p-5 text-sm text-zinc-300 outline-none transition-colors focus:border-indigo-500"
-                  />
-                  <label className="flex items-center gap-2 text-xs text-zinc-400">
-                    <input
-                      type="checkbox"
-                      checked={authoringImportReplaceBranches}
-                      onChange={(event) => setAuthoringImportReplaceBranches(event.target.checked)}
-                    />
-                    导入时尝试覆盖支线结构
-                  </label>
-                  <button type="button" onClick={handleAuthoringImport} className={semanticButtonClass('secondary', { fullWidth: true })}>
-                    <Copy className="h-4 w-4" />
-                    解析并导入
-                  </button>
+
                   <div className="border-t border-zinc-800 pt-6">
                     <h3 className="text-xl font-black text-white">作品设置</h3>
                     <p className="mt-1 text-xs leading-relaxed text-zinc-500">正式作品可选择私人、非公开链接或公开；保存区记录不会出现在这里。</p>
@@ -5859,8 +5846,25 @@ export default function App() {
                       <input
                         value={authoringCustomTagsInput}
                         onChange={(event) => setAuthoringCustomTagsInput(event.target.value)}
+                        placeholder="在此手动输入标签或点击下方快速添加"
                         className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-white outline-none focus:border-indigo-500"
                       />
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {['生存', '末日', '异界', '恋爱', '悬疑', '推理', '赛博朋克', '奇幻', '惊悚', '治愈'].map(tag => (
+                          <button
+                            key={tag}
+                            type="button"
+                            onClick={() => {
+                               const current = authoringCustomTagsInput.trim();
+                               if (!current) setAuthoringCustomTagsInput(tag);
+                               else if (!current.includes(tag)) setAuthoringCustomTagsInput(current + (current.endsWith('，') || current.endsWith(',') ? '' : '，') + tag);
+                            }}
+                            className="rounded-lg bg-zinc-800/50 px-3 py-1.5 text-[11px] text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-white"
+                          >
+                            + {tag}
+                          </button>
+                        ))}
+                      </div>
                     </label>
                   </div>
                   <section className="rounded-2xl border border-zinc-800 bg-zinc-950/40 p-4">
@@ -5964,10 +5968,66 @@ export default function App() {
                       <span className="mt-1 block text-xs leading-relaxed text-zinc-500">开启后，其他已登录用户可以把这篇作品改编成自己的私人作品。</span>
                     </span>
                   </label>
+                  
+                  <div className="border-t border-zinc-800 pt-6">
+                    <h3 className="text-xl font-black text-white">一键导入</h3>
+                    <p className="mt-1 text-xs leading-relaxed text-zinc-500">支持按“主线设置 / 支线设置”范本格式自动解析并写入当前作品。</p>
+                  </div>
+                  <textarea
+                    value={authoringImportText}
+                    onChange={(event) => setAuthoringImportText(event.target.value)}
+                    placeholder="把其他 AI 生成的完整文本粘贴到这里..."
+                    className="min-h-[320px] w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-950 p-5 text-sm text-zinc-300 outline-none transition-colors focus:border-indigo-500"
+                  />
+                  <label className="flex items-center gap-2 text-xs text-zinc-400">
+                    <input
+                      type="checkbox"
+                      checked={authoringImportReplaceBranches}
+                      onChange={(event) => setAuthoringImportReplaceBranches(event.target.checked)}
+                    />
+                    导入时尝试覆盖支线结构
+                  </label>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <button type="button" onClick={handleAuthoringImport} className={semanticButtonClass('primary', { fullWidth: true })}>
+                      <Copy className="h-4 w-4" />
+                      解析并导入
+                    </button>
+                    <button type="button" onClick={() => {
+                        const template = `# 主线设置\n## 标题\n作品名称\n\n## 主轴\n一句话描述故事核心冲突\n\n## 主要角色\n### 角色1\n- 名字: 角色名A\n- 简介: 角色A的简介\n\n### 角色2\n- 名字: 角色名B\n- 简介: 角色B的简介\n\n## 默认故事\n### 第 1 章 标题一\n第一章大纲或正文\n\n### 第 2 章 标题二\n第二章大纲或正文\n\n## 结局\n### 默认结局\n默认结局正文\n### 左结局\n左结局正文\n### 右结局\n右结局正文\n\n# 支线设置\n## 支线1\n- 支线名: 支线名称\n- 倾向: 左倾\n- 影响: 中\n- 提示短句: 留意这里的变化\n- 支线情节: 这里写支线发生时的具体剧情\n- 条件组1: 第 2 章 角色名A 庇佑`;
+                        navigator.clipboard.writeText(template);
+                        showError('蓝本格式已复制到剪贴板！');
+                    }} className={semanticButtonClass('secondary', { fullWidth: true })}>
+                      <Copy className="h-4 w-4" />
+                      拷贝蓝本格式
+                    </button>
+                  </div>
                 </section>
               )}
 
               {authoringTab === 'mainline' && (
+                <div className="relative">
+                  <div className={`fixed bottom-8 right-8 z-[100] flex-col gap-2 rounded-2xl border border-zinc-800 bg-zinc-950/90 p-2 shadow-2xl backdrop-blur-md transition-all ${authoringTocOpen ? 'flex' : 'hidden'}`}>
+                     <div className="mb-1 text-center text-[10px] font-black text-zinc-500">目录导航</div>
+                     {(authoringCartridge.chapters || []).map((c: any) => (
+                        <button type="button" key={c.chapter_num} onClick={() => document.getElementById(`authoring-chapter-${c.chapter_num}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="rounded-xl px-3 py-2 text-xs font-bold text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white">
+                           第 {c.chapter_num} 章
+                        </button>
+                     ))}
+                     <div className="mx-2 my-1 h-px bg-zinc-800" />
+                     <button type="button" onClick={() => document.getElementById('authoring-endings')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="rounded-xl px-3 py-2 text-xs font-bold text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white">
+                        结局设置
+                     </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setAuthoringTocOpen(!authoringTocOpen)}
+                    className="fixed bottom-8 right-8 z-[101] flex h-12 w-12 items-center justify-center rounded-full bg-indigo-600 text-white shadow-xl hover:bg-indigo-500 active:scale-95"
+                    style={{ transform: authoringTocOpen ? 'translateY(-100%) translateY(-240px)' : 'none', opacity: authoringTocOpen ? 0 : 1, pointerEvents: authoringTocOpen ? 'none' : 'auto', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)' }}
+                  >
+                    <BookOpen className="h-5 w-5" />
+                  </button>
+
                 <section className="space-y-6">
                   <div>
                     <h3 className="text-xl font-black text-white">主线与结局</h3>
@@ -6028,6 +6088,7 @@ export default function App() {
                     ))}
                   </div>
                 </section>
+              </div>
               )}
 
               {authoringTab === 'branches' && (
