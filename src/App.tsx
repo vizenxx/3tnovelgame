@@ -5594,99 +5594,101 @@ export default function App() {
   );
 
   const renderAuthoringView = () => (
-    <div className="mx-auto max-w-7xl px-6 pb-12 pt-24 lg:px-8">
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
-        <BackNavButton label="返回作品库" onClick={() => setGameState('STORY_SELECT')} />
-        <div className="flex flex-wrap gap-3">
-          <button type="button" onClick={() => handleCreateAuthoringStory()} disabled={authoringSaving} className={semanticButtonClass('secondary', { compact: true })}>
-            <Sparkles className="h-4 w-4" />
-            新建作品
-          </button>
-          <button type="button" onClick={() => handleDeleteAuthoringStory()} disabled={authoringSaving || !authoringStoryId} className={semanticButtonClass('danger', { compact: true })}>
-            <Trash2 className="h-4 w-4" />
-            删除当前
-          </button>
-          <button type="button" onClick={() => refreshStories({ force: true })} disabled={authoringSaving} className={semanticButtonClass('ghost', { compact: true })}>
-            <RefreshCcw className="h-4 w-4" />
-            刷新列表
-          </button>
-          <button type="button" onClick={handleSaveAuthoringChanges} disabled={authoringSaving || !authoringCartridge} className={semanticButtonClass('primary', { compact: true })}>
-            {authoringSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-            保存更改
-          </button>
-        </div>
-      </div>
+    <div className="mx-auto max-w-5xl px-6 pb-12 pt-24 lg:px-8">
+      {!authoringCartridge ? (
+        <>
+          <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
+            <BackNavButton label="返回作品库" onClick={() => setGameState('STORY_SELECT')} />
+            <div className="flex flex-wrap gap-3">
+              <button type="button" onClick={() => handleCreateAuthoringStory()} disabled={authoringSaving} className={semanticButtonClass('secondary', { compact: true })}>
+                <Sparkles className="h-4 w-4" />
+                新建作品
+              </button>
+              <button type="button" onClick={() => refreshStories({ force: true })} disabled={authoringSaving} className={semanticButtonClass('ghost', { compact: true })}>
+                <RefreshCcw className="h-4 w-4" />
+                刷新列表
+              </button>
+            </div>
+          </div>
 
-      <div className="grid gap-6 lg:grid-cols-12">
-        <aside className="space-y-6 lg:col-span-4">
-          <div className="rounded-[2rem] border border-zinc-800 bg-zinc-900/30 p-5">
-            <div className="mb-4 text-lg font-black text-white">我的作品</div>
-            <div className="space-y-3">
-              {myStories.length === 0 ? (
-                <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4 text-sm text-zinc-500">
-                  还没有作品，点击“新建作品”开始创作。
-                </div>
-              ) : (
-                myStories.map((story: any) => (
+          <div className="rounded-[2rem] border border-zinc-800 bg-zinc-900/30 p-6 sm:p-8">
+            <div className="mb-6 text-2xl font-black text-white">我的作品</div>
+            {myStories.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/40 p-10 text-center text-zinc-500">
+                还没有作品，点击“新建作品”开始创作。
+              </div>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {myStories.map((story: any) => (
                   <button
                     key={story.id}
                     type="button"
                     onClick={async () => {
-                      if (authoringStoryId !== story.id && authoringDirty) {
-                        setConfirmationModal({
-                          isOpen: true,
-                          title: 'Discard unsaved changes',
-                          message: 'Switch stories and discard current unsaved changes?',
-                          onConfirm: () => {
-                            setAuthoringDirty(false);
-                            void selectAuthoringStory(story.id);
-                          },
-                        });
-                        return;
-                      }
                       await selectAuthoringStory(story.id);
                     }}
-                    className={`w-full rounded-2xl border p-4 text-left transition-colors ${
-                      authoringStoryId === story.id
-                        ? 'border-indigo-500/40 bg-indigo-500/10'
-                        : 'border-zinc-800 bg-zinc-950/40 hover:border-zinc-600'
-                    }`}
+                    className="flex flex-col justify-between rounded-2xl border border-zinc-800 bg-zinc-950/60 p-5 text-left transition-all hover:-translate-y-1 hover:border-indigo-500/50 hover:bg-indigo-500/10 hover:shadow-xl"
                   >
-                    <div className="text-sm font-black text-white">{formatBookTitle(getStoryTitle(story))}</div>
-                    <div className="mt-1 text-xs text-zinc-500">{getStoryAuthorName(story)}</div>
+                    <div>
+                      <div className="line-clamp-2 text-lg font-black text-white leading-tight">{formatBookTitle(getStoryTitle(story))}</div>
+                      <div className="mt-2 text-xs font-bold text-zinc-500">{getStoryAuthorName(story)}</div>
+                    </div>
+                    <div className="mt-4 flex items-center gap-2 text-[10px] text-zinc-600">
+                      <span className="rounded bg-zinc-800/50 px-1.5 py-0.5">{story.visibility === 'public' ? '公开' : story.visibility === 'unlisted' ? '链接分享' : '私人'}</span>
+                    </div>
                   </button>
-                ))
-              )}
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
+            <BackNavButton
+              label="返回列表"
+              onClick={() => {
+                if (authoringDirty) {
+                  setConfirmationModal({
+                    isOpen: true,
+                    title: '放弃未保存的更改',
+                    message: '退出编辑模式将丢失当前未保存的内容，确定要离开吗？',
+                    onConfirm: () => {
+                      setAuthoringDirty(false);
+                      setAuthoringStoryId(null);
+                      setAuthoringCartridge(null);
+                    },
+                  });
+                } else {
+                  setAuthoringStoryId(null);
+                  setAuthoringCartridge(null);
+                }
+              }}
+            />
+            <div className="flex flex-wrap gap-3">
+              <button type="button" onClick={() => handleDeleteAuthoringStory()} disabled={authoringSaving} className={semanticButtonClass('danger', { compact: true })}>
+                <Trash2 className="h-4 w-4" />
+                删除作品
+              </button>
+              <button type="button" onClick={handleSaveAuthoringChanges} disabled={authoringSaving} className={semanticButtonClass('primary', { compact: true })}>
+                {authoringSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                保存更改
+              </button>
             </div>
           </div>
 
-          {authoringCartridge && (
-          <div className="rounded-[2rem] border border-zinc-800 bg-zinc-900/30 p-5">
-            <div className="mb-4 text-lg font-black text-white">编辑分区</div>
-            <nav className="space-y-2">
-              <button type="button" onClick={() => setAuthoringTab('settings')} className={semanticMenuButtonClass(authoringTab === 'settings' ? 'primary' : 'ghost')}>
-                <Copy className="h-4 w-4" />
-                作品设置
-              </button>
-              <button type="button" onClick={() => setAuthoringTab('mainline')} className={semanticMenuButtonClass(authoringTab === 'mainline' ? 'primary' : 'ghost')}>
-                <BookOpen className="h-4 w-4" />
-                主线和结局
-              </button>
-              <button type="button" onClick={() => setAuthoringTab('branches')} className={semanticMenuButtonClass(authoringTab === 'branches' ? 'secondary' : 'ghost')}>
-                <Sparkles className="h-4 w-4" />
-                角色和支线
-              </button>
-            </nav>
+          <div className="mb-6 flex flex-wrap gap-2 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-1">
+            <button type="button" onClick={() => setAuthoringTab('settings')} className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-black transition-colors ${authoringTab === 'settings' ? 'bg-indigo-600 text-white shadow-md' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'}`}>
+              <Copy className="mr-2 inline-block h-4 w-4 -translate-y-0.5" />作品设置
+            </button>
+            <button type="button" onClick={() => setAuthoringTab('mainline')} className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-black transition-colors ${authoringTab === 'mainline' ? 'bg-indigo-600 text-white shadow-md' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'}`}>
+              <BookOpen className="mr-2 inline-block h-4 w-4 -translate-y-0.5" />主线和结局
+            </button>
+            <button type="button" onClick={() => setAuthoringTab('branches')} className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-black transition-colors ${authoringTab === 'branches' ? 'bg-indigo-600 text-white shadow-md' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'}`}>
+              <Sparkles className="mr-2 inline-block h-4 w-4 -translate-y-0.5" />角色和支线
+            </button>
           </div>
-          )}
-        </aside>
 
-        <main className="lg:col-span-8 rounded-[2rem] border border-zinc-800 bg-zinc-900/20 p-6 sm:p-8">
-          {!authoringCartridge ? (
-            <div className="rounded-[2rem] border border-dashed border-zinc-800 bg-zinc-950/40 p-10 text-center text-zinc-500">
-              请选择一个作品，或新建作品后开始编辑。
-            </div>
-          ) : (
+          <div className="rounded-[2rem] border border-zinc-800 bg-zinc-900/20 p-6 sm:p-8">
             <div className="space-y-8">
               {authoringTab === 'settings' && (
                 <section className="space-y-4">
@@ -6378,9 +6380,9 @@ export default function App() {
                 </section>
               )}
             </div>
-          )}
-        </main>
-      </div>
+          </div>
+        </>
+      )}
     </div>
   );
 
