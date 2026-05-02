@@ -906,6 +906,12 @@ export default function App() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [gameState, setGameState] = useState<GameState>('STORY_SELECT');
   const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
+  const [themeInputText, setThemeInputText] = useState('');
+  useEffect(() => {
+    if (selectedThemes.length > 0 && !themeInputText) {
+      setThemeInputText(selectedThemes.join('，'));
+    }
+  }, [selectedThemes, themeInputText]);
   const [customOutline, setCustomOutline] = useState<string>('');
   const [blueprint, setBlueprint] = useState<Blueprint | null>(null);
   const [chapters, setChapters] = useState<Chapter[]>([]);
@@ -4726,21 +4732,37 @@ export default function App() {
         </p>
       </div>
 
-      <div className="mt-10 flex flex-wrap justify-center gap-3">
-        {THEMES.map((theme) => (
-          <button
-            key={theme}
-            type="button"
-            onClick={() => toggleTheme(theme)}
-            className={`rounded-full border px-4 py-2 text-sm font-bold transition-colors ${
-              selectedThemes.includes(theme)
-                ? 'border-indigo-400 bg-indigo-500/10 text-indigo-200'
-                : 'border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
-            }`}
-          >
-            {theme}
-          </button>
-        ))}
+      <div className="mx-auto mt-6 w-full max-w-2xl px-4 text-left">
+        <label className="mb-3 block text-sm font-bold text-zinc-300">主题与标签（以中文逗号分隔）</label>
+        <input
+          value={themeInputText}
+          onChange={(event) => {
+             const val = event.target.value;
+             setThemeInputText(val);
+             setSelectedThemes(val.split(/[,，]/).map(s => s.trim()).filter(Boolean));
+          }}
+          placeholder="在此手动输入标签或点击下方快速添加"
+          className="w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-sm text-zinc-200 outline-none transition-colors focus:border-indigo-500"
+        />
+        <div className="mt-4 flex flex-wrap gap-2">
+          {THEMES.map(tag => (
+            <button
+              key={tag}
+              type="button"
+              onClick={() => {
+                 const current = themeInputText.trim();
+                 let newText = current;
+                 if (!current) newText = tag;
+                 else if (!current.includes(tag)) newText = current + (current.endsWith('，') || current.endsWith(',') ? '' : '，') + tag;
+                 setThemeInputText(newText);
+                 setSelectedThemes(newText.split(/[,，]/).map(s => s.trim()).filter(Boolean));
+              }}
+              className="rounded-lg bg-zinc-800/50 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-white"
+            >
+              + {tag}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="mx-auto mt-10 w-full max-w-2xl rounded-[2rem] border border-zinc-800 bg-zinc-900/30 p-6 text-left">
@@ -5811,15 +5833,15 @@ export default function App() {
             </div>
           </div>
 
-          <div className="mb-6 flex flex-wrap gap-2 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-1">
-            <button type="button" onClick={() => setAuthoringTab('settings')} className={`flex-1 flex flex-col items-center justify-center rounded-xl px-2 py-2 text-[11px] font-black transition-colors ${authoringTab === 'settings' ? 'bg-indigo-600 text-white shadow-md' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'}`}>
-              <Copy className="mb-1 h-4 w-4" />作品设置
+          <div className="mb-6 flex gap-1 overflow-x-auto whitespace-nowrap rounded-2xl border border-zinc-800 bg-zinc-950/70 p-1">
+            <button type="button" onClick={() => setAuthoringTab('settings')} className={`flex-1 flex flex-col items-center justify-center rounded-xl px-1 py-2 text-[10px] sm:text-[11px] font-black transition-colors ${authoringTab === 'settings' ? 'bg-indigo-600 text-white shadow-md' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'}`}>
+              <Copy className="mb-1 h-4 w-4 shrink-0" />作品设置
             </button>
-            <button type="button" onClick={() => setAuthoringTab('mainline')} className={`flex-1 flex flex-col items-center justify-center rounded-xl px-2 py-2 text-[11px] font-black transition-colors ${authoringTab === 'mainline' ? 'bg-indigo-600 text-white shadow-md' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'}`}>
-              <BookOpen className="mb-1 h-4 w-4" />主线和结局
+            <button type="button" onClick={() => setAuthoringTab('mainline')} className={`flex-1 flex flex-col items-center justify-center rounded-xl px-1 py-2 text-[10px] sm:text-[11px] font-black transition-colors ${authoringTab === 'mainline' ? 'bg-indigo-600 text-white shadow-md' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'}`}>
+              <BookOpen className="mb-1 h-4 w-4 shrink-0" />主线和结局
             </button>
-            <button type="button" onClick={() => setAuthoringTab('branches')} className={`flex-1 flex flex-col items-center justify-center rounded-xl px-2 py-2 text-[11px] font-black transition-colors ${authoringTab === 'branches' ? 'bg-indigo-600 text-white shadow-md' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'}`}>
-              <Sparkles className="mb-1 h-4 w-4" />角色和支线
+            <button type="button" onClick={() => setAuthoringTab('branches')} className={`flex-1 flex flex-col items-center justify-center rounded-xl px-1 py-2 text-[10px] sm:text-[11px] font-black transition-colors ${authoringTab === 'branches' ? 'bg-indigo-600 text-white shadow-md' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'}`}>
+              <Sparkles className="mb-1 h-4 w-4 shrink-0" />角色和支线
             </button>
           </div>
 
@@ -6009,12 +6031,12 @@ export default function App() {
                   <div className={`fixed bottom-8 right-8 z-[100] flex-col gap-2 rounded-2xl border border-zinc-800 bg-zinc-950/90 p-2 shadow-2xl backdrop-blur-md transition-all ${authoringTocOpen ? 'flex' : 'hidden'}`}>
                      <div className="mb-1 text-center text-[10px] font-black text-zinc-500">目录导航</div>
                      {(authoringCartridge.chapters || []).map((c: any) => (
-                        <button type="button" key={c.chapter_num} onClick={() => document.getElementById(`authoring-chapter-${c.chapter_num}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="rounded-xl px-3 py-2 text-xs font-bold text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white">
+                        <button type="button" key={c.chapter_num} onClick={() => { setAuthoringTocOpen(false); document.getElementById(`authoring-chapter-${c.chapter_num}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} className="rounded-xl px-3 py-2 text-xs font-bold text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white">
                            第 {c.chapter_num} 章
                         </button>
                      ))}
                      <div className="mx-2 my-1 h-px bg-zinc-800" />
-                     <button type="button" onClick={() => document.getElementById('authoring-endings')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="rounded-xl px-3 py-2 text-xs font-bold text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white">
+                     <button type="button" onClick={() => { setAuthoringTocOpen(false); document.getElementById('authoring-endings')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} className="rounded-xl px-3 py-2 text-xs font-bold text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white">
                         结局设置
                      </button>
                   </div>
@@ -6037,7 +6059,7 @@ export default function App() {
                   <div className="space-y-4">
                     <div className="text-lg font-black text-white">章节正文</div>
                     {(authoringCartridge.chapters || []).map((chapter: any) => (
-                      <div key={chapter.chapter_num} className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/40 p-4 space-y-3">
+                      <div id={`authoring-chapter-${chapter.chapter_num}`} key={chapter.chapter_num} className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/40 p-4 space-y-3">
                         <div className="text-sm font-black text-white">{formatStoryHeading(chapter)}</div>
                         <input
                           value={chapter.title || ''}
@@ -6062,7 +6084,7 @@ export default function App() {
                   </div>
 
                   <div className="space-y-4">
-                    <div className="text-lg font-black text-white">结局设置</div>
+                    <div id="authoring-endings" className="text-lg font-black text-white">结局设置</div>
                     {(authoringCartridge.endings || []).map((ending: any) => (
                       <div key={ending.id} className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/40 p-4 space-y-3">
                         <div className="text-sm font-black text-white">{endingIdToLabel(ending.id)}</div>
