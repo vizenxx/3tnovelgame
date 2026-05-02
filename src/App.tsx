@@ -925,6 +925,7 @@ export default function App() {
   const [showIosInstallModal, setShowIosInstallModal] = useState<boolean>(false);
   const [isStandaloneMode, setIsStandaloneMode] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
+  const [preparedSharePayload, setPreparedSharePayload] = useState<ShareData | null>(null);
   const [sharedStoryId, setSharedStoryId] = useState<string | null>(null);
   const [readonlyStoryData, setReadonlyStoryData] = useState<{ meta: any, chapters: Chapter[] } | null>(null);
   const [readonlyCanGoBack, setReadonlyCanGoBack] = useState(false);
@@ -1813,7 +1814,10 @@ export default function App() {
       const shareUrl = buildSharedStoryUrl(archiveId);
       const shareTitle = formatBookTitle(story.meta?.title || '未命名故事');
       const shareText = buildStoryShareText(shareTitle, story.chapters);
-      await deliverPreparedShare({ title: shareTitle, text: shareText, url: shareUrl });
+      const payload = { title: shareTitle, text: shareText, url: shareUrl };
+      setPreparedSharePayload(payload);
+      const shared = await deliverPreparedShare(payload);
+      if (shared) setPreparedSharePayload(null);
     } catch (error: any) {
       console.error(error);
       if (error?.name === 'AbortError') {
@@ -2044,21 +2048,22 @@ export default function App() {
     const copied = await writeClipboardText(buildShareClipboardText(String(payload.text || ''), String(payload.url || '')));
     if (!navigator.share) {
       showError(copied ? '已复制分享内容到剪贴板。' : '分享链接已准备好，请手动复制浏览器地址。');
-      return;
+      return false;
     }
     try {
       await openSystemShare(payload);
       if (copied && isIosDevice()) {
         showError('已打开系统分享，分享文案也已复制；如果社交 App 没带上文字，可直接粘贴。');
       }
+      return true;
     } catch (error: any) {
       if (error?.name === 'AbortError') {
         showError('已取消分享。');
-        return;
+        return false;
       }
       if (copied) {
-        showError('系统分享未能打开，但分享内容已复制，可直接粘贴发送。');
-        return;
+        showError('系统分享未能自动打开，分享内容已复制；也可以再点一次“打开系统分享”。');
+        return false;
       }
       throw error;
     }
@@ -3419,7 +3424,10 @@ export default function App() {
       const shareUrl = buildSharedStoryUrl(shareId);
       const shareTitle = formatBookTitle(blueprint?.title || "未命名故事");
       const shareText = buildStoryShareText(shareTitle, chapters);
-      await deliverPreparedShare({ title: shareTitle, text: shareText, url: shareUrl });
+      const payload = { title: shareTitle, text: shareText, url: shareUrl };
+      setPreparedSharePayload(payload);
+      const shared = await deliverPreparedShare(payload);
+      if (shared) setPreparedSharePayload(null);
     } catch (e) {
       console.error(e);
       if ((e as any)?.name === 'AbortError') {
@@ -3845,6 +3853,71 @@ export default function App() {
               <button type="button" onClick={handleShareStory} disabled={isSharing} className={semanticButtonClass('primary', { fullWidth: true })}>
                 {isSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
                 分享故事
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
+  const renderPreparedShareModal = () => (
+    <AnimatePresence>
+      {preparedSharePayload && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[2600] flex items-center justify-center bg-black/80 px-4 py-[max(1.5rem,env(safe-area-inset-top))]"
+        >
+          <motion.div
+            initial={{ scale: 0.96, y: 16 }}
+            animate={{ scale: 1, y: 0 }}
+            exit={{ scale: 0.96, y: 16 }}
+            className="w-full max-w-md rounded-[2rem] border border-white/10 bg-zinc-950 p-6 shadow-2xl shadow-black/50"
+          >
+            <p className="text-xs font-black uppercase tracking-[0.3em] text-indigo-300">Share Ready</p>
+            <h3 className="mt-3 text-2xl font-black text-white">分享链接已准备好</h3>
+            <p className="mt-3 text-sm leading-7 text-zinc-300">
+              如果系统分享弹窗刚才没有跳出，通常是 iOS/PWA 把异步生成链接后的分享动作拦截了。现在再点一次按钮，就会以新的用户动作打开系统分享。
+            </p>
+            <div className="mt-5 rounded-2xl border border-zinc-800 bg-zinc-900/70 p-3 text-xs leading-6 text-zinc-400 break-all">
+              {preparedSharePayload.url}
+            </div>
+            <div className="mt-6 grid gap-3">
+              {navigator.share && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await openSystemShare(preparedSharePayload);
+                      setPreparedSharePayload(null);
+                    } catch (error: any) {
+                      if (error?.name === 'AbortError') {
+                        showError('已取消分享。');
+                        return;
+                      }
+                      await copySharePayload(preparedSharePayload);
+                    }
+                  }}
+                  className={semanticButtonClass('primary', { fullWidth: true })}
+                >
+                  <Copy className="h-4 w-4" /> 打开系统分享
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => { void copySharePayload(preparedSharePayload); }}
+                className={semanticButtonClass('secondary', { fullWidth: true })}
+              >
+                复制分享文字和链接
+              </button>
+              <button
+                type="button"
+                onClick={() => setPreparedSharePayload(null)}
+                className="rounded-2xl px-4 py-3 text-sm font-bold text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-white"
+              >
+                关闭
               </button>
             </div>
           </motion.div>
@@ -6186,6 +6259,7 @@ export default function App() {
           {renderLeaveGameModal()}
           {renderBranchUnlockModal()}
           {renderSummaryModal()}
+          {renderPreparedShareModal()}
           
           <AnimatePresence>
             {storyLaunchOverlay && (
