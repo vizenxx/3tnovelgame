@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp, Download, Sun, Moon } from 'lucide-react';
@@ -983,6 +983,7 @@ export default function App() {
   const [archiveSearch, setArchiveSearch] = useState('');
   const [archiveUpdatingIds, setArchiveUpdatingIds] = useState<Record<string, boolean>>({});
   const [archiveChoiceStoryId, setArchiveChoiceStoryId] = useState<string | null>(null);
+  const [archiveTab, setArchiveTab] = useState<'favorite' | 'saved'>('favorite');
   const [showScrollTopButton, setShowScrollTopButton] = useState(false);
   const [readonlyReturnTarget, setReadonlyReturnTarget] = useState<GameState>('STORY_SELECT');
   const [archiveReturnTarget, setArchiveReturnTarget] = useState<GameState>('STORY_SELECT');
@@ -4467,8 +4468,8 @@ export default function App() {
             <div className="line-clamp-2 text-sm font-black text-white leading-snug">{formatBookTitle(story.title)}</div>
             <div className="shrink-0 rounded-full bg-indigo-500/15 px-2 py-1 text-[10px] font-black text-indigo-300">收藏原作</div>
           </div>
-          <div className="mb-3 grid gap-1 text-[11px] font-bold text-zinc-500">
-            <div>原作者：{getOriginalAuthorName(story)}</div>
+          <div className="mb-3 text-[11px] font-bold text-zinc-500">
+            原作者：{getOriginalAuthorName(story)}
           </div>
           <div className="line-clamp-3 text-xs leading-relaxed text-zinc-500 mb-4">{story.main_axis || '暂无主轴摘要。'}</div>
 
@@ -4619,56 +4620,36 @@ export default function App() {
           <BackNavButton label={archiveReturnTarget === 'PLAYING' ? '返回游玩页' : '返回作品库'} onClick={leaveArchiveView} />
         </div>
 
-        {/* 搜索栏 */}
-        <div className="mb-8 rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4">
-          <input
-            type="search"
-            value={archiveSearch}
-            onChange={(event) => { setArchiveSearch(event.target.value); setArchiveChoiceStoryId(null); }}
-            placeholder="搜索标题或主轴内容"
-            className="w-full rounded-xl border border-zinc-700 bg-zinc-950/70 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500"
-          />
-        </div>
-
-        {/* 收藏区 */}
-        <section className="mb-12">
-          <div className="mb-5 flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-500/15">
-              <Heart className="h-4 w-4 text-indigo-400" />
-            </div>
-            <div>
-              <div className="text-base font-black text-white">收藏 &amp; 分享</div>
-              <div className="text-xs text-zinc-500">原作快速入口 — 点击「前往原作」选择「干涉命运」或「观测命数」</div>
-            </div>
-          </div>
-          {favoriteStories.length === 0 ? (
-            <div className="rounded-[2rem] border border-dashed border-indigo-500/20 bg-indigo-500/5 p-8 text-center">
-              <div className="text-sm font-bold text-zinc-500">
-                {keyword ? '没有符合搜索词的收藏原作' : '还没有收藏任何原作'}
-              </div>
-              <div className="mt-1 text-xs text-zinc-600">在游玩页点击「收藏」按钮，原作会出现在这里。</div>
-            </div>
-          ) : (
-            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {favoriteStories.map(renderFavoriteCard)}
-            </div>
-          )}
-        </section>
-
-        {/* 保存区 */}
-        <section>
-          <div className="mb-5 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500/15">
-                <Bookmark className="h-4 w-4 text-emerald-400" />
-              </div>
-              <div>
-                <div className="text-base font-black text-white">保存 &amp; 分享</div>
-                <div className="text-xs text-zinc-500">干涉后的快照与只读分享页</div>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
+        <section className="rounded-[2rem] border border-zinc-800 bg-zinc-900/20 p-4 sm:p-5">
+          {/* Tab 切换栏 */}
+          <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex rounded-2xl border border-zinc-800 bg-zinc-950/70 p-1">
               {([
+                { id: 'favorite', label: '收藏原作' },
+                { id: 'saved', label: '保存记录' },
+              ] as const).map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => { setArchiveTab(tab.id); setArchiveChoiceStoryId(null); }}
+                  className={`rounded-xl px-4 py-2 text-sm font-black transition-all duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 ${
+                    archiveTab === tab.id ? 'bg-indigo-600 text-white shadow-lg' : 'text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200'
+                  }`}
+                >
+                  {tab.label} <span className="ml-1 text-[10px] opacity-70">{mySharedStories.filter((s: any) => tab.id === 'favorite' ? s.archiveKind === 'favorite' : s.archiveKind !== 'favorite').length}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto_auto]">
+              <input
+                type="search"
+                value={archiveSearch}
+                onChange={(event) => { setArchiveSearch(event.target.value); setArchiveChoiceStoryId(null); }}
+                placeholder="搜索标题或主轴内容"
+                className="min-w-0 rounded-xl border border-zinc-800 bg-zinc-950/80 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+              />
+              {archiveTab === 'saved' && ([
                 { id: 'all', label: '全部' },
                 { id: 'private', label: '私密' },
                 { id: 'public', label: '公开' },
@@ -4684,17 +4665,28 @@ export default function App() {
               ))}
             </div>
           </div>
-          {savedStories.length === 0 ? (
-            <div className="rounded-[2rem] border border-dashed border-zinc-800 bg-zinc-900/20 p-8 text-center">
-              <div className="text-sm font-bold text-zinc-500">
-                {keyword || archiveFilter !== 'all' ? '没有符合条件的保存记录' : '还没有保存任何干涉记录'}
+
+          {/* Tab 内容 */}
+          {archiveTab === 'favorite' ? (
+            favoriteStories.length === 0 ? (
+              <div className="rounded-3xl border border-dashed border-zinc-800 bg-zinc-950/40 p-10 text-center text-sm font-bold text-zinc-500">
+                {keyword ? '没有符合搜索词的收藏原作' : '还没有收藏任何原作。在游玩页点击「收藏」后会出现在这里。'}
               </div>
-              <div className="mt-1 text-xs text-zinc-600">在游玩页点击「保存作品」后，记录会出现在这里。</div>
-            </div>
+            ) : (
+              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {favoriteStories.map(renderFavoriteCard)}
+              </div>
+            )
           ) : (
-            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {savedStories.map(renderSavedCard)}
-            </div>
+            savedStories.length === 0 ? (
+              <div className="rounded-3xl border border-dashed border-zinc-800 bg-zinc-950/40 p-10 text-center text-sm font-bold text-zinc-500">
+                {keyword || archiveFilter !== 'all' ? '没有符合条件的保存记录' : '还没有保存任何干涉记录。在游玩页点击「保存作品」后会出现在这里。'}
+              </div>
+            ) : (
+              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {savedStories.map(renderSavedCard)}
+              </div>
+            )
           )}
         </section>
       </div>
