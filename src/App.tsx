@@ -6028,7 +6028,10 @@ export default function App() {
 
               {authoringTab === 'mainline' && (
                 <div className="relative">
-                  <div className={`fixed bottom-8 right-8 z-[100] flex-col gap-2 rounded-2xl border border-zinc-800 bg-zinc-950/90 p-2 shadow-2xl backdrop-blur-md transition-all ${authoringTocOpen ? 'flex' : 'hidden'}`}>
+                  {authoringTocOpen && (
+                    <div className="fixed inset-0 z-[99]" onClick={() => setAuthoringTocOpen(false)} />
+                  )}
+                  <div className={`fixed bottom-8 left-8 z-[100] flex-col gap-2 rounded-2xl border border-zinc-800 bg-zinc-950/90 p-2 shadow-2xl backdrop-blur-md transition-all ${authoringTocOpen ? 'flex' : 'hidden'}`}>
                      <div className="mb-1 text-center text-[10px] font-black text-zinc-500">目录导航</div>
                      {(authoringCartridge.chapters || []).map((c: any) => (
                         <button type="button" key={c.chapter_num} onClick={() => { setAuthoringTocOpen(false); document.getElementById(`authoring-chapter-${c.chapter_num}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} className="rounded-xl px-3 py-2 text-xs font-bold text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white">
@@ -6044,7 +6047,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setAuthoringTocOpen(!authoringTocOpen)}
-                    className="fixed bottom-8 right-8 z-[101] flex h-12 w-12 items-center justify-center rounded-full bg-indigo-600 text-white shadow-xl hover:bg-indigo-500 active:scale-95"
+                    className="fixed bottom-8 left-8 z-[101] flex h-12 w-12 items-center justify-center rounded-full bg-indigo-600 text-white shadow-xl hover:bg-indigo-500 active:scale-95"
                     style={{ transform: authoringTocOpen ? 'translateY(-100%) translateY(-240px)' : 'none', opacity: authoringTocOpen ? 0 : 1, pointerEvents: authoringTocOpen ? 'none' : 'auto', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)' }}
                   >
                     <BookOpen className="h-5 w-5" />
