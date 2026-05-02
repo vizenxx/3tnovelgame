@@ -22,3 +22,4 @@ test-*.mjs
 local-dev.mjs
 refactor.cjs
 imagen-models.txt
+.vercel
