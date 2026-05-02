@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp, Download, Sun, Moon } from 'lucide-react';
@@ -4154,6 +4154,11 @@ export default function App() {
         setIsSharing(false);
       }
     };
+    const handleFavoriteFromDetail = async () => {
+      const sid = storyDetailStory?.id || storyDetailStory?.storyId;
+      if (!sid || !db || !user) { setIsAccountCenterOpen(true); return; }
+      await handleStoryInteraction('favorite');
+    };
 
     return (
       <AnimatePresence>
@@ -4209,11 +4214,17 @@ export default function App() {
                     <Sparkles className="h-4 w-4" />
                     干涉命运
                   </button>
-                  <button type="button" onClick={handleShareFromDetail} disabled={isSharing} className={semanticButtonClass('secondary', { fullWidth: true })}>
-                    {isSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
-                    分享作品
-                  </button>
-                  <button type="button" onClick={() => setStoryDetailStory(null)} className={semanticButtonClass('secondary', { fullWidth: true })}>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button type="button" onClick={handleFavoriteFromDetail} className={semanticButtonClass('secondary', { fullWidth: true })}>
+                      <Bookmark className="h-4 w-4" />
+                      收藏原作
+                    </button>
+                    <button type="button" onClick={handleShareFromDetail} disabled={isSharing} className={semanticButtonClass('secondary', { fullWidth: true })}>
+                      {isSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
+                      分享作品
+                    </button>
+                  </div>
+                  <button type="button" onClick={() => setStoryDetailStory(null)} className={semanticButtonClass('ghost', { fullWidth: true })}>
                     关闭
                   </button>
                 </div>
@@ -4509,7 +4520,7 @@ export default function App() {
               >
                 <BookOpen className="h-4 w-4 shrink-0" />
                 <div>
-                  <div>观测命数</div>
+                  <div>观看命运</div>
                   <div className="text-[10px] font-normal text-zinc-500">以只读方式阅读原版故事</div>
                 </div>
               </button>
@@ -4547,33 +4558,54 @@ export default function App() {
       );
     };
 
+    const cycleVisibility = (story: any) => {
+      const next = story.visibility === 'private' ? 'public'
+        : story.visibility === 'public' ? 'unlisted'
+        : 'private';
+      void handleArchiveVisibilityChange(story, next as 'public' | 'private');
+    };
+    const visibilityLabel = (v: string) =>
+      v === 'public' ? '公开分享' : v === 'unlisted' ? '链接分享' : '私密保存';
+    const visibilityClass = (v: string) =>
+      v === 'public'
+        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20'
+        : v === 'unlisted'
+        ? 'bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20'
+        : 'bg-zinc-800/80 border-zinc-700 text-zinc-400 hover:bg-zinc-700';
+
     const renderSavedCard = (story: any) => (
       <div key={story.id} className="rounded-[1.5rem] border border-zinc-800 bg-zinc-900/30 p-5">
         <div className="mb-2 flex items-start justify-between gap-2">
           <div className="line-clamp-2 text-sm font-black text-white leading-snug">{formatBookTitle(story.title)}</div>
-          <div className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-black ${story.visibility === 'public' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-zinc-800 text-zinc-400'}`}>
-            {story.visibility === 'public' ? '公开分享' : '私密保存'}
-          </div>
+          <button
+            type="button"
+            disabled={archiveUpdatingIds[story.id]}
+            onClick={() => cycleVisibility(story)}
+            title="点击切换可见范围"
+            className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-black transition-colors ${visibilityClass(story.visibility)}`}
+          >
+            {visibilityLabel(story.visibility)}
+          </button>
         </div>
         <div className="mb-3 grid gap-1 text-[11px] font-bold text-zinc-500">
           <div>原作者：{getOriginalAuthorName(story)}</div>
           {getIntervenerName(story) && <div>干涉者：{getIntervenerName(story)}</div>}
         </div>
         <div className="line-clamp-3 text-xs leading-relaxed text-zinc-500">{story.main_axis || '暂无主轴摘要。'}</div>
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-4 flex gap-2">
           <button
             type="button"
             onClick={() => openReadonlyStory(story.id, { allowBack: true, returnTarget: 'ARCHIVE' })}
             className={semanticButtonClass('secondary', { compact: true })}
           >
             <BookOpen className="h-4 w-4" />
-            观测命数
+            观看命运
           </button>
           <button
             type="button"
             disabled={isSharing || archiveUpdatingIds[story.id]}
             onClick={() => shareArchiveListStory(story)}
-            className={semanticButtonClass('ghost', { compact: true })}
+            className={semanticButtonClass('secondary', { compact: true })}
           >
             {isSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
             分享
@@ -4588,24 +4620,6 @@ export default function App() {
             删除
           </button>
         </div>
-        <div className="mt-3 flex gap-2">
-          <button
-            type="button"
-            disabled={archiveUpdatingIds[story.id] || story.visibility === 'private'}
-            onClick={() => handleArchiveVisibilityChange(story, 'private')}
-            className={semanticButtonClass('ghost', { compact: true })}
-          >
-            设为私密
-          </button>
-          <button
-            type="button"
-            disabled={archiveUpdatingIds[story.id] || story.visibility === 'public'}
-            onClick={() => handleArchiveVisibilityChange(story, 'public')}
-            className={semanticButtonClass('ghost', { compact: true })}
-          >
-            设为公开
-          </button>
-        </div>
       </div>
     );
 
@@ -4613,8 +4627,8 @@ export default function App() {
       <div className="mx-auto max-w-6xl px-6 pb-12 pt-24 lg:px-8">
         <div className="mb-10 flex items-start justify-between gap-4">
           <div>
-            <div className="text-xs font-black uppercase tracking-[0.22em] text-zinc-500">故事馆藏</div>
-            <h2 className="mt-2 text-3xl font-black text-white sm:text-4xl">藏馆</h2>
+            <div className="text-xs font-black uppercase tracking-[0.22em] text-zinc-500">命运收藏馆</div>
+            <h2 className="mt-2 text-3xl font-black text-white sm:text-4xl">命运收藏馆</h2>
             <p className="mt-2 text-sm text-zinc-500">管理你收藏的原作与保存的干涉记录。</p>
           </div>
           <BackNavButton label={archiveReturnTarget === 'PLAYING' ? '返回游玩页' : '返回作品库'} onClick={leaveArchiveView} />
@@ -4641,28 +4655,32 @@ export default function App() {
               ))}
             </div>
 
-            <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto_auto]">
+            <div className="flex flex-wrap items-center gap-2">
               <input
                 type="search"
                 value={archiveSearch}
                 onChange={(event) => { setArchiveSearch(event.target.value); setArchiveChoiceStoryId(null); }}
                 placeholder="搜索标题或主轴内容"
-                className="min-w-0 rounded-xl border border-zinc-800 bg-zinc-950/80 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+                className="min-w-0 flex-1 rounded-xl border border-zinc-800 bg-zinc-950/80 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500"
               />
-              {archiveTab === 'saved' && ([
-                { id: 'all', label: '全部' },
-                { id: 'private', label: '私密' },
-                { id: 'public', label: '公开' },
-              ] as const).map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={() => setArchiveFilter(option.id)}
-                  className={archiveFilter === option.id ? semanticButtonClass('primary', { compact: true }) : semanticButtonClass('ghost', { compact: true })}
-                >
-                  {option.label}
-                </button>
-              ))}
+              {archiveTab === 'saved' && (
+                <div className="flex gap-1.5">
+                  {([
+                    { id: 'all', label: '全部' },
+                    { id: 'private', label: '私密' },
+                    { id: 'public', label: '公开' },
+                  ] as const).map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => setArchiveFilter(option.id)}
+                      className={archiveFilter === option.id ? semanticButtonClass('primary', { compact: true }) : semanticButtonClass('ghost', { compact: true })}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -4916,7 +4934,7 @@ export default function App() {
               <section className="rounded-[1.5rem] border border-zinc-800 bg-zinc-900/30 p-5">
                 <div className="mb-4 flex items-center gap-2 text-lg font-black text-white">
                   <Archive className="h-5 w-5 text-indigo-300" />
-                  故事馆藏
+                  命运收藏馆
                 </div>
                 <div className="space-y-3 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
                   <div className="text-sm text-zinc-400">
@@ -4928,7 +4946,7 @@ export default function App() {
                     className={semanticButtonClass('secondary', { fullWidth: true })}
                   >
                     <Archive className="h-4 w-4" />
-                    打开故事馆藏页
+                    打开命运收藏馆页
                   </button>
                 </div>
               </section>
@@ -5262,7 +5280,7 @@ export default function App() {
       <button
         type="button"
         onClick={() => openArchiveView('STORY_SELECT')}
-        aria-label="打开故事馆藏"
+        aria-label="打开命运收藏馆"
         className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950/85 text-zinc-200 transition-colors hover:border-zinc-600 hover:text-white backdrop-blur-md"
       >
         <Archive className="h-5 w-5" />
@@ -6228,7 +6246,7 @@ export default function App() {
                 className={semanticMenuButtonClass('ghost')}
               >
                 <Archive className="h-5 w-5" />
-                故事馆藏
+                命运收藏馆
               </button>
               {gameState === 'PLAYING' && (
                 <button
