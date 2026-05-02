@@ -3610,27 +3610,28 @@ export default function App() {
     }
   };
 
-  const handleStoryInteraction = async (kind: 'like' | 'favorite' | 'report') => {
-    if (!activeStoryId || !db || !user) return;
+  const handleStoryInteraction = async (kind: 'like' | 'favorite' | 'report', targetId?: string, targetMeta?: any) => {
+    const idToUse = targetId || activeStoryId;
+    if (!idToUse || !db || !user) { if (!user) setIsAccountCenterOpen(true); return; }
     try {
       if (kind === 'like') {
-        const result = await likeStory(db as any, activeStoryId, user.uid);
+        const result = await likeStory(db as any, idToUse, user.uid);
         if (result?.alreadyExists) throw new Error('already-liked');
-        showError('å·²ç‚¹èµžã€‚');
+        showError('已点赞。');
         return;
       }
       if (kind === 'favorite') {
-        const favoriteResult = await favoriteStory(db as any, activeStoryId, user.uid);
+        const favoriteResult = await favoriteStory(db as any, idToUse, user.uid);
         const alreadyFavorited = Boolean(favoriteResult?.alreadyExists);
-        const sourceMeta = activeStoryMeta || await getStoryMeta(db as any, activeStoryId).catch(() => null);
+        const sourceMeta = targetMeta || activeStoryMeta || await getStoryMeta(db as any, idToUse).catch(() => null);
         if (sourceMeta) {
           setMySharedStories((prev) => {
-            if (prev.some((story: any) => story.archiveKind === 'favorite' && (story.id === activeStoryId || story.sourceStoryId === activeStoryId))) return prev;
+            if (prev.some((story: any) => story.archiveKind === 'favorite' && (story.id === idToUse || story.sourceStoryId === idToUse))) return prev;
             return [{
               ...sourceMeta,
-              id: activeStoryId,
+              id: idToUse,
               archiveKind: 'favorite',
-              sourceStoryId: activeStoryId,
+              sourceStoryId: idToUse,
               originalAuthorId: sourceMeta.authorId,
               originalAuthorName: sourceMeta.authorName,
               intervenerId: null,
@@ -3643,14 +3644,14 @@ export default function App() {
         showError(alreadyFavorited ? '已在馆藏中。' : '已收藏并加入馆藏。');
         if ((globalThis as any).__legacyFavoriteArchive__) {
 
-        const cartridge = await getStoryCartridge(db as any, activeStoryId);
+        const cartridge = await getStoryCartridge(db as any, idToUse);
         if (!cartridge) {
           throw new Error('story-not-found-or-denied');
         }
-        const archiveSourceStoryId = activeStoryId;
+        const archiveSourceStoryId = idToUse;
         const alreadyInArchive = mySharedStories.some((story: any) => (
           story.sourceStoryId === archiveSourceStoryId ||
-          story.sourceStoryId === activeStoryId ||
+          story.sourceStoryId === idToUse ||
           story.id === archiveSourceStoryId
         ));
         if (!alreadyInArchive) {
@@ -3701,8 +3702,8 @@ export default function App() {
         }
         return;
       }
-      await reportStory(db as any, activeStoryId, user.uid);
-      showError('å·²æ”¶åˆ°ä¸¾æŠ¥ã€‚');
+      await reportStory(db as any, idToUse, user.uid);
+      showError('已收到举报。');
       return;
     } catch (error) {
       if ((error as any)?.message === 'already-liked') {
@@ -4125,12 +4126,6 @@ export default function App() {
     const coverUrl = storyDetailStory ? getStoryCoverUrl(storyDetailStory) : '';
     const tags = storyDetailStory ? getStoryTags(storyDetailStory) : [];
     const title = storyDetailStory ? formatBookTitle(getStoryTitle(storyDetailStory)) : '';
-    const stats = [
-      { label: '点赞', value: storyDetailStory ? getStoryLikeCount(storyDetailStory) : 0 },
-      { label: '干涉', value: storyDetailStory ? getStoryInterventionCount(storyDetailStory) : 0 },
-      { label: '收藏', value: storyDetailStory ? getStoryFavoriteCount(storyDetailStory) : 0 },
-      { label: '均章字数', value: `${storyDetailStory ? getStoryAverageChapterWords(storyDetailStory) || '未知' : '未知'} 字` },
-    ];
     const handlePlayFromDetail = () => {
       const targetStoryId = storyDetailStory?.id || storyDetailStory?.storyId;
       if (!targetStoryId) return;
@@ -4148,11 +4143,6 @@ export default function App() {
       } finally {
         setIsSharing(false);
       }
-    };
-    const handleFavoriteFromDetail = async () => {
-      const sid = storyDetailStory?.id || storyDetailStory?.storyId;
-      if (!sid || !db || !user) { setIsAccountCenterOpen(true); return; }
-      await handleStoryInteraction('favorite');
     };
 
     return (
@@ -4182,12 +4172,30 @@ export default function App() {
                   )}
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-1">
-                  {stats.map((stat) => (
-                    <div key={stat.label} className="rounded-2xl border border-zinc-800 bg-zinc-900/60 px-3 py-2">
-                      <div className="text-[11px] font-black text-zinc-500">{stat.label}</div>
-                      <div className="mt-0.5 text-sm font-black text-zinc-100">{stat.value}</div>
+                  <button type="button" onClick={() => handleStoryInteraction('like', storyDetailStory?.id || storyDetailStory?.storyId, storyDetailStory)} className="group flex flex-col justify-between rounded-2xl border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-left transition-all hover:border-pink-500/30 hover:bg-pink-500/10 active:scale-[0.98]">
+                    <div className="flex w-full items-center justify-between text-[11px] font-black text-zinc-500 transition-colors group-hover:text-pink-400">
+                      点赞 <Heart className="h-3.5 w-3.5" />
                     </div>
-                  ))}
+                    <div className="mt-0.5 text-sm font-black text-zinc-100">{storyDetailStory ? getStoryLikeCount(storyDetailStory) : 0}</div>
+                  </button>
+                  <button type="button" onClick={() => handleStoryInteraction('favorite', storyDetailStory?.id || storyDetailStory?.storyId, storyDetailStory)} className="group flex flex-col justify-between rounded-2xl border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-left transition-all hover:border-amber-500/30 hover:bg-amber-500/10 active:scale-[0.98]">
+                    <div className="flex w-full items-center justify-between text-[11px] font-black text-zinc-500 transition-colors group-hover:text-amber-400">
+                      收藏 <Bookmark className="h-3.5 w-3.5" />
+                    </div>
+                    <div className="mt-0.5 text-sm font-black text-zinc-100">{storyDetailStory ? getStoryFavoriteCount(storyDetailStory) : 0}</div>
+                  </button>
+                  <div className="flex flex-col justify-between rounded-2xl border border-zinc-800 bg-zinc-900/60 px-3 py-2">
+                    <div className="flex w-full items-center justify-between text-[11px] font-black text-zinc-500">
+                      干涉 <Sparkles className="h-3.5 w-3.5" />
+                    </div>
+                    <div className="mt-0.5 text-sm font-black text-zinc-100">{storyDetailStory ? getStoryInterventionCount(storyDetailStory) : 0}</div>
+                  </div>
+                  <div className="flex flex-col justify-between rounded-2xl border border-zinc-800 bg-zinc-900/60 px-3 py-2">
+                    <div className="flex w-full items-center justify-between text-[11px] font-black text-zinc-500">
+                      均章字数 <BookOpen className="h-3.5 w-3.5" />
+                    </div>
+                    <div className="mt-0.5 text-sm font-black text-zinc-100">{storyDetailStory ? getStoryAverageChapterWords(storyDetailStory) || '未知' : '未知'} 字</div>
+                  </div>
                 </div>
               </div>
 
@@ -4210,18 +4218,14 @@ export default function App() {
                     干涉命运
                   </button>
                   <div className="grid grid-cols-2 gap-3">
-                    <button type="button" onClick={handleFavoriteFromDetail} className={semanticButtonClass('secondary', { fullWidth: true })}>
-                      <Bookmark className="h-4 w-4" />
-                      收藏原作
-                    </button>
                     <button type="button" onClick={handleShareFromDetail} disabled={isSharing} className={semanticButtonClass('secondary', { fullWidth: true })}>
                       {isSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
                       分享作品
                     </button>
+                    <button type="button" onClick={() => setStoryDetailStory(null)} className={semanticButtonClass('ghost', { fullWidth: true })}>
+                      关闭
+                    </button>
                   </div>
-                  <button type="button" onClick={() => setStoryDetailStory(null)} className={semanticButtonClass('ghost', { fullWidth: true })}>
-                    关闭
-                  </button>
                 </div>
               </div>
             </div>
