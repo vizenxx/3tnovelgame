@@ -455,8 +455,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (action === 'createSharedStoryRecord') {
       const args = body.args || {};
+      const sharedVisibility = args.visibility === 'private' ? 'private' : 'unlisted';
       const payload = {
-        snapshot_kind: args.snapshotKind || (args.visibility === 'private' ? 'saved_run' : 'intervened'),
+        snapshot_kind: args.snapshotKind || (sharedVisibility === 'private' ? 'saved_run' : 'intervened'),
         content_hash: args.contentHash || '',
         title: args.title,
         main_axis: args.main_axis || '',
@@ -475,7 +476,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         chapter_count: countReadyChapters(args.chapters),
         card_excerpt: buildCardExcerpt(args.main_axis, args.chapters),
         allow_adaptation: Boolean(args.allowAdaptation),
-        visibility: args.visibility || 'public',
+        visibility: sharedVisibility,
         created_at: nowIso(),
         updated_at: nowIso(),
       };
@@ -491,11 +492,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           },
         });
         if (existing?.id) {
-          if (payload.visibility === 'public' && existing.visibility !== 'public') {
+          if (payload.visibility !== existing.visibility) {
             await supabaseRequest('shared_stories', {
               method: 'PATCH',
               query: { id: `eq.${existing.id}`, author_id: `eq.${authUser.uid}` },
-              body: { visibility: 'public', updated_at: nowIso() },
+              body: { visibility: payload.visibility, updated_at: nowIso() },
             });
           }
           return res.status(200).json(existing.id);
@@ -618,7 +619,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (action === 'updateSharedStoryVisibility') {
-      await supabaseRequest('shared_stories', { method: 'PATCH', query: { id: `eq.${body.sharedStoryId}`, author_id: `eq.${authUser.uid}` }, body: { visibility: body.visibility, updated_at: nowIso() } });
+      const visibility = body.visibility === 'private' ? 'private' : 'unlisted';
+      await supabaseRequest('shared_stories', { method: 'PATCH', query: { id: `eq.${body.sharedStoryId}`, author_id: `eq.${authUser.uid}` }, body: { visibility, updated_at: nowIso() } });
       return res.status(200).json({ ok: true });
     }
 

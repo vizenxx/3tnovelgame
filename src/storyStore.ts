@@ -133,7 +133,7 @@ export type SharedStoryRecord = {
   allowAdaptation?: boolean;
   createdAt: string;
   updatedAt: string;
-  visibility: 'public' | 'private';
+  visibility: 'private' | 'unlisted';
 };
 
 export async function listPublicStories(db: Firestore, pageSize = 20) {
@@ -509,7 +509,7 @@ export async function getSharedStoryRecord(db: Firestore, storyId: string, curre
         intervenerId: data.intervenerId || data.authorId,
         intervenerName: data.intervenerName || data.authorName,
         coverUrl: (data as any).coverUrl || '',
-        visibility: data.visibility || 'public',
+        visibility: data.visibility || 'unlisted',
     averageChapterWords: data.averageChapterWords || 0,
     chapterCount: data.chapterCount || sharedChapters.length,
     cardExcerpt: data.cardExcerpt || buildCardExcerpt(data.main_axis, sharedChapters),
@@ -565,7 +565,7 @@ export async function createSharedStoryRecord(db: Firestore, args: {
   averageChapterWords?: number;
   allowAdaptation?: boolean;
   coverUrl?: string;
-  visibility?: 'public' | 'private';
+  visibility?: 'private' | 'unlisted';
   snapshotKind?: 'intervened' | 'saved_run';
   contentHash?: string;
 }) {
@@ -602,7 +602,7 @@ export async function createSharedStoryRecord(db: Firestore, args: {
     allowAdaptation: Boolean(args.allowAdaptation),
     createdAt: now,
     updatedAt: now,
-    visibility: args.visibility || 'public',
+    visibility: args.visibility || 'unlisted',
   };
 
   const ref = await addDoc(collection(db, 'sharedStories'), payload);
@@ -630,7 +630,7 @@ export async function deleteSharedStoryRecord(db: Firestore, sharedStoryId: stri
 export async function updateSharedStoryVisibility(
   db: Firestore,
   sharedStoryId: string,
-  args: { authorId: string; visibility: 'public' | 'private' }
+  args: { authorId: string; visibility: 'private' | 'unlisted' }
 ) {
   if (useSupabaseStories()) {
     return storyApi('updateSharedStoryVisibility', { sharedStoryId, visibility: args.visibility }, { auth: true });

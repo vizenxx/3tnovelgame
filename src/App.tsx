@@ -979,7 +979,7 @@ export default function App() {
   const [publicStories, setPublicStories] = useState<any[]>([]);
   const [myStories, setMyStories] = useState<any[]>([]);
   const [mySharedStories, setMySharedStories] = useState<any[]>([]);
-  const [archiveFilter, setArchiveFilter] = useState<'all' | 'private' | 'public' | 'unlisted'>('all');
+  const [archiveFilter, setArchiveFilter] = useState<'all' | 'private' | 'unlisted'>('all');
   const [archiveSearch, setArchiveSearch] = useState('');
   const [archiveUpdatingIds, setArchiveUpdatingIds] = useState<Record<string, boolean>>({});
   const [archiveChoiceStoryId, setArchiveChoiceStoryId] = useState<string | null>(null);
@@ -1008,7 +1008,7 @@ export default function App() {
   const [isSavingAdminSettings, setIsSavingAdminSettings] = useState(false);
   const [authoringImportText, setAuthoringImportText] = useState('');
   const [authoringImportReplaceBranches, setAuthoringImportReplaceBranches] = useState(true);
-  const [authoringTab, setAuthoringTab] = useState<'play' | 'mainline' | 'branches'>('play');
+  const [authoringTab, setAuthoringTab] = useState<'settings' | 'mainline' | 'branches'>('settings');
   const [appTheme, setAppTheme] = useState<AppTheme>(() => (
     typeof window !== 'undefined' && window.localStorage?.getItem('app-theme') === 'light'
       ? 'light'
@@ -1175,7 +1175,7 @@ export default function App() {
       .catch((error) => console.warn('share cacheStoryLists failed:', error));
   };
 
-  const createCurrentStorySnapshot = async (visibility: 'public' | 'private', snapshotKind: 'intervened' | 'saved_run') => {
+  const createCurrentStorySnapshot = async (visibility: 'private' | 'unlisted', snapshotKind: 'intervened' | 'saved_run') => {
     if (!user || !blueprint) throw new Error('请先进入故事后再继续。');
     const provenance = await resolveActiveStoryProvenance();
     const contentHash = currentRunContentHash();
@@ -1873,7 +1873,7 @@ export default function App() {
     }
   };
 
-  const handleArchiveVisibilityChange = async (story: any, visibility: 'public' | 'private') => {
+  const handleArchiveVisibilityChange = async (story: any, visibility: 'private' | 'unlisted') => {
     if (!db || !user || !story?.id) return;
     if (story.archiveKind === 'favorite') {
       showError('收藏原作的公开状态由原作者决定。');
@@ -1932,8 +1932,8 @@ export default function App() {
     if (!story || !user || (!archiveId && !sourceStoryId)) return;
     try {
       setIsSharing(true);
-      if (archiveId && story.meta?.visibility !== 'public') {
-        await handleArchiveVisibilityChange({ id: archiveId }, 'public');
+      if (archiveId && story.meta?.visibility !== 'unlisted') {
+        await handleArchiveVisibilityChange({ id: archiveId }, 'unlisted');
       }
       const shareUrl = archiveId ? buildSharedStoryUrl(archiveId) : buildOriginalStoryUrl(sourceStoryId);
       const shareTitle = formatBookTitle(story.meta?.title || '未命名故事');
@@ -2194,8 +2194,8 @@ export default function App() {
     if (!story) return;
     try {
       setIsSharing(true);
-      if (story.archiveKind !== 'favorite' && story.visibility !== 'public') {
-        await handleArchiveVisibilityChange(story, 'public');
+      if (story.archiveKind !== 'favorite' && story.visibility !== 'unlisted') {
+        await handleArchiveVisibilityChange(story, 'unlisted');
       }
       const storyId = story.archiveKind === 'favorite' ? (story.sourceStoryId || story.id) : story.id;
       const shareUrl = story.archiveKind === 'favorite' ? buildOriginalStoryUrl(storyId) : buildSharedStoryUrl(storyId);
@@ -2397,13 +2397,13 @@ export default function App() {
         await favoriteStory(db as any, activeStoryId, user.uid);
         showError('原作已加入馆藏，不会重复保存一份相同文本。');
       } else {
-        const { shareId, sharedRecord } = await createCurrentStorySnapshot('private', 'saved_run');
+        const { shareId, sharedRecord } = await createCurrentStorySnapshot('unlisted', 'saved_run');
         cacheSharedSnapshotAfterCreate(shareId, sharedRecord);
-        showError('当前故事已保存至个人馆藏（私密）。');
+        showError('当前故事已保存至个人馆藏（非公开链接）。');
       }
       await resetGame();
       return;
-      showError("作品已保存至个人馆藏（私密）");
+      showError("作品已保存至个人馆藏（非公开链接）");
     } catch (e) {
       console.error(e);
       showError("保存作品失败");
@@ -2943,15 +2943,10 @@ export default function App() {
 
   const enterAuthoring = async () => {
     setGameState('AUTHORING');
+    setAuthoringStoryId(null);
+    setAuthoringCartridge(null);
+    setAuthoringTab('settings');
     await refreshStories();
-    if (!authoringStoryId && myStories.length > 0 && db) {
-      const cartridge = await getStoryCartridge(db as any, myStories[0].id);
-      if (cartridge) {
-        setAuthoringStoryId(myStories[0].id);
-        setAuthoringCartridge(cartridge);
-        markAuthoringSaved(cartridge);
-      }
-    }
   };
 
   const selectAuthoringStory = async (storyId: string) => {
@@ -2967,7 +2962,7 @@ export default function App() {
     setAuthoringImportText('');
     setSelectedBranchId(null);
     setExpandedBranchId(null);
-    setAuthoringTab('mainline');
+    setAuthoringTab('settings');
     markAuthoringSaved(cartridge);
   };
 
@@ -3520,7 +3515,7 @@ export default function App() {
         return;
       }
       shareStage = 'createStorySnapshot';
-      const { shareId, sharedRecord } = await createCurrentStorySnapshot('public', 'intervened');
+      const { shareId, sharedRecord } = await createCurrentStorySnapshot('unlisted', 'intervened');
       createdShareId = shareId;
       setSharedStoryId(shareId);
       shareStage = 'deliverPreparedShare';
@@ -3546,7 +3541,7 @@ export default function App() {
         intervenerId: user.uid,
         intervenerName: getUserAuthorName(user),
         allowAdaptation: getActiveStoryAllowAdaptation(),
-        visibility: 'public',
+        visibility: 'unlisted',
       });
       createdShareId = shareId;
       const sharedRecord = {
@@ -3568,7 +3563,7 @@ export default function App() {
         chapterCount: getReadyChapterCount(chapters),
         cardExcerpt: getStoryCardExcerpt(blueprint?.main_axis || '', chapters),
         allowAdaptation: getActiveStoryAllowAdaptation(),
-        visibility: 'public',
+        visibility: 'unlisted',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -3779,7 +3774,7 @@ export default function App() {
 
       setAuthoringCartridge(nextCartridge);
       setAuthoringImportText('');
-      setAuthoringTab('play');
+      setAuthoringTab('settings');
     } catch (e) {
       console.error(e);
       showError("解析导入文本失败");
@@ -4571,15 +4566,14 @@ export default function App() {
           <div className="line-clamp-2 text-sm font-black text-white leading-snug">{formatBookTitle(story.title)}</div>
           <div className="relative shrink-0">
             <select
-              value={story.visibility || 'private'}
+              value={story.visibility || 'unlisted'}
               disabled={archiveUpdatingIds[story.id]}
               onChange={(e) => handleArchiveVisibilityChange(story, e.target.value as any)}
               title="点击切换可见范围"
               className={`block w-full appearance-none rounded-full border px-2.5 py-1 pr-6 text-[10px] font-black outline-none transition-colors cursor-pointer text-center ${visibilityClass(story.visibility)}`}
             >
-              <option value="public" className="bg-zinc-900 text-zinc-100">公开分享</option>
-              <option value="unlisted" className="bg-zinc-900 text-zinc-100">链接分享</option>
-              <option value="private" className="bg-zinc-900 text-zinc-100">私密保存</option>
+              <option value="unlisted" className="bg-zinc-900 text-zinc-100">非公开链接</option>
+              <option value="private" className="bg-zinc-900 text-zinc-100">私人</option>
             </select>
             <div className="pointer-events-none absolute inset-y-0 right-1 flex items-center px-1 text-inherit opacity-70">
               <svg className="h-3 w-3 fill-current" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" /></svg>
@@ -4666,9 +4660,8 @@ export default function App() {
                 <div className="flex flex-wrap gap-1.5">
                   {([
                     { id: 'all', label: '全部' },
-                    { id: 'public', label: '公开' },
-                    { id: 'unlisted', label: '链接分享' },
-                    { id: 'private', label: '私密' },
+                    { id: 'unlisted', label: '非公开链接' },
+                    { id: 'private', label: '私人' },
                   ] as const).map((option) => (
                     <button
                       key={option.id}
@@ -5029,7 +5022,7 @@ export default function App() {
               <div>
                 <div className="text-xs font-black uppercase tracking-[0.22em] text-zinc-500">馆藏管理</div>
                 <div className="mt-1 text-sm font-bold text-zinc-300">
-                  当前状态：{story.meta?.visibility === 'public' ? '公开，可通过链接访问' : '私人，仅你可见'}
+                  当前状态：{story.meta?.visibility === 'unlisted' ? '非公开链接，可通过链接访问' : '私人，仅你可见'}
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -5044,12 +5037,12 @@ export default function App() {
                 </button>
                 <button
                   type="button"
-                  disabled={isReadonlyUpdating || story.meta?.visibility === 'public'}
-                  onClick={() => handleArchiveVisibilityChange({ id: readonlyArchiveId }, 'public')}
+                  disabled={isReadonlyUpdating || story.meta?.visibility === 'unlisted'}
+                  onClick={() => handleArchiveVisibilityChange({ id: readonlyArchiveId }, 'unlisted')}
                   className={semanticButtonClass('secondary', { compact: true })}
                 >
                   <ExternalLink className="h-4 w-4" />
-                  设为公开
+                  设为非公开链接
                 </button>
                 <button
                   type="button"
@@ -5663,23 +5656,25 @@ export default function App() {
             </div>
           </div>
 
+          {authoringCartridge && (
           <div className="rounded-[2rem] border border-zinc-800 bg-zinc-900/30 p-5">
-            <div className="mb-4 text-lg font-black text-white">创作入口</div>
+            <div className="mb-4 text-lg font-black text-white">编辑分区</div>
             <nav className="space-y-2">
-              <button type="button" onClick={() => setAuthoringTab('play')} className={semanticMenuButtonClass(authoringTab === 'play' ? 'primary' : 'ghost')}>
+              <button type="button" onClick={() => setAuthoringTab('settings')} className={semanticMenuButtonClass(authoringTab === 'settings' ? 'primary' : 'ghost')}>
                 <Copy className="h-4 w-4" />
-                一键导入
+                作品设置
               </button>
               <button type="button" onClick={() => setAuthoringTab('mainline')} className={semanticMenuButtonClass(authoringTab === 'mainline' ? 'primary' : 'ghost')}>
                 <BookOpen className="h-4 w-4" />
-                主线设定
+                主线和结局
               </button>
               <button type="button" onClick={() => setAuthoringTab('branches')} className={semanticMenuButtonClass(authoringTab === 'branches' ? 'secondary' : 'ghost')}>
                 <Sparkles className="h-4 w-4" />
-                支线设定
+                角色和支线
               </button>
             </nav>
           </div>
+          )}
         </aside>
 
         <main className="lg:col-span-8 rounded-[2rem] border border-zinc-800 bg-zinc-900/20 p-6 sm:p-8">
@@ -5689,7 +5684,7 @@ export default function App() {
             </div>
           ) : (
             <div className="space-y-8">
-              {authoringTab === 'play' && (
+              {authoringTab === 'settings' && (
                 <section className="space-y-4">
                   <div>
                     <h3 className="text-xl font-black text-white">一键导入</h3>
@@ -5699,7 +5694,7 @@ export default function App() {
                     value={authoringImportText}
                     onChange={(event) => setAuthoringImportText(event.target.value)}
                     placeholder="把其他 AI 生成的完整文本粘贴到这里..."
-                    className="min-h-[260px] w-full rounded-2xl border border-zinc-800 bg-zinc-950 p-5 text-sm text-zinc-300 outline-none transition-colors focus:border-indigo-500"
+                    className="min-h-[320px] w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-950 p-5 text-sm text-zinc-300 outline-none transition-colors focus:border-indigo-500"
                   />
                   <label className="flex items-center gap-2 text-xs text-zinc-400">
                     <input
@@ -5713,6 +5708,129 @@ export default function App() {
                     <Copy className="h-4 w-4" />
                     解析并导入
                   </button>
+                  <div className="border-t border-zinc-800 pt-6">
+                    <h3 className="text-xl font-black text-white">作品设置</h3>
+                    <p className="mt-1 text-xs leading-relaxed text-zinc-500">正式作品可选择私人、非公开链接或公开；保存区记录不会出现在这里。</p>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <label className="space-y-2 text-sm text-zinc-400">
+                      <div>作品标题</div>
+                      <input
+                        value={stripBookTitle(authoringCartridge.meta?.title || '')}
+                        onChange={(event) => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, title: event.target.value } }))}
+                        className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-white outline-none focus:border-indigo-500"
+                      />
+                    </label>
+                    <label className="space-y-2 text-sm text-zinc-400">
+                      <div>标签（以中文逗号分隔）</div>
+                      <input
+                        value={authoringCustomTagsInput}
+                        onChange={(event) => setAuthoringCustomTagsInput(event.target.value)}
+                        className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-white outline-none focus:border-indigo-500"
+                      />
+                    </label>
+                  </div>
+                  <section className="rounded-2xl border border-zinc-800 bg-zinc-950/40 p-4">
+                    <div className="mb-4 flex flex-col gap-4 sm:flex-row">
+                      <div className="h-32 w-32 shrink-0 overflow-hidden rounded-2xl border border-zinc-800 bg-gradient-to-br from-zinc-800 via-zinc-950 to-indigo-950">
+                        {authoringCartridge.meta?.coverUrl ? (
+                          <img src={authoringCartridge.meta.coverUrl} alt="作品封面预览" className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center p-4 text-center text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">
+                            NO COVER
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1 space-y-3">
+                        <div>
+                          <h4 className="text-lg font-black text-white">作品封面</h4>
+                          <p className="mt-1 text-xs leading-relaxed text-zinc-500">用于作品卡和分享预览，建议 1:1。</p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <label className={`${semanticButtonClass('secondary', { compact: true })} cursor-pointer`}>
+                            <BookOpen className="h-4 w-4" />
+                            上传封面
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(event) => {
+                                void handleAuthoringCoverUpload(event.target.files?.[0]);
+                                event.currentTarget.value = '';
+                              }}
+                            />
+                          </label>
+                          {authoringCartridge.meta?.coverUrl && (
+                            <button type="button" onClick={() => applyAuthoringCover('')} className={semanticButtonClass('ghost', { compact: true })}>
+                              <X className="h-4 w-4" />
+                              移除封面
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    {canUseCoverGeneration && (
+                      <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                        <input
+                          value={authoringCoverPrompt}
+                          onChange={(event) => setAuthoringCoverPrompt(event.target.value)}
+                          placeholder="描述你想要的封面画面..."
+                          className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                        />
+                        <button type="button" onClick={handleGenerateAuthoringCover} disabled={isGeneratingCover} className={semanticButtonClass('primary', { compact: true })}>
+                          {isGeneratingCover ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                          AI 生成
+                        </button>
+                      </div>
+                    )}
+                  </section>
+                  <label className="block space-y-2 text-sm text-zinc-400">
+                    <div>故事主轴</div>
+                    <textarea
+                      value={authoringCartridge.meta?.main_axis || ''}
+                      onChange={(event) => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, main_axis: event.target.value } }))}
+                      className="min-h-[180px] w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-white outline-none focus:border-indigo-500"
+                    />
+                  </label>
+                  <section className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
+                    <div className="mb-3 text-sm font-black text-zinc-100">作品可见性</div>
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      {[
+                        { value: 'private', label: '私人', hint: '只有作者自己可见。' },
+                        { value: 'unlisted', label: '非公开链接', hint: '不进公开列表，但链接可读。' },
+                        { value: 'public', label: '公开', hint: '会出现在公开作品库。' },
+                      ].map((option) => {
+                        const selected = (authoringCartridge.meta?.visibility || 'private') === option.value;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, visibility: option.value } }))}
+                            className={`rounded-2xl border px-3 py-3 text-left transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
+                              selected
+                                ? 'border-emerald-400 bg-emerald-500/10 text-emerald-100'
+                                : 'border-zinc-800 bg-zinc-900/40 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
+                            }`}
+                          >
+                            <div className="text-sm font-black">{option.label}</div>
+                            <div className="mt-1 text-[11px] leading-relaxed opacity-70">{option.hint}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                  <label className="flex items-start gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4 text-sm text-zinc-400">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(authoringCartridge.meta?.allowAdaptation)}
+                      onChange={(event) => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, allowAdaptation: event.target.checked } }))}
+                      className="mt-1 h-4 w-4 accent-indigo-500"
+                    />
+                    <span>
+                      <span className="block font-black text-zinc-100">开放一键改编权限</span>
+                      <span className="mt-1 block text-xs leading-relaxed text-zinc-500">开启后，其他已登录用户可以把这篇作品改编成自己的私人作品。</span>
+                    </span>
+                  </label>
                 </section>
               )}
 
@@ -5807,7 +5925,7 @@ export default function App() {
                     <textarea
                       value={authoringCartridge.meta?.main_axis || ''}
                       onChange={(event) => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, main_axis: event.target.value } }))}
-                      className="min-h-[120px] w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-white outline-none focus:border-indigo-500"
+                      className="min-h-[180px] w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-white outline-none focus:border-indigo-500"
                     />
                   </label>
 
@@ -5940,7 +6058,7 @@ export default function App() {
                             ...prev,
                             chapters: prev.chapters.map((item: any) => item.chapter_num === chapter.chapter_num ? { ...item, text: event.target.value } : item),
                           }))}
-                          className="min-h-[140px] w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-sm text-white outline-none focus:border-indigo-500"
+                          className="min-h-[240px] w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-sm text-white outline-none focus:border-indigo-500"
                           placeholder={`第${chapter.chapter_num}章正文`}
                         />
                       </div>
@@ -5967,7 +6085,7 @@ export default function App() {
                             ...prev,
                             endings: prev.endings.map((item: any) => item.id === ending.id ? { ...item, text: event.target.value } : item),
                           }))}
-                          className="min-h-[140px] w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-sm text-white outline-none focus:border-indigo-500"
+                          className="min-h-[240px] w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-sm text-white outline-none focus:border-indigo-500"
                           placeholder="结局正文"
                         />
                       </div>
@@ -5979,8 +6097,66 @@ export default function App() {
               {authoringTab === 'branches' && (
                 <section className="space-y-6">
                   <div>
-                    <h3 className="text-xl font-black text-white">支线设定</h3>
-                    <p className="mt-1 text-xs leading-relaxed text-zinc-500">支线会根据触发条件在游玩时被判定解锁。提示短句会出现在干涉面板中。</p>
+                    <h3 className="text-xl font-black text-white">角色和支线</h3>
+                    <p className="mt-1 text-xs leading-relaxed text-zinc-500">角色会作为干涉对象和支线条件基础；支线会根据触发条件在游玩时被判定解锁。</p>
+                  </div>
+
+                  <div className="space-y-3 rounded-[1.5rem] border border-zinc-800 bg-zinc-950/40 p-5">
+                    <div className="flex items-center justify-between">
+                      <div className="text-lg font-black text-white">角色设定</div>
+                      <button
+                        type="button"
+                        onClick={() => setAuthoringCartridge((prev: any) => {
+                          const characters = [...(prev.meta?.characters || [])];
+                          if (characters.length >= 5) return prev;
+                          characters.push({ name: `角色${characters.length + 1}`, desc: '（待填写简介）' });
+                          return { ...prev, meta: { ...prev.meta, characters } };
+                        })}
+                        className={semanticButtonClass('ghost', { compact: true })}
+                      >
+                        <Sparkles className="h-4 w-4" />
+                        新增角色
+                      </button>
+                    </div>
+                    {(authoringCartridge.meta?.characters || []).map((character: any, index: number) => (
+                      <div key={index} className="grid gap-3 md:grid-cols-[1fr_1.4fr_auto]">
+                        <input
+                          value={character.name || ''}
+                          onChange={(event) => setAuthoringCartridge((prev: any) => ({
+                            ...prev,
+                            meta: {
+                              ...prev.meta,
+                              characters: prev.meta.characters.map((item: any, itemIndex: number) => itemIndex === index ? { ...item, name: event.target.value } : item),
+                            },
+                          }))}
+                          className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                          placeholder="角色名"
+                        />
+                        <input
+                          value={character.desc || ''}
+                          onChange={(event) => setAuthoringCartridge((prev: any) => ({
+                            ...prev,
+                            meta: {
+                              ...prev.meta,
+                              characters: prev.meta.characters.map((item: any, itemIndex: number) => itemIndex === index ? { ...item, desc: event.target.value } : item),
+                            },
+                          }))}
+                          className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                          placeholder="角色简介"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setAuthoringCartridge((prev: any) => ({
+                            ...prev,
+                            meta: { ...prev.meta, characters: prev.meta.characters.filter((_: any, itemIndex: number) => itemIndex !== index) },
+                          }))}
+                          disabled={(authoringCartridge.meta?.characters || []).length <= 1}
+                          className={semanticButtonClass('danger', { compact: true })}
+                        >
+                          删除
+                        </button>
+                      </div>
+                    ))}
                   </div>
 
                   <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/40 p-5 space-y-4">
@@ -6001,7 +6177,7 @@ export default function App() {
                         <option value="hidden">影响：隐</option>
                       </select>
                     </div>
-                    <textarea value={branchForm.sceneText} onChange={(event) => setBranchForm((prev) => ({ ...prev, sceneText: event.target.value }))} className="min-h-[120px] w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-sm text-white outline-none focus:border-indigo-500" placeholder="支线情节（300 字以内）" />
+                    <textarea value={branchForm.sceneText} onChange={(event) => setBranchForm((prev) => ({ ...prev, sceneText: event.target.value }))} className="min-h-[180px] w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-sm text-white outline-none focus:border-indigo-500" placeholder="支线情节（300 字以内）" />
                     <div className="space-y-3">
                       <div className="text-sm font-black text-white">触发条件</div>
                       {branchConditions.map((condition, idx) => (

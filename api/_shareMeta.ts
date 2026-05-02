@@ -52,7 +52,7 @@ export async function fetchSharedStoryMeta(shareId: string): Promise<SharedStory
 
   const rows = await response.json();
   const row = rows?.[0];
-  if (row?.visibility !== 'public') return null;
+  if (row?.visibility !== 'unlisted') return null;
 
   const rawTitle = String(row.title || DEFAULT_TITLE);
   const title = rawTitle.replace(/[《》]/g, '').trim() || DEFAULT_TITLE;
@@ -107,6 +107,6 @@ export function defaultShareMeta(shareId: string): SharedStoryMeta {
     title: DEFAULT_TITLE,
     description: DEFAULT_DESCRIPTION,
     coverUrl: '',
-    visibility: 'public',
+    visibility: 'unlisted',
   };
 }
