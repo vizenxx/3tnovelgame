@@ -1000,6 +1000,7 @@ export default function App() {
   const [authoringStoryId, setAuthoringStoryId] = useState<string | null>(null);
   const [authoringCartridge, setAuthoringCartridge] = useState<any | null>(null);
   const [authoringSaving, setAuthoringSaving] = useState(false);
+  const [authoringLoadingStoryId, setAuthoringLoadingStoryId] = useState<string | null>(null);
   const [authoringCoverPrompt, setAuthoringCoverPrompt] = useState('');
   const [isGeneratingCover, setIsGeneratingCover] = useState(false);
   const [coverGenerationRemaining, setCoverGenerationRemaining] = useState<number | null>(null);
@@ -5593,6 +5594,125 @@ export default function App() {
     </div>
   );
 
+  const renderBranchForm = (isNew: boolean) => (
+    <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/40 p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-black text-white">{isNew ? '新建支线' : '编辑支线'}</div>
+        <button type="button" onClick={() => setExpandedBranchId(null)} className={semanticButtonClass('ghost', { compact: true })}>
+          <X className="h-4 w-4" />
+          取消
+        </button>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <input value={branchForm.name} onChange={(event) => setBranchForm((prev) => ({ ...prev, name: event.target.value }))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" placeholder="支线名" />
+        <input value={branchForm.hint} onChange={(event) => setBranchForm((prev) => ({ ...prev, hint: event.target.value }))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" placeholder="提示短句" />
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <select value={branchForm.side} onChange={(event) => setBranchForm((prev) => ({ ...prev, side: event.target.value as 'left' | 'right' }))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500">
+          <option value="left">左倾支线</option>
+          <option value="right">右倾支线</option>
+        </select>
+        <select value={branchForm.tier} onChange={(event) => setBranchForm((prev) => ({ ...prev, tier: event.target.value as 'small' | 'medium' | 'large' | 'hidden' }))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500">
+          <option value="small">影响：小</option>
+          <option value="medium">影响：中</option>
+          <option value="large">影响：大</option>
+          <option value="hidden">影响：隐</option>
+        </select>
+      </div>
+      <textarea value={branchForm.sceneText} onChange={(event) => setBranchForm((prev) => ({ ...prev, sceneText: event.target.value }))} className="min-h-[180px] w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-sm text-white outline-none focus:border-indigo-500" placeholder="支线情节（300 字以内）" />
+      <div className="space-y-3">
+        <div className="text-sm font-black text-white">触发条件</div>
+        {branchConditions.map((condition, idx) => (
+          <div key={idx} className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-xs font-black text-zinc-500">条件组 {idx + 1}</div>
+              {branchConditions.length > 1 && (
+                <button type="button" onClick={() => setBranchConditions((prev) => prev.filter((_, itemIdx) => itemIdx !== idx))} className={semanticButtonClass('danger', { compact: true })}>
+                  <Trash2 className="h-4 w-4" />
+                  删除条件
+                </button>
+              )}
+            </div>
+            <div className="grid gap-3 md:grid-cols-4">
+              <select value={condition.kind} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, kind: event.target.value as 'single' | 'count' } : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500">
+                <option value="single">单次判定</option>
+                <option value="count">累计判定</option>
+              </select>
+              <select value={condition.kind === 'single' ? condition.singleChapterNum : condition.upToChapterNum} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? (condition.kind === 'single' ? { ...item, singleChapterNum: Number(event.target.value) } : { ...item, upToChapterNum: Number(event.target.value) }) : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500">
+                {chapterOptions.map((chapterNum) => <option key={chapterNum} value={chapterNum}>第{chapterNum}章</option>)}
+              </select>
+              <select value={condition.kind === 'single' ? condition.singleCharId : condition.countCharId} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? (condition.kind === 'single' ? { ...item, singleCharId: event.target.value } : { ...item, countCharId: event.target.value }) : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500">
+                <option value="">选择角色</option>
+                {normalizeCharacters(authoringCartridge?.meta?.characters || []).map((character: any) => <option key={character.id} value={character.id}>{character.name}</option>)}
+              </select>
+              {condition.kind === 'single' ? (
+                <select value={condition.singleAction} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, singleAction: event.target.value as 'bless' | 'curse' } : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500">
+                  <option value="bless">庇佑</option>
+                  <option value="curse">磨难</option>
+                </select>
+              ) : (
+                <input type="number" min={1} value={condition.minCount} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, minCount: Math.max(1, Number(event.target.value) || 1) } : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500" placeholder="累计次数" />
+              )}
+            </div>
+            <div className="text-xs text-indigo-300">
+              {triggerPreview({
+                triggerType: condition.kind,
+                singleChapterNum: condition.singleChapterNum,
+                singleCharId: condition.singleCharId,
+                singleAction: condition.singleAction,
+                countCharId: condition.countCharId,
+                countAction: condition.countAction,
+                minCount: condition.minCount,
+                upToChapterNum: condition.upToChapterNum,
+                characters: normalizeCharacters(authoringCartridge?.meta?.characters || []),
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-3">
+        <button type="button" onClick={() => setBranchConditions((prev) => prev.length >= 3 ? prev : [...prev, { kind: 'single', singleChapterNum: 2, singleCharId: '', singleAction: 'bless', countCharId: '', countAction: 'bless', minCount: 1, upToChapterNum: 6 }])} className={semanticButtonClass('ghost', { compact: true })}>
+          新增条件组
+        </button>
+        <button
+          type="button"
+          onClick={async () => {
+            if (!authoringStoryId || !branchForm.name.trim()) {
+              showError('请先填写支线名。');
+              return;
+            }
+            const payload = {
+              side: branchForm.side,
+              tier: branchForm.tier,
+              name: branchForm.name,
+              hint: branchForm.hint || `留意${branchForm.name}`,
+              desc: branchForm.sceneText.slice(0, 80) || branchForm.name,
+              common: false,
+              trigger: normalizeBranchConditionsForStorage(branchConditions)[0],
+              triggerGroups: normalizeBranchConditionsForStorage(branchConditions),
+              inject: { mustHappen: branchForm.sceneText ? [branchForm.sceneText] : [], mustReveal: [], mustChange: [] },
+              sceneText: branchForm.sceneText,
+            } as any;
+            if (isNew) {
+              const newId = await createStoryBranch(db as any, authoringStoryId, payload);
+              await selectAuthoringStory(authoringStoryId);
+              setExpandedBranchId(null);
+              showError('支线已创建。');
+            } else {
+              await upsertStoryBranch(db as any, authoringStoryId, branchForm.id, payload);
+              await selectAuthoringStory(authoringStoryId);
+              setExpandedBranchId(null);
+              showError('支线已保存。');
+            }
+          }}
+          className={semanticButtonClass('primary', { compact: true })}
+        >
+          {isNew ? '创建支线' : '保存修改'}
+        </button>
+      </div>
+    </div>
+  );
+
   const renderAuthoringView = () => (
     <div className="mx-auto max-w-5xl px-6 pb-12 pt-24 lg:px-8">
       {!authoringCartridge ? (
@@ -5623,14 +5743,21 @@ export default function App() {
                   <button
                     key={story.id}
                     type="button"
+                    disabled={authoringLoadingStoryId === story.id}
                     onClick={async () => {
+                      setAuthoringLoadingStoryId(story.id);
                       await selectAuthoringStory(story.id);
+                      setAuthoringLoadingStoryId(null);
                     }}
-                    className="flex flex-col justify-between rounded-2xl border border-zinc-800 bg-zinc-950/60 p-5 text-left transition-all hover:-translate-y-1 hover:border-indigo-500/50 hover:bg-indigo-500/10 hover:shadow-xl"
+                    className={`relative overflow-hidden flex flex-col justify-between rounded-2xl border border-zinc-800 bg-zinc-950/60 p-5 text-left transition-all hover:-translate-y-1 hover:border-indigo-500/50 hover:bg-indigo-500/10 hover:shadow-xl active:scale-[0.98] ${authoringLoadingStoryId === story.id ? 'opacity-70 pointer-events-none' : ''}`}
                   >
+                    {authoringLoadingStoryId === story.id && (
+                      <div className="absolute inset-0 z-10 flex items-center justify-center bg-zinc-950/60 backdrop-blur-sm">
+                        <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
+                      </div>
+                    )}
                     <div>
                       <div className="line-clamp-2 text-lg font-black text-white leading-tight">{formatBookTitle(getStoryTitle(story))}</div>
-                      <div className="mt-2 text-xs font-bold text-zinc-500">{getStoryAuthorName(story)}</div>
                     </div>
                     <div className="mt-4 flex items-center gap-2 text-[10px] text-zinc-600">
                       <span className="rounded bg-zinc-800/50 px-1.5 py-0.5">{story.visibility === 'public' ? '公开' : story.visibility === 'unlisted' ? '链接分享' : '私人'}</span>
@@ -5843,205 +5970,8 @@ export default function App() {
               {authoringTab === 'mainline' && (
                 <section className="space-y-6">
                   <div>
-                    <h3 className="text-xl font-black text-white">主线设定</h3>
-                    <p className="mt-1 text-xs leading-relaxed text-zinc-500">这里负责作品基本信息、角色、章节正文与结局。保存后会同步到作品库与游玩端。</p>
-                  </div>
-
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <label className="space-y-2 text-sm text-zinc-400">
-                      <div>作品标题</div>
-                      <input
-                        value={stripBookTitle(authoringCartridge.meta?.title || '')}
-                        onChange={(event) => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, title: event.target.value } }))}
-                        className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-white outline-none focus:border-indigo-500"
-                      />
-                    </label>
-                    <label className="space-y-2 text-sm text-zinc-400">
-                      <div>标签（以中文逗号分隔）</div>
-                      <input
-                        value={authoringCustomTagsInput}
-                        onChange={(event) => setAuthoringCustomTagsInput(event.target.value)}
-                        className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-white outline-none focus:border-indigo-500"
-                      />
-                    </label>
-                  </div>
-
-                  <section className="rounded-2xl border border-zinc-800 bg-zinc-950/40 p-4">
-                    <div className="mb-4 flex flex-col gap-4 sm:flex-row">
-                      <div className="h-32 w-32 shrink-0 overflow-hidden rounded-2xl border border-zinc-800 bg-gradient-to-br from-zinc-800 via-zinc-950 to-indigo-950">
-                        {authoringCartridge.meta?.coverUrl ? (
-                          <img src={authoringCartridge.meta.coverUrl} alt="作品封面预览" className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center p-4 text-center text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">
-                            NO COVER
-                          </div>
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1 space-y-3">
-                        <div>
-                          <h4 className="text-lg font-black text-white">作品封面</h4>
-                          <p className="mt-1 text-xs leading-relaxed text-zinc-500">默认 1:1，上传或 AI 生成后会压缩为适合作品卡与分享使用的 1024 方形图。</p>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          <label className={`${semanticButtonClass('secondary', { compact: true })} cursor-pointer`}>
-                            <BookOpen className="h-4 w-4" />
-                            上传封面
-                            <input
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={(event) => {
-                                void handleAuthoringCoverUpload(event.target.files?.[0]);
-                                event.currentTarget.value = '';
-                              }}
-                            />
-                          </label>
-                          {authoringCartridge.meta?.coverUrl && (
-                            <button type="button" onClick={() => applyAuthoringCover('')} className={semanticButtonClass('ghost', { compact: true })}>
-                              <X className="h-4 w-4" />
-                              移除封面
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    {canUseCoverGeneration && (
-                      <>
-                        <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-                          <input
-                            value={authoringCoverPrompt}
-                            onChange={(event) => setAuthoringCoverPrompt(event.target.value)}
-                            placeholder="描述你想要的封面画面，例如：雨夜、古旧列车、少女手中发光的怀表、电影感低饱和..."
-                            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
-                          />
-                          <button type="button" onClick={handleGenerateAuthoringCover} disabled={isGeneratingCover} className={semanticButtonClass('primary', { compact: true })}>
-                            {isGeneratingCover ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                            AI 生成
-                          </button>
-                        </div>
-                        <div className="mt-2 text-xs text-zinc-600">
-                          每个账户每天最多生成 5 张。{coverGenerationRemaining !== null ? `今日剩余 ${coverGenerationRemaining} 张。` : ''}
-                        </div>
-                      </>
-                    )}
-                  </section>
-
-                  <label className="block space-y-2 text-sm text-zinc-400">
-                    <div>故事主轴</div>
-                    <textarea
-                      value={authoringCartridge.meta?.main_axis || ''}
-                      onChange={(event) => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, main_axis: event.target.value } }))}
-                      className="min-h-[180px] w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-white outline-none focus:border-indigo-500"
-                    />
-                  </label>
-
-                  <section className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
-                    <div className="mb-3">
-                      <div className="text-sm font-black text-zinc-100">作品可见性</div>
-                      <div className="mt-1 text-xs leading-relaxed text-zinc-500">
-                        这只决定作品是否出现在作品库或可被链接访问；它和“开放一键改编权限”是两件事。
-                      </div>
-                    </div>
-                    <div className="grid gap-2 sm:grid-cols-3">
-                      {[
-                        { value: 'private', label: '私人', hint: '只有作者自己可见。' },
-                        { value: 'public', label: '公开', hint: '会出现在公开作品库。' },
-                        { value: 'unlisted', label: '非公开链接', hint: '不进公开列表，但链接可读。' },
-                      ].map((option) => {
-                        const selected = (authoringCartridge.meta?.visibility || 'private') === option.value;
-                        return (
-                          <button
-                            key={option.value}
-                            type="button"
-                            onClick={() => setAuthoringCartridge((prev: any) => ({
-                              ...prev,
-                              meta: { ...prev.meta, visibility: option.value },
-                            }))}
-                            className={`rounded-2xl border px-3 py-3 text-left transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
-                              selected
-                                ? 'border-emerald-400 bg-emerald-500/10 text-emerald-100'
-                                : 'border-zinc-800 bg-zinc-900/40 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
-                            }`}
-                          >
-                            <div className="text-sm font-black">{option.label}</div>
-                            <div className="mt-1 text-[11px] leading-relaxed opacity-70">{option.hint}</div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </section>
-
-                  <label className="flex items-start gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4 text-sm text-zinc-400">
-                    <input
-                      type="checkbox"
-                      checked={Boolean(authoringCartridge.meta?.allowAdaptation)}
-                      onChange={(event) => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, allowAdaptation: event.target.checked } }))}
-                      className="mt-1 h-4 w-4 accent-indigo-500"
-                    />
-                    <span>
-                      <span className="block font-black text-zinc-100">开放一键改编权限</span>
-                      <span className="mt-1 block text-xs leading-relaxed text-zinc-500">
-                        开启后，其他已登录用户可以把这篇作品改编成自己的私密作品；不开启时，只有你自己可以改编。
-                      </span>
-                    </span>
-                  </label>
-
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="text-lg font-black text-white">角色设定</div>
-                      <button
-                        type="button"
-                        onClick={() => setAuthoringCartridge((prev: any) => {
-                          const characters = [...(prev.meta?.characters || [])];
-                          if (characters.length >= 5) return prev;
-                          characters.push({ name: `角色${characters.length + 1}`, desc: '（待填写简介）' });
-                          return { ...prev, meta: { ...prev.meta, characters } };
-                        })}
-                        className={semanticButtonClass('ghost', { compact: true })}
-                      >
-                        <Sparkles className="h-4 w-4" />
-                        新增角色
-                      </button>
-                    </div>
-                    {(authoringCartridge.meta?.characters || []).map((character: any, index: number) => (
-                      <div key={index} className="grid gap-3 md:grid-cols-[1fr_1.4fr_auto]">
-                        <input
-                          value={character.name || ''}
-                          onChange={(event) => setAuthoringCartridge((prev: any) => ({
-                            ...prev,
-                            meta: {
-                              ...prev.meta,
-                              characters: prev.meta.characters.map((item: any, itemIndex: number) => itemIndex === index ? { ...item, name: event.target.value } : item),
-                            },
-                          }))}
-                          className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
-                          placeholder="角色名"
-                        />
-                        <input
-                          value={character.desc || ''}
-                          onChange={(event) => setAuthoringCartridge((prev: any) => ({
-                            ...prev,
-                            meta: {
-                              ...prev.meta,
-                              characters: prev.meta.characters.map((item: any, itemIndex: number) => itemIndex === index ? { ...item, desc: event.target.value } : item),
-                            },
-                          }))}
-                          className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
-                          placeholder="角色简介"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setAuthoringCartridge((prev: any) => ({
-                            ...prev,
-                            meta: { ...prev.meta, characters: prev.meta.characters.filter((_: any, itemIndex: number) => itemIndex !== index) },
-                          }))}
-                          disabled={(authoringCartridge.meta?.characters || []).length <= 1}
-                          className={semanticButtonClass('danger', { compact: true })}
-                        >
-                          删除
-                        </button>
-                      </div>
-                    ))}
+                    <h3 className="text-xl font-black text-white">主线与结局</h3>
+                    <p className="mt-1 text-xs leading-relaxed text-zinc-500">这里负责章节正文与结局的编写。其他基本设定请前往「作品设置」修改。</p>
                   </div>
 
                   <div className="space-y-4">
@@ -6165,213 +6095,135 @@ export default function App() {
                     ))}
                   </div>
 
-                  <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/40 p-5 space-y-4">
-                    <div className="text-sm font-black text-white">新建 / 编辑支线</div>
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <input value={branchForm.name} onChange={(event) => setBranchForm((prev) => ({ ...prev, name: event.target.value }))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" placeholder="支线名" />
-                      <input value={branchForm.hint} onChange={(event) => setBranchForm((prev) => ({ ...prev, hint: event.target.value }))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" placeholder="提示短句" />
-                    </div>
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <select value={branchForm.side} onChange={(event) => setBranchForm((prev) => ({ ...prev, side: event.target.value as 'left' | 'right' }))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500">
-                        <option value="left">左倾支线</option>
-                        <option value="right">右倾支线</option>
-                      </select>
-                      <select value={branchForm.tier} onChange={(event) => setBranchForm((prev) => ({ ...prev, tier: event.target.value as 'small' | 'medium' | 'large' | 'hidden' }))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500">
-                        <option value="small">影响：小</option>
-                        <option value="medium">影响：中</option>
-                        <option value="large">影响：大</option>
-                        <option value="hidden">影响：隐</option>
-                      </select>
-                    </div>
-                    <textarea value={branchForm.sceneText} onChange={(event) => setBranchForm((prev) => ({ ...prev, sceneText: event.target.value }))} className="min-h-[180px] w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-sm text-white outline-none focus:border-indigo-500" placeholder="支线情节（300 字以内）" />
-                    <div className="space-y-3">
-                      <div className="text-sm font-black text-white">触发条件</div>
-                      {branchConditions.map((condition, idx) => (
-                        <div key={idx} className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 space-y-3">
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="text-xs font-black text-zinc-500">条件组 {idx + 1}</div>
-                            {branchConditions.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => setBranchConditions((prev) => prev.filter((_, itemIdx) => itemIdx !== idx))}
-                                className={semanticButtonClass('danger', { compact: true })}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                                删除条件
-                              </button>
-                            )}
-                          </div>
-                          <div className="grid gap-3 md:grid-cols-4">
-                            <select value={condition.kind} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, kind: event.target.value as 'single' | 'count' } : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500">
-                              <option value="single">单次判定</option>
-                              <option value="count">累计判定</option>
-                            </select>
-                            <select value={condition.kind === 'single' ? condition.singleChapterNum : condition.upToChapterNum} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? (condition.kind === 'single' ? { ...item, singleChapterNum: Number(event.target.value) } : { ...item, upToChapterNum: Number(event.target.value) }) : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500">
-                              {chapterOptions.map((chapterNum) => <option key={chapterNum} value={chapterNum}>第{chapterNum}章</option>)}
-                            </select>
-                            <select value={condition.kind === 'single' ? condition.singleCharId : condition.countCharId} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? (condition.kind === 'single' ? { ...item, singleCharId: event.target.value } : { ...item, countCharId: event.target.value }) : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500">
-                              <option value="">选择角色</option>
-                              {normalizeCharacters(authoringCartridge.meta?.characters || []).map((character: any) => <option key={character.id} value={character.id}>{character.name}</option>)}
-                            </select>
-                            {condition.kind === 'single' ? (
-                              <select value={condition.singleAction} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, singleAction: event.target.value as 'bless' | 'curse' } : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500">
-                                <option value="bless">庇佑</option>
-                                <option value="curse">磨难</option>
-                              </select>
-                            ) : (
-                              <input type="number" min={1} value={condition.minCount} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, minCount: Math.max(1, Number(event.target.value) || 1) } : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500" placeholder="累计次数" />
-                            )}
-                          </div>
-                          <div className="text-xs text-indigo-300">
-                            {triggerPreview({
-                              triggerType: condition.kind,
-                              singleChapterNum: condition.singleChapterNum,
-                              singleCharId: condition.singleCharId,
-                              singleAction: condition.singleAction,
-                              countCharId: condition.countCharId,
-                              countAction: condition.countAction,
-                              minCount: condition.minCount,
-                              upToChapterNum: condition.upToChapterNum,
-                              characters: normalizeCharacters(authoringCartridge.meta?.characters || []),
-                            })}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="flex flex-wrap gap-3">
+                  <div className="flex items-center justify-between">
+                    <div className="text-lg font-black text-white">支线列表</div>
+                    {expandedBranchId !== 'NEW' && (
                       <button
                         type="button"
-                        onClick={() => setBranchConditions((prev) => prev.length >= 3 ? prev : [...prev, {
-                          kind: 'single',
-                          singleChapterNum: 2,
-                          singleCharId: '',
-                          singleAction: 'bless',
-                          countCharId: '',
-                          countAction: 'bless',
-                          minCount: 1,
-                          upToChapterNum: 6,
-                        }])}
-                        className={semanticButtonClass('ghost', { compact: true })}
-                      >
-                        新增条件组
-                      </button>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (!authoringStoryId || !branchForm.name.trim()) {
-                            showError('请先填写支线名。');
-                            return;
-                          }
-                          const newId = await createStoryBranch(db as any, authoringStoryId, {
-                            side: branchForm.side,
-                            tier: branchForm.tier,
-                            name: branchForm.name,
-                            hint: branchForm.hint || `留意${branchForm.name}`,
-                            desc: branchForm.sceneText.slice(0, 80) || branchForm.name,
-                            common: false,
-                            trigger: normalizeBranchConditionsForStorage(branchConditions)[0],
-                            triggerGroups: normalizeBranchConditionsForStorage(branchConditions),
-                            inject: { mustHappen: branchForm.sceneText ? [branchForm.sceneText] : [], mustReveal: [], mustChange: [] },
-                            sceneText: branchForm.sceneText,
-                          } as any);
-                          await selectAuthoringStory(authoringStoryId);
-                          setSelectedBranchId(newId);
-                          setExpandedBranchId(newId);
-                          showError('支线已创建。');
+                        onClick={() => {
+                          setExpandedBranchId('NEW');
+                          setBranchForm({
+                            id: '',
+                            name: '',
+                            side: 'left',
+                            tier: 'small',
+                            triggerType: 'single',
+                            singleChapterNum: 2,
+                            singleCharId: '',
+                            singleAction: 'bless',
+                            countCharId: '',
+                            countAction: 'bless',
+                            minCount: 1,
+                            upToChapterNum: 6,
+                            hint: '',
+                            sceneText: '',
+                          });
+                          setBranchConditions([{
+                            kind: 'single',
+                            singleChapterNum: 2,
+                            singleCharId: '',
+                            singleAction: 'bless',
+                            countCharId: '',
+                            countAction: 'bless',
+                            minCount: 1,
+                            upToChapterNum: 6,
+                          }]);
                         }}
-                        className={semanticButtonClass('primary', { compact: true })}
+                        className={semanticButtonClass('secondary', { compact: true })}
                       >
-                        创建支线
+                        <Sparkles className="h-4 w-4" />
+                        新增支线
                       </button>
-                    </div>
+                    )}
                   </div>
+
+                  {expandedBranchId === 'NEW' && renderBranchForm(true)}
 
                   <div className="space-y-3">
                     {(authoringCartridge.branches || []).map((branch: any) => (
-                      <div key={branch.id} className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/40 p-4">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div>
-                            <div className="text-sm font-black text-white">{branch.name}</div>
-                            <div className="text-xs text-zinc-500">{branch.side} / {branch.tier}</div>
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedBranchId(branch.id);
-                                setExpandedBranchId(expandedBranchId === branch.id ? null : branch.id);
-                                setBranchForm({
-                                  id: branch.id,
-                                  name: branch.name || '',
-                                  side: branch.side || 'left',
-                                  tier: branch.tier || 'small',
-                                  triggerType: 'single',
-                                  singleChapterNum: branch.trigger?.single?.chapterNum || 2,
-                                  singleCharId: branch.trigger?.single?.charId || '',
-                                  singleAction: branch.trigger?.single?.action || 'bless',
-                                  countCharId: branch.trigger?.count?.charId || '',
-                                  countAction: branch.trigger?.count?.action || 'bless',
-                                  minCount: branch.trigger?.count?.minCount || 1,
-                                  upToChapterNum: branch.trigger?.count?.upToChapterNum || 6,
-                                  hint: branch.hint || '',
-                                  sceneText: branch.sceneText || '',
-                                });
-                                setBranchConditions((branch.triggerGroups && branch.triggerGroups.length > 0)
-                                  ? branch.triggerGroups.map((group: any) => group.type === 'count'
-                                    ? {
-                                        kind: 'count',
+                      <div key={branch.id} className="transition-all">
+                        {expandedBranchId === branch.id ? (
+                          renderBranchForm(false)
+                        ) : (
+                          <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/40 p-4 flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <div className="text-sm font-black text-white">{branch.name}</div>
+                              <div className="mt-1 text-xs text-zinc-500">{branch.side === 'left' ? '左倾' : '右倾'} / 影响：{branch.tier}</div>
+                              <div className="mt-2 text-xs leading-relaxed text-zinc-400 max-w-xl line-clamp-2">{branch.sceneText || branch.hint || '暂无内容'}</div>
+                            </div>
+                            <div className="flex gap-2 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedBranchId(branch.id);
+                                  setExpandedBranchId(branch.id);
+                                  setBranchForm({
+                                    id: branch.id,
+                                    name: branch.name || '',
+                                    side: branch.side || 'left',
+                                    tier: branch.tier || 'small',
+                                    triggerType: 'single',
+                                    singleChapterNum: branch.trigger?.single?.chapterNum || 2,
+                                    singleCharId: branch.trigger?.single?.charId || '',
+                                    singleAction: branch.trigger?.single?.action || 'bless',
+                                    countCharId: branch.trigger?.count?.charId || '',
+                                    countAction: branch.trigger?.count?.action || 'bless',
+                                    minCount: branch.trigger?.count?.minCount || 1,
+                                    upToChapterNum: branch.trigger?.count?.upToChapterNum || 6,
+                                    hint: branch.hint || '',
+                                    sceneText: branch.sceneText || '',
+                                  });
+                                  setBranchConditions((branch.triggerGroups && branch.triggerGroups.length > 0)
+                                    ? branch.triggerGroups.map((group: any) => group.type === 'count'
+                                      ? {
+                                          kind: 'count',
+                                          singleChapterNum: 2,
+                                          singleCharId: '',
+                                          singleAction: 'bless',
+                                          countCharId: group.count?.charId || '',
+                                          countAction: group.count?.action || 'bless',
+                                          minCount: group.count?.minCount || 1,
+                                          upToChapterNum: group.count?.upToChapterNum || 6,
+                                        }
+                                      : {
+                                          kind: 'single',
+                                          singleChapterNum: group.single?.chapterNum || 2,
+                                          singleCharId: group.single?.charId || '',
+                                          singleAction: group.single?.action || 'bless',
+                                          countCharId: '',
+                                          countAction: 'bless',
+                                          minCount: 1,
+                                          upToChapterNum: 6,
+                                        })
+                                    : [{
+                                        kind: 'single',
                                         singleChapterNum: 2,
                                         singleCharId: '',
                                         singleAction: 'bless',
-                                        countCharId: group.count?.charId || '',
-                                        countAction: group.count?.action || 'bless',
-                                        minCount: group.count?.minCount || 1,
-                                        upToChapterNum: group.count?.upToChapterNum || 6,
-                                      }
-                                    : {
-                                        kind: 'single',
-                                        singleChapterNum: group.single?.chapterNum || 2,
-                                        singleCharId: group.single?.charId || '',
-                                        singleAction: group.single?.action || 'bless',
                                         countCharId: '',
                                         countAction: 'bless',
                                         minCount: 1,
                                         upToChapterNum: 6,
-                                      })
-                                  : [{
-                                      kind: 'single',
-                                      singleChapterNum: 2,
-                                      singleCharId: '',
-                                      singleAction: 'bless',
-                                      countCharId: '',
-                                      countAction: 'bless',
-                                      minCount: 1,
-                                      upToChapterNum: 6,
-                                    }]
-                                );
-                              }}
-                              className={semanticButtonClass('secondary', { compact: true })}
-                            >
-                              编辑
-                            </button>
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                if (!authoringStoryId) return;
-                                await deleteStoryBranch(db as any, authoringStoryId, branch.id);
-                                await selectAuthoringStory(authoringStoryId);
-                                showError('支线已删除。');
-                              }}
-                              className={semanticButtonClass('danger', { compact: true })}
-                            >
-                              删除
-                            </button>
-                          </div>
-                        </div>
-                        {expandedBranchId === branch.id && (
-                          <div className="mt-4 border-t border-zinc-800 pt-4 text-xs leading-relaxed text-zinc-500">
-                            <div className="mb-2 font-bold text-zinc-300">{branch.hint || '暂无提示短句'}</div>
-                            <div>{branch.sceneText || '暂无支线情节。'}</div>
+                                      }]
+                                  );
+                                }}
+                                className={semanticButtonClass('secondary', { compact: true })}
+                              >
+                                编辑
+                              </button>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  if (!authoringStoryId) return;
+                                  await deleteStoryBranch(db as any, authoringStoryId, branch.id);
+                                  await selectAuthoringStory(authoringStoryId);
+                                  showError('支线已删除。');
+                                }}
+                                className={semanticButtonClass('danger', { compact: true })}
+                              >
+                                删除
+                              </button>
+                            </div>
                           </div>
                         )}
                       </div>
