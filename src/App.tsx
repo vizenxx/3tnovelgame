@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp, Download, Sun, Moon } from 'lucide-react';
@@ -982,6 +982,7 @@ export default function App() {
   const [archiveFilter, setArchiveFilter] = useState<'all' | 'private' | 'public'>('all');
   const [archiveSearch, setArchiveSearch] = useState('');
   const [archiveUpdatingIds, setArchiveUpdatingIds] = useState<Record<string, boolean>>({});
+  const [archiveChoiceStoryId, setArchiveChoiceStoryId] = useState<string | null>(null);
   const [showScrollTopButton, setShowScrollTopButton] = useState(false);
   const [readonlyReturnTarget, setReadonlyReturnTarget] = useState<GameState>('STORY_SELECT');
   const [archiveReturnTarget, setArchiveReturnTarget] = useState<GameState>('STORY_SELECT');
@@ -4443,119 +4444,262 @@ export default function App() {
 
   const renderArchiveView = () => {
     const keyword = archiveSearch.trim().toLowerCase();
-    const filteredStories = mySharedStories.filter((story: any) => {
-      if (archiveFilter !== 'all' && story.visibility !== archiveFilter) return false;
+    const matchesKeyword = (story: any) => {
       if (!keyword) return true;
       const haystack = `${story.title || ''}\n${story.main_axis || ''}`.toLowerCase();
       return haystack.includes(keyword);
+    };
+
+    const favoriteStories = mySharedStories.filter(
+      (story: any) => story.archiveKind === 'favorite' && matchesKeyword(story)
+    );
+    const savedStories = mySharedStories.filter((story: any) => {
+      if (story.archiveKind === 'favorite') return false;
+      if (archiveFilter !== 'all' && story.visibility !== archiveFilter) return false;
+      return matchesKeyword(story);
     });
+
+    const renderFavoriteCard = (story: any) => {
+      const isChoosingThis = archiveChoiceStoryId === story.id;
+      return (
+        <div key={story.id} className="rounded-[1.5rem] border border-indigo-500/20 bg-indigo-500/5 p-5 transition-all duration-150">
+          <div className="mb-2 flex items-start justify-between gap-2">
+            <div className="line-clamp-2 text-sm font-black text-white leading-snug">{formatBookTitle(story.title)}</div>
+            <div className="shrink-0 rounded-full bg-indigo-500/15 px-2 py-1 text-[10px] font-black text-indigo-300">收藏原作</div>
+          </div>
+          <div className="mb-3 grid gap-1 text-[11px] font-bold text-zinc-500">
+            <div>原作者：{getOriginalAuthorName(story)}</div>
+          </div>
+          <div className="line-clamp-3 text-xs leading-relaxed text-zinc-500 mb-4">{story.main_axis || '暂无主轴摘要。'}</div>
+
+          {!isChoosingThis ? (
+            <button
+              type="button"
+              onClick={() => setArchiveChoiceStoryId(story.id)}
+              className={semanticButtonClass('secondary', { compact: true })}
+            >
+              <BookOpen className="h-4 w-4" />
+              前往原作
+            </button>
+          ) : (
+            <div className="rounded-2xl border border-indigo-500/30 bg-indigo-950/40 p-3 space-y-2">
+              <div className="text-[11px] font-black uppercase tracking-[0.18em] text-indigo-400 mb-2">选择进入方式</div>
+              <button
+                type="button"
+                onClick={() => {
+                  setArchiveChoiceStoryId(null);
+                  void startStoryPlay(story.sourceStoryId || story.id);
+                }}
+                className="flex w-full items-center gap-3 rounded-xl bg-indigo-600/90 px-3 py-2.5 text-left text-sm font-bold text-white transition-colors hover:bg-indigo-500 active:scale-[0.98]"
+              >
+                <Zap className="h-4 w-4 shrink-0" />
+                <div>
+                  <div>干涉命运</div>
+                  <div className="text-[10px] font-normal text-indigo-200/80">进入游玩页，亲手改写这段故事</div>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setArchiveChoiceStoryId(null);
+                  void openReadonlyStory(story.sourceStoryId || story.id, { allowBack: true, returnTarget: 'ARCHIVE' });
+                }}
+                className="flex w-full items-center gap-3 rounded-xl border border-zinc-700 bg-zinc-900/80 px-3 py-2.5 text-left text-sm font-bold text-zinc-200 transition-colors hover:border-zinc-500 hover:bg-zinc-800 active:scale-[0.98]"
+              >
+                <BookOpen className="h-4 w-4 shrink-0" />
+                <div>
+                  <div>观测命数</div>
+                  <div className="text-[10px] font-normal text-zinc-500">以只读方式阅读原版故事</div>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setArchiveChoiceStoryId(null)}
+                className="w-full rounded-xl px-3 py-1.5 text-center text-xs font-bold text-zinc-600 hover:text-zinc-400 transition-colors"
+              >
+                取消
+              </button>
+            </div>
+          )}
+
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              disabled={archiveUpdatingIds[story.id]}
+              onClick={() => handleDeleteArchiveStory(story)}
+              className={semanticButtonClass('danger', { compact: true })}
+            >
+              <Trash2 className="h-4 w-4" />
+              取消收藏
+            </button>
+            <button
+              type="button"
+              disabled={isSharing || archiveUpdatingIds[story.id]}
+              onClick={() => shareArchiveListStory(story)}
+              className={semanticButtonClass('ghost', { compact: true })}
+            >
+              {isSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+              分享原作
+            </button>
+          </div>
+        </div>
+      );
+    };
+
+    const renderSavedCard = (story: any) => (
+      <div key={story.id} className="rounded-[1.5rem] border border-zinc-800 bg-zinc-900/30 p-5">
+        <div className="mb-2 flex items-start justify-between gap-2">
+          <div className="line-clamp-2 text-sm font-black text-white leading-snug">{formatBookTitle(story.title)}</div>
+          <div className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-black ${story.visibility === 'public' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-zinc-800 text-zinc-400'}`}>
+            {story.visibility === 'public' ? '公开分享' : '私密保存'}
+          </div>
+        </div>
+        <div className="mb-3 grid gap-1 text-[11px] font-bold text-zinc-500">
+          <div>原作者：{getOriginalAuthorName(story)}</div>
+          {getIntervenerName(story) && <div>干涉者：{getIntervenerName(story)}</div>}
+        </div>
+        <div className="line-clamp-3 text-xs leading-relaxed text-zinc-500">{story.main_axis || '暂无主轴摘要。'}</div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => openReadonlyStory(story.id, { allowBack: true, returnTarget: 'ARCHIVE' })}
+            className={semanticButtonClass('secondary', { compact: true })}
+          >
+            <BookOpen className="h-4 w-4" />
+            观测命数
+          </button>
+          <button
+            type="button"
+            disabled={isSharing || archiveUpdatingIds[story.id]}
+            onClick={() => shareArchiveListStory(story)}
+            className={semanticButtonClass('ghost', { compact: true })}
+          >
+            {isSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+            分享
+          </button>
+          <button
+            type="button"
+            disabled={archiveUpdatingIds[story.id]}
+            onClick={() => handleDeleteArchiveStory(story)}
+            className={semanticButtonClass('danger', { compact: true })}
+          >
+            <Trash2 className="h-4 w-4" />
+            删除
+          </button>
+        </div>
+        <div className="mt-3 flex gap-2">
+          <button
+            type="button"
+            disabled={archiveUpdatingIds[story.id] || story.visibility === 'private'}
+            onClick={() => handleArchiveVisibilityChange(story, 'private')}
+            className={semanticButtonClass('ghost', { compact: true })}
+          >
+            设为私密
+          </button>
+          <button
+            type="button"
+            disabled={archiveUpdatingIds[story.id] || story.visibility === 'public'}
+            onClick={() => handleArchiveVisibilityChange(story, 'public')}
+            className={semanticButtonClass('ghost', { compact: true })}
+          >
+            设为公开
+          </button>
+        </div>
+      </div>
+    );
+
     return (
       <div className="mx-auto max-w-6xl px-6 pb-12 pt-24 lg:px-8">
         <div className="mb-10 flex items-start justify-between gap-4">
           <div>
             <div className="text-xs font-black uppercase tracking-[0.22em] text-zinc-500">故事馆藏</div>
-            <h2 className="mt-2 text-3xl font-black text-white sm:text-4xl">保存与分享记录</h2>
-            <p className="mt-2 text-sm text-zinc-500">在这里查看你保存过的私密馆藏与公开分享记录。</p>
+            <h2 className="mt-2 text-3xl font-black text-white sm:text-4xl">藏馆</h2>
+            <p className="mt-2 text-sm text-zinc-500">管理你收藏的原作与保存的干涉记录。</p>
           </div>
           <BackNavButton label={archiveReturnTarget === 'PLAYING' ? '返回游玩页' : '返回作品库'} onClick={leaveArchiveView} />
         </div>
 
-        <div className="mb-6 space-y-3 rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4">
-          <div className="flex flex-wrap gap-2">
-            {[
-              { id: 'all', label: '全部' },
-              { id: 'private', label: '私密' },
-              { id: 'public', label: '公开' },
-            ].map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                onClick={() => setArchiveFilter(option.id as 'all' | 'private' | 'public')}
-                className={archiveFilter === option.id ? semanticButtonClass('primary', { compact: true }) : semanticButtonClass('ghost', { compact: true })}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
+        {/* 搜索栏 */}
+        <div className="mb-8 rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4">
           <input
             type="search"
             value={archiveSearch}
-            onChange={(event) => setArchiveSearch(event.target.value)}
+            onChange={(event) => { setArchiveSearch(event.target.value); setArchiveChoiceStoryId(null); }}
             placeholder="搜索标题或主轴内容"
             className="w-full rounded-xl border border-zinc-700 bg-zinc-950/70 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500"
           />
         </div>
 
-        {filteredStories.length === 0 ? (
-          <div className="rounded-[2rem] border border-zinc-800 bg-zinc-900/30 p-10 text-center">
-            <div className="text-lg font-bold text-zinc-300">{mySharedStories.length === 0 ? '还没有故事记录' : '没有符合筛选条件的记录'}</div>
-            <div className="mt-2 text-sm text-zinc-500">你在游玩页点击“保存作品并返回”或“分享”后，记录会出现在这里。</div>
+        {/* 收藏区 */}
+        <section className="mb-12">
+          <div className="mb-5 flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-500/15">
+              <Heart className="h-4 w-4 text-indigo-400" />
+            </div>
+            <div>
+              <div className="text-base font-black text-white">收藏 &amp; 分享</div>
+              <div className="text-xs text-zinc-500">原作快速入口 — 点击「前往原作」选择「干涉命运」或「观测命数」</div>
+            </div>
           </div>
-        ) : (
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredStories.map((story: any) => (
-              <div key={story.id} className="rounded-[1.5rem] border border-zinc-800 bg-zinc-900/30 p-5">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <div className="line-clamp-1 text-sm font-black text-white">{formatBookTitle(story.title)}</div>
-                  <div className={`rounded-full px-2 py-1 text-[10px] font-black ${story.archiveKind === 'favorite' ? 'bg-indigo-500/10 text-indigo-300' : story.visibility === 'public' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-zinc-800 text-zinc-400'}`}>
-                    {story.archiveKind === 'favorite' ? '收藏原作' : story.visibility === 'public' ? '公开分享' : '保存故事'}
-                  </div>
-                </div>
-                <div className="mb-3 grid gap-1 text-[11px] font-bold text-zinc-500">
-                  <div>原作者：{getOriginalAuthorName(story)}</div>
-                  {getIntervenerName(story) && <div>干涉者：{getIntervenerName(story)}</div>}
-                </div>
-                <div className="line-clamp-3 text-xs leading-relaxed text-zinc-500">{story.main_axis || '暂无主轴摘要。'}</div>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <button type="button" onClick={() => openReadonlyStory(story.archiveKind === 'favorite' ? (story.sourceStoryId || story.id) : story.id, { allowBack: true, returnTarget: 'ARCHIVE' })} className={semanticButtonClass('secondary', { compact: true })}>
-                    <BookOpen className="h-4 w-4" />
-                    打开
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => shareArchiveListStory(story)}
-                    disabled={isSharing || archiveUpdatingIds[story.id]}
-                    className={semanticButtonClass('ghost', { compact: true })}
-                  >
-                    {isSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
-                    分享
-                  </button>
-                  <button
-                    type="button"
-                    disabled={archiveUpdatingIds[story.id]}
-                    onClick={() => handleDeleteArchiveStory(story)}
-                    className={semanticButtonClass('danger', { compact: true })}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    删除
-                  </button>
-                </div>
-                {story.archiveKind !== 'favorite' && <div className="mt-3 flex gap-2">
-                  <button
-                    type="button"
-                    disabled={archiveUpdatingIds[story.id] || story.visibility === 'private'}
-                    onClick={() => handleArchiveVisibilityChange(story, 'private')}
-                    className={semanticButtonClass('ghost', { compact: true })}
-                  >
-                    设为私密
-                  </button>
-                  <button
-                    type="button"
-                    disabled={archiveUpdatingIds[story.id] || story.visibility === 'public'}
-                    onClick={() => handleArchiveVisibilityChange(story, 'public')}
-                    className={semanticButtonClass('ghost', { compact: true })}
-                  >
-                    设为公开
-                  </button>
-                </div>}
+          {favoriteStories.length === 0 ? (
+            <div className="rounded-[2rem] border border-dashed border-indigo-500/20 bg-indigo-500/5 p-8 text-center">
+              <div className="text-sm font-bold text-zinc-500">
+                {keyword ? '没有符合搜索词的收藏原作' : '还没有收藏任何原作'}
               </div>
-            ))}
+              <div className="mt-1 text-xs text-zinc-600">在游玩页点击「收藏」按钮，原作会出现在这里。</div>
+            </div>
+          ) : (
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {favoriteStories.map(renderFavoriteCard)}
+            </div>
+          )}
+        </section>
+
+        {/* 保存区 */}
+        <section>
+          <div className="mb-5 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500/15">
+                <Bookmark className="h-4 w-4 text-emerald-400" />
+              </div>
+              <div>
+                <div className="text-base font-black text-white">保存 &amp; 分享</div>
+                <div className="text-xs text-zinc-500">干涉后的快照与只读分享页</div>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {([
+                { id: 'all', label: '全部' },
+                { id: 'private', label: '私密' },
+                { id: 'public', label: '公开' },
+              ] as const).map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => setArchiveFilter(option.id)}
+                  className={archiveFilter === option.id ? semanticButtonClass('primary', { compact: true }) : semanticButtonClass('ghost', { compact: true })}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
           </div>
-        )}
+          {savedStories.length === 0 ? (
+            <div className="rounded-[2rem] border border-dashed border-zinc-800 bg-zinc-900/20 p-8 text-center">
+              <div className="text-sm font-bold text-zinc-500">
+                {keyword || archiveFilter !== 'all' ? '没有符合条件的保存记录' : '还没有保存任何干涉记录'}
+              </div>
+              <div className="mt-1 text-xs text-zinc-600">在游玩页点击「保存作品」后，记录会出现在这里。</div>
+            </div>
+          ) : (
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {savedStories.map(renderSavedCard)}
+            </div>
+          )}
+        </section>
       </div>
     );
   };
-
   const renderThemeSelectionView = () => (
     <div className="mx-auto flex min-h-[100dvh] max-w-5xl flex-col justify-center px-6 pb-20 pt-28 text-center lg:px-8">
       <div className="mb-8 flex items-center justify-between">
