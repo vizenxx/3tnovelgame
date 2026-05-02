@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp, Download, Sun, Moon } from 'lucide-react';
@@ -979,7 +979,7 @@ export default function App() {
   const [publicStories, setPublicStories] = useState<any[]>([]);
   const [myStories, setMyStories] = useState<any[]>([]);
   const [mySharedStories, setMySharedStories] = useState<any[]>([]);
-  const [archiveFilter, setArchiveFilter] = useState<'all' | 'private' | 'public'>('all');
+  const [archiveFilter, setArchiveFilter] = useState<'all' | 'private' | 'public' | 'unlisted'>('all');
   const [archiveSearch, setArchiveSearch] = useState('');
   const [archiveUpdatingIds, setArchiveUpdatingIds] = useState<Record<string, boolean>>({});
   const [archiveChoiceStoryId, setArchiveChoiceStoryId] = useState<string | null>(null);
@@ -4558,14 +4558,6 @@ export default function App() {
       );
     };
 
-    const cycleVisibility = (story: any) => {
-      const next = story.visibility === 'private' ? 'public'
-        : story.visibility === 'public' ? 'unlisted'
-        : 'private';
-      void handleArchiveVisibilityChange(story, next as 'public' | 'private');
-    };
-    const visibilityLabel = (v: string) =>
-      v === 'public' ? '公开分享' : v === 'unlisted' ? '链接分享' : '私密保存';
     const visibilityClass = (v: string) =>
       v === 'public'
         ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20'
@@ -4574,49 +4566,56 @@ export default function App() {
         : 'bg-zinc-800/80 border-zinc-700 text-zinc-400 hover:bg-zinc-700';
 
     const renderSavedCard = (story: any) => (
-      <div key={story.id} className="rounded-[1.5rem] border border-zinc-800 bg-zinc-900/30 p-5">
+      <div key={story.id} className="rounded-[1.5rem] border border-zinc-800 bg-zinc-900/30 p-5 flex flex-col">
         <div className="mb-2 flex items-start justify-between gap-2">
           <div className="line-clamp-2 text-sm font-black text-white leading-snug">{formatBookTitle(story.title)}</div>
-          <button
-            type="button"
-            disabled={archiveUpdatingIds[story.id]}
-            onClick={() => cycleVisibility(story)}
-            title="点击切换可见范围"
-            className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-black transition-colors ${visibilityClass(story.visibility)}`}
-          >
-            {visibilityLabel(story.visibility)}
-          </button>
+          <div className="relative shrink-0">
+            <select
+              value={story.visibility || 'private'}
+              disabled={archiveUpdatingIds[story.id]}
+              onChange={(e) => handleArchiveVisibilityChange(story, e.target.value as any)}
+              title="点击切换可见范围"
+              className={`block w-full appearance-none rounded-full border px-2.5 py-1 pr-6 text-[10px] font-black outline-none transition-colors cursor-pointer text-center ${visibilityClass(story.visibility)}`}
+            >
+              <option value="public" className="bg-zinc-900 text-zinc-100">公开分享</option>
+              <option value="unlisted" className="bg-zinc-900 text-zinc-100">链接分享</option>
+              <option value="private" className="bg-zinc-900 text-zinc-100">私密保存</option>
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-1 flex items-center px-1 text-inherit opacity-70">
+              <svg className="h-3 w-3 fill-current" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" /></svg>
+            </div>
+          </div>
         </div>
         <div className="mb-3 grid gap-1 text-[11px] font-bold text-zinc-500">
           <div>原作者：{getOriginalAuthorName(story)}</div>
           {getIntervenerName(story) && <div>干涉者：{getIntervenerName(story)}</div>}
         </div>
-        <div className="line-clamp-3 text-xs leading-relaxed text-zinc-500">{story.main_axis || '暂无主轴摘要。'}</div>
-        <div className="mt-4 flex gap-2">
+        <div className="line-clamp-3 text-xs leading-relaxed text-zinc-500 flex-1">{story.main_axis || '暂无主轴摘要。'}</div>
+        <div className="mt-4 flex gap-1.5 sm:gap-2">
           <button
             type="button"
             onClick={() => openReadonlyStory(story.id, { allowBack: true, returnTarget: 'ARCHIVE' })}
-            className={semanticButtonClass('secondary', { compact: true })}
+            className={`${semanticButtonClass('secondary', { compact: true })} flex-1 justify-center whitespace-nowrap px-0.5 text-[10px] tracking-tighter sm:px-2 sm:text-xs`}
           >
-            <BookOpen className="h-4 w-4" />
+            <BookOpen className="mr-1 h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
             观看命运
           </button>
           <button
             type="button"
             disabled={isSharing || archiveUpdatingIds[story.id]}
             onClick={() => shareArchiveListStory(story)}
-            className={semanticButtonClass('secondary', { compact: true })}
+            className={`${semanticButtonClass('secondary', { compact: true })} flex-1 justify-center whitespace-nowrap px-0.5 text-[10px] tracking-tighter sm:px-2 sm:text-xs`}
           >
-            {isSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+            {isSharing ? <Loader2 className="mr-1 h-3.5 w-3.5 shrink-0 animate-spin sm:h-4 sm:w-4" /> : <ExternalLink className="mr-1 h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />}
             分享
           </button>
           <button
             type="button"
             disabled={archiveUpdatingIds[story.id]}
             onClick={() => handleDeleteArchiveStory(story)}
-            className={semanticButtonClass('danger', { compact: true })}
+            className={`${semanticButtonClass('danger', { compact: true })} flex-1 justify-center whitespace-nowrap px-0.5 text-[10px] tracking-tighter sm:px-2 sm:text-xs`}
           >
-            <Trash2 className="h-4 w-4" />
+            <Trash2 className="mr-1 h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
             删除
           </button>
         </div>
@@ -4636,8 +4635,8 @@ export default function App() {
 
         <section className="rounded-[2rem] border border-zinc-800 bg-zinc-900/20 p-4 sm:p-5">
           {/* Tab 切换栏 */}
-          <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex rounded-2xl border border-zinc-800 bg-zinc-950/70 p-1">
+          <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex rounded-2xl border border-zinc-800 bg-zinc-950/70 p-1 shrink-0">
               {([
                 { id: 'favorite', label: '收藏原作' },
                 { id: 'saved', label: '保存记录' },
@@ -4655,25 +4654,26 @@ export default function App() {
               ))}
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex min-w-0 flex-1 flex-col gap-3">
               <input
                 type="search"
                 value={archiveSearch}
                 onChange={(event) => { setArchiveSearch(event.target.value); setArchiveChoiceStoryId(null); }}
                 placeholder="搜索标题或主轴内容"
-                className="min-w-0 flex-1 rounded-xl border border-zinc-800 bg-zinc-950/80 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-950/80 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500"
               />
               {archiveTab === 'saved' && (
-                <div className="flex gap-1.5">
+                <div className="flex flex-wrap gap-1.5">
                   {([
                     { id: 'all', label: '全部' },
-                    { id: 'private', label: '私密' },
                     { id: 'public', label: '公开' },
+                    { id: 'unlisted', label: '链接分享' },
+                    { id: 'private', label: '私密' },
                   ] as const).map((option) => (
                     <button
                       key={option.id}
                       type="button"
-                      onClick={() => setArchiveFilter(option.id)}
+                      onClick={() => setArchiveFilter(option.id as any)}
                       className={archiveFilter === option.id ? semanticButtonClass('primary', { compact: true }) : semanticButtonClass('ghost', { compact: true })}
                     >
                       {option.label}
