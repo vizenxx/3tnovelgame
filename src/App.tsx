@@ -6075,22 +6075,30 @@ export default function App() {
             </button>
           </div>
 
-          <div className="sticky top-[calc(env(safe-area-inset-top)+4.75rem)] z-40 mb-6 rounded-2xl border border-indigo-500/30 bg-zinc-950/95 p-3 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-4">
+          <div className="fixed bottom-24 left-8 z-[1700]">
             <button
               type="button"
               onClick={() => setAuthoringFindReplaceOpen((prev) => !prev)}
-              className={`${semanticButtonClass(authoringFindReplaceOpen ? 'secondary' : 'primary', { compact: true })} w-full justify-center sm:w-auto`}
+              aria-label="查找 / 替换"
+              className={`flex h-12 w-12 items-center justify-center rounded-full border shadow-2xl backdrop-blur-md transition-all hover:-translate-y-0.5 active:scale-95 ${
+                authoringFindReplaceOpen
+                  ? 'border-indigo-400 bg-indigo-500 text-white'
+                  : 'border-zinc-800 bg-zinc-950/90 text-zinc-200 hover:border-indigo-500 hover:text-white'
+              }`}
             >
               <Search className="h-4 w-4" />
-              查找 / 替换
             </button>
-            {!authoringFindReplaceOpen && (
-              <p className="mt-2 text-center text-[11px] font-bold text-zinc-500 sm:text-left">
-                可批量处理章节、结局与角色简介，直屏编辑时也会固定在顶部方便使用。
-              </p>
-            )}
             {authoringFindReplaceOpen && (
-              <div className="mt-4 grid gap-3">
+              <div className="absolute bottom-16 left-0 grid max-h-[min(76dvh,680px)] w-[min(92vw,44rem)] gap-3 overflow-y-auto rounded-[1.75rem] border border-indigo-500/30 bg-zinc-950/95 p-4 shadow-2xl shadow-black/40 backdrop-blur-xl sm:p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-lg font-black text-white">查找 / 替换</div>
+                    <p className="mt-1 text-xs leading-relaxed text-zinc-500">可指定章节、结局或角色范围，避免误改其他段落。</p>
+                  </div>
+                  <button type="button" onClick={() => setAuthoringFindReplaceOpen(false)} className={semanticIconButtonClass('ghost')}>
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="space-y-1 text-xs font-bold text-zinc-400">
                     <span>查找文字</span>
