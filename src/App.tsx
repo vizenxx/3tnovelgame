@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp, Download, Sun, Moon } from 'lucide-react';
+import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp, Download, Sun, Moon, Search } from 'lucide-react';
 import { auth, db, firebaseInitError } from './firebase';
 import { createEmptyStory, createSharedStoryRecord, createStorySnapshot, adaptBlueprintToStory, createStoryBranch, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, favoriteStory, unfavoriteStory, getAppSettings, getSharedStoryRecord, getStoryCartridge, getStoryMeta, getUserProgress, incrementStoryMetric, likeStory, listMySharedStories, listMyStories, listPublicStories, refundCoverGenerationUsage, reportStory, reserveCoverGenerationUsage, saveAppSettings, saveStoryMainlineBundle, saveStoryMeta, saveUserProgress, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch } from './storyStore';
 import { isBranchUnlockedByHistory, tierToScore } from './storyCartridge';
@@ -1026,6 +1026,7 @@ export default function App() {
   const handleAuthoringReplaceAll = () => {
     if (!authoringFindQuery) return;
     setAuthoringCartridge((prev: any) => {
+      if (!prev) return prev;
       const next = { ...prev };
       const q = authoringFindQuery;
       const r = authoringReplaceQuery;
@@ -1100,6 +1101,7 @@ export default function App() {
   const [expandedBranchId, setExpandedBranchId] = useState<string | null>(null);
   const [authoringSavedSnapshot, setAuthoringSavedSnapshot] = useState('');
   const [authoringDirty, setAuthoringDirty] = useState(false);
+  const [authoringSaveSuccessStory, setAuthoringSaveSuccessStory] = useState<any | null>(null);
   const [interventionHistory, setInterventionHistory] = useState<Array<{ chapterNum: number; charId: string; action: 'bless' | 'curse' }>>([]);
   const localDeviceIdRef = useRef(getLocalDeviceId());
   const hasLoadedInitialStoryListRef = useRef(false);
@@ -1306,6 +1308,38 @@ export default function App() {
     const shareTitle = formatBookTitle(getStoryTitle(story));
     const shareText = buildStoryShareText(shareTitle, []);
     await sharePayload({ title: shareTitle, text: shareText, url: buildOriginalStoryUrl(storyId) });
+  };
+
+  const handleShareSavedAuthoringStory = async () => {
+    const storyId = authoringSaveSuccessStory?.storyId || authoringStoryId;
+    if (!storyId || !authoringSaveSuccessStory) return;
+    try {
+      setIsSharing(true);
+      let meta = {
+        ...(authoringSaveSuccessStory.meta || {}),
+        id: storyId,
+        storyId,
+      };
+      if ((meta.visibility || 'private') === 'private') {
+        await saveStoryMeta(db as any, storyId, { visibility: 'unlisted' } as any);
+        meta = { ...meta, visibility: 'unlisted' };
+        setAuthoringCartridge((prev: any) => prev ? ({ ...prev, meta: { ...prev.meta, visibility: 'unlisted' } }) : prev);
+        setAuthoringSaveSuccessStory((prev: any) => prev ? ({ ...prev, meta: { ...prev.meta, visibility: 'unlisted' } }) : prev);
+        setMyStories((prev) => prev.map((story: any) => (story.id === storyId ? { ...story, visibility: 'unlisted' } : story)));
+      }
+      const shareTitle = formatBookTitle(getStoryTitle(meta));
+      const shareText = buildStoryShareText(shareTitle, authoringSaveSuccessStory.chapters || []);
+      await sharePayload({ title: shareTitle, text: shareText, url: buildOriginalStoryUrl(storyId) });
+    } catch (error: any) {
+      console.error(error);
+      if (error?.name === 'AbortError') {
+        showError('已取消分享。');
+        return;
+      }
+      showError(error?.message || '分享作品失败。');
+    } finally {
+      setIsSharing(false);
+    }
   };
 
   const isGuestAuthoredMeta = (meta: any) => {
@@ -3132,7 +3166,7 @@ export default function App() {
       const latest = await getStoryCartridge(db as any, authoringStoryId);
       setAuthoringCartridge(latest);
       markAuthoringSaved(latest);
-      showError('支线已保存。');
+      setAuthoringSaveSuccessStory(latest);
     } catch (error: any) {
       console.error(error);
       showError(error?.message || '保存支线失败。');
@@ -3178,7 +3212,7 @@ export default function App() {
       setAuthoringCustomTagsInput(normalizedTags.join('，'));
       markAuthoringSaved(latest);
       await refreshStories({ force: true });
-      showError('作品更改已保存。');
+      setAuthoringSaveSuccessStory(latest);
     } catch (error: any) {
       console.error(error);
       showError(error?.message || '保存作品失败。');
@@ -3808,6 +3842,11 @@ export default function App() {
       });
       setAuthoringSavedSnapshot(JSON.stringify(authoringCartridge));
       setAuthoringDirty(false);
+      setAuthoringSaveSuccessStory({
+        storyId: authoringStoryId,
+        meta: authoringCartridge.meta,
+        chapters: authoringCartridge.chapters,
+      });
     } catch (e) {
       console.error(e);
       showError("保存失败");
@@ -3925,6 +3964,77 @@ export default function App() {
       )}
     </AnimatePresence>
   );
+
+  const renderAuthoringSaveSuccessModal = () => {
+    const story = authoringSaveSuccessStory;
+    const isPrivate = (story?.meta?.visibility || 'private') === 'private';
+    const title = story ? formatBookTitle(story.meta?.title || '未命名作品') : '';
+    return (
+      <AnimatePresence>
+        {story && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className={`${safeModalBackdropClass} z-[5300] bg-black/80 backdrop-blur-md`}
+          >
+            <motion.div
+              initial={{ y: 18, opacity: 0, scale: 0.96 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: 12, opacity: 0, scale: 0.98 }}
+              className="w-full max-w-md rounded-[2rem] border border-emerald-500/25 bg-zinc-950 p-6 shadow-2xl"
+            >
+              <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-300">
+                <CheckCircle2 className="h-6 w-6" />
+              </div>
+              <div className="text-xs font-black uppercase tracking-[0.22em] text-emerald-300">作品已保存</div>
+              <h3 className="mt-2 break-words text-2xl font-black text-white">{title}</h3>
+              <p className="mt-3 text-sm leading-relaxed text-zinc-400">
+                更改已经写入作品档案。你可以马上分享作品，或回到首页继续查看作品库。
+              </p>
+              {isPrivate && (
+                <p className="mt-3 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs font-bold leading-relaxed text-amber-100/80">
+                  当前作品仍是私人状态；点击分享时会先改为“非公开链接”，这样收到链接的人才能阅读，但作品不会出现在公开列表。
+                </p>
+              )}
+              <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={handleShareSavedAuthoringStory}
+                  disabled={isSharing}
+                  className={semanticButtonClass('primary', { fullWidth: true })}
+                >
+                  {isSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
+                  分享作品
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthoringSaveSuccessStory(null);
+                    setAuthoringStoryId(null);
+                    setAuthoringCartridge(null);
+                    setGameState('STORY_SELECT');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className={semanticButtonClass('secondary', { fullWidth: true })}
+                >
+                  <BookOpen className="h-4 w-4" />
+                  回到首页
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAuthoringSaveSuccessStory(null)}
+                className={`${semanticButtonClass('ghost', { fullWidth: true })} mt-3`}
+              >
+                继续编辑
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    );
+  };
 
   const renderResumePromptModal = () => (
     <AnimatePresence>
@@ -5725,7 +5835,7 @@ export default function App() {
           <option value="hidden">影响：隐</option>
         </select>
       </div>
-      <textarea value={branchForm.sceneText} onChange={(event) => setBranchForm((prev) => ({ ...prev, sceneText: event.target.value }))} className="min-h-[180px] w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-sm text-white outline-none focus:border-indigo-500" placeholder="支线情节（300 字以内）" />
+      <textarea value={branchForm.sceneText} onChange={(event) => setBranchForm((prev) => ({ ...prev, sceneText: event.target.value }))} className="authoring-resizable-textarea min-h-[180px] w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-sm text-white outline-none focus:border-indigo-500" placeholder="支线情节（300 字以内）" />
       <div className="space-y-3">
         <div className="text-sm font-black text-white">触发条件</div>
         {branchConditions.map((condition, idx) => (
@@ -5862,11 +5972,17 @@ export default function App() {
                         <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
                       </div>
                     )}
-                    <div>
-                      <div className="line-clamp-2 text-lg font-black text-white leading-tight">{formatBookTitle(getStoryTitle(story))}</div>
-                    </div>
-                    <div className="mt-4 flex items-center gap-2 text-[10px] text-zinc-600">
-                      <span className="rounded bg-zinc-800/50 px-1.5 py-0.5">{story.visibility === 'public' ? '公开' : story.visibility === 'unlisted' ? '链接分享' : '私人'}</span>
+                    <span className={`absolute right-3 top-3 rounded-full border px-2.5 py-1 text-[10px] font-black shadow-lg backdrop-blur-md ${
+                      story.visibility === 'public'
+                        ? 'border-emerald-400/25 bg-emerald-500/15 text-emerald-200'
+                        : story.visibility === 'unlisted'
+                        ? 'border-sky-400/25 bg-sky-500/15 text-sky-200'
+                        : 'border-zinc-700 bg-zinc-900/80 text-zinc-300'
+                    }`}>
+                      {story.visibility === 'public' ? '公开' : story.visibility === 'unlisted' ? '非公开链接' : '私人'}
+                    </span>
+                    <div className="pr-24">
+                      <div className="line-clamp-3 text-lg font-black text-white leading-tight">{formatBookTitle(getStoryTitle(story))}</div>
                     </div>
                   </button>
                 ))}
@@ -5919,6 +6035,83 @@ export default function App() {
             <button type="button" onClick={() => setAuthoringTab('branches')} className={`flex-1 flex flex-col items-center justify-center rounded-xl px-1 py-2 text-[10px] sm:text-[11px] font-black transition-colors ${authoringTab === 'branches' ? 'bg-indigo-600 text-white shadow-md' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'}`}>
               <Sparkles className="mb-1 h-4 w-4 shrink-0" />角色和支线
             </button>
+          </div>
+
+          <div className="sticky top-[calc(env(safe-area-inset-top)+4.75rem)] z-40 mb-6 rounded-2xl border border-indigo-500/30 bg-zinc-950/95 p-3 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-4">
+            <button
+              type="button"
+              onClick={() => setAuthoringFindReplaceOpen((prev) => !prev)}
+              className={`${semanticButtonClass(authoringFindReplaceOpen ? 'secondary' : 'primary', { compact: true })} w-full justify-center sm:w-auto`}
+            >
+              <Search className="h-4 w-4" />
+              查找 / 替换全文
+            </button>
+            {!authoringFindReplaceOpen && (
+              <p className="mt-2 text-center text-[11px] font-bold text-zinc-500 sm:text-left">
+                可批量处理章节、结局与角色简介，直屏编辑时也会固定在顶部方便使用。
+              </p>
+            )}
+            {authoringFindReplaceOpen && (
+              <div className="mt-4 grid gap-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="space-y-1 text-xs font-bold text-zinc-400">
+                    <span>查找文字</span>
+                    <input
+                      value={authoringFindQuery}
+                      onChange={(event) => setAuthoringFindQuery(event.target.value)}
+                      className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                      placeholder="输入要查找的文字"
+                    />
+                  </label>
+                  <label className="space-y-1 text-xs font-bold text-zinc-400">
+                    <span>替换成</span>
+                    <input
+                      value={authoringReplaceQuery}
+                      onChange={(event) => setAuthoringReplaceQuery(event.target.value)}
+                      className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                      placeholder="留空则删除查找文字"
+                    />
+                  </label>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {([
+                    ['chapters', '章节'],
+                    ['endings', '结局'],
+                    ['characters', '角色'],
+                  ] as const).map(([key, label]) => (
+                    <label key={key} className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/50 px-3 py-2 text-xs font-bold text-zinc-300">
+                      <input
+                        type="checkbox"
+                        checked={authoringFindScope[key]}
+                        onChange={(event) => setAuthoringFindScope((prev) => ({ ...prev, [key]: event.target.checked }))}
+                        className="accent-indigo-500"
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <button
+                    type="button"
+                    onClick={handleAuthoringReplaceAll}
+                    disabled={!authoringFindQuery || !Object.values(authoringFindScope).some(Boolean)}
+                    className={semanticButtonClass('primary', { compact: true })}
+                  >
+                    全部替换
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthoringFindQuery('');
+                      setAuthoringReplaceQuery('');
+                    }}
+                    className={semanticButtonClass('ghost', { compact: true })}
+                  >
+                    清空
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="rounded-[2rem] border border-zinc-800 bg-zinc-900/20 p-6 sm:p-8">
@@ -6024,7 +6217,7 @@ export default function App() {
                     <textarea
                       value={authoringCartridge.meta?.main_axis || ''}
                       onChange={(event) => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, main_axis: event.target.value } }))}
-                      className="min-h-[180px] w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-white outline-none focus:border-indigo-500"
+                      className="authoring-resizable-textarea min-h-[180px] w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-white outline-none focus:border-indigo-500"
                     />
                   </label>
                   <section className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
@@ -6075,7 +6268,7 @@ export default function App() {
                     value={authoringImportText}
                     onChange={(event) => setAuthoringImportText(event.target.value)}
                     placeholder="把其他 AI 生成的完整文本粘贴到这里..."
-                    className="min-h-[320px] w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-950 p-5 text-sm text-zinc-300 outline-none transition-colors focus:border-indigo-500"
+                    className="authoring-resizable-textarea min-h-[320px] w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-950 p-5 text-sm text-zinc-300 outline-none transition-colors focus:border-indigo-500"
                   />
                   <label className="flex items-center gap-2 text-xs text-zinc-400">
                     <input
@@ -6155,7 +6348,7 @@ export default function App() {
                             ...prev,
                             chapters: prev.chapters.map((item: any) => item.chapter_num === chapter.chapter_num ? { ...item, text: event.target.value } : item),
                           }))}
-                          className="min-h-[240px] w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-sm text-white outline-none focus:border-indigo-500"
+                          className="authoring-resizable-textarea min-h-[240px] w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-sm text-white outline-none focus:border-indigo-500"
                           placeholder={`第${chapter.chapter_num}章正文`}
                         />
                       </div>
@@ -6182,7 +6375,7 @@ export default function App() {
                             ...prev,
                             endings: prev.endings.map((item: any) => item.id === ending.id ? { ...item, text: event.target.value } : item),
                           }))}
-                          className="min-h-[240px] w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-sm text-white outline-none focus:border-indigo-500"
+                          className="authoring-resizable-textarea min-h-[240px] w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-sm text-white outline-none focus:border-indigo-500"
                           placeholder="结局正文"
                         />
                       </div>
@@ -6239,7 +6432,7 @@ export default function App() {
                               characters: prev.meta.characters.map((item: any, itemIndex: number) => itemIndex === index ? { ...item, desc: event.target.value } : item),
                             },
                           }))}
-                          className="min-h-[44px] w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                          className="authoring-resizable-textarea min-h-[96px] w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
                           placeholder="角色简介"
                         />
                         <button
@@ -6771,6 +6964,7 @@ export default function App() {
           {renderStoryDetailModal()}
           {accountCenterModal}
           {renderConfirmationModal()}
+          {renderAuthoringSaveSuccessModal()}
           {renderResumePromptModal()}
           {renderLeaveGameModal()}
           {renderBranchUnlockModal()}

@@ -162,6 +162,20 @@ textarea {
   font: inherit;
 }
 
+textarea.resize-y,
+.authoring-resizable-textarea {
+  resize: vertical !important;
+  overflow: auto;
+}
+
+textarea.resize-y::-webkit-resizer,
+.authoring-resizable-textarea::-webkit-resizer {
+  border-radius: 0 0 0.75rem 0;
+  background:
+    linear-gradient(135deg, transparent 0 45%, rgba(129, 140, 248, 0.45) 45% 55%, transparent 55%),
+    linear-gradient(135deg, transparent 0 62%, rgba(129, 140, 248, 0.32) 62% 72%, transparent 72%);
+}
+
 button {
   touch-action: manipulation;
 }
