@@ -30,8 +30,8 @@
       html, body {
         margin: 0;
         min-height: 100%;
-        background: #09090b;
-        color: #f4f4f5;
+        background: #262629;
+        color: #d9d9d9;
         font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
 
@@ -45,47 +45,108 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 20px;
+        gap: 16px;
         text-align: center;
-        padding: 24px;
+        padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
         background:
-          radial-gradient(circle at top, rgba(99, 102, 241, 0.18), transparent 40%),
-          #09090b;
-      }
-
-      .boot-spinner {
-        width: 36px;
-        height: 36px;
-        border-radius: 9999px;
-        border: 3px solid rgba(99, 102, 241, 0.18);
-        border-top-color: #818cf8;
-        animation: boot-spin 0.9s linear infinite;
+          radial-gradient(circle at 50% 18%, rgba(129, 140, 248, 0.22), transparent 32%),
+          radial-gradient(circle at 88% 78%, rgba(244, 63, 94, 0.13), transparent 28%),
+          linear-gradient(180deg, #2d2d33 0%, #262629 46%, #202024 100%);
       }
 
       .boot-label {
-        font-size: 14px;
-        color: #a1a1aa;
-        letter-spacing: 0.08em;
+        font-size: 11px;
+        font-weight: 800;
+        color: #858585;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
       }
 
       .boot-title {
-        font-size: clamp(32px, 7vw, 52px);
+        font-size: clamp(36px, 9vw, 58px);
         line-height: 1;
         font-weight: 900;
         letter-spacing: -0.04em;
-        color: #ffffff;
+        color: #d9d9d9;
+        text-shadow: 0 18px 48px rgba(0, 0, 0, 0.38);
       }
 
       .boot-subtitle {
         max-width: 360px;
         font-size: 14px;
         line-height: 1.7;
-        color: #a1a1aa;
+        color: #a6a6a6;
       }
 
-      @keyframes boot-spin {
-        to {
-          transform: rotate(360deg);
+      .boot-orb {
+        position: relative;
+        width: 74px;
+        height: 74px;
+        border-radius: 28px;
+        border: 1px solid rgba(129, 140, 248, 0.28);
+        background:
+          radial-gradient(circle at 32% 24%, rgba(217, 217, 217, 0.85), transparent 18%),
+          linear-gradient(135deg, rgba(129, 140, 248, 0.28), rgba(244, 63, 94, 0.16));
+        box-shadow: 0 20px 70px rgba(99, 102, 241, 0.22);
+        animation: boot-float 2.6s ease-in-out infinite;
+      }
+
+      .boot-progress-wrap {
+        width: min(280px, 72vw);
+        margin-top: clamp(28px, 7vh, 72px);
+      }
+
+      .boot-progress {
+        height: 4px;
+        overflow: hidden;
+        border-radius: 999px;
+        border: 1px solid rgba(217, 217, 217, 0.08);
+        background: rgba(38, 38, 38, 0.72);
+        box-shadow: inset 0 1px 8px rgba(0, 0, 0, 0.3);
+      }
+
+      .boot-progress-fill {
+        height: 100%;
+        width: 18%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #818cf8, #c084fc, #fb7185);
+        animation: boot-progress 6.5s ease-out forwards;
+      }
+
+      .boot-percent {
+        margin-top: 10px;
+        font-size: 10px;
+        font-weight: 900;
+        letter-spacing: 0.22em;
+        color: #858585;
+      }
+
+      @keyframes boot-float {
+        0%, 100% { transform: translateY(0) rotate(0deg); }
+        50% { transform: translateY(-8px) rotate(3deg); }
+      }
+
+      @keyframes boot-progress {
+        from { width: 18%; }
+        to { width: 86%; }
+      }
+
+      @media (prefers-color-scheme: light) {
+        html, body {
+          background: #f4f0e8;
+          color: #292522;
+        }
+
+        .boot-splash {
+          background:
+            radial-gradient(circle at 50% 18%, rgba(79, 95, 187, 0.17), transparent 34%),
+            radial-gradient(circle at 88% 78%, rgba(180, 113, 76, 0.12), transparent 28%),
+            linear-gradient(180deg, #fbf8f1 0%, #f4f0e8 50%, #eee8dc 100%);
+        }
+
+        .boot-title {
+          color: #292522;
+          text-shadow: none;
         }
       }
     </style>
@@ -93,10 +154,16 @@
   <body>
     <div id="root">
       <div class="boot-splash">
+        <div class="boot-label">3T Novelgame</div>
+        <div class="boot-orb" aria-hidden="true"></div>
         <div class="boot-title">命运干涉</div>
         <div class="boot-subtitle">正在整理你的故事记录与时间线，请稍候片刻。</div>
-        <div class="boot-spinner" aria-hidden="true"></div>
-        <div class="boot-label">正在接通命运干涉...</div>
+        <div class="boot-progress-wrap" aria-label="启动进度">
+          <div class="boot-progress">
+            <div class="boot-progress-fill"></div>
+          </div>
+          <div class="boot-percent">LOADING</div>
+        </div>
       </div>
     </div>
     <script type="module" src="/src/main.tsx"></script>

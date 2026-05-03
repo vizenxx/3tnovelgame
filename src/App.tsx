@@ -401,16 +401,16 @@ const InstallAppBanner = ({
 };
 
 const SimulatedProgressBar = () => {
-  const [width, setWidth] = useState("0%");
+  const [width, setWidth] = useState("18%");
   const [percent, setPercent] = useState(0);
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
-      setTimeout(() => setWidth("85%"), 50);
+      setTimeout(() => setWidth("86%"), 50);
     });
     const start = Date.now();
     const interval = setInterval(() => {
       const elapsed = Date.now() - start;
-      setPercent(Math.min(85, Math.round((elapsed / 6000) * 85)));
+      setPercent(Math.min(86, Math.round(18 + (elapsed / 6000) * 68)));
     }, 180);
     return () => {
       cancelAnimationFrame(frame);
@@ -418,17 +418,27 @@ const SimulatedProgressBar = () => {
     };
   }, []);
   return (
-    <div className="mt-6 w-48 sm:w-64">
-      <div className="relative h-1.5 overflow-hidden rounded-full border border-white/5 bg-zinc-800/80 shadow-inner">
+    <div className="app-boot-progress-wrap">
+      <div className="app-boot-progress">
         <div
-          className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-rose-500 transition-all ease-out"
+          className="app-boot-progress-fill"
           style={{ width, transitionDuration: '6000ms' }}
         />
       </div>
-      <div className="mt-2 text-center text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">{percent}%</div>
+      <div className="app-boot-percent">{percent}%</div>
     </div>
   );
 };
+
+const BootSplash = ({ message }: { message: string }) => (
+  <div className="app-boot-screen">
+    <div className="app-boot-label">3T Novelgame</div>
+    <div className="app-boot-orb" aria-hidden="true" />
+    <div className="app-boot-title">命运干涉</div>
+    <div className="app-boot-subtitle">{message || '正在整理你的故事记录与时间线，请稍候片刻。'}</div>
+    <SimulatedProgressBar />
+  </div>
+);
 
 const PwaUpdateModal = ({
   updateInfo,
@@ -1022,6 +1032,8 @@ export default function App() {
   const [authoringFindQuery, setAuthoringFindQuery] = useState('');
   const [authoringReplaceQuery, setAuthoringReplaceQuery] = useState('');
   const [authoringFindScope, setAuthoringFindScope] = useState({ chapters: true, endings: true, characters: true });
+  const [authoringFindChapterNums, setAuthoringFindChapterNums] = useState<number[]>([]);
+  const [authoringFindEndingIds, setAuthoringFindEndingIds] = useState<string[]>([]);
 
   const handleAuthoringReplaceAll = () => {
     if (!authoringFindQuery) return;
@@ -1030,19 +1042,29 @@ export default function App() {
       const next = { ...prev };
       const q = authoringFindQuery;
       const r = authoringReplaceQuery;
+      const chapterNums = new Set(authoringFindChapterNums);
+      const endingIds = new Set(authoringFindEndingIds);
       if (authoringFindScope.chapters && next.chapters) {
-        next.chapters = next.chapters.map((c: any) => ({
-          ...c,
-          title: (c.title || '').split(q).join(r),
-          text: (c.text || '').split(q).join(r),
-        }));
+        next.chapters = next.chapters.map((c: any) => (
+          chapterNums.has(Number(c.chapter_num))
+            ? {
+                ...c,
+                title: (c.title || '').split(q).join(r),
+                text: (c.text || '').split(q).join(r),
+              }
+            : c
+        ));
       }
       if (authoringFindScope.endings && next.endings) {
-        next.endings = next.endings.map((e: any) => ({
-          ...e,
-          title: (e.title || '').split(q).join(r),
-          text: (e.text || '').split(q).join(r),
-        }));
+        next.endings = next.endings.map((e: any) => (
+          endingIds.has(String(e.id))
+            ? {
+                ...e,
+                title: (e.title || '').split(q).join(r),
+                text: (e.text || '').split(q).join(r),
+              }
+            : e
+        ));
       }
       if (authoringFindScope.characters && next.meta?.characters) {
         next.meta = {
@@ -2368,6 +2390,22 @@ export default function App() {
     if (!authoringCartridge) return;
     setAuthoringDirty(buildAuthoringSnapshot(authoringCartridge) !== authoringSavedSnapshot);
   }, [authoringCartridge, authoringSavedSnapshot]);
+
+  useEffect(() => {
+    if (!authoringCartridge) {
+      setAuthoringFindChapterNums([]);
+      setAuthoringFindEndingIds([]);
+      return;
+    }
+    const chapterNums = (authoringCartridge.chapters || [])
+      .map((chapter: any) => Number(chapter.chapter_num))
+      .filter((chapterNum: number) => Number.isFinite(chapterNum));
+    const endingIds = (authoringCartridge.endings || [])
+      .map((ending: any) => String(ending.id || ''))
+      .filter(Boolean);
+    setAuthoringFindChapterNums((prev) => prev.length > 0 ? prev.filter((chapterNum) => chapterNums.includes(chapterNum)) : chapterNums);
+    setAuthoringFindEndingIds((prev) => prev.length > 0 ? prev.filter((endingId) => endingIds.includes(endingId)) : endingIds);
+  }, [authoringCartridge?.storyId]);
 
   // Restore the current run from this device only. Firestore progress is read only when the user
   // explicitly opens a story that has saved progress.
@@ -6044,7 +6082,7 @@ export default function App() {
               className={`${semanticButtonClass(authoringFindReplaceOpen ? 'secondary' : 'primary', { compact: true })} w-full justify-center sm:w-auto`}
             >
               <Search className="h-4 w-4" />
-              查找 / 替换全文
+              查找 / 替换
             </button>
             {!authoringFindReplaceOpen && (
               <p className="mt-2 text-center text-[11px] font-bold text-zinc-500 sm:text-left">
@@ -6073,28 +6111,99 @@ export default function App() {
                     />
                   </label>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {([
-                    ['chapters', '章节'],
-                    ['endings', '结局'],
-                    ['characters', '角色'],
-                  ] as const).map(([key, label]) => (
-                    <label key={key} className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/50 px-3 py-2 text-xs font-bold text-zinc-300">
-                      <input
-                        type="checkbox"
-                        checked={authoringFindScope[key]}
-                        onChange={(event) => setAuthoringFindScope((prev) => ({ ...prev, [key]: event.target.checked }))}
-                        className="accent-indigo-500"
-                      />
-                      {label}
-                    </label>
-                  ))}
+                <div className="grid gap-3">
+                  <div className="flex flex-wrap gap-2">
+                    {([
+                      ['chapters', '章节'],
+                      ['endings', '结局'],
+                      ['characters', '角色'],
+                    ] as const).map(([key, label]) => (
+                      <label key={key} className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/50 px-3 py-2 text-xs font-bold text-zinc-300">
+                        <input
+                          type="checkbox"
+                          checked={authoringFindScope[key]}
+                          onChange={(event) => setAuthoringFindScope((prev) => ({ ...prev, [key]: event.target.checked }))}
+                          className="accent-indigo-500"
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                  {authoringFindScope.chapters && (
+                    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/35 p-3">
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-500">章节范围</div>
+                        <button
+                          type="button"
+                          onClick={() => setAuthoringFindChapterNums((authoringCartridge.chapters || []).map((chapter: any) => Number(chapter.chapter_num)).filter((chapterNum: number) => Number.isFinite(chapterNum)))}
+                          className="text-xs font-black text-indigo-300 hover:text-indigo-100"
+                        >
+                          全选章节
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {(authoringCartridge.chapters || []).map((chapter: any) => {
+                          const chapterNum = Number(chapter.chapter_num);
+                          const selected = authoringFindChapterNums.includes(chapterNum);
+                          return (
+                            <label key={chapterNum} className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold transition-colors ${selected ? 'border-indigo-500/50 bg-indigo-500/15 text-indigo-100' : 'border-zinc-800 bg-zinc-950/60 text-zinc-400'}`}>
+                              <input
+                                type="checkbox"
+                                checked={selected}
+                                onChange={(event) => setAuthoringFindChapterNums((prev) => event.target.checked ? [...new Set([...prev, chapterNum])].sort((a, b) => a - b) : prev.filter((item) => item !== chapterNum))}
+                                className="accent-indigo-500"
+                              />
+                              第{chapterNum}章
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {authoringFindScope.endings && (
+                    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/35 p-3">
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-500">结局范围</div>
+                        <button
+                          type="button"
+                          onClick={() => setAuthoringFindEndingIds((authoringCartridge.endings || []).map((ending: any) => String(ending.id || '')).filter(Boolean))}
+                          className="text-xs font-black text-indigo-300 hover:text-indigo-100"
+                        >
+                          全选结局
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {(authoringCartridge.endings || []).map((ending: any) => {
+                          const endingId = String(ending.id || '');
+                          const selected = authoringFindEndingIds.includes(endingId);
+                          return (
+                            <label key={endingId} className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold transition-colors ${selected ? 'border-indigo-500/50 bg-indigo-500/15 text-indigo-100' : 'border-zinc-800 bg-zinc-950/60 text-zinc-400'}`}>
+                              <input
+                                type="checkbox"
+                                checked={selected}
+                                onChange={(event) => setAuthoringFindEndingIds((prev) => event.target.checked ? [...new Set([...prev, endingId])] : prev.filter((item) => item !== endingId))}
+                                className="accent-indigo-500"
+                              />
+                              {ending.title || endingIdToLabel(ending.id)}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <button
                     type="button"
                     onClick={handleAuthoringReplaceAll}
-                    disabled={!authoringFindQuery || !Object.values(authoringFindScope).some(Boolean)}
+                    disabled={
+                      !authoringFindQuery ||
+                      !(
+                        (authoringFindScope.chapters && authoringFindChapterNums.length > 0) ||
+                        (authoringFindScope.endings && authoringFindEndingIds.length > 0) ||
+                        authoringFindScope.characters
+                      )
+                    }
                     className={semanticButtonClass('primary', { compact: true })}
                   >
                     全部替换
@@ -6916,15 +7025,7 @@ export default function App() {
       {installGuideModal}
       
       {!isSessionHydrated ? (
-        <div className="fixed inset-0 z-[5000] flex flex-col items-center justify-center bg-zinc-950 p-6 text-center">
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ repeat: Infinity, duration: 4, ease: "linear" }}
-            className="mb-8 h-12 w-12 rounded-2xl border-2 border-indigo-500/20 border-t-indigo-500"
-          />
-          <h2 className="text-xl font-black text-white">{startupMessage}</h2>
-          <SimulatedProgressBar />
-        </div>
+        <BootSplash message={startupMessage} />
       ) : gameState === 'READONLY_STORY' && readonlyStoryData ? (
         <>
           {renderReadonlyStoryView()}
