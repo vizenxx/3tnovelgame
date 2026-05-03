@@ -915,6 +915,26 @@ export default function App() {
   const [startupMessage, setStartupMessage] = useState('正在连接时空枢纽...');
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [gameState, setGameState] = useState<GameState>('STORY_SELECT');
+  const navigationStackRef = useRef<GameState[]>([]);
+  const navigateTo = (nextState: GameState, options: { replace?: boolean; reset?: boolean } = {}) => {
+    setGameState((current) => {
+      if (options.reset) {
+        navigationStackRef.current = [];
+      } else if (!options.replace && current !== nextState) {
+        const stack = navigationStackRef.current;
+        navigationStackRef.current = stack[stack.length - 1] === current ? stack : [...stack, current];
+      }
+      return nextState;
+    });
+  };
+  const resetToHome = () => {
+    navigationStackRef.current = [];
+    setGameState('STORY_SELECT');
+  };
+  const goBack = (fallback: GameState = 'STORY_SELECT') => {
+    const previous = navigationStackRef.current.pop();
+    setGameState(previous || fallback);
+  };
   const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
   const [globalLoadingMessage, setGlobalLoadingMessage] = useState<string | null>(null);
   const [themeInputText, setThemeInputText] = useState('');
@@ -1832,7 +1852,7 @@ export default function App() {
 
   const applyLocalRunSnapshot = async (snapshot: any) => {
     if (!snapshot?.blueprint) return false;
-    setGameState(snapshot.gameState === 'SUMMARY' ? 'PLAYING' : snapshot.gameState || 'PLAYING');
+    navigateTo(snapshot.gameState === 'SUMMARY' ? 'PLAYING' : snapshot.gameState || 'PLAYING', { reset: true });
     setSelectedThemes(snapshot.selectedThemes || []);
     setBlueprint(snapshot.blueprint);
     setChapters(snapshot.currentChapters || []);
@@ -1911,7 +1931,7 @@ export default function App() {
         setReadonlyStoryData({ meta: cached.value.meta, chapters: cached.value.chapters as any });
         setReadonlyCanGoBack(Boolean(options?.allowBack));
         setReadonlyReturnTarget(options?.returnTarget || 'STORY_SELECT');
-        setGameState('READONLY_STORY');
+        navigateTo('READONLY_STORY', { reset: !options?.allowBack });
       }
       const record = await getSharedStoryRecord(db as any, storyId, user?.uid);
       if (!record) {
@@ -1922,7 +1942,7 @@ export default function App() {
       setReadonlyStoryData({ meta: record.meta, chapters: record.chapters as any });
       setReadonlyCanGoBack(Boolean(options?.allowBack));
       setReadonlyReturnTarget(options?.returnTarget || 'STORY_SELECT');
-      setGameState('READONLY_STORY');
+      navigateTo('READONLY_STORY', { replace: Boolean(cached?.value), reset: !options?.allowBack });
       const nextUrl = buildAppSharedStoryUrl(storyId);
       window.history.replaceState({ internalReadonly: true }, '', nextUrl);
     } catch (error) {
@@ -1937,7 +1957,11 @@ export default function App() {
     window.history.replaceState({}, '', window.location.pathname);
     setReadonlyStoryData(null);
     setReadonlyCanGoBack(false);
-    setGameState(readonlyCanGoBack ? readonlyReturnTarget : 'STORY_SELECT');
+    if (readonlyCanGoBack) {
+      goBack(readonlyReturnTarget);
+    } else {
+      resetToHome();
+    }
   };
 
   const handleInterveneFromReadonly = async () => {
@@ -1987,7 +2011,7 @@ export default function App() {
       });
       await refreshStories({ force: true });
       await selectAuthoringStory(storyId);
-      setGameState('AUTHORING');
+      navigateTo('AUTHORING');
       showError('已完成一键改编，已带你进入作者编辑界面。');
       setReadonlyStoryData(null);
       setReadonlyCanGoBack(false);
@@ -2094,7 +2118,7 @@ export default function App() {
           setReadonlyStoryData(null);
           setReadonlyCanGoBack(false);
           window.history.replaceState({}, '', window.location.pathname);
-          setGameState(readonlyReturnTarget === 'ARCHIVE' ? 'ARCHIVE' : 'STORY_SELECT');
+          goBack(readonlyReturnTarget === 'ARCHIVE' ? 'ARCHIVE' : 'STORY_SELECT');
           showError('馆藏记录已删除。');
         } catch (error: any) {
           console.error(error);
@@ -2110,11 +2134,11 @@ export default function App() {
     setArchiveReturnTarget(returnTarget);
     setIsActionMenuOpen(false);
     setIsAccountCenterOpen(false);
-    setGameState('ARCHIVE');
+    navigateTo('ARCHIVE');
   };
 
   const leaveArchiveView = () => {
-    setGameState(archiveReturnTarget);
+    goBack(archiveReturnTarget);
     if (archiveReturnTarget === 'STORY_SELECT') {
       window.setTimeout(() => window.scrollTo({ top: storySelectScrollYRef.current || 0, behavior: 'smooth' }), 0);
     }
@@ -2427,7 +2451,7 @@ export default function App() {
         await applyLocalRunSnapshot(cachedRun.value);
       } else {
         setSessionId(user.uid);
-        setGameState('STORY_SELECT');
+        resetToHome();
       }
       setIsSessionHydrated(true);
     };
@@ -2436,7 +2460,7 @@ export default function App() {
       if (cancelled) return;
       console.error(error);
       setIsSessionHydrated(true);
-      setGameState('STORY_SELECT');
+      resetToHome();
       showError('同步会话失败，请检查 Firebase 权限配置后重试。');
     });
 
@@ -2487,7 +2511,7 @@ export default function App() {
         if (cached?.value) {
           setReadonlyStoryData({ meta: cached.value.meta, chapters: cached.value.chapters as any });
           setReadonlyCanGoBack(Boolean(document.referrer) && new URL(document.referrer).origin === window.location.origin);
-          setGameState('READONLY_STORY');
+          navigateTo('READONLY_STORY', { reset: !(Boolean(document.referrer) && new URL(document.referrer).origin === window.location.origin) });
         }
         return getSharedStoryRecord(db as any, sharedStoryIdFromUrl, user?.uid);
       })
@@ -2496,7 +2520,7 @@ export default function App() {
         await cacheSharedStory(sharedStoryIdFromUrl, { meta: record.meta, chapters: record.chapters as any });
         setReadonlyStoryData({ meta: record.meta, chapters: record.chapters as any });
         setReadonlyCanGoBack(Boolean(document.referrer) && new URL(document.referrer).origin === window.location.origin);
-        setGameState('READONLY_STORY');
+        navigateTo('READONLY_STORY', { replace: true, reset: !(Boolean(document.referrer) && new URL(document.referrer).origin === window.location.origin) });
       })
       .catch(() => {
         showError('加载分享故事失败。');
@@ -2587,7 +2611,7 @@ export default function App() {
     setActiveStoryMeta(null);
     setBackgroundGeneratingChapter(null);
     fetchingChapterRef.current = null;
-    setGameState('THEME_SELECTION');
+    navigateTo('THEME_SELECTION');
   };
 
   const handleAdaptCurrentStory = async () => {
@@ -2607,7 +2631,7 @@ export default function App() {
       });
       await refreshStories({ force: true });
       await selectAuthoringStory(storyId);
-      setGameState('AUTHORING');
+      navigateTo('AUTHORING');
       showError('已完成一键改编，已带你进入作者编辑界面。');
     } catch (error) {
       console.error(error);
@@ -2680,7 +2704,7 @@ export default function App() {
     setActiveInterventionOverlay(null);
     setReadonlyStoryData(null);
     setReadonlyCanGoBack(false);
-    setGameState('STORY_SELECT');
+    resetToHome();
     if (window.location.search) {
       window.history.replaceState({}, '', window.location.pathname);
     }
@@ -2705,7 +2729,7 @@ export default function App() {
     try {
       setShowLeaveGameModal(false);
       const shouldRestoreStorySelectScroll = gameState === 'PLAYING';
-      setGameState('STORY_SELECT');
+      resetToHome();
       setSelectedThemes([]);
       setBlueprint(null);
       setChapters([]);
@@ -2818,7 +2842,7 @@ export default function App() {
     setCanonicalWorldState(progressData?.canonicalWorldState || null);
     setDeltaWorldStateByChapter(progressData?.deltaWorldStateByChapter || {});
     setUiFeedback(progressData?.uiFeedback || { leftProgress: 0, rightProgress: 0, endingLabel: '均衡道' });
-    setGameState('PLAYING');
+    navigateTo('PLAYING');
   };
 
   const startStoryPlay = async (storyId: string) => {
@@ -2907,7 +2931,7 @@ export default function App() {
       return;
     }
 
-    setGameState('GENERATING_BLUEPRINT');
+    navigateTo('GENERATING_BLUEPRINT');
     const progressInterval = startProgressSimulation(45000, [
       "正在构思宏大世界观...",
       "正在编织命运的丝线...",
@@ -2999,11 +3023,11 @@ export default function App() {
       setActiveStoryId(null);
       setActiveStoryMeta(null);
       await deleteLocalCache(quickGenerationDraftCacheKey());
-      setGameState('PLAYING');
+      navigateTo('PLAYING', { replace: true });
     } catch (error) {
       console.error(error);
       showError(error instanceof Error && error.message ? error.message : '生成失败，请检查网络或稍后重试。');
-      setGameState('THEME_SELECTION');
+      goBack('THEME_SELECTION');
     } finally {
       clearInterval(progressInterval);
       setGenerationProgress(100);
@@ -3091,7 +3115,7 @@ export default function App() {
   }, [gameState, blueprint, chapters, interventionsLeft, isRewriting, activeInterventionOverlay, user, db, targetWordCount, narrativePerson]);
 
   const enterAuthoring = async () => {
-    setGameState('AUTHORING');
+    navigateTo('AUTHORING');
     setAuthoringStoryId(null);
     setAuthoringCartridge(null);
     setAuthoringTab('settings');
@@ -3422,7 +3446,7 @@ export default function App() {
       setShowLeaveGameModal(false);
       setIsActionMenuOpen(false);
       setIsStoryInfoOpen(false);
-      setGameState('STORY_SELECT');
+      resetToHome();
     } catch (error: any) {
       console.error(error);
       showError(error?.message || '登出失败，请重试。');
@@ -3633,7 +3657,7 @@ export default function App() {
     } catch (e: any) {
       console.error(e);
       showError(e.message || "生成总结失败");
-      setGameState('PLAYING');
+      navigateTo('PLAYING', { replace: true });
     } finally {
       if (simulation) {
         clearInterval(simulation);
@@ -4051,7 +4075,7 @@ export default function App() {
                     setAuthoringSaveSuccessStory(null);
                     setAuthoringStoryId(null);
                     setAuthoringCartridge(null);
-                    setGameState('STORY_SELECT');
+                    resetToHome();
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
                   className={semanticButtonClass('secondary', { fullWidth: true })}
@@ -4501,7 +4525,7 @@ export default function App() {
             </button>
           )}
           <button
-            onClick={() => setGameState('THEME_SELECTION')}
+            onClick={() => navigateTo('THEME_SELECTION')}
             className={semanticButtonClass('primary', { compact: true })}
           >
             <Wand2 className="h-4 w-4" />
@@ -4935,7 +4959,7 @@ export default function App() {
   const renderThemeSelectionView = () => (
     <div className="mx-auto flex min-h-[100dvh] max-w-5xl flex-col justify-center px-6 pb-20 pt-28 text-center lg:px-8">
       <div className="mb-8 flex items-center justify-between">
-        <BackNavButton label="返回作品库" onClick={() => setGameState('STORY_SELECT')} />
+        <BackNavButton label="返回上一页" onClick={() => goBack('STORY_SELECT')} />
         <div className="h-10 w-10" />
       </div>
       <div className="mx-auto max-w-2xl space-y-4">
@@ -5359,7 +5383,7 @@ export default function App() {
               onClick={() => {
                 setReadonlyStoryData(null);
                 window.history.replaceState({}, '', window.location.pathname);
-                setGameState('STORY_SELECT');
+                resetToHome();
               }}
               className={semanticButtonClass('ghost', { compact: true })}
             >
@@ -5972,7 +5996,7 @@ export default function App() {
       {!authoringCartridge ? (
         <>
           <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
-            <BackNavButton label="返回作品库" onClick={() => setGameState('STORY_SELECT')} />
+            <BackNavButton label="返回上一页" onClick={() => goBack('STORY_SELECT')} />
             <div className="flex flex-wrap gap-3">
               <button type="button" onClick={() => handleCreateAuthoringStory()} disabled={authoringSaving} className={semanticButtonClass('secondary', { compact: true })}>
                 <Sparkles className="h-4 w-4" />
@@ -6792,7 +6816,7 @@ export default function App() {
               <button
                 onClick={() => {
                   setIsActionMenuOpen(false);
-                  setGameState('STORY_SELECT');
+                  resetToHome();
                 }}
                 className={semanticMenuButtonClass('ghost')}
               >
