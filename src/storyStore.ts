@@ -64,23 +64,43 @@ const canReadStoryRecord = (meta: StoryMeta, currentUserId?: string) => (
 // emergency fallback when VITE_STORY_BACKEND is set to "firebase".
 const useSupabaseStories = () => import.meta.env.VITE_STORY_BACKEND !== 'firebase';
 
-async function storyApi<T = any>(action: string, payload: Record<string, any> = {}, options: { auth?: boolean } = {}) {
+const STORY_API_TIMEOUT_MS = 12000;
+
+const getStoryApiFriendlyError = (action: string, error: unknown, fallback: string) => {
+  const message = String(error instanceof Error ? error.message : error || '');
+  if (/abort|timeout|timed out/i.test(message)) return `${fallback}：连接超时。`;
+  if (/quota|RESOURCE_EXHAUSTED|exceeded/i.test(message)) return `${fallback}：服务器额度暂时不足。`;
+  if (/permission|insufficient|unauthorized|forbidden/i.test(message)) return `${fallback}：权限不足或登录状态已过期。`;
+  return message || fallback;
+};
+
+async function storyApi<T = any>(action: string, payload: Record<string, any> = {}, options: { auth?: boolean; timeoutMs?: number; stage?: string } = {}) {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   const currentUser = auth?.currentUser;
   if (options.auth || currentUser) {
     const token = await currentUser?.getIdToken();
     if (token) headers.Authorization = `Bearer ${token}`;
   }
-  const response = await fetch('/api/story-store', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ action, ...payload }),
-  });
-  const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(data?.error || `story-store ${action} failed`);
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), options.timeoutMs || STORY_API_TIMEOUT_MS);
+  try {
+    const response = await fetch('/api/story-store', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ action, ...payload }),
+      signal: controller.signal,
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(data?.error || data?.message || `story-store ${action} failed`);
+    }
+    return data as T;
+  } catch (error) {
+    console.error('storyApi failed:', { action, stage: options.stage || action, error });
+    throw new Error(getStoryApiFriendlyError(action, error, `${options.stage || action}失败`));
+  } finally {
+    window.clearTimeout(timeout);
   }
-  return data as T;
 }
 
 export type StoryListItem = {
@@ -138,7 +158,7 @@ export type SharedStoryRecord = {
 
 export async function listPublicStories(db: Firestore, pageSize = 20) {
   if (useSupabaseStories()) {
-    return storyApi<StoryListItem[]>('listPublicStories', { pageSize });
+    return storyApi<StoryListItem[]>('listPublicStories', { pageSize }, { timeoutMs: 9000, stage: '公开作品列表同步' });
   }
   const q = query(
     collection(db, 'stories'),
@@ -152,7 +172,7 @@ export async function listPublicStories(db: Firestore, pageSize = 20) {
 
 export async function getUserProgress(db: Firestore, userId: string, storyId: string) {
   if (useSupabaseStories()) {
-    return storyApi<any | null>('getUserProgress', { storyId }, { auth: true });
+    return storyApi<any | null>('getUserProgress', { storyId }, { auth: true, timeoutMs: 8000, stage: '故事进度同步' });
   }
   const progressSnap = await getDoc(doc(db, 'users', userId, 'progress', storyId));
   return progressSnap.exists() ? progressSnap.data() : null;
@@ -298,7 +318,7 @@ export async function reportStory(db: Firestore, storyId: string, userId: string
 
 export async function listMyStories(db: Firestore, authorId: string, pageSize = 50) {
   if (useSupabaseStories()) {
-    return storyApi<StoryListItem[]>('listMyStories', { pageSize }, { auth: true });
+    return storyApi<StoryListItem[]>('listMyStories', { pageSize }, { auth: true, timeoutMs: 9000, stage: '我的作品同步' });
   }
   const q = query(
     collection(db, 'stories'),
@@ -312,7 +332,7 @@ export async function listMyStories(db: Firestore, authorId: string, pageSize = 
 
 export async function listMySharedStories(db: Firestore, authorId: string, pageSize = 50) {
   if (useSupabaseStories()) {
-    return storyApi<SharedStoryRecord[]>('listMySharedStories', { pageSize }, { auth: true });
+    return storyApi<SharedStoryRecord[]>('listMySharedStories', { pageSize }, { auth: true, timeoutMs: 9000, stage: '馆藏同步' });
   }
   const q = query(
     collection(db, 'sharedStories'),
@@ -432,7 +452,7 @@ export async function getStoryMeta(db: Firestore, storyId: string) {
 
 export async function getStoryCartridge(db: Firestore, storyId: string) {
   if (useSupabaseStories()) {
-    return storyApi('getStoryCartridge', { storyId });
+    return storyApi('getStoryCartridge', { storyId }, { timeoutMs: 12000, stage: '完整故事读取' });
   }
   const metaSnap = await getDoc(doc(db, 'stories', storyId));
   if (!metaSnap.exists()) return null;
@@ -452,7 +472,7 @@ export async function getStoryCartridge(db: Firestore, storyId: string) {
 
 export async function getSharedStoryRecord(db: Firestore, storyId: string, currentUserId?: string) {
   if (useSupabaseStories()) {
-    return storyApi('getSharedStoryRecord', { storyId });
+    return storyApi('getSharedStoryRecord', { storyId }, { timeoutMs: 12000, stage: '只读故事记录读取' });
   }
   const sharedSnap = await getDoc(doc(db, 'sharedStories', storyId));
   if (sharedSnap.exists()) {

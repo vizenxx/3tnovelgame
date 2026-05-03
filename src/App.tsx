@@ -906,6 +906,7 @@ export default function App() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [gameState, setGameState] = useState<GameState>('STORY_SELECT');
   const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
+  const [globalLoadingMessage, setGlobalLoadingMessage] = useState<string | null>(null);
   const [themeInputText, setThemeInputText] = useState('');
   useEffect(() => {
     if (selectedThemes.length > 0 && !themeInputText) {
@@ -1017,6 +1018,47 @@ export default function App() {
   const [authoringImportReplaceBranches, setAuthoringImportReplaceBranches] = useState(true);
   const [authoringTab, setAuthoringTab] = useState<'settings' | 'mainline' | 'branches'>('settings');
   const [authoringTocOpen, setAuthoringTocOpen] = useState(false);
+  const [authoringFindReplaceOpen, setAuthoringFindReplaceOpen] = useState(false);
+  const [authoringFindQuery, setAuthoringFindQuery] = useState('');
+  const [authoringReplaceQuery, setAuthoringReplaceQuery] = useState('');
+  const [authoringFindScope, setAuthoringFindScope] = useState({ chapters: true, endings: true, characters: true });
+
+  const handleAuthoringReplaceAll = () => {
+    if (!authoringFindQuery) return;
+    setAuthoringCartridge((prev: any) => {
+      const next = { ...prev };
+      const q = authoringFindQuery;
+      const r = authoringReplaceQuery;
+      if (authoringFindScope.chapters && next.chapters) {
+        next.chapters = next.chapters.map((c: any) => ({
+          ...c,
+          title: (c.title || '').split(q).join(r),
+          text: (c.text || '').split(q).join(r),
+        }));
+      }
+      if (authoringFindScope.endings && next.endings) {
+        next.endings = next.endings.map((e: any) => ({
+          ...e,
+          title: (e.title || '').split(q).join(r),
+          text: (e.text || '').split(q).join(r),
+        }));
+      }
+      if (authoringFindScope.characters && next.meta?.characters) {
+        next.meta = {
+          ...next.meta,
+          characters: next.meta.characters.map((ch: any) => ({
+            ...ch,
+            name: (ch.name || '').split(q).join(r),
+            desc: (ch.desc || '').split(q).join(r),
+          }))
+        };
+      }
+      return next;
+    });
+    setAuthoringDirty(true);
+    showError('替换完成！');
+    setAuthoringFindReplaceOpen(false);
+  };
   const [appTheme, setAppTheme] = useState<AppTheme>(() => (
     typeof window !== 'undefined' && window.localStorage?.getItem('app-theme') === 'light'
       ? 'light'
@@ -1073,6 +1115,23 @@ export default function App() {
   });
   const isAdminUser = Boolean(user && ADMIN_USER_IDS.has(user.uid));
   const canUseCoverGeneration = isAdminUser || featureSettings.coverGenerationEnabled;
+  const isGlobalBlockingLoading = Boolean(
+    globalLoadingMessage ||
+    authoringSaving ||
+    isSharing ||
+    isGeneratingCover ||
+    isGeneratingConclusion
+  );
+  const globalBlockingLoadingMessage = globalLoadingMessage ||
+    (authoringSaving
+      ? '正在保存...'
+      : isSharing
+      ? '正在生成分享链接...'
+      : isGeneratingCover
+      ? '正在绘制封面...'
+      : isGeneratingConclusion
+      ? '正在生成前情提要...'
+      : '正在处理...');
 
   useEffect(() => {
     document.documentElement.dataset.theme = appTheme;
@@ -1513,6 +1572,7 @@ export default function App() {
     if (!user || !activeStoryId || !db || !blueprint) return;
     try {
       setAuthoringSaving(true);
+      setGlobalLoadingMessage('正在保存进度...');
       await saveUserProgress(db as any, user.uid, activeStoryId, {
         ...buildCurrentRunSnapshot(),
         userId: user.uid,
@@ -1524,6 +1584,7 @@ export default function App() {
       console.error(e);
       showError("保存进度失败");
     } finally {
+      setGlobalLoadingMessage(null);
       setAuthoringSaving(false);
     }
   };
@@ -1532,6 +1593,7 @@ export default function App() {
     if (!user || !blueprint) return;
     try {
       setAuthoringSaving(true);
+      setGlobalLoadingMessage('正在保存至馆藏...');
       const sourceChapters = naturalChapters.length > 0 ? naturalChapters : chapters;
       const provenance = await resolveActiveStoryProvenance();
       await createSharedStoryRecord(db as any, {
@@ -1558,6 +1620,7 @@ export default function App() {
       console.error(e);
       showError("保存作品失败");
     } finally {
+      setGlobalLoadingMessage(null);
       setAuthoringSaving(false);
     }
   };
@@ -2371,7 +2434,7 @@ export default function App() {
   const handleSaveProgressAndReturn = async () => {
     if (!user || !activeStoryId || !blueprint) return;
     try {
-      setShowLeaveGameModal(false);
+      setGlobalLoadingMessage('正在保存进度...');
       await saveUserProgress(db as any, user.uid, activeStoryId, {
         userId: user.uid,
         storyId: activeStoryId,
@@ -2394,13 +2457,15 @@ export default function App() {
       console.error(e);
       showError("保存进度失败");
       setShowLeaveGameModal(false);
+    } finally {
+      setGlobalLoadingMessage(null);
     }
   };
 
   const handleSaveWorkAndReturn = async () => {
     if (!user || !blueprint) return;
     try {
-      setShowLeaveGameModal(false);
+      setGlobalLoadingMessage('正在保存至馆藏...');
       if (activeStoryId && currentRunMatchesOriginal()) {
         await favoriteStory(db as any, activeStoryId, user.uid);
         showError('原作已加入馆藏，不会重复保存一份相同文本。');
@@ -2416,6 +2481,8 @@ export default function App() {
       console.error(e);
       showError("保存作品失败");
       setShowLeaveGameModal(false);
+    } finally {
+      setGlobalLoadingMessage(null);
     }
   };
 
@@ -2594,6 +2661,8 @@ export default function App() {
       console.error(e);
       showError("重置命运失败");
       setShowLeaveGameModal(false);
+    } finally {
+      setGlobalLoadingMessage(null);
     }
   };
 
@@ -5188,7 +5257,14 @@ export default function App() {
                     <div className="grid gap-3">
                       {blueprint.characters.map(char => (
                         <div key={char.id} className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
-                          <div className="mb-1 font-bold text-indigo-300">{char.name}</div>
+                          <div className="mb-1 flex items-start justify-between">
+                            <div className="font-bold text-indigo-300">{char.name}</div>
+                            {characterStatuses[char.id] && (
+                              <div className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${characterStatuses[char.id].isDead ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                                {characterStatuses[char.id].status || '在场'}
+                              </div>
+                            )}
+                          </div>
                           <div className="text-xs text-zinc-500 leading-relaxed">{char.desc}</div>
                         </div>
                       ))}
@@ -5547,7 +5623,7 @@ export default function App() {
             <button type="button" onClick={() => handleStoryInteraction('favorite')} className={semanticButtonClass('ghost', { compact: true })}>
               <Bookmark className="h-4 w-4" /> 收藏
             </button>
-            <button type="button" onClick={handleShareStory} disabled={isSharing || !activeStoryId} className={semanticButtonClass('secondary', { compact: true })}>
+            <button type="button" onClick={handleShareStory} disabled={isSharing || !blueprint} className={semanticButtonClass('secondary', { compact: true })}>
               {isSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />} 分享
             </button>
             <button type="button" onClick={handleSaveWorkAndReturn} className={semanticButtonClass('secondary', { compact: true })}>
@@ -6154,7 +6230,7 @@ export default function App() {
                           className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
                           placeholder="角色名"
                         />
-                        <input
+                        <textarea
                           value={character.desc || ''}
                           onChange={(event) => setAuthoringCartridge((prev: any) => ({
                             ...prev,
@@ -6163,7 +6239,7 @@ export default function App() {
                               characters: prev.meta.characters.map((item: any, itemIndex: number) => itemIndex === index ? { ...item, desc: event.target.value } : item),
                             },
                           }))}
-                          className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                          className="min-h-[44px] w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
                           placeholder="角色简介"
                         />
                         <button
@@ -6369,29 +6445,39 @@ export default function App() {
                 命运收藏馆
               </button>
               {gameState === 'PLAYING' && (
-                <button
-                  onClick={() => {
-                    setIsActionMenuOpen(false);
-                    void handleShareStory();
-                  }}
-                  disabled={isSharing}
-                  className={semanticMenuButtonClass('secondary')}
-                >
-                  {isSharing ? <Loader2 className="h-5 w-5 animate-spin" /> : <Copy className="h-5 w-5" />}
-                  分享故事
-                </button>
-              )}
-              {gameState === 'PLAYING' && (
-                <button
-                  onClick={() => {
-                    setIsActionMenuOpen(false);
-                    resetGame();
-                  }}
-                  className={semanticMenuButtonClass('ghost')}
-                >
-                  <RefreshCcw className="h-5 w-5" />
-                  重新干涉
-                </button>
+                <>
+                  <button onClick={() => { setIsActionMenuOpen(false); handleStoryInteraction('like'); }} className={semanticMenuButtonClass('ghost')}>
+                    <Heart className="h-5 w-5" /> 点赞
+                  </button>
+                  <button onClick={() => { setIsActionMenuOpen(false); handleStoryInteraction('favorite'); }} className={semanticMenuButtonClass('ghost')}>
+                    <Bookmark className="h-5 w-5" /> 收藏
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsActionMenuOpen(false);
+                      void handleShareStory();
+                    }}
+                    disabled={isSharing || !blueprint}
+                    className={semanticMenuButtonClass('secondary')}
+                  >
+                    {isSharing ? <Loader2 className="h-5 w-5 animate-spin" /> : <Copy className="h-5 w-5" />}
+                    分享故事
+                  </button>
+                  <button onClick={() => { setIsActionMenuOpen(false); handleSaveWorkAndReturn(); }} className={semanticMenuButtonClass('ghost')}>
+                    <Archive className="h-5 w-5" /> 保存当前故事
+                  </button>
+                  {!activeStoryId && (
+                    <button onClick={() => { setIsActionMenuOpen(false); handleRegenerateQuickStory(); }} className={semanticMenuButtonClass('ghost')}>
+                      <RefreshCcw className="h-5 w-5" /> 重新生成
+                    </button>
+                  )}
+                  <button onClick={() => { setIsActionMenuOpen(false); handleAdaptCurrentStory(); }} disabled={!canAdaptCurrentStory() || isLoadingStories} className={semanticMenuButtonClass('secondary')}>
+                    <Wand2 className="h-5 w-5" /> {activeStoryMeta?.authorId === user?.uid ? '改变命运' : '创作同人'}
+                  </button>
+                  <button onClick={() => { setIsActionMenuOpen(false); resetGame(); }} className={semanticMenuButtonClass('ghost')}>
+                    <RefreshCcw className="h-5 w-5" /> 重新干涉
+                  </button>
+                </>
               )}
               <button
                 onClick={() => {
@@ -6704,6 +6790,23 @@ export default function App() {
                 status={generationStatus}
                 variant={activeInterventionOverlay.type}
               />
+            )}
+          </AnimatePresence>
+          <AnimatePresence>
+            {isGlobalBlockingLoading && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+              >
+                <div className="flex flex-col items-center gap-4">
+                  <Loader2 className="h-12 w-12 animate-spin text-indigo-500" />
+                  <p className="text-sm font-bold tracking-widest text-zinc-300 animate-pulse">
+                    {globalBlockingLoadingMessage}
+                  </p>
+                </div>
+              </motion.div>
             )}
           </AnimatePresence>
         </>
