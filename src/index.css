@@ -160,7 +160,6 @@ body,
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
   overflow: hidden;
   padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
   text-align: center;
@@ -171,6 +170,15 @@ body,
   color: #d9d9d9;
 }
 
+.app-boot-cover-main {
+  display: flex;
+  min-height: 52dvh;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+}
+
 .app-boot-label {
   font-size: 11px;
   font-weight: 900;
@@ -179,17 +187,25 @@ body,
   color: #858585;
 }
 
-.app-boot-orb {
+.app-boot-mark {
   position: relative;
-  width: 74px;
-  height: 74px;
-  border-radius: 28px;
+  display: grid;
+  place-items: center;
+  width: 88px;
+  height: 88px;
+  border-radius: 30px;
   border: 1px solid rgba(129, 140, 248, 0.28);
   background:
-    radial-gradient(circle at 32% 24%, rgba(217, 217, 217, 0.85), transparent 18%),
-    linear-gradient(135deg, rgba(129, 140, 248, 0.28), rgba(244, 63, 94, 0.16));
+    radial-gradient(circle at 32% 24%, rgba(217, 217, 217, 0.18), transparent 22%),
+    linear-gradient(135deg, rgba(129, 140, 248, 0.22), rgba(244, 63, 94, 0.12));
   box-shadow: 0 20px 70px rgba(99, 102, 241, 0.22);
   animation: app-boot-float 2.6s ease-in-out infinite;
+}
+
+.app-boot-mark img {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
 }
 
 .app-boot-title {
@@ -203,14 +219,17 @@ body,
 
 .app-boot-subtitle {
   max-width: 360px;
-  font-size: 14px;
-  line-height: 1.7;
+  font-size: 13px;
+  line-height: 1.6;
   color: #a6a6a6;
 }
 
 .app-boot-progress-wrap {
+  position: fixed;
+  left: 50%;
+  bottom: max(42px, calc(env(safe-area-inset-bottom) + 32px));
+  transform: translateX(-50%);
   width: min(280px, 72vw);
-  margin-top: clamp(28px, 7vh, 72px);
 }
 
 .app-boot-progress {
@@ -276,27 +295,26 @@ textarea.resize-y,
   resize: vertical !important;
   overflow: auto;
   scrollbar-width: thin;
-  background-image:
-    linear-gradient(135deg, transparent 0 45%, rgba(129, 140, 248, 0.55) 45% 55%, transparent 55%),
-    linear-gradient(135deg, transparent 0 62%, rgba(129, 140, 248, 0.34) 62% 72%, transparent 72%);
-  background-position: right 12px bottom 12px, right 7px bottom 7px;
-  background-repeat: no-repeat;
-  background-size: 18px 18px, 18px 18px;
+  padding-bottom: 1.5rem !important;
 }
 
 textarea.resize-y::-webkit-scrollbar,
 .authoring-resizable-textarea::-webkit-scrollbar {
   display: initial;
-  width: 10px;
-  height: 10px;
+  width: 14px;
+  height: 14px;
 }
 
 textarea.resize-y::-webkit-resizer,
 .authoring-resizable-textarea::-webkit-resizer {
+  background-color: transparent;
+  background-image:
+    linear-gradient(135deg, transparent 0 45%, rgba(129, 140, 248, 0.7) 45% 55%, transparent 55%),
+    linear-gradient(135deg, transparent 0 62%, rgba(129, 140, 248, 0.45) 62% 72%, transparent 72%);
+  background-position: right 4px bottom 4px, right 2px bottom 2px;
+  background-size: 10px 10px, 10px 10px;
+  background-repeat: no-repeat;
   border-radius: 0 0 0.75rem 0;
-  background:
-    linear-gradient(135deg, transparent 0 45%, rgba(129, 140, 248, 0.45) 45% 55%, transparent 55%),
-    linear-gradient(135deg, transparent 0 62%, rgba(129, 140, 248, 0.32) 62% 72%, transparent 72%);
 }
 
 button {

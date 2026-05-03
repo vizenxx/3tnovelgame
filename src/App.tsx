@@ -418,7 +418,7 @@ const SimulatedProgressBar = () => {
     };
   }, []);
   return (
-    <div className="app-boot-progress-wrap">
+    <>
       <div className="app-boot-progress">
         <div
           className="app-boot-progress-fill"
@@ -426,17 +426,23 @@ const SimulatedProgressBar = () => {
         />
       </div>
       <div className="app-boot-percent">{percent}%</div>
-    </div>
+    </>
   );
 };
 
 const BootSplash = ({ message }: { message: string }) => (
   <div className="app-boot-screen">
-    <div className="app-boot-label">3T Novelgame</div>
-    <div className="app-boot-orb" aria-hidden="true" />
-    <div className="app-boot-title">命运干涉</div>
-    <div className="app-boot-subtitle">{message || '正在整理你的故事记录与时间线，请稍候片刻。'}</div>
-    <SimulatedProgressBar />
+    <div className="app-boot-cover-main">
+      <div className="app-boot-label">3T Novelgame</div>
+      <div className="app-boot-mark" aria-hidden="true">
+        <img src="/pwa-icon.svg" alt="" />
+      </div>
+      <div className="app-boot-title">命运干涉</div>
+    </div>
+    <div className="app-boot-progress-wrap">
+      <SimulatedProgressBar />
+      <div className="app-boot-subtitle">{message || '正在连接时空枢纽，请稍候片刻。'}</div>
+    </div>
   </div>
 );
 
@@ -2452,6 +2458,11 @@ export default function App() {
       } else {
         setSessionId(user.uid);
         resetToHome();
+        setStartupMessage('正在读取作品档案...');
+        hasLoadedInitialStoryListRef.current = true;
+        await refreshStories().catch((error) => {
+          console.warn('Initial story library load skipped:', error);
+        });
       }
       setIsSessionHydrated(true);
     };
@@ -6099,7 +6110,7 @@ export default function App() {
             </button>
           </div>
 
-          <div className="fixed bottom-24 left-8 z-[1700]">
+          <div className="fixed bottom-8 left-8 z-[1700]">
             <button
               type="button"
               onClick={() => setAuthoringFindReplaceOpen((prev) => !prev)}
@@ -6441,7 +6452,7 @@ export default function App() {
                   {authoringTocOpen && (
                     <div className="fixed inset-0 z-[99]" onClick={() => setAuthoringTocOpen(false)} />
                   )}
-                  <div className={`fixed bottom-8 left-8 z-[100] flex-col gap-2 rounded-2xl border border-zinc-800 bg-zinc-950/90 p-2 shadow-2xl backdrop-blur-md transition-all ${authoringTocOpen ? 'flex' : 'hidden'}`}>
+                  <div className={`fixed bottom-24 left-8 z-[1600] flex-col gap-2 rounded-2xl border border-zinc-800 bg-zinc-950/90 p-2 shadow-2xl backdrop-blur-md transition-all ${authoringTocOpen ? 'flex' : 'hidden'}`}>
                      <div className="mb-1 text-center text-[10px] font-black text-zinc-500">目录导航</div>
                      {(authoringCartridge.chapters || []).map((c: any) => (
                         <button type="button" key={c.chapter_num} onClick={() => { setAuthoringTocOpen(false); document.getElementById(`authoring-chapter-${c.chapter_num}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} className="rounded-xl px-3 py-2 text-xs font-bold text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white">
@@ -6457,7 +6468,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setAuthoringTocOpen(!authoringTocOpen)}
-                    className="fixed bottom-8 left-8 z-[101] flex h-12 w-12 items-center justify-center rounded-full bg-indigo-600 text-white shadow-xl hover:bg-indigo-500 active:scale-95"
+                    className="fixed bottom-24 left-8 z-[1601] flex h-12 w-12 items-center justify-center rounded-full bg-indigo-600 text-white shadow-xl hover:bg-indigo-500 active:scale-95"
                     style={{ transform: authoringTocOpen ? 'translateY(-100%) translateY(-240px)' : 'none', opacity: authoringTocOpen ? 0 : 1, pointerEvents: authoringTocOpen ? 'none' : 'auto', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)' }}
                   >
                     <BookOpen className="h-5 w-5" />
