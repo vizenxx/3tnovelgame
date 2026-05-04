@@ -5848,10 +5848,11 @@ export default function App() {
                           const isUnlocked = unlockedBranches.some((item: any) => item.id === branch.id);
                           const wasUnlocked = historicallyUnlockedBranches.some((item: any) => item.id === branch.id);
                           const isHidden = branch.is_hidden || branch.tier === 'hidden';
-                          const visibleName = isHidden && !isUnlocked && !wasUnlocked ? '隐藏支线' : branch.name;
-                          const visibleDesc = isHidden && !isUnlocked && !wasUnlocked
-                            ? (branch.hint || '继续干涉命运，寻找这条支线的触发契机。')
-                            : (branch.desc || branch.sceneText || branch.hint || '尚无支线描述。');
+                          const canRevealBranchContent = isUnlocked || wasUnlocked;
+                          const visibleName = isHidden && !canRevealBranchContent ? '隐藏支线' : branch.name;
+                          const visibleDesc = canRevealBranchContent
+                            ? (branch.desc || branch.sceneText || branch.hint || '尚无支线描述。')
+                            : (branch.hint || '继续干涉命运，寻找这条支线的触发契机。');
                           return (
                             <div
                               key={branch.id || branch.name}
