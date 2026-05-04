@@ -1126,6 +1126,13 @@ export default function App() {
       if (!field || typeof field.setSelectionRange !== 'function') return;
       field.focus({ preventScroll: true });
       field.setSelectionRange(match.index, match.index + authoringFindQuery.length);
+      if (field instanceof HTMLTextAreaElement) {
+        const valueBeforeMatch = field.value.slice(0, match.index);
+        const lineCountBeforeMatch = valueBeforeMatch.split(/\r\n|\r|\n/).length - 1;
+        const lineHeight = Number.parseFloat(window.getComputedStyle(field).lineHeight || '20') || 20;
+        const targetScrollTop = Math.max(0, lineCountBeforeMatch * lineHeight - field.clientHeight * 0.45);
+        field.scrollTop = Math.min(targetScrollTop, field.scrollHeight - field.clientHeight);
+      }
     }, 180);
   };
 
