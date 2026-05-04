@@ -86,6 +86,11 @@ export type StoryListItem = {
   averageChapterWords?: number;
   chapterCount?: number;
   cardExcerpt?: string;
+  allowAdaptation?: boolean;
+  endingMode?: 'dual' | 'single';
+  endingRates?: { left: number; right: number };
+  endingBias?: { leftBaseWeight: number; rightBaseWeight: number };
+  endingNames?: { left?: string; right?: string };
   updatedAt: string | any;
   createdAt: string | any;
   version: number;

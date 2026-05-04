@@ -179,16 +179,16 @@ const formatStoryHeading = (chapter: Pick<Chapter, 'chapter_num' | 'title'>) => 
   return title ? `第${chapter.chapter_num}章：${title}` : `第${chapter.chapter_num}章`;
 };
 const endingIdToLabel = (id: 'default' | 'left' | 'right') => {
-  if (id === 'left') return '左结局';
-  if (id === 'right') return '右结局';
-  return '默认结局';
+  if (id === 'left') return '左域默认结局';
+  if (id === 'right') return '右域默认结局';
+  return '中域默认结局';
 };
 
 const authoringEndingIdToLabel = (id: 'default' | 'left' | 'right' | string) => {
-  if (id === 'default') return '结局1（默认）';
-  if (id === 'left') return '结局2（左线）';
-  if (id === 'right') return '结局3（右线）';
-  return `结局 ${id}`;
+  if (id === 'default') return '中域默认结局';
+  if (id === 'left') return '左域默认结局';
+  if (id === 'right') return '右域默认结局';
+  return `具体结局 ${id}`;
 };
 
 const buildSharedStoryUrl = (storyId: string) =>
@@ -482,13 +482,62 @@ function summaryEndingCategoryLabel(args: {
   endingLabel: string;
 }) {
   const mode = args.endingMode ?? 'dual';
-  if (mode === 'single') return '默认结局';
+  if (mode === 'single') return '中域默认结局';
   const left = String(args.endingNames?.left || '左').trim().slice(0, 5) || '左';
   const right = String(args.endingNames?.right || '右').trim().slice(0, 5) || '右';
   if (args.endingLabel === '秩序律') return `${left}结局`;
   if (args.endingLabel === '混沌终') return `${right}结局`;
-  return '默认结局';
+  return '中域默认结局';
 }
+
+const getEndingBias = (source?: any) => normalizeEndingBias(source?.endingBias || source?.endingRates || {
+  left: source?.left_mainline_default,
+  right: source?.right_mainline_default,
+});
+
+const weightToneLabel = (value: number) => {
+  if (value >= 13) return '极强';
+  if (value >= 9) return '强';
+  if (value >= 5) return '中';
+  if (value >= 3) return '低';
+  return '微弱';
+};
+
+const endingDomainSummaryText = (source?: any) => {
+  const bias = getEndingBias(source);
+  if (bias.leftBaseWeight === bias.rightBaseWeight) return '左右结局域的基础倾向均衡，玩家干涉与支线更容易决定最终偏向。';
+  const dominant = bias.leftBaseWeight > bias.rightBaseWeight ? '左结局域' : '右结局域';
+  const ratio = `${bias.leftBaseWeight}:${bias.rightBaseWeight}`;
+  return `${dominant}拥有更高基础倾向（${ratio}），故事本身会更自然地朝该方向收束，但玩家仍可通过支线改变走向。`;
+};
+
+const endingDomainCards = (source?: any) => {
+  const bias = getEndingBias(source);
+  const names = source?.endingNames || {};
+  return [
+    {
+      id: 'middle',
+      title: '中结局域',
+      label: '中域默认结局',
+      weight: '平衡域',
+      hint: '命运值未明显偏向左右时进入。中域也可以承载多个具体结局，并由支线绑定决定具体收束。',
+    },
+    {
+      id: 'left',
+      title: `${names.left || '左'}结局域`,
+      label: '左域默认结局',
+      weight: `${bias.leftBaseWeight} · ${weightToneLabel(bias.leftBaseWeight)}`,
+      hint: '命运值明显偏向左域时进入。左向支线可绑定到域内不同具体结局。',
+    },
+    {
+      id: 'right',
+      title: `${names.right || '右'}结局域`,
+      label: '右域默认结局',
+      weight: `${bias.rightBaseWeight} · ${weightToneLabel(bias.rightBaseWeight)}`,
+      hint: '命运值明显偏向右域时进入。右向支线可绑定到域内不同具体结局。',
+    },
+  ];
+};
 
 const shortUserId = (value?: string | null) => (value || 'guest').slice(0, 6).toUpperCase();
 
@@ -875,6 +924,7 @@ export default function App() {
   const [targetWordCount, setTargetWordCount] = useState(600);
   const [narrativePerson, setNarrativePerson] = useState<NarrativePerson>('third');
   const [quickEndingMode, setQuickEndingMode] = useState<EndingMode>('dual');
+  const [quickEndingBias, setQuickEndingBias] = useState({ leftBaseWeight: 1, rightBaseWeight: 1 });
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationStatus, setGenerationStatus] = useState("");
   const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
@@ -1155,6 +1205,7 @@ export default function App() {
     name: '',
     side: 'left' as 'left' | 'right',
     tier: 'small' as 'small' | 'medium' | 'large' | 'hidden',
+    endingId: '',
     triggerType: 'single' as 'single' | 'count',
     singleChapterNum: 2,
     singleCharId: '',
@@ -1271,10 +1322,16 @@ export default function App() {
 
   const readErrorMessage = async (response: Response) => {
     try {
-      const data = await response.json();
-      return [data?.error, data?.code ? `(${data.code})` : '', data?.detail ? `：${data.detail}` : ''].filter(Boolean).join(' ') || `请求失败（${response.status}）`;
-    } catch {
-      return await response.text() || `请求失败（${response.status}）`;
+      const raw = await response.text();
+      if (!raw) return `请求失败（${response.status}）`;
+      try {
+        const data = JSON.parse(raw);
+        return [data?.error, data?.code ? `(${data.code})` : '', data?.detail ? `：${data.detail}` : ''].filter(Boolean).join(' ') || `请求失败（${response.status}）`;
+      } catch {
+        return raw || `请求失败（${response.status}）`;
+      }
+    } catch (error: any) {
+      return error?.message || `请求失败（${response.status}）`;
     }
   };
 
@@ -1824,6 +1881,7 @@ export default function App() {
     targetWordCount,
     narrativePerson,
     quickEndingMode,
+    quickEndingBias,
   });
 
   const applyStoryListCache = (data: any) => {
@@ -2920,8 +2978,8 @@ export default function App() {
     })(),
     endings: [
       { type: 'normal', title: ((cartridge.endings || []).find((ending: any) => ending.id === 'default')?.title || '第七章'), text: ((cartridge.endings || []).find((ending: any) => ending.id === 'default')?.text || '') },
-      { type: 'good', title: ((cartridge.endings || []).find((ending: any) => ending.id === 'left')?.title || '左结局'), text: ((cartridge.endings || []).find((ending: any) => ending.id === 'left')?.text || '') },
-      { type: 'bad', title: ((cartridge.endings || []).find((ending: any) => ending.id === 'right')?.title || '右结局'), text: ((cartridge.endings || []).find((ending: any) => ending.id === 'right')?.text || '') },
+      { type: 'good', title: ((cartridge.endings || []).find((ending: any) => ending.id === 'left')?.title || '左域默认结局'), text: ((cartridge.endings || []).find((ending: any) => ending.id === 'left')?.text || '') },
+      { type: 'bad', title: ((cartridge.endings || []).find((ending: any) => ending.id === 'right')?.title || '右域默认结局'), text: ((cartridge.endings || []).find((ending: any) => ending.id === 'right')?.text || '') },
     ],
     tags: cartridge.meta.tags || [],
     branches: (cartridge.branches || []).map((branch: any) => {
@@ -3082,14 +3140,14 @@ export default function App() {
       if (!data) {
       const response = await apiFetch('/api/generate-blueprint', {
         method: 'POST',
-        body: JSON.stringify({ selectedThemes, customOutline, targetWordCount, narrativePerson, endingMode: quickEndingMode }),
+        body: JSON.stringify({ selectedThemes, customOutline, targetWordCount, narrativePerson, endingMode: quickEndingMode, endingBias: quickEndingBias }),
       }, 90000);
       if (!response.ok) throw new Error(await readErrorMessage(response));
       data = await response.json();
       }
       data.narrative_person = narrativePerson;
       data.endingMode = data.endingMode === 'single' ? 'single' : quickEndingMode;
-      data.endingBias = normalizeEndingBias(data.endingBias || { left: data.left_mainline_default, right: data.right_mainline_default });
+      data.endingBias = normalizeEndingBias(data.endingBias || quickEndingBias || { left: data.left_mainline_default, right: data.right_mainline_default });
       data.chapters = ensureSevenChapterShells(data.chapters || []);
       await setLocalCache(quickGenerationDraftCacheKey(), { signature: draftSignature, blueprint: data });
 
@@ -3345,6 +3403,7 @@ export default function App() {
         id: selectedBranchId,
         side: branchForm.side,
         tier: branchForm.tier,
+        endingId: branchForm.endingId || undefined,
         name: branchForm.name || '未命名支线',
         hint: branchForm.hint || `留意${branchForm.name || '支线变化'}`,
         desc: branchForm.sceneText.slice(0, 80) || branchForm.name || '支线',
@@ -3355,6 +3414,7 @@ export default function App() {
           mustHappen: branchForm.sceneText ? [branchForm.sceneText] : [],
           mustReveal: [],
           mustChange: [],
+          endingId: branchForm.endingId || undefined,
         },
         sceneText: branchForm.sceneText,
       } as any);
@@ -4097,8 +4157,8 @@ export default function App() {
 
       nextCartridge.endings = [
         { id: 'default', title: '终局', text: parsed.endings.default },
-        { id: 'left', title: '左结局', text: parsed.endings.left },
-        { id: 'right', title: '右结局', text: parsed.endings.right },
+        { id: 'left', title: '左域默认结局', text: parsed.endings.left },
+        { id: 'right', title: '右域默认结局', text: parsed.endings.right },
       ];
 
       if (authoringImportReplaceBranches && parsed.branches.length > 0) {
@@ -4528,6 +4588,20 @@ export default function App() {
                 <p key={index}>{paragraph}</p>
               ))}
             </div>
+            {blueprint && (
+              <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4">
+                <div className="text-xs font-black uppercase tracking-[0.18em] text-zinc-500">本局结局倾向参考</div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                  {endingDomainCards(blueprint).map((domain) => (
+                    <div key={domain.id} className="rounded-xl border border-zinc-800 bg-zinc-950/45 p-3">
+                      <div className="text-xs font-black text-zinc-100">{domain.title}</div>
+                      <div className="mt-1 text-[11px] font-bold text-indigo-300">{domain.weight}</div>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-3 text-xs leading-relaxed text-zinc-500">{endingDomainSummaryText(blueprint)}</p>
+              </div>
+            )}
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
               <button type="button" onClick={() => setShowSummaryModal(false)} className={semanticButtonClass('secondary', { fullWidth: true })}>
                 <BookOpen className="h-4 w-4" />
@@ -4605,6 +4679,37 @@ export default function App() {
                 <Sparkles className="h-4 w-4" />
                 干涉命运
               </button>
+            </div>
+          </div>
+          <div className="space-y-3 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm font-bold text-zinc-400">命运基础倾向</span>
+              <span className="text-xs font-black text-indigo-300">
+                左 {quickEndingBias.leftBaseWeight} / 右 {quickEndingBias.rightBaseWeight}
+              </span>
+            </div>
+            <p className="text-xs leading-relaxed text-zinc-500">这是故事本身的命运惯性，不会改变开局命运值。玩家触发的支线会和它一起影响最终结局域。</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {([
+                { key: 'leftBaseWeight', label: '左结局域' },
+                { key: 'rightBaseWeight', label: '右结局域' },
+              ] as const).map((option) => (
+                <label key={option.key} className="block space-y-2 text-xs font-bold text-zinc-400">
+                  <span>{option.label} · {weightToneLabel(quickEndingBias[option.key])}</span>
+                  <input
+                    type="range"
+                    min={1}
+                    max={15}
+                    step={1}
+                    value={quickEndingBias[option.key]}
+                    onChange={(event) => {
+                      const raw = Math.max(1, Math.min(15, Number(event.target.value) || 1));
+                      setQuickEndingBias((prev) => ({ ...prev, [option.key]: raw }));
+                    }}
+                    className="w-full accent-indigo-500"
+                  />
+                </label>
+              ))}
             </div>
           </div>
         </div>
@@ -4701,6 +4806,18 @@ export default function App() {
                 <div className="mt-2 text-sm font-bold text-zinc-500">作者：{getStoryAuthorName(storyDetailStory)}</div>
                 <div className="mt-5 max-h-[40vh] overflow-y-auto rounded-3xl border border-zinc-800 bg-zinc-900/45 p-4 text-base leading-relaxed text-zinc-300">
                   {getStoryMainAxis(storyDetailStory) || '这部作品暂时还没有填写完整介绍。'}
+                </div>
+                <div className="mt-4 rounded-3xl border border-zinc-800 bg-zinc-900/35 p-4">
+                  <div className="text-xs font-black uppercase tracking-[0.18em] text-zinc-500">结局倾向</div>
+                  <p className="mt-2 text-sm leading-relaxed text-zinc-300">{endingDomainSummaryText(storyDetailStory)}</p>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                    {endingDomainCards(storyDetailStory).map((domain) => (
+                      <div key={domain.id} className="rounded-2xl border border-zinc-800 bg-zinc-950/45 p-3">
+                        <div className="text-xs font-black text-zinc-100">{domain.title}</div>
+                        <div className="mt-1 text-[11px] font-bold text-indigo-300">{domain.weight}</div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
                 <div className="mt-5 grid gap-3">
                   <button type="button" onClick={handlePlayFromDetail} className={semanticButtonClass('primary', { fullWidth: true })}>
@@ -5341,7 +5458,7 @@ export default function App() {
                 {
                   value: 'dual',
                   label: '多线结局',
-                  hint: '先沿用默认/左右三结局机制，之后可平滑扩展更多结局。',
+                  hint: '使用中/左/右三个结局域，并为每个结局域保留扩展更多具体结局的空间。',
                 },
               ] as const).map((option) => (
                 <button
@@ -5763,6 +5880,23 @@ export default function App() {
                     </div>
                   </section>
                   <section className="space-y-4">
+                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">结局倾向</h4>
+                    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/35 p-4">
+                      <p className="text-sm leading-relaxed text-zinc-300">{endingDomainSummaryText(blueprint)}</p>
+                      <div className="mt-4 grid gap-2">
+                        {endingDomainCards(blueprint).map((domain) => (
+                          <div key={domain.id} className="rounded-xl border border-zinc-800 bg-zinc-950/45 p-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-sm font-black text-zinc-100">{domain.title}</span>
+                              <span className="text-xs font-black text-indigo-300">{domain.weight}</span>
+                            </div>
+                            <div className="mt-1 text-[11px] leading-relaxed text-zinc-500">{domain.label}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </section>
+                  <section className="space-y-4">
                     <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">命运支线</h4>
                     <div className="grid gap-3">
                       {(blueprint.branches || []).length === 0 ? (
@@ -5808,6 +5942,22 @@ export default function App() {
                                 </div>
                               </div>
                               <div className="text-xs leading-relaxed text-zinc-500">{visibleDesc}</div>
+                              {canRevealBranchContent && (
+                                <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-black">
+                                  <span className="rounded-full bg-zinc-800 px-2 py-1 text-zinc-300">
+                                    {branch.side === 'left' ? '左向支线' : '右向支线'}
+                                  </span>
+                                  <span className="rounded-full bg-indigo-500/10 px-2 py-1 text-indigo-200">
+                                    权重 {branchEffectiveWeight(branch)} · {weightToneLabel(branchEffectiveWeight(branch))}
+                                  </span>
+                                  <span className="rounded-full bg-sky-500/10 px-2 py-1 text-sky-200">
+                                    导向 {authoringEndingIdToLabel(branch.endingId || branch.inject?.endingId || branch.inject?.targetEndingId || branch.side)}
+                                  </span>
+                                  {(branch.is_hidden || branch.tier === 'hidden') && (
+                                    <span className="rounded-full bg-amber-500/10 px-2 py-1 text-amber-200">隐藏 +1</span>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           );
                         })
@@ -6218,6 +6368,22 @@ export default function App() {
           <option value="hidden">影响：隐</option>
         </select>
       </div>
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4">
+        <label className="block space-y-2 text-sm font-bold text-zinc-300">
+          <span>导向结局绑定</span>
+          <select
+            value={branchForm.endingId}
+            onChange={(event) => setBranchForm((prev) => ({ ...prev, endingId: event.target.value }))}
+            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+          >
+            <option value="">自动进入该方向的域内默认结局</option>
+            <option value="default">绑定中域默认结局</option>
+            <option value="left">绑定左域默认结局</option>
+            <option value="right">绑定右域默认结局</option>
+          </select>
+        </label>
+        <p className="mt-2 text-xs leading-relaxed text-zinc-500">如果未来同一结局域内有多个具体结局，这里会用来决定该支线更偏向哪一个收束。</p>
+      </div>
       <textarea value={branchForm.sceneText} onChange={(event) => setBranchForm((prev) => ({ ...prev, sceneText: event.target.value }))} className="authoring-resizable-textarea min-h-[180px] w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-sm text-white outline-none focus:border-indigo-500" placeholder="支线情节（300 字以内）" />
       <div className="space-y-3">
         <div className="text-sm font-black text-white">触发条件</div>
@@ -6283,13 +6449,14 @@ export default function App() {
             const payload = {
               side: branchForm.side,
               tier: branchForm.tier,
+              endingId: branchForm.endingId || undefined,
               name: branchForm.name,
               hint: branchForm.hint || `留意${branchForm.name}`,
               desc: branchForm.sceneText.slice(0, 80) || branchForm.name,
               common: false,
               trigger: normalizeBranchConditionsForStorage(branchConditions)[0],
               triggerGroups: normalizeBranchConditionsForStorage(branchConditions),
-              inject: { mustHappen: branchForm.sceneText ? [branchForm.sceneText] : [], mustReveal: [], mustChange: [] },
+              inject: { mustHappen: branchForm.sceneText ? [branchForm.sceneText] : [], mustReveal: [], mustChange: [], endingId: branchForm.endingId || undefined },
               sceneText: branchForm.sceneText,
             } as any;
             if (isNew) {
@@ -6732,12 +6899,12 @@ export default function App() {
                         {
                           value: 'single',
                           label: '单一结局',
-                          hint: '所有干涉都需要自然收束到结局1，适合宿命感或强主线作品。',
+                          hint: '所有干涉都需要自然收束到中域默认结局，适合宿命感或强主线作品。',
                         },
                         {
                           value: 'dual',
                           label: '多线结局',
-                          hint: '当前沿用结局1/2/3，对应前端的默认/左/右结局。',
+                          hint: '使用中/左/右三个结局域，每个域都可以继续扩展具体结局。',
                         },
                       ] as const).map((option) => {
                         const selected = (authoringCartridge.meta?.endingMode || 'dual') === option.value;
@@ -6759,36 +6926,37 @@ export default function App() {
                       })}
                     </div>
                     <div className="mt-4 rounded-2xl border border-zinc-800/80 bg-zinc-950/60 p-4">
-                      <div className="text-sm font-black text-zinc-100">命运初始倾向权重</div>
-                      <p className="mt-1 text-xs leading-relaxed text-zinc-500">不会改变开局 EV（仍为 0），只代表原故事本身偏向左/右结局域的命运惯性。默认 1:1 为中性。</p>
+                      <div className="text-sm font-black text-zinc-100">命运基础倾向</div>
+                      <p className="mt-1 text-xs leading-relaxed text-zinc-500">给作品本身设置一个“更容易走向哪边”的命运惯性。它不会改变玩家开局数值，只会在干涉结算时和支线一起影响最终结局域。</p>
                       <div className="mt-3 grid gap-3 sm:grid-cols-2">
                         {([
-                          { key: 'leftBaseWeight', label: '左域基础权重' },
-                          { key: 'rightBaseWeight', label: '右域基础权重' },
+                          { key: 'leftBaseWeight', label: '左结局域' },
+                          { key: 'rightBaseWeight', label: '右结局域' },
                         ] as const).map((option) => {
                           const bias = normalizeEndingBias(authoringCartridge.meta?.endingBias || authoringCartridge.meta?.endingRates);
                           return (
                             <label key={option.key} className="block space-y-2 text-xs font-bold text-zinc-400">
-                              <span>{option.label}</span>
+                              <span>{option.label} · {bias[option.key]} · {weightToneLabel(bias[option.key])}</span>
                               <input
-                                type="number"
+                                type="range"
                                 min={1}
-                                max={20}
+                                max={15}
                                 step={1}
                                 value={bias[option.key]}
                                 onChange={(event) => {
-                                  const raw = Math.max(1, Math.min(20, Number(event.target.value) || 1));
+                                  const raw = Math.max(1, Math.min(15, Number(event.target.value) || 1));
                                   setAuthoringCartridge((prev: any) => {
                                     const prevBias = normalizeEndingBias(prev.meta?.endingBias || prev.meta?.endingRates);
                                     return { ...prev, meta: { ...prev.meta, endingBias: { ...prevBias, [option.key]: raw } } };
                                   });
                                 }}
-                                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                                className="w-full accent-indigo-500"
                               />
                             </label>
                           );
                         })}
                       </div>
+                      <p className="mt-3 text-[11px] leading-relaxed text-zinc-500">建议范围：1-2 微弱，3-4 低，5-8 中，9-12 强，13-15 极强。左右都为 1 时，作品更接近完全中性。</p>
                     </div>
                   </section>
                   <section className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
@@ -6855,7 +7023,7 @@ export default function App() {
                       解析并导入
                     </button>
                     <button type="button" onClick={() => {
-                        const template = `# 主线设置\n## 标题\n作品名称\n\n## 主轴\n一句话描述故事核心冲突\n\n## 主要角色\n### 角色1\n- 名字: 角色名A\n- 简介: 角色A的简介\n\n### 角色2\n- 名字: 角色名B\n- 简介: 角色B的简介\n\n## 默认故事\n### 第 1 章 标题一\n第一章大纲或正文\n\n### 第 2 章 标题二\n第二章大纲或正文\n\n## 结局\n### 默认结局\n默认结局正文\n### 左结局\n左结局正文\n### 右结局\n右结局正文\n\n# 支线设置\n## 支线1\n- 支线名: 支线名称\n- 倾向: 左倾\n- 影响: 中\n- 提示短句: 留意这里的变化\n- 支线情节: 这里写支线发生时的具体剧情\n- 条件组1: 第 2 章 角色名A 庇佑`;
+                        const template = `# 主线设置\n## 标题\n作品名称\n\n## 主轴\n一句话描述故事核心冲突\n\n## 主要角色\n### 角色1\n- 名字: 角色名A\n- 简介: 角色A的简介\n\n### 角色2\n- 名字: 角色名B\n- 简介: 角色B的简介\n\n## 默认故事\n### 第 1 章 标题一\n第一章大纲或正文\n\n### 第 2 章 标题二\n第二章大纲或正文\n\n## 结局域\n### 中域默认结局\n中域默认结局正文\n### 左域默认结局\n左域默认结局正文\n### 右域默认结局\n右域默认结局正文\n\n# 支线设置\n## 支线1\n- 支线名: 支线名称\n- 倾向: 左倾\n- 影响: 中\n- 导向结局: 左域默认结局\n- 提示短句: 留意这里的变化\n- 支线情节: 这里写支线发生时的具体剧情\n- 条件组1: 第 2 章 角色名A 庇佑`;
                         navigator.clipboard.writeText(template);
                         showError('蓝本格式已复制到剪贴板！');
                     }} className={semanticButtonClass('secondary', { fullWidth: true })}>
@@ -6880,7 +7048,7 @@ export default function App() {
                      ))}
                      <div className="mx-2 my-1 h-px bg-zinc-800" />
                         <button type="button" onClick={() => { setAuthoringTocOpen(false); document.getElementById('authoring-endings')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} className="rounded-xl px-3 py-2 text-xs font-bold text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white">
-                        结局设置（结局1-3）
+                       结局域设置
                      </button>
                   </div>
 
@@ -6929,6 +7097,19 @@ export default function App() {
 
                   <div className="space-y-4">
                     <div id="authoring-endings" className="text-lg font-black text-white">结局设置</div>
+                    <div className="grid gap-3 lg:grid-cols-3">
+                      {endingDomainCards(authoringCartridge.meta).map((domain) => (
+                        <div key={domain.id} className="rounded-2xl border border-zinc-800 bg-zinc-950/45 p-4">
+                          <div className="text-xs font-black uppercase tracking-[0.18em] text-zinc-500">{domain.title}</div>
+                          <div className="mt-2 text-sm font-black text-zinc-100">{domain.label}</div>
+                          <div className="mt-1 text-xs font-bold text-indigo-300">{domain.weight}</div>
+                          <p className="mt-3 text-xs leading-relaxed text-zinc-500">{domain.hint}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-4 text-xs leading-relaxed text-indigo-100/75">
+                      你可以先编辑“中域默认 / 左域默认 / 右域默认”三个结局原型。每个结局域都可承载更多具体结局，并可由支线绑定来决定最终收束；已设置的支线倾向和基础权重会继续沿用。
+                    </div>
                     {authoringCartridge.meta?.endingMode === 'single' && (
                       (() => {
                         const hiddenEndings = (authoringCartridge.endings || []).filter(
@@ -7053,6 +7234,7 @@ export default function App() {
                             name: '',
                             side: 'left',
                             tier: 'small',
+                            endingId: '',
                             triggerType: 'single',
                             singleChapterNum: 2,
                             singleCharId: '',
@@ -7095,6 +7277,9 @@ export default function App() {
                             <div>
                               <div className="text-sm font-black text-white">{branch.name}</div>
                               <div className="mt-1 text-xs text-zinc-500">{branch.side === 'left' ? '左倾' : '右倾'} / 影响：{branch.tier}</div>
+                              <div className="mt-1 text-xs text-indigo-300">
+                                导向：{authoringEndingIdToLabel(branch.endingId || branch.inject?.endingId || branch.inject?.targetEndingId || branch.side)}
+                              </div>
                               <div className="mt-2 text-xs leading-relaxed text-zinc-400 max-w-xl line-clamp-2">{branch.sceneText || branch.hint || '暂无内容'}</div>
                             </div>
                             <div className="flex gap-2 shrink-0">
@@ -7108,6 +7293,7 @@ export default function App() {
                                     name: branch.name || '',
                                     side: branch.side || 'left',
                                     tier: branch.tier || 'small',
+                                    endingId: branch.endingId || branch.inject?.endingId || branch.inject?.targetEndingId || '',
                                     triggerType: 'single',
                                     singleChapterNum: branch.trigger?.single?.chapterNum || 2,
                                     singleCharId: branch.trigger?.single?.charId || '',

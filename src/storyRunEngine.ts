@@ -89,7 +89,12 @@ function highestBranchWeight(branches: RuntimeBranchLike[]) {
 }
 
 function branchEndingId(branch: RuntimeBranchLike, domain: EndingDomain) {
-  const raw = (branch as any).endingId ?? (branch as any).ending_id ?? (branch as any).targetEndingId ?? (branch as any).target_ending_id;
+  const raw = (branch as any).endingId
+    ?? (branch as any).ending_id
+    ?? (branch as any).targetEndingId
+    ?? (branch as any).target_ending_id
+    ?? (branch as any).inject?.endingId
+    ?? (branch as any).inject?.targetEndingId;
   if (typeof raw === 'string' && raw.trim()) return raw.trim();
   return domain === 'middle' ? 'default' : domain;
 }
