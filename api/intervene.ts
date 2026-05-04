@@ -273,7 +273,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const normalizedBranches = blueprint.branches.map((branch: any) => ({
       ...branch,
       score: branchEffectiveWeight(branch),
-      is_hidden: Boolean(branch.is_hidden || branch.tier === 'hidden'),
+      is_hidden: Boolean(branch.is_hidden || branch.hidden || branch.tier === 'hidden' || branch.inject?.hidden),
+      tier: branch.tier === 'hidden' ? 'small' : branch.tier,
     }));
     const countTriggered = normalizedBranches.filter((branch: any) => isBranchTriggered(branch, justTriggeredHistory, safeChapterNum));
     const unlocked = countTriggered[0];

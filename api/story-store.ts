@@ -251,7 +251,8 @@ async function getCartridge(storyId: string, currentUserId?: string) {
       branches: asArray(row.branches).map((branch) => ({
         id: branch.id,
         side: branch.side,
-        tier: branch.tier,
+        tier: branch.tier === 'hidden' ? 'small' : branch.tier,
+        is_hidden: Boolean(branch.is_hidden || branch.hidden || branch.tier === 'hidden' || branch.inject?.hidden),
         name: branch.name,
         hint: branch.hint,
         desc: branch.description,
@@ -294,7 +295,8 @@ async function getCartridge(storyId: string, currentUserId?: string) {
     branches: branches.map((branch) => ({
       id: branch.id,
       side: branch.side,
-      tier: branch.tier,
+      tier: branch.tier === 'hidden' ? 'small' : branch.tier,
+      is_hidden: Boolean(branch.is_hidden || branch.hidden || branch.tier === 'hidden' || branch.inject?.hidden),
       name: branch.name,
       hint: branch.hint,
       desc: branch.description,
@@ -648,14 +650,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const branches = asArray(bp.branches).map((branch) => ({
         story_id: storyId,
         side: branch.side === 'right' ? 'right' : 'left',
-        tier: branch.score >= 5 ? 'hidden' : branch.score >= 3 ? 'large' : branch.score >= 2 ? 'medium' : 'small',
+        tier: branch.score >= 5 ? 'large' : branch.score >= 3 ? 'large' : branch.score >= 2 ? 'medium' : 'small',
         name: branch.name || '未命名支线',
         hint: branch.hint || '',
         description: branch.desc || branch.sceneText || '',
         trigger: branch.trigger || { type: 'single', single: { chapterNum: 2, charId: characters[0]?.id || 'c1', action: 'bless' } },
         trigger_groups: branch.triggerGroups || (branch.trigger ? [branch.trigger] : []),
         common: false,
-        inject: branch.inject || { mustHappen: [], mustReveal: [], mustChange: [] },
+        inject: { ...(branch.inject || { mustHappen: [], mustReveal: [], mustChange: [] }), hidden: Boolean(branch.is_hidden || branch.hidden || branch.score >= 5) },
         scene_text: branch.sceneText || branch.desc || '',
       }));
       if (branches.length) await supabaseInsert('story_branches', branches);
@@ -727,18 +729,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (action === 'upsertStoryBranch') {
       await requireStoryOwner(body.storyId, authUser.uid);
       const branch = body.branch || {};
+      const isHidden = Boolean(branch.is_hidden || branch.hidden || branch.tier === 'hidden' || branch.inject?.hidden);
+      const tier = branch.tier === 'large' ? 'large' : branch.tier === 'medium' ? 'medium' : 'small';
       await supabaseUpsert('story_branches', [{
         id: body.branchId,
         story_id: body.storyId,
         side: branch.side || 'left',
-        tier: branch.tier || 'small',
+        tier,
         name: branch.name || '',
         hint: branch.hint || '',
         description: branch.desc || '',
         trigger: branch.trigger || {},
         trigger_groups: asArray(branch.triggerGroups),
         common: Boolean(branch.common),
-        inject: branch.inject || { mustHappen: [], mustReveal: [], mustChange: [] },
+        inject: { ...(branch.inject || { mustHappen: [], mustReveal: [], mustChange: [] }), hidden: isHidden },
         scene_text: branch.sceneText || '',
         updated_at: nowIso(),
       }], 'id');
@@ -748,17 +752,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (action === 'createStoryBranch') {
       await requireStoryOwner(body.storyId, authUser.uid);
       const branch = body.branch || {};
+      const isHidden = Boolean(branch.is_hidden || branch.hidden || branch.tier === 'hidden' || branch.inject?.hidden);
+      const tier = branch.tier === 'large' ? 'large' : branch.tier === 'medium' ? 'medium' : 'small';
       const [created] = await supabaseInsert<any[]>('story_branches', [{
         story_id: body.storyId,
         side: branch.side || 'left',
-        tier: branch.tier || 'small',
+        tier,
         name: branch.name || '',
         hint: branch.hint || '',
         description: branch.desc || '',
         trigger: branch.trigger || {},
         trigger_groups: asArray(branch.triggerGroups),
         common: Boolean(branch.common),
-        inject: branch.inject || { mustHappen: [], mustReveal: [], mustChange: [] },
+        inject: { ...(branch.inject || { mustHappen: [], mustReveal: [], mustChange: [] }), hidden: isHidden },
         scene_text: branch.sceneText || '',
       }]);
       return res.status(200).json(created.id);

@@ -740,7 +740,8 @@ type ParsedImportCondition = {
 type ParsedImportBranch = {
   name: string;
   side: 'left' | 'right';
-  tier: 'small' | 'medium' | 'large' | 'hidden';
+  tier: 'small' | 'medium' | 'large';
+  isHidden: boolean;
   hint: string;
   sceneText: string;
   common: boolean;
@@ -763,11 +764,27 @@ function parseSide(raw: string): 'left' | 'right' {
   return /right|右/.test(raw) ? 'right' : 'left';
 }
 
-function parseTier(raw: string): 'small' | 'medium' | 'large' | 'hidden' {
-  if (/hidden|隐/.test(raw)) return 'hidden';
+function parseTier(raw: string): 'small' | 'medium' | 'large' {
   if (/large|大/.test(raw)) return 'large';
   if (/medium|中/.test(raw)) return 'medium';
   return 'small';
+}
+
+function parseHiddenBranch(raw: string): boolean {
+  return /hidden|隐|隐藏/.test(raw);
+}
+
+function normalizeBranchTier(tier: string): 'small' | 'medium' | 'large' {
+  if (tier === 'large') return 'large';
+  if (tier === 'medium') return 'medium';
+  return 'small';
+}
+
+function branchTierLabel(tier: string) {
+  const normalized = normalizeBranchTier(tier);
+  if (normalized === 'large') return '大';
+  if (normalized === 'medium') return '中';
+  return '小';
 }
 
 function parseConditionLine(line: string): ParsedImportCondition | null {
@@ -838,10 +855,13 @@ function parseImportedAuthoringText(raw: string) {
     const block = branchMatch[1];
     const name = pickLabeledText(block, ['支线名']) || '未命名支线';
     const side = parseSide(pickLabeledText(block, ['倾向']));
-    const tier = parseTier(pickLabeledText(block, ['影响']));
+    const impactRaw = pickLabeledText(block, ['影响']);
+    const hiddenRaw = pickLabeledText(block, ['隐藏', '隐']);
+    const tier = parseTier(impactRaw);
+    const isHidden = parseHiddenBranch(impactRaw) || /true|是|1|yes/i.test(hiddenRaw);
     const hint = pickLabeledText(block, ['提示短句']) || `留意${name}`;
     const common = /true|是|1/.test(pickLabeledText(block, ['通用支线']).toLowerCase());
-    const sceneText = extractSection(block, /-\s*支线情节\s*[：:]\s*/i, /\n-\s*(触发后剧情改变|支线名|倾向|影响|提示短句|通用支线|触发条件组)/i).trim().slice(0, 300);
+    const sceneText = extractSection(block, /-\s*支线情节\s*[：:]\s*/i, /\n-\s*(触发后剧情改变|支线名|倾向|影响|隐藏|隐|提示短句|通用支线|触发条件组)/i).trim().slice(0, 300);
     const conditions: ParsedImportCondition[] = [];
     const condMatches = block.match(/条件组\d+\s*[：:]\s*[^\n]+/g) || [];
     for (const c of condMatches) {
@@ -853,6 +873,7 @@ function parseImportedAuthoringText(raw: string) {
       name: name.trim(),
       side,
       tier,
+      isHidden,
       hint: hint.trim(),
       sceneText: sceneText || '',
       common,
@@ -1222,7 +1243,8 @@ export default function App() {
     id: '',
     name: '',
     side: 'left' as 'left' | 'right',
-    tier: 'small' as 'small' | 'medium' | 'large' | 'hidden',
+    tier: 'small' as 'small' | 'medium' | 'large',
+    isHidden: false,
     endingId: '',
     triggerType: 'single' as 'single' | 'count',
     singleChapterNum: 2,
@@ -1750,7 +1772,8 @@ export default function App() {
         id: branch.id,
         name: String(branch.name || ''),
         hint: String(branch.hint || ''),
-        tier: branch.tier || 'small',
+        tier: normalizeBranchTier(branch.tier || 'small'),
+        isHidden: Boolean(branch.is_hidden || branch.hidden || branch.tier === 'hidden' || branch.inject?.hidden),
         side: branch.side || 'left',
         sceneText: String(branch.sceneText || ''),
       })),
@@ -3013,11 +3036,11 @@ export default function App() {
         condition_action: condition.action,
         condition_chapter: condition.chapterNum,
         desc: branch.desc,
-        is_hidden: branch.tier === 'hidden',
+        is_hidden: Boolean(branch.is_hidden || branch.hidden || branch.tier === 'hidden' || branch.inject?.hidden),
         hint: branch.hint,
         trigger: branch.trigger,
         triggerGroups: branch.triggerGroups,
-        tier: branch.tier,
+        tier: normalizeBranchTier(branch.tier),
         inject: branch.inject,
         sceneText: branch.sceneText,
       } as any;
@@ -3420,7 +3443,8 @@ export default function App() {
       await upsertStoryBranch(db as any, authoringStoryId, selectedBranchId, {
         id: selectedBranchId,
         side: branchForm.side,
-        tier: branchForm.tier,
+        tier: normalizeBranchTier(branchForm.tier),
+        is_hidden: branchForm.isHidden,
         endingId: branchForm.endingId || undefined,
         name: branchForm.name || '未命名支线',
         hint: branchForm.hint || `留意${branchForm.name || '支线变化'}`,
@@ -3432,6 +3456,7 @@ export default function App() {
           mustHappen: branchForm.sceneText ? [branchForm.sceneText] : [],
           mustReveal: [],
           mustChange: [],
+          hidden: branchForm.isHidden,
           endingId: branchForm.endingId || undefined,
         },
         sceneText: branchForm.sceneText,
@@ -4685,6 +4710,17 @@ export default function App() {
             <div className="mb-2 text-sm font-bold text-zinc-500">
               作者：{getStoryAuthorName(story)}
             </div>
+            <div className="mb-3 flex flex-wrap gap-1.5">
+              {(() => {
+                const bias = getEndingBias(story);
+                return (
+                  <>
+                    <span className="rounded-full border border-indigo-500/20 bg-indigo-500/10 px-2.5 py-1 text-[11px] font-black text-indigo-200">左域 {weightToneLabel(bias.leftBaseWeight)}</span>
+                    <span className="rounded-full border border-rose-500/20 bg-rose-500/10 px-2.5 py-1 text-[11px] font-black text-rose-200">右域 {weightToneLabel(bias.rightBaseWeight)}</span>
+                  </>
+                );
+              })()}
+            </div>
             <p className="mb-3 line-clamp-3 text-sm leading-relaxed text-zinc-400 transition-colors group-hover:text-zinc-300">
               {getStoryMainAxis(story)}
             </p>
@@ -4697,37 +4733,6 @@ export default function App() {
                 <Sparkles className="h-4 w-4" />
                 干涉命运
               </button>
-            </div>
-          </div>
-          <div className="space-y-3 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-sm font-bold text-zinc-400">命运基础倾向</span>
-              <span className="text-xs font-black text-indigo-300">
-                左 {quickEndingBias.leftBaseWeight} / 右 {quickEndingBias.rightBaseWeight}
-              </span>
-            </div>
-            <p className="text-xs leading-relaxed text-zinc-500">这是故事本身的命运惯性，不会改变开局命运值。玩家触发的支线会和它一起影响最终结局域。</p>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {([
-                { key: 'leftBaseWeight', label: '左结局域' },
-                { key: 'rightBaseWeight', label: '右结局域' },
-              ] as const).map((option) => (
-                <label key={option.key} className="block space-y-2 text-xs font-bold text-zinc-400">
-                  <span>{option.label} · {weightToneLabel(quickEndingBias[option.key])}</span>
-                  <input
-                    type="range"
-                    min={1}
-                    max={15}
-                    step={1}
-                    value={quickEndingBias[option.key]}
-                    onChange={(event) => {
-                      const raw = Math.max(1, Math.min(15, Number(event.target.value) || 1));
-                      setQuickEndingBias((prev) => ({ ...prev, [option.key]: raw }));
-                    }}
-                    className="w-full accent-indigo-500"
-                  />
-                </label>
-              ))}
             </div>
           </div>
         </div>
@@ -5928,12 +5933,12 @@ export default function App() {
                         (blueprint.branches || []).filter((branch: any) => {
                           const isUnlocked = unlockedBranches.some((item: any) => item.id === branch.id);
                           const wasUnlocked = historicallyUnlockedBranches.some((item: any) => item.id === branch.id);
-                          const isHidden = branch.is_hidden || branch.tier === 'hidden';
+                          const isHidden = branch.is_hidden || branch.hidden || branch.tier === 'hidden' || branch.inject?.hidden;
                           return !isHidden || isUnlocked || wasUnlocked;
                         }).map((branch: any) => {
                           const isUnlocked = unlockedBranches.some((item: any) => item.id === branch.id);
                           const wasUnlocked = historicallyUnlockedBranches.some((item: any) => item.id === branch.id);
-                          const isHidden = branch.is_hidden || branch.tier === 'hidden';
+                          const isHidden = branch.is_hidden || branch.hidden || branch.tier === 'hidden' || branch.inject?.hidden;
                           const canRevealBranchContent = isUnlocked || wasUnlocked;
                           const visibleName = isHidden && !canRevealBranchContent ? '隐藏支线' : branch.name;
                           const visibleDesc = canRevealBranchContent
@@ -5974,7 +5979,7 @@ export default function App() {
                                   <span className="rounded-full bg-sky-500/10 px-2 py-1 text-sky-200">
                                     导向 {authoringEndingIdToLabel(branch.endingId || branch.inject?.endingId || branch.inject?.targetEndingId || branch.side)}
                                   </span>
-                                  {(branch.is_hidden || branch.tier === 'hidden') && (
+                                  {(branch.is_hidden || branch.hidden || branch.tier === 'hidden' || branch.inject?.hidden) && (
                                     <span className="rounded-full bg-amber-500/10 px-2 py-1 text-amber-200">隐藏 +1</span>
                                   )}
                                 </div>
@@ -6382,13 +6387,24 @@ export default function App() {
           <option value="left">左倾支线</option>
           <option value="right">右倾支线</option>
         </select>
-        <select value={branchForm.tier} onChange={(event) => setBranchForm((prev) => ({ ...prev, tier: event.target.value as 'small' | 'medium' | 'large' | 'hidden' }))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500">
+        <select value={branchForm.tier} onChange={(event) => setBranchForm((prev) => ({ ...prev, tier: event.target.value as 'small' | 'medium' | 'large' }))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500">
           <option value="small">影响：小</option>
           <option value="medium">影响：中</option>
           <option value="large">影响：大</option>
-          <option value="hidden">影响：隐</option>
         </select>
       </div>
+      <label className="flex items-start gap-3 rounded-2xl border border-amber-500/15 bg-amber-500/5 p-4 text-sm text-zinc-300">
+        <input
+          type="checkbox"
+          checked={branchForm.isHidden}
+          onChange={(event) => setBranchForm((prev) => ({ ...prev, isHidden: event.target.checked }))}
+          className="mt-1 h-4 w-4 accent-amber-500"
+        />
+        <span>
+          <span className="block font-black text-amber-200">隐藏支线</span>
+          <span className="mt-1 block text-xs leading-relaxed text-zinc-500">隐藏只控制线索是否提前展示，并在数学结算时额外提供 +1 权重；支线强度仍由上方的大 / 中 / 小决定。</span>
+        </span>
+      </label>
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4">
         <label className="block space-y-2 text-sm font-bold text-zinc-300">
           <span>导向结局绑定</span>
@@ -6471,7 +6487,8 @@ export default function App() {
             }
             const payload = {
               side: branchForm.side,
-              tier: branchForm.tier,
+              tier: normalizeBranchTier(branchForm.tier),
+              is_hidden: branchForm.isHidden,
               endingId: branchForm.endingId || undefined,
               name: branchForm.name,
               hint: branchForm.hint || `留意${branchForm.name}`,
@@ -6479,7 +6496,7 @@ export default function App() {
               common: false,
               trigger: normalizeBranchConditionsForStorage(branchConditions)[0],
               triggerGroups: normalizeBranchConditionsForStorage(branchConditions),
-              inject: { mustHappen: branchForm.sceneText ? [branchForm.sceneText] : [], mustReveal: [], mustChange: [], endingId: branchForm.endingId || undefined },
+              inject: { mustHappen: branchForm.sceneText ? [branchForm.sceneText] : [], mustReveal: [], mustChange: [], hidden: branchForm.isHidden, endingId: branchForm.endingId || undefined },
               sceneText: branchForm.sceneText,
             } as any;
             if (isNew) {
@@ -7046,7 +7063,7 @@ export default function App() {
                       解析并导入
                     </button>
                     <button type="button" onClick={() => {
-                        const template = `# 主线设置\n## 标题\n作品名称\n\n## 主轴\n一句话描述故事核心冲突\n\n## 主要角色\n### 角色1\n- 名字: 角色名A\n- 简介: 角色A的简介\n\n### 角色2\n- 名字: 角色名B\n- 简介: 角色B的简介\n\n## 默认故事\n### 第 1 章 标题一\n第一章大纲或正文\n\n### 第 2 章 标题二\n第二章大纲或正文\n\n## 结局域\n### 中域默认结局\n中域默认结局正文\n### 左域默认结局\n左域默认结局正文\n### 右域默认结局\n右域默认结局正文\n\n# 支线设置\n## 支线1\n- 支线名: 支线名称\n- 倾向: 左倾\n- 影响: 中\n- 导向结局: 左域默认结局\n- 提示短句: 留意这里的变化\n- 支线情节: 这里写支线发生时的具体剧情\n- 条件组1: 第 2 章 角色名A 庇佑`;
+                        const template = `# 主线设置\n## 标题\n作品名称\n\n## 主轴\n一句话描述故事核心冲突\n\n## 主要角色\n### 角色1\n- 名字: 角色名A\n- 简介: 角色A的简介\n\n### 角色2\n- 名字: 角色名B\n- 简介: 角色B的简介\n\n## 默认故事\n### 第 1 章 标题一\n第一章大纲或正文\n\n### 第 2 章 标题二\n第二章大纲或正文\n\n## 结局域\n### 中域默认结局\n中域默认结局正文\n### 左域默认结局\n左域默认结局正文\n### 右域默认结局\n右域默认结局正文\n\n# 支线设置\n## 支线1\n- 支线名: 支线名称\n- 倾向: 左倾\n- 影响: 中\n- 隐藏: 否\n- 导向结局: 左域默认结局\n- 提示短句: 留意这里的变化\n- 支线情节: 这里写支线发生时的具体剧情\n- 条件组1: 第 2 章 角色名A 庇佑`;
                         navigator.clipboard.writeText(template);
                         showError('蓝本格式已复制到剪贴板！');
                     }} className={semanticButtonClass('secondary', { fullWidth: true })}>
@@ -7296,6 +7313,7 @@ export default function App() {
                             name: '',
                             side: 'left',
                             tier: 'small',
+                            isHidden: false,
                             endingId: '',
                             triggerType: 'single',
                             singleChapterNum: 2,
@@ -7338,7 +7356,12 @@ export default function App() {
                           <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/40 p-4 flex flex-wrap items-center justify-between gap-3">
                             <div>
                               <div className="text-sm font-black text-white">{branch.name}</div>
-                              <div className="mt-1 text-xs text-zinc-500">{branch.side === 'left' ? '左倾' : '右倾'} / 影响：{branch.tier}</div>
+                              <div className="mt-1 flex flex-wrap gap-1.5 text-xs text-zinc-500">
+                                <span>{branch.side === 'left' ? '左倾' : '右倾'} / 影响：{branchTierLabel(branch.tier)}</span>
+                                {(branch.is_hidden || branch.hidden || branch.tier === 'hidden' || branch.inject?.hidden) && (
+                                  <span className="rounded-full bg-amber-500/10 px-2 py-0.5 font-black text-amber-200">隐藏 +1</span>
+                                )}
+                              </div>
                               <div className="mt-1 text-xs text-indigo-300">
                                 导向：{authoringEndingIdToLabel(branch.endingId || branch.inject?.endingId || branch.inject?.targetEndingId || branch.side)}
                               </div>
@@ -7354,7 +7377,8 @@ export default function App() {
                                     id: branch.id,
                                     name: branch.name || '',
                                     side: branch.side || 'left',
-                                    tier: branch.tier || 'small',
+                                    tier: normalizeBranchTier(branch.tier || 'small'),
+                                    isHidden: Boolean(branch.is_hidden || branch.hidden || branch.tier === 'hidden' || branch.inject?.hidden),
                                     endingId: branch.endingId || branch.inject?.endingId || branch.inject?.targetEndingId || '',
                                     triggerType: 'single',
                                     singleChapterNum: branch.trigger?.single?.chapterNum || 2,

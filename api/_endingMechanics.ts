@@ -14,6 +14,7 @@ type RuntimeBranchLike = {
   targetEndingId?: string;
   target_ending_id?: string;
   inject?: {
+    hidden?: boolean;
     endingId?: string;
     targetEndingId?: string;
   };
@@ -36,7 +37,7 @@ export function branchEffectiveWeight(branch: RuntimeBranchLike): number {
   if (Number.isFinite(score) && score > 0 && score <= 4) {
     return Math.max(1, Math.min(4, Math.round(score)));
   }
-  const hiddenBonus = branch.tier === 'hidden' || branch.is_hidden || branch.hidden ? 1 : 0;
+  const hiddenBonus = branch.tier === 'hidden' || branch.is_hidden || branch.hidden || branch.inject?.hidden ? 1 : 0;
   return branchBaseWeight(branch.tier) + hiddenBonus;
 }
 

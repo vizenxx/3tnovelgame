@@ -103,6 +103,9 @@ export interface StoryBranchDoc {
     mustHappen: string[];
     mustReveal: string[];
     mustChange: string[];
+    hidden?: boolean;
+    endingId?: string;
+    targetEndingId?: string;
   };
   sceneText?: string;
 }
@@ -164,7 +167,7 @@ export function branchBaseWeight(tier?: BranchTier): number {
 }
 
 export function branchHiddenBonus(branch: { tier?: BranchTier; is_hidden?: boolean; hidden?: boolean }): number {
-  return branch.tier === 'hidden' || branch.is_hidden || branch.hidden ? 1 : 0;
+  return branch.tier === 'hidden' || branch.is_hidden || branch.hidden || (branch as any).inject?.hidden ? 1 : 0;
 }
 
 export function branchEffectiveWeight(branch: {
