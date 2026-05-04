@@ -306,6 +306,20 @@ textarea.resize-y,
   background-size: 18px 18px, 18px 18px, 18px 18px !important;
 }
 
+.authoring-resizable-textarea:hover {
+  cursor: text;
+}
+
+.authoring-resizable-textarea:hover:not(:focus) {
+  background-color: rgba(24, 24, 27, 0.96);
+}
+
+.authoring-resizable-textarea.authoring-resizing,
+.authoring-resizable-textarea.authoring-resizing:hover {
+  cursor: ns-resize !important;
+  user-select: none;
+}
+
 textarea.resize-y::-webkit-scrollbar,
 .authoring-resizable-textarea::-webkit-scrollbar {
   display: initial;

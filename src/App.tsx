@@ -1125,14 +1125,26 @@ export default function App() {
       const field = document.getElementById(match.selector) as HTMLInputElement | HTMLTextAreaElement | null;
       if (!field || typeof field.setSelectionRange !== 'function') return;
       field.focus({ preventScroll: true });
-      field.setSelectionRange(match.index, match.index + authoringFindQuery.length);
       if (field instanceof HTMLTextAreaElement) {
-        const valueBeforeMatch = field.value.slice(0, match.index);
-        const lineCountBeforeMatch = valueBeforeMatch.split(/\r\n|\r|\n/).length - 1;
-        const lineHeight = Number.parseFloat(window.getComputedStyle(field).lineHeight || '20') || 20;
-        const targetScrollTop = Math.max(0, lineCountBeforeMatch * lineHeight - field.clientHeight * 0.45);
-        field.scrollTop = Math.min(targetScrollTop, field.scrollHeight - field.clientHeight);
+        const style = window.getComputedStyle(field);
+        const lineHeight = Number.parseFloat(style.lineHeight || '20') || 20;
+        const fontSize = Number.parseFloat(style.fontSize || '14') || 14;
+        const horizontalPadding = Number.parseFloat(style.paddingLeft || '0') + Number.parseFloat(style.paddingRight || '0');
+        const usableWidth = Math.max(1, field.clientWidth - horizontalPadding - 24);
+        const approxCharWidth = Math.max(7, fontSize * 0.9);
+        const charsPerLine = Math.max(1, Math.floor(usableWidth / approxCharWidth));
+        const visualLineCount = field.value
+          .slice(0, match.index)
+          .split(/\r\n|\r|\n/)
+          .reduce((total, line) => total + Math.max(1, Math.ceil((line.length + 1) / charsPerLine)), 0) - 1;
+        const targetScrollTop = Math.max(0, visualLineCount * lineHeight - field.clientHeight * 0.42);
+        const applyTextAreaScroll = () => {
+          field.scrollTop = Math.min(targetScrollTop, Math.max(0, field.scrollHeight - field.clientHeight));
+        };
+        applyTextAreaScroll();
+        window.requestAnimationFrame(applyTextAreaScroll);
       }
+      field.setSelectionRange(match.index, match.index + authoringFindQuery.length);
     }, 180);
   };
 
@@ -2319,7 +2331,6 @@ export default function App() {
     setIsActionMenuOpen(false);
     setIsAccountCenterOpen(false);
     navigateTo('ARCHIVE');
-    void refreshArchiveStories();
   };
 
   const leaveArchiveView = () => {
@@ -4164,6 +4175,55 @@ export default function App() {
   }, [gameState, user, db]);
 
   useEffect(() => {
+    if (gameState !== 'ARCHIVE' || !user || !db) return;
+    void refreshArchiveStories();
+  }, [gameState, user, db]);
+
+  useEffect(() => {
+    let activeTextarea: HTMLTextAreaElement | null = null;
+    let startY = 0;
+    let startHeight = 0;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof HTMLTextAreaElement) || !target.classList.contains('authoring-resizable-textarea')) return;
+      const rect = target.getBoundingClientRect();
+      const isGripHit = event.clientX >= rect.right - 34 && event.clientY >= rect.bottom - 34;
+      if (!isGripHit) return;
+      activeTextarea = target;
+      startY = event.clientY;
+      startHeight = rect.height;
+      target.classList.add('authoring-resizing');
+      target.setPointerCapture?.(event.pointerId);
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!activeTextarea) return;
+      const nextHeight = Math.max(80, startHeight + event.clientY - startY);
+      activeTextarea.style.height = `${nextHeight}px`;
+      event.preventDefault();
+    };
+
+    const stopResizing = () => {
+      activeTextarea?.classList.remove('authoring-resizing');
+      activeTextarea = null;
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown, true);
+    document.addEventListener('pointermove', handlePointerMove, true);
+    document.addEventListener('pointerup', stopResizing, true);
+    document.addEventListener('pointercancel', stopResizing, true);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown, true);
+      document.removeEventListener('pointermove', handlePointerMove, true);
+      document.removeEventListener('pointerup', stopResizing, true);
+      document.removeEventListener('pointercancel', stopResizing, true);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!isSessionHydrated || !user) return;
     if (gameState === 'READONLY_STORY' && !readonlyStoryData) {
       console.warn('Recovered invalid READONLY_STORY state without readonly story data.');
@@ -5125,8 +5185,7 @@ export default function App() {
         </AnimatePresence>
         <div className="mb-10 flex items-start justify-between gap-4">
           <div>
-            <div className="text-xs font-black uppercase tracking-[0.22em] text-zinc-500">命运收藏馆</div>
-            <h2 className="mt-2 text-3xl font-black text-white sm:text-4xl">命运收藏馆</h2>
+            <h2 className="text-3xl font-black text-white sm:text-4xl">命运收藏馆</h2>
             <p className="mt-2 text-sm text-zinc-500">管理你收藏的原作与保存的干涉记录。</p>
           </div>
           <BackNavButton label={archiveReturnTarget === 'PLAYING' ? '返回游玩页' : '返回作品库'} onClick={leaveArchiveView} />
