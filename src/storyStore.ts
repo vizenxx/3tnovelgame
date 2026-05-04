@@ -695,7 +695,7 @@ export async function adaptBlueprintToStory(db: Firestore, args: { authorId: str
     chapterCount: countReadyChapters(args.chapters as any),
     cardExcerpt: buildCardExcerpt(bp.main_axis, args.chapters as any),
     allowAdaptation: Boolean(bp.allowAdaptation),
-    endingMode: 'dual',
+    endingMode: bp.endingMode === 'single' ? 'single' : 'dual',
     endingRates: { left: bp.left_mainline_default || 40, right: bp.right_mainline_default || 40 },
     endingNames: { left: '', right: '' },
     createdAt: now,
@@ -734,17 +734,18 @@ export async function adaptBlueprintToStory(db: Firestore, args: { authorId: str
     title: chapterByNum.get(7)?.title || bp.endings?.find((e: any) => e.type === 'normal')?.title || '第七章',
     text: chapterByNum.get(7)?.text || args.conclusionText || bp.endings?.find((e: any) => e.type === 'normal')?.text || ''
   };
+  const singleEndingText = defaultEnding.text || bp.endings?.[0]?.text || '';
   const leftEnding: StoryEndingDoc = {
     id: 'left',
     chapter_num: 7,
     title: bp.endings?.find((e: any) => e.type === 'good' || e.type === 'left')?.title || '左结局',
-    text: bp.endings?.find((e: any) => e.type === 'good' || e.type === 'left')?.text || ''
+    text: bp.endingMode === 'single' ? singleEndingText : bp.endings?.find((e: any) => e.type === 'good' || e.type === 'left')?.text || ''
   };
   const rightEnding: StoryEndingDoc = {
     id: 'right',
     chapter_num: 7,
     title: bp.endings?.find((e: any) => e.type === 'bad' || e.type === 'right')?.title || '右结局',
-    text: bp.endings?.find((e: any) => e.type === 'bad' || e.type === 'right')?.text || ''
+    text: bp.endingMode === 'single' ? singleEndingText : bp.endings?.find((e: any) => e.type === 'bad' || e.type === 'right')?.text || ''
   };
   batch.set(doc(db, 'stories', ref.id, 'endings', 'default'), defaultEnding);
   batch.set(doc(db, 'stories', ref.id, 'endings', 'left'), leftEnding);

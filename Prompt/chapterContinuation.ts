@@ -38,10 +38,12 @@ export function buildChapterContinuationPrompt(args: {
   targetChapterNum: number;
   targetWordCount: number;
 }) {
+  const isSingleEnding = args.blueprint?.endingMode === 'single' || args.blueprint?.ending_mode === 'single';
   return `你是一个互动小说引擎的织梦者。
 小说大纲/主轴：${args.blueprint.main_axis}
 叙事人称：${buildNarrativePersonInstruction(args.narrativePerson || args.blueprint.narrative_person, 'chapter')}
 角色列表：${args.blueprint.characters.map((character: any) => `${character.id}:${character.name}(${character.desc})`).join('; ')}
+结局结构：${isSingleEnding ? '单一结局。后续章节必须允许过程变化，但终章需要自然收束到同一个核心结局。' : '多线结局。当前使用默认/左/右三结局，未来可扩展为更多结局。'}
 ${args.worldStatePrompt}
 当前章节大纲指引：${args.outlineSummary}
 ${args.futureOutlines ? `后续章节走向备忘：\n${args.futureOutlines}` : ''}

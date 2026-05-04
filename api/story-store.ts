@@ -569,7 +569,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         chapterCount: countReadyChapters(chapters),
         cardExcerpt: buildCardExcerpt(bp.main_axis, chapters),
         allowAdaptation: Boolean(bp.allowAdaptation),
-        endingMode: 'dual',
+        endingMode: bp.endingMode === 'single' ? 'single' : 'dual',
         endingRates: { left: bp.left_mainline_default || 40, right: bp.right_mainline_default || 40 },
         endingNames: { left: '', right: '' },
         characters: characters.length ? characters : [{ id: 'c1', name: '角色一', desc: '（待填写简介）' }],
@@ -591,10 +591,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           text: chapter.text || '',
         };
       }), 'story_id,chapter_num');
+      const defaultEndingText = chapterByNum.get(7)?.text || args.conclusionText || asArray(bp.endings).find((ending) => ending.type === 'normal')?.text || asArray(bp.endings)[0]?.text || '';
+      const isSingleEnding = bp.endingMode === 'single';
       await supabaseUpsert('story_endings', [
-        { story_id: storyId, id: 'default', chapter_num: 7, title: chapterByNum.get(7)?.title || '第七章', text: chapterByNum.get(7)?.text || args.conclusionText || '' },
-        { story_id: storyId, id: 'left', chapter_num: 7, title: '左结局', text: asArray(bp.endings).find((ending) => ending.type === 'good' || ending.type === 'left')?.text || '' },
-        { story_id: storyId, id: 'right', chapter_num: 7, title: '右结局', text: asArray(bp.endings).find((ending) => ending.type === 'bad' || ending.type === 'right')?.text || '' },
+        { story_id: storyId, id: 'default', chapter_num: 7, title: chapterByNum.get(7)?.title || '第七章', text: defaultEndingText },
+        { story_id: storyId, id: 'left', chapter_num: 7, title: '左结局', text: isSingleEnding ? defaultEndingText : asArray(bp.endings).find((ending) => ending.type === 'good' || ending.type === 'left')?.text || '' },
+        { story_id: storyId, id: 'right', chapter_num: 7, title: '右结局', text: isSingleEnding ? defaultEndingText : asArray(bp.endings).find((ending) => ending.type === 'bad' || ending.type === 'right')?.text || '' },
       ], 'story_id,id');
       const branches = asArray(bp.branches).map((branch) => ({
         story_id: storyId,

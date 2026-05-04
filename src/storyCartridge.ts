@@ -133,6 +133,7 @@ export interface RuntimeBlueprint {
     text?: string;
   }>;
   endings: Array<{ type: 'good' | 'normal' | 'bad'; text: string }> & any[];
+  endingMode?: EndingMode;
   branches: RuntimeBranch[];
   // Cartridge-only author assets
   authorAssets?: {

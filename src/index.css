@@ -300,10 +300,11 @@ textarea.resize-y,
   background-image:
     linear-gradient(135deg, transparent 0 50%, rgba(129, 140, 248, 0.9) 50% 58%, transparent 58%),
     linear-gradient(135deg, transparent 0 66%, rgba(129, 140, 248, 0.65) 66% 74%, transparent 74%),
-    linear-gradient(135deg, transparent 0 80%, rgba(129, 140, 248, 0.4) 80% 88%, transparent 88%) !important;
-  background-position: right 8px bottom 8px, right 8px bottom 13px, right 8px bottom 18px !important;
+    linear-gradient(135deg, transparent 0 80%, rgba(129, 140, 248, 0.4) 80% 88%, transparent 88%),
+    radial-gradient(circle at bottom right, rgba(129, 140, 248, 0.16), transparent 64%) !important;
+  background-position: right 8px bottom 8px, right 8px bottom 13px, right 8px bottom 18px, right bottom !important;
   background-repeat: no-repeat !important;
-  background-size: 18px 18px, 18px 18px, 18px 18px !important;
+  background-size: 18px 18px, 18px 18px, 18px 18px, 44px 44px !important;
 }
 
 .authoring-resizable-textarea:hover {

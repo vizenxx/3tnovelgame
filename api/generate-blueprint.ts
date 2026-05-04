@@ -10,6 +10,7 @@ const blueprintSchema = {
   properties: {
     title: { type: Type.STRING, description: '第一篇章标题' },
     main_axis: { type: Type.STRING, description: '第一篇章的核心主轴/大纲，作为后续发展的基架' },
+    endingMode: { type: Type.STRING, description: 'single or dual' },
     left_mainline_default: { type: Type.NUMBER, description: '左侧主线默认影响率 (0-100)' },
     right_mainline_default: { type: Type.NUMBER, description: '右侧主线默认影响率 (0-100)' },
     characters: {
@@ -75,7 +76,7 @@ const blueprintSchema = {
   required: ['title', 'main_axis', 'left_mainline_default', 'right_mainline_default', 'characters', 'chapters', 'endings', 'branches'],
 };
 
-function normalizeBlueprint(raw: any) {
+function normalizeBlueprint(raw: any, requestedEndingMode: 'single' | 'dual' = 'dual') {
   if (!raw || typeof raw !== 'object') {
     throw new Error('AI_RESPONSE_INVALID: blueprint response is not an object.');
   }
@@ -99,12 +100,21 @@ function normalizeBlueprint(raw: any) {
       }))
     : [];
 
-  const endings = Array.isArray(raw.endings)
+  const endingMode = raw.endingMode === 'single' || raw.ending_mode === 'single' || requestedEndingMode === 'single' ? 'single' : 'dual';
+  let endings = Array.isArray(raw.endings)
     ? raw.endings.slice(0, 3).map((ending: any, index: number) => ({
         type: ['good', 'normal', 'bad'].includes(String(ending?.type)) ? String(ending.type) : ['normal', 'good', 'bad'][index] || 'normal',
         text: String(ending?.text || '命运在终章留下尚未命名的回声。').trim(),
       }))
     : [];
+  if (endingMode === 'single' && endings.length > 0) {
+    const base = endings.find((ending: any) => ending.type === 'normal')?.text || endings[0]?.text || '命运在终章自然收束为同一个终局。';
+    endings = [
+      { type: 'normal', text: base },
+      { type: 'good', text: base },
+      { type: 'bad', text: base },
+    ];
+  }
 
   const branches = Array.isArray(raw.branches)
     ? raw.branches.slice(0, 10).map((branch: any, index: number) => ({
@@ -132,6 +142,7 @@ function normalizeBlueprint(raw: any) {
     ...raw,
     title: String(raw.title).trim(),
     main_axis: String(raw.main_axis).trim(),
+    endingMode,
     left_mainline_default: Math.min(100, Math.max(0, Number(raw.left_mainline_default) || 40)),
     right_mainline_default: Math.min(100, Math.max(0, Number(raw.right_mainline_default) || 40)),
     characters,
@@ -141,14 +152,14 @@ function normalizeBlueprint(raw: any) {
   };
 }
 
-async function generateBlueprintWithFallback(prompt: string, logContext: { flow: string; requestId: string }) {
+async function generateBlueprintWithFallback(prompt: string, logContext: { flow: string; requestId: string }, endingMode: 'single' | 'dual') {
   const { data, model, keyIndex } = await generateGeminiJsonWithFallback({
     contents: prompt,
     config: {
       responseMimeType: 'application/json',
       responseSchema: blueprintSchema,
     },
-    parseResponse: (rawText) => normalizeBlueprint(parseGeminiJson(rawText)),
+    parseResponse: (rawText) => normalizeBlueprint(parseGeminiJson(rawText), endingMode),
     logContext,
     logInfo: logGenerationInfo,
     logError: logGenerationError,
@@ -174,12 +185,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!user) return;
 
     const { selectedThemes, customOutline, targetWordCount, narrativePerson } = req.body || {};
+    const endingMode = req.body?.endingMode === 'single' ? 'single' : 'dual';
     logGenerationInfo(logContext, 'request', {
       uid: user.uid,
       themeCount: Array.isArray(selectedThemes) ? selectedThemes.length : 0,
       hasOutline: Boolean(String(customOutline || '').trim()),
       targetWordCount,
       narrativePerson,
+      endingMode,
     });
 
     if (!Array.isArray(selectedThemes) && !customOutline) {
@@ -193,9 +206,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       customOutline,
       targetWordCount: safeTargetWordCount,
       narrativePerson,
+      endingMode,
     });
 
-    const data = await generateBlueprintWithFallback(prompt, logContext);
+    const data = await generateBlueprintWithFallback(prompt, logContext, endingMode);
     logGenerationInfo(logContext, 'success', { title: data.title });
     return res.status(200).json(data);
   } catch (error) {

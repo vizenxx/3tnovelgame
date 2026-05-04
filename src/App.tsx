@@ -38,6 +38,7 @@ import {
 // --- Types ---
 type GameState = 'STORY_SELECT' | 'AUTHORING' | 'THEME_SELECTION' | 'GENERATING_BLUEPRINT' | 'PLAYING' | 'SUMMARY' | 'READONLY_STORY' | 'ARCHIVE';
 type NarrativePerson = 'first' | 'second' | 'third';
+type EndingMode = 'single' | 'dual';
 type AppTheme = 'dark' | 'light';
 
 const safeModalBackdropClass = "fixed inset-0 flex items-center justify-center overflow-y-auto overscroll-contain px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]";
@@ -171,6 +172,13 @@ const endingIdToLabel = (id: 'default' | 'left' | 'right') => {
   if (id === 'left') return '左结局';
   if (id === 'right') return '右结局';
   return '默认结局';
+};
+
+const authoringEndingIdToLabel = (id: 'default' | 'left' | 'right' | string) => {
+  if (id === 'default') return '结局1（默认）';
+  if (id === 'left') return '结局2（左线）';
+  if (id === 'right') return '结局3（右线）';
+  return `结局 ${id}`;
 };
 
 const buildSharedStoryUrl = (storyId: string) =>
@@ -995,6 +1003,7 @@ export default function App() {
   });
   const [targetWordCount, setTargetWordCount] = useState(600);
   const [narrativePerson, setNarrativePerson] = useState<NarrativePerson>('third');
+  const [quickEndingMode, setQuickEndingMode] = useState<EndingMode>('dual');
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationStatus, setGenerationStatus] = useState("");
   const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
@@ -1952,6 +1961,7 @@ export default function App() {
     customOutline: customOutline.trim(),
     targetWordCount,
     narrativePerson,
+    quickEndingMode,
   });
 
   const applyStoryListCache = (data: any) => {
@@ -3153,12 +3163,13 @@ export default function App() {
       if (!data) {
       const response = await apiFetch('/api/generate-blueprint', {
         method: 'POST',
-        body: JSON.stringify({ selectedThemes, customOutline, targetWordCount, narrativePerson }),
+        body: JSON.stringify({ selectedThemes, customOutline, targetWordCount, narrativePerson, endingMode: quickEndingMode }),
       }, 90000);
       if (!response.ok) throw new Error(await readErrorMessage(response));
       data = await response.json();
       }
       data.narrative_person = narrativePerson;
+      data.endingMode = data.endingMode === 'single' ? 'single' : quickEndingMode;
       data.chapters = ensureSevenChapterShells(data.chapters || []);
       await setLocalCache(quickGenerationDraftCacheKey(), { signature: draftSignature, blueprint: data });
 
@@ -4183,18 +4194,23 @@ export default function App() {
     let activeTextarea: HTMLTextAreaElement | null = null;
     let startY = 0;
     let startHeight = 0;
+    const resizeGripSize = 44;
+
+    const isInTextareaResizeGrip = (event: PointerEvent | MouseEvent, textarea: HTMLTextAreaElement) => {
+      const rect = textarea.getBoundingClientRect();
+      return event.clientX >= rect.right - resizeGripSize && event.clientY >= rect.bottom - resizeGripSize;
+    };
 
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target;
       if (!(target instanceof HTMLTextAreaElement) || !target.classList.contains('authoring-resizable-textarea')) return;
-      const rect = target.getBoundingClientRect();
-      const isGripHit = event.clientX >= rect.right - 34 && event.clientY >= rect.bottom - 34;
-      if (!isGripHit) return;
+      if (!isInTextareaResizeGrip(event, target)) return;
       activeTextarea = target;
       startY = event.clientY;
-      startHeight = rect.height;
+      startHeight = target.getBoundingClientRect().height;
       target.classList.add('authoring-resizing');
       target.setPointerCapture?.(event.pointerId);
+      window.getSelection()?.removeAllRanges();
       event.preventDefault();
       event.stopPropagation();
     };
@@ -4211,15 +4227,28 @@ export default function App() {
       activeTextarea = null;
     };
 
+    const preventGripTextSelection = (event: MouseEvent) => {
+      const target = event.target;
+      if (
+        target instanceof HTMLTextAreaElement &&
+        target.classList.contains('authoring-resizable-textarea') &&
+        isInTextareaResizeGrip(event, target)
+      ) {
+        event.preventDefault();
+      }
+    };
+
     document.addEventListener('pointerdown', handlePointerDown, true);
     document.addEventListener('pointermove', handlePointerMove, true);
     document.addEventListener('pointerup', stopResizing, true);
     document.addEventListener('pointercancel', stopResizing, true);
+    document.addEventListener('selectstart', preventGripTextSelection, true);
     return () => {
       document.removeEventListener('pointerdown', handlePointerDown, true);
       document.removeEventListener('pointermove', handlePointerMove, true);
       document.removeEventListener('pointerup', stopResizing, true);
       document.removeEventListener('pointercancel', stopResizing, true);
+      document.removeEventListener('selectstart', preventGripTextSelection, true);
     };
   }, []);
 
@@ -5341,6 +5370,44 @@ export default function App() {
                   onClick={() => setNarrativePerson(option.value)}
                   className={`rounded-2xl border px-3 py-3 text-left transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
                     narrativePerson === option.value
+                      ? 'border-indigo-400 bg-indigo-500/15 text-indigo-100 shadow-lg shadow-indigo-950/30'
+                      : 'border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
+                  }`}
+                >
+                  <div className="text-sm font-black">{option.label}</div>
+                  <div className="mt-1 text-[11px] leading-relaxed opacity-70">{option.hint}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="mt-6 space-y-3">
+          <div className="space-y-3 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm font-bold text-zinc-400">结局结构</span>
+              <span className="text-xs font-black text-indigo-300">
+                {quickEndingMode === 'single' ? '单一结局' : '多线结局'}
+              </span>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {([
+                {
+                  value: 'single',
+                  label: '单一结局',
+                  hint: '所有干涉最终收束到同一个终局，重点在过程变化与圆回主线。',
+                },
+                {
+                  value: 'dual',
+                  label: '多线结局',
+                  hint: '先沿用默认/左右三结局机制，之后可平滑扩展更多结局。',
+                },
+              ] as const).map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setQuickEndingMode(option.value)}
+                  className={`rounded-2xl border px-3 py-3 text-left transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
+                    quickEndingMode === option.value
                       ? 'border-indigo-400 bg-indigo-500/15 text-indigo-100 shadow-lg shadow-indigo-950/30'
                       : 'border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
                   }`}
@@ -6555,7 +6622,7 @@ export default function App() {
                                 onChange={(event) => setAuthoringFindEndingIds((prev) => event.target.checked ? [...new Set([...prev, endingId])] : prev.filter((item) => item !== endingId))}
                                 className="accent-indigo-500"
                               />
-                              {ending.title || endingIdToLabel(ending.id)}
+                              {ending.title || authoringEndingIdToLabel(ending.id)}
                             </label>
                           );
                         })}
@@ -6716,6 +6783,40 @@ export default function App() {
                     />
                   </label>
                   <section className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
+                    <div className="mb-3 text-sm font-black text-zinc-100">结局结构</div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {([
+                        {
+                          value: 'single',
+                          label: '单一结局',
+                          hint: '所有干涉都需要自然收束到结局1，适合宿命感或强主线作品。',
+                        },
+                        {
+                          value: 'dual',
+                          label: '多线结局',
+                          hint: '当前沿用结局1/2/3，对应前端的默认/左/右结局。',
+                        },
+                      ] as const).map((option) => {
+                        const selected = (authoringCartridge.meta?.endingMode || 'dual') === option.value;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, endingMode: option.value } }))}
+                            className={`rounded-2xl border px-3 py-3 text-left transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
+                              selected
+                                ? 'border-indigo-400 bg-indigo-500/15 text-indigo-100'
+                                : 'border-zinc-800 bg-zinc-900/40 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
+                            }`}
+                          >
+                            <div className="text-sm font-black">{option.label}</div>
+                            <div className="mt-1 text-[11px] leading-relaxed opacity-70">{option.hint}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                  <section className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
                     <div className="mb-3 text-sm font-black text-zinc-100">作品可见性</div>
                     <div className="grid gap-2 sm:grid-cols-3">
                       {[
@@ -6803,8 +6904,8 @@ export default function App() {
                         </button>
                      ))}
                      <div className="mx-2 my-1 h-px bg-zinc-800" />
-                     <button type="button" onClick={() => { setAuthoringTocOpen(false); document.getElementById('authoring-endings')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} className="rounded-xl px-3 py-2 text-xs font-bold text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white">
-                        结局设置
+                        <button type="button" onClick={() => { setAuthoringTocOpen(false); document.getElementById('authoring-endings')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} className="rounded-xl px-3 py-2 text-xs font-bold text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white">
+                        结局设置（结局1-3）
                      </button>
                   </div>
 
@@ -6855,7 +6956,7 @@ export default function App() {
                     <div id="authoring-endings" className="text-lg font-black text-white">结局设置</div>
                     {(authoringCartridge.endings || []).map((ending: any) => (
                       <div id={`authoring-ending-${ending.id}`} key={ending.id} className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/40 p-4 space-y-3">
-                        <div className="text-sm font-black text-white">{endingIdToLabel(ending.id)}</div>
+                        <div className="text-sm font-black text-white">{authoringEndingIdToLabel(ending.id)}</div>
                         <input
                           id={`authoring-ending-${ending.id}-title`}
                           value={ending.title || ''}
