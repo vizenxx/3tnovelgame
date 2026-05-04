@@ -1039,6 +1039,7 @@ export default function App() {
   const [storyImportCode, setStoryImportCode] = useState('');
   const [authoringCustomTagsInput, setAuthoringCustomTagsInput] = useState('');
   const [isLoadingStories, setIsLoadingStories] = useState(false);
+  const [storyListLoadError, setStoryListLoadError] = useState<string | null>(null);
   const [storyLaunchOverlay, setStoryLaunchOverlay] = useState<{ progress: number; status: string } | null>(null);
   const [authoringStoryId, setAuthoringStoryId] = useState<string | null>(null);
   const [authoringCartridge, setAuthoringCartridge] = useState<any | null>(null);
@@ -1060,6 +1061,118 @@ export default function App() {
   const [authoringFindScope, setAuthoringFindScope] = useState({ chapters: true, endings: true, characters: true });
   const [authoringFindChapterNums, setAuthoringFindChapterNums] = useState<number[]>([]);
   const [authoringFindEndingIds, setAuthoringFindEndingIds] = useState<string[]>([]);
+  const [authoringFindCompact, setAuthoringFindCompact] = useState(false);
+  const [authoringFindMatchIndex, setAuthoringFindMatchIndex] = useState(0);
+
+  const getAuthoringFindMatches = (cartridge = authoringCartridge) => {
+    if (!cartridge || !authoringFindQuery) return [] as Array<{ type: 'chapter' | 'ending' | 'character'; id: string; label: string }>;
+    const queryText = authoringFindQuery;
+    const matches: Array<{ type: 'chapter' | 'ending' | 'character'; id: string; label: string }> = [];
+    if (authoringFindScope.chapters) {
+      (cartridge.chapters || []).forEach((chapter: any) => {
+        const chapterNum = Number(chapter.chapter_num);
+        if (!authoringFindChapterNums.includes(chapterNum)) return;
+        if (`${chapter.title || ''}\n${chapter.text || ''}`.includes(queryText)) {
+          matches.push({ type: 'chapter', id: String(chapterNum), label: `第${chapterNum}章` });
+        }
+      });
+    }
+    if (authoringFindScope.endings) {
+      (cartridge.endings || []).forEach((ending: any) => {
+        const endingId = String(ending.id || '');
+        if (!authoringFindEndingIds.includes(endingId)) return;
+        if (`${ending.title || ''}\n${ending.text || ''}`.includes(queryText)) {
+          matches.push({ type: 'ending', id: endingId, label: ending.title || endingIdToLabel(ending.id) });
+        }
+      });
+    }
+    if (authoringFindScope.characters) {
+      (cartridge.meta?.characters || []).forEach((character: any, index: number) => {
+        if (`${character.name || ''}\n${character.desc || ''}`.includes(queryText)) {
+          matches.push({ type: 'character', id: String(index), label: character.name || `角色${index + 1}` });
+        }
+      });
+    }
+    return matches;
+  };
+
+  const scrollToAuthoringFindMatch = (match?: { type: 'chapter' | 'ending' | 'character'; id: string }) => {
+    if (!match) return;
+    const targetId = match.type === 'chapter'
+      ? `authoring-chapter-${match.id}`
+      : match.type === 'ending'
+      ? `authoring-ending-${match.id}`
+      : `authoring-character-${match.id}`;
+    document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
+  const openCompactFindMode = () => {
+    const matches = getAuthoringFindMatches();
+    setAuthoringFindCompact(true);
+    setAuthoringFindReplaceOpen(false);
+    setAuthoringFindMatchIndex(0);
+    window.setTimeout(() => scrollToAuthoringFindMatch(matches[0]), 0);
+    if (matches.length === 0) showError('没有找到匹配内容。');
+  };
+
+  const moveAuthoringFindMatch = (direction: 1 | -1) => {
+    const matches = getAuthoringFindMatches();
+    if (matches.length === 0) {
+      showError('没有找到匹配内容。');
+      return;
+    }
+    const nextIndex = (authoringFindMatchIndex + direction + matches.length) % matches.length;
+    setAuthoringFindMatchIndex(nextIndex);
+    scrollToAuthoringFindMatch(matches[nextIndex]);
+  };
+
+  const replaceCurrentAuthoringMatch = () => {
+    const matches = getAuthoringFindMatches();
+    const match = matches[authoringFindMatchIndex];
+    if (!match || !authoringFindQuery) return;
+    setAuthoringCartridge((prev: any) => {
+      if (!prev) return prev;
+      if (match.type === 'chapter') {
+        return {
+          ...prev,
+          chapters: (prev.chapters || []).map((chapter: any) => Number(chapter.chapter_num) === Number(match.id)
+            ? {
+                ...chapter,
+                title: String(chapter.title || '').replace(authoringFindQuery, authoringReplaceQuery),
+                text: String(chapter.text || '').replace(authoringFindQuery, authoringReplaceQuery),
+              }
+            : chapter),
+        };
+      }
+      if (match.type === 'ending') {
+        return {
+          ...prev,
+          endings: (prev.endings || []).map((ending: any) => String(ending.id || '') === match.id
+            ? {
+                ...ending,
+                title: String(ending.title || '').replace(authoringFindQuery, authoringReplaceQuery),
+                text: String(ending.text || '').replace(authoringFindQuery, authoringReplaceQuery),
+              }
+            : ending),
+        };
+      }
+      return {
+        ...prev,
+        meta: {
+          ...prev.meta,
+          characters: (prev.meta?.characters || []).map((character: any, index: number) => String(index) === match.id
+            ? {
+                ...character,
+                name: String(character.name || '').replace(authoringFindQuery, authoringReplaceQuery),
+                desc: String(character.desc || '').replace(authoringFindQuery, authoringReplaceQuery),
+              }
+            : character),
+        },
+      };
+    });
+    setAuthoringDirty(true);
+    window.setTimeout(() => moveAuthoringFindMatch(1), 0);
+  };
 
   const handleAuthoringReplaceAll = () => {
     if (!authoringFindQuery) return;
@@ -1182,6 +1295,10 @@ export default function App() {
       : isGeneratingConclusion
       ? '正在生成前情提要...'
       : '正在处理...');
+  const isRecoveringInvalidGameState = isSessionHydrated && Boolean(user) && (
+    (gameState === 'READONLY_STORY' && !readonlyStoryData) ||
+    ((gameState === 'PLAYING' || gameState === 'SUMMARY') && !blueprint)
+  );
 
   useEffect(() => {
     document.documentElement.dataset.theme = appTheme;
@@ -1884,35 +2001,69 @@ export default function App() {
     return true;
   };
 
-  const refreshStories = async (options: { force?: boolean } = {}) => {
-    if (!user || !db) return;
+  const refreshStories = async (options: { force?: boolean; includeArchive?: boolean } = {}) => {
+    if (!user || !db) return false;
     setIsLoadingStories(true);
     try {
       const cached = await getStoryListCache();
       if (cached?.value) {
         applyStoryListCache(cached.value);
         if (!options.force && Date.now() - cached.updatedAt < STORY_LIST_CACHE_TTL_MS) {
-          return;
+          setStoryListLoadError(null);
+          return true;
         }
       }
-      const [pub, mine, shared] = await withTimeout(
+      const [pub, mine] = await withTimeout(
         Promise.all([
           listPublicStories(db as any, 18),
           listMyStories(db as any, user.uid, 30),
-          listMySharedStories(db as any, user.uid, 30),
         ]),
-        10000,
+        8500,
         "连接作品档案超时，请稍后重试。"
       );
+      const shared = options.includeArchive
+        ? await withTimeout(listMySharedStories(db as any, user.uid, 30), 12000, '连接收藏馆超时，稍后进入收藏馆时会继续同步。')
+        : (cached?.value?.shared || mySharedStories);
       setPublicStories(pub);
       setMyStories(mine);
       setMySharedStories(shared);
       await cacheStoryLists(pub, mine, shared);
+      setStoryListLoadError(null);
+      return true;
     } catch (error: any) {
       console.error(error);
       const cached = await getStoryListCache();
       if (cached?.value) applyStoryListCache(cached.value);
-      showError(getFriendlyFirebaseError(error, '作品库加载失败。'));
+      const message = getFriendlyFirebaseError(error, '作品库加载失败。');
+      setStoryListLoadError(message);
+      showError(message);
+      return false;
+    } finally {
+      setIsLoadingStories(false);
+    }
+  };
+
+  const refreshArchiveStories = async (options: { force?: boolean } = {}) => {
+    if (!user || !db) return;
+    setIsLoadingStories(true);
+    try {
+      const cached = await getStoryListCache();
+      if (cached?.value?.shared) {
+        setMySharedStories(cached.value.shared);
+        if (!options.force && Date.now() - cached.updatedAt < STORY_LIST_CACHE_TTL_MS) return;
+      }
+      const shared = await withTimeout(
+        listMySharedStories(db as any, user.uid, 30),
+        14000,
+        '连接收藏馆超时，已先显示本机缓存。'
+      );
+      setMySharedStories(shared);
+      await cacheStoryLists(publicStories, myStories, shared);
+    } catch (error: any) {
+      console.error(error);
+      const cached = await getStoryListCache();
+      if (cached?.value?.shared) setMySharedStories(cached.value.shared);
+      showError(getFriendlyFirebaseError(error, '收藏馆同步失败，已先显示本机缓存。'));
     } finally {
       setIsLoadingStories(false);
     }
@@ -2141,6 +2292,7 @@ export default function App() {
     setIsActionMenuOpen(false);
     setIsAccountCenterOpen(false);
     navigateTo('ARCHIVE');
+    void refreshArchiveStories();
   };
 
   const leaveArchiveView = () => {
@@ -2459,10 +2611,11 @@ export default function App() {
         setSessionId(user.uid);
         resetToHome();
         setStartupMessage('正在读取作品档案...');
-        hasLoadedInitialStoryListRef.current = true;
-        await refreshStories().catch((error) => {
+        const loadedStories = await refreshStories().catch((error) => {
           console.warn('Initial story library load skipped:', error);
+          return false;
         });
+        hasLoadedInitialStoryListRef.current = Boolean(loadedStories);
       }
       setIsSessionHydrated(true);
     };
@@ -3975,9 +4128,28 @@ export default function App() {
     if (gameState === 'STORY_SELECT' && user && db) {
       if (hasLoadedInitialStoryListRef.current) return;
       hasLoadedInitialStoryListRef.current = true;
-      refreshStories().catch(() => {});
+      refreshStories().then((ok) => {
+        if (!ok) hasLoadedInitialStoryListRef.current = false;
+      }).catch(() => {
+        hasLoadedInitialStoryListRef.current = false;
+      });
     }
   }, [gameState, user, db]);
+
+  useEffect(() => {
+    if (!isSessionHydrated || !user) return;
+    if (gameState === 'READONLY_STORY' && !readonlyStoryData) {
+      console.warn('Recovered invalid READONLY_STORY state without readonly story data.');
+      resetToHome();
+      showError('页面状态已恢复，请重新打开故事记录。');
+      return;
+    }
+    if ((gameState === 'PLAYING' || gameState === 'SUMMARY') && !blueprint) {
+      console.warn('Recovered invalid story runtime state without blueprint.');
+      resetToHome();
+      showError('游玩状态已恢复，请重新进入故事。');
+    }
+  }, [isSessionHydrated, user, gameState, readonlyStoryData, blueprint]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -4666,6 +4838,21 @@ export default function App() {
         {isLoadingStories ? (
           <div className="flex h-64 items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-zinc-700" />
+          </div>
+        ) : storyListLoadError && visibleStories.length === 0 ? (
+          <div className="rounded-3xl border border-amber-500/30 bg-amber-500/10 p-8 text-center">
+            <div className="text-sm font-black text-amber-100">作品列表暂时无法同步</div>
+            <p className="mx-auto mt-2 max-w-xl text-xs leading-relaxed text-amber-100/75">
+              {storyListLoadError}
+            </p>
+            <button
+              type="button"
+              onClick={() => refreshStories({ force: true })}
+              className={`${semanticButtonClass('primary', { compact: true })} mt-5`}
+            >
+              <RefreshCcw className="h-4 w-4" />
+              重新读取作品库
+            </button>
           </div>
         ) : visibleStories.length === 0 ? (
           <div className="rounded-3xl border border-dashed border-zinc-800 bg-zinc-950/40 p-10 text-center text-sm font-bold text-zinc-500">
@@ -6113,16 +6300,38 @@ export default function App() {
           <div className="fixed bottom-8 left-8 z-[1700]">
             <button
               type="button"
-              onClick={() => setAuthoringFindReplaceOpen((prev) => !prev)}
+              onClick={() => {
+                if (authoringFindCompact) {
+                  setAuthoringFindCompact(false);
+                  return;
+                }
+                setAuthoringFindReplaceOpen((prev) => !prev);
+              }}
               aria-label="查找 / 替换"
               className={`flex h-12 w-12 items-center justify-center rounded-full border shadow-2xl backdrop-blur-md transition-all hover:-translate-y-0.5 active:scale-95 ${
-                authoringFindReplaceOpen
+                authoringFindReplaceOpen || authoringFindCompact
                   ? 'border-indigo-400 bg-indigo-500 text-white'
                   : 'border-zinc-800 bg-zinc-950/90 text-zinc-200 hover:border-indigo-500 hover:text-white'
               }`}
             >
-              <Search className="h-4 w-4" />
+              {authoringFindCompact ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
             </button>
+            {authoringFindCompact && (
+              <div className="absolute bottom-0 left-16 flex w-[min(76vw,22rem)] items-center gap-1 rounded-full border border-indigo-500/30 bg-zinc-950/95 p-1.5 shadow-2xl shadow-black/40 backdrop-blur-xl">
+                <button type="button" onClick={() => moveAuthoringFindMatch(-1)} className={semanticButtonClass('ghost', { compact: true })}>
+                  上一个
+                </button>
+                <button type="button" onClick={() => moveAuthoringFindMatch(1)} className={semanticButtonClass('ghost', { compact: true })}>
+                  下一个
+                </button>
+                <button type="button" onClick={replaceCurrentAuthoringMatch} disabled={!authoringFindQuery} className={semanticButtonClass('secondary', { compact: true })}>
+                  替换
+                </button>
+                <button type="button" onClick={() => { setAuthoringFindCompact(false); setAuthoringFindReplaceOpen(true); }} className={semanticButtonClass('primary', { compact: true })}>
+                  返回
+                </button>
+              </div>
+            )}
             {authoringFindReplaceOpen && (
               <div className="absolute bottom-16 left-0 grid max-h-[min(76dvh,680px)] w-[min(92vw,44rem)] gap-3 overflow-y-auto rounded-[1.75rem] border border-indigo-500/30 bg-zinc-950/95 p-4 shadow-2xl shadow-black/40 backdrop-blur-xl sm:p-5">
                 <div className="flex items-start justify-between gap-3">
@@ -6236,6 +6445,21 @@ export default function App() {
                   )}
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row">
+                  <button
+                    type="button"
+                    onClick={openCompactFindMode}
+                    disabled={
+                      !authoringFindQuery ||
+                      !(
+                        (authoringFindScope.chapters && authoringFindChapterNums.length > 0) ||
+                        (authoringFindScope.endings && authoringFindEndingIds.length > 0) ||
+                        authoringFindScope.characters
+                      )
+                    }
+                    className={semanticButtonClass('secondary', { compact: true })}
+                  >
+                    查找
+                  </button>
                   <button
                     type="button"
                     onClick={handleAuthoringReplaceAll}
@@ -6452,7 +6676,7 @@ export default function App() {
                   {authoringTocOpen && (
                     <div className="fixed inset-0 z-[99]" onClick={() => setAuthoringTocOpen(false)} />
                   )}
-                  <div className={`fixed bottom-24 left-8 z-[1600] flex-col gap-2 rounded-2xl border border-zinc-800 bg-zinc-950/90 p-2 shadow-2xl backdrop-blur-md transition-all ${authoringTocOpen ? 'flex' : 'hidden'}`}>
+                  <div className={`fixed bottom-24 left-8 z-[1600] max-h-[min(56dvh,28rem)] flex-col gap-2 overflow-y-auto rounded-2xl border border-zinc-800 bg-zinc-950/90 p-2 shadow-2xl backdrop-blur-md transition-all ${authoringTocOpen ? 'flex' : 'hidden'}`}>
                      <div className="mb-1 text-center text-[10px] font-black text-zinc-500">目录导航</div>
                      {(authoringCartridge.chapters || []).map((c: any) => (
                         <button type="button" key={c.chapter_num} onClick={() => { setAuthoringTocOpen(false); document.getElementById(`authoring-chapter-${c.chapter_num}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} className="rounded-xl px-3 py-2 text-xs font-bold text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white">
@@ -6469,9 +6693,8 @@ export default function App() {
                     type="button"
                     onClick={() => setAuthoringTocOpen(!authoringTocOpen)}
                     className="fixed bottom-24 left-8 z-[1601] flex h-12 w-12 items-center justify-center rounded-full bg-indigo-600 text-white shadow-xl hover:bg-indigo-500 active:scale-95"
-                    style={{ transform: authoringTocOpen ? 'translateY(-100%) translateY(-240px)' : 'none', opacity: authoringTocOpen ? 0 : 1, pointerEvents: authoringTocOpen ? 'none' : 'auto', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)' }}
                   >
-                    <BookOpen className="h-5 w-5" />
+                    {authoringTocOpen ? <X className="h-5 w-5" /> : <BookOpen className="h-5 w-5" />}
                   </button>
 
                 <section className="space-y-6">
@@ -6510,7 +6733,7 @@ export default function App() {
                   <div className="space-y-4">
                     <div id="authoring-endings" className="text-lg font-black text-white">结局设置</div>
                     {(authoringCartridge.endings || []).map((ending: any) => (
-                      <div key={ending.id} className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/40 p-4 space-y-3">
+                      <div id={`authoring-ending-${ending.id}`} key={ending.id} className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/40 p-4 space-y-3">
                         <div className="text-sm font-black text-white">{endingIdToLabel(ending.id)}</div>
                         <input
                           value={ending.title || ''}
@@ -6562,7 +6785,7 @@ export default function App() {
                       </button>
                     </div>
                     {(authoringCartridge.meta?.characters || []).map((character: any, index: number) => (
-                      <div key={index} className="grid gap-3 md:grid-cols-[1fr_1.4fr_auto]">
+                      <div id={`authoring-character-${index}`} key={index} className="grid gap-3 md:grid-cols-[1fr_1.4fr_auto]">
                         <input
                           value={character.name || ''}
                           onChange={(event) => setAuthoringCartridge((prev: any) => ({
@@ -7078,6 +7301,8 @@ export default function App() {
         </>
       ) : !user ? (
         renderAuthView()
+      ) : isRecoveringInvalidGameState ? (
+        <BootSplash message="正在恢复页面状态..." />
       ) : (
         <>
           {gameState === 'STORY_SELECT' && renderStorySelectView()}
