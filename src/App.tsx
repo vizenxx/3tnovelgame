@@ -3476,13 +3476,24 @@ export default function App() {
           cardExcerpt: getStoryCardExcerpt(authoringCartridge.meta?.main_axis, normalizedChapters),
         } as any,
         chapters: normalizedChapters,
-        endings: (authoringCartridge.endings || []).map((ending: any) => ({
-          id: ending.id,
-          title: ending.title || endingIdToLabel(ending.id),
-          text: ending.text || '',
-        })),
+        endings: (authoringCartridge.endings || [])
+          .filter((ending: any) => authoringCartridge.meta?.endingMode === 'single' ? ending.id === 'default' : true)
+          .map((ending: any) => ({
+            id: ending.id,
+            title: ending.title || endingIdToLabel(ending.id),
+            text: ending.text || '',
+          })),
       });
       const latest = await getStoryCartridge(db as any, authoringStoryId);
+      // In single-ending mode, the server only has the default ending.
+      // Merge back any locally-cached non-default endings so the author
+      // can still see them if they switch back to multi-ending mode before leaving.
+      if (authoringCartridge.meta?.endingMode === 'single') {
+        const cachedOtherEndings = (authoringCartridge.endings || []).filter((e: any) => e.id !== 'default');
+        if (cachedOtherEndings.length > 0 && latest) {
+          latest.endings = [...(latest.endings || []), ...cachedOtherEndings];
+        }
+      }
       setAuthoringCartridge(latest);
       setAuthoringCustomTagsInput(normalizedTags.join('，'));
       markAuthoringSaved(latest);
@@ -6954,7 +6965,22 @@ export default function App() {
 
                   <div className="space-y-4">
                     <div id="authoring-endings" className="text-lg font-black text-white">结局设置</div>
-                    {(authoringCartridge.endings || []).map((ending: any) => (
+                    {authoringCartridge.meta?.endingMode === 'single' && (
+                      (() => {
+                        const hiddenEndings = (authoringCartridge.endings || []).filter(
+                          (e: any) => e.id !== 'default' && (e.title || e.text)
+                        );
+                        return hiddenEndings.length > 0 ? (
+                          <div className="flex items-start gap-2 rounded-2xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-xs leading-relaxed text-amber-300/80">
+                            <span className="mt-0.5 shrink-0">⚠️</span>
+                            <span>其他结局的内容已暂时保留在内存中（共 {hiddenEndings.length} 个结局有未保存的内容）。如需取回，请在离开此页前切换回“多线结局”。</span>
+                          </div>
+                        ) : null;
+                      })()
+                    )}
+                    {(authoringCartridge.endings || [])
+                      .filter((ending: any) => authoringCartridge.meta?.endingMode === 'single' ? ending.id === 'default' : true)
+                      .map((ending: any) => (
                       <div id={`authoring-ending-${ending.id}`} key={ending.id} className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/40 p-4 space-y-3">
                         <div className="text-sm font-black text-white">{authoringEndingIdToLabel(ending.id)}</div>
                         <input

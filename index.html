@@ -30,13 +30,15 @@
       html, body {
         margin: 0;
         min-height: 100%;
-        background: #262629;
+        background: #202024;
+        color-scheme: dark;
         color: #d9d9d9;
         font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
 
       #root {
         min-height: 100dvh;
+        background: #202024;
       }
 
       .boot-splash {
@@ -150,28 +152,9 @@
         from { width: 18%; }
         to { width: 86%; }
       }
-
-      @media (prefers-color-scheme: light) {
-        html, body {
-          background: #f4f0e8;
-          color: #292522;
-        }
-
-        .boot-splash {
-          background:
-            radial-gradient(circle at 50% 18%, rgba(79, 95, 187, 0.17), transparent 34%),
-            radial-gradient(circle at 88% 78%, rgba(180, 113, 76, 0.12), transparent 28%),
-            linear-gradient(180deg, #fbf8f1 0%, #f4f0e8 50%, #eee8dc 100%);
-        }
-
-        .boot-title {
-          color: #292522;
-          text-shadow: none;
-        }
-      }
     </style>
   </head>
-  <body>
+  <body style="background:#202024;color:#d9d9d9;">
     <div id="root">
       <div class="boot-splash">
         <div class="boot-cover-main">
