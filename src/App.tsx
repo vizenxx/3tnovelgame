@@ -178,7 +178,7 @@ const formatStoryHeading = (chapter: Pick<Chapter, 'chapter_num' | 'title'>) => 
   const title = String(chapter.title || '').trim();
   return title ? `第${chapter.chapter_num}章：${title}` : `第${chapter.chapter_num}章`;
 };
-const endingIdToLabel = (id: 'default' | 'left' | 'right') => {
+const endingIdToLabel = (id: 'default' | 'left' | 'right' | string) => {
   if (id === 'left') return '左域默认结局';
   if (id === 'right') return '右域默认结局';
   return '中域默认结局';
@@ -188,8 +188,26 @@ const authoringEndingIdToLabel = (id: 'default' | 'left' | 'right' | string) => 
   if (id === 'default') return '中域默认结局';
   if (id === 'left') return '左域默认结局';
   if (id === 'right') return '右域默认结局';
+  if (id.startsWith('left-')) return '左域具体结局';
+  if (id.startsWith('right-')) return '右域具体结局';
+  if (id.startsWith('middle-')) return '中域具体结局';
   return `具体结局 ${id}`;
 };
+
+const endingDomainFromId = (id: string): 'middle' | 'left' | 'right' => {
+  if (id === 'left' || id.startsWith('left-')) return 'left';
+  if (id === 'right' || id.startsWith('right-')) return 'right';
+  return 'middle';
+};
+
+const endingDomainTitle = (domain: 'middle' | 'left' | 'right') => {
+  if (domain === 'left') return '左结局域';
+  if (domain === 'right') return '右结局域';
+  return '中结局域';
+};
+
+const createEndingIdForDomain = (domain: 'middle' | 'left' | 'right') =>
+  `${domain}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 
 const buildSharedStoryUrl = (storyId: string) =>
   `${window.location.origin}/api/share?share=${encodeURIComponent(storyId)}`;
@@ -4810,13 +4828,16 @@ export default function App() {
                 <div className="mt-4 rounded-3xl border border-zinc-800 bg-zinc-900/35 p-4">
                   <div className="text-xs font-black uppercase tracking-[0.18em] text-zinc-500">结局倾向</div>
                   <p className="mt-2 text-sm leading-relaxed text-zinc-300">{endingDomainSummaryText(storyDetailStory)}</p>
-                  <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                    {endingDomainCards(storyDetailStory).map((domain) => (
-                      <div key={domain.id} className="rounded-2xl border border-zinc-800 bg-zinc-950/45 p-3">
-                        <div className="text-xs font-black text-zinc-100">{domain.title}</div>
-                        <div className="mt-1 text-[11px] font-bold text-indigo-300">{domain.weight}</div>
-                      </div>
-                    ))}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {(() => {
+                      const bias = getEndingBias(storyDetailStory);
+                      return (
+                        <>
+                          <span className="rounded-full border border-indigo-500/20 bg-indigo-500/10 px-3 py-1 text-xs font-black text-indigo-200">左域：{weightToneLabel(bias.leftBaseWeight)}</span>
+                          <span className="rounded-full border border-rose-500/20 bg-rose-500/10 px-3 py-1 text-xs font-black text-rose-200">右域：{weightToneLabel(bias.rightBaseWeight)}</span>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
                 <div className="mt-5 grid gap-3">
@@ -6377,12 +6398,14 @@ export default function App() {
             className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
           >
             <option value="">自动进入该方向的域内默认结局</option>
-            <option value="default">绑定中域默认结局</option>
-            <option value="left">绑定左域默认结局</option>
-            <option value="right">绑定右域默认结局</option>
+            {(authoringCartridge?.endings || []).map((ending: any) => (
+              <option key={ending.id} value={ending.id}>
+                绑定{ending.title || authoringEndingIdToLabel(ending.id)}
+              </option>
+            ))}
           </select>
         </label>
-        <p className="mt-2 text-xs leading-relaxed text-zinc-500">如果未来同一结局域内有多个具体结局，这里会用来决定该支线更偏向哪一个收束。</p>
+        <p className="mt-2 text-xs leading-relaxed text-zinc-500">支线可以只影响左/右结局域，也可以进一步绑定到某个具体结局。没有绑定时，会自动进入该方向的域内默认结局。</p>
       </div>
       <textarea value={branchForm.sceneText} onChange={(event) => setBranchForm((prev) => ({ ...prev, sceneText: event.target.value }))} className="authoring-resizable-textarea min-h-[180px] w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-sm text-white outline-none focus:border-indigo-500" placeholder="支线情节（300 字以内）" />
       <div className="space-y-3">
@@ -7123,33 +7146,72 @@ export default function App() {
                         ) : null;
                       })()
                     )}
-                    {(authoringCartridge.endings || [])
-                      .filter((ending: any) => authoringCartridge.meta?.endingMode === 'single' ? ending.id === 'default' : true)
-                      .map((ending: any) => (
-                      <div id={`authoring-ending-${ending.id}`} key={ending.id} className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/40 p-4 space-y-3">
-                        <div className="text-sm font-black text-white">{authoringEndingIdToLabel(ending.id)}</div>
-                        <input
-                          id={`authoring-ending-${ending.id}-title`}
-                          value={ending.title || ''}
-                          onChange={(event) => setAuthoringCartridge((prev: any) => ({
-                            ...prev,
-                            endings: prev.endings.map((item: any) => item.id === ending.id ? { ...item, title: event.target.value } : item),
-                          }))}
-                          className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
-                          placeholder="结局标题"
-                        />
-                        <textarea
-                          id={`authoring-ending-${ending.id}-text`}
-                          value={ending.text || ''}
-                          onChange={(event) => setAuthoringCartridge((prev: any) => ({
-                            ...prev,
-                            endings: prev.endings.map((item: any) => item.id === ending.id ? { ...item, text: event.target.value } : item),
-                          }))}
-                          className="authoring-resizable-textarea min-h-[240px] w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-sm text-white outline-none focus:border-indigo-500"
-                          placeholder="结局正文"
-                        />
-                      </div>
-                    ))}
+                    {(['middle', 'left', 'right'] as const)
+                      .filter((domain) => authoringCartridge.meta?.endingMode === 'single' ? domain === 'middle' : true)
+                      .map((domain) => {
+                        const endingsInDomain = (authoringCartridge.endings || []).filter((ending: any) => endingDomainFromId(String(ending.id || '')) === domain);
+                        const defaultEndingId = domain === 'middle' ? 'default' : domain;
+                        const visibleEndings = endingsInDomain.length > 0
+                          ? endingsInDomain
+                          : [{ id: defaultEndingId, title: '', text: '' }];
+                        return (
+                          <div key={domain} className="space-y-3 rounded-[1.5rem] border border-zinc-800 bg-zinc-950/25 p-4">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div>
+                                <div className="text-base font-black text-white">{endingDomainTitle(domain)}</div>
+                                <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+                                  {domain === 'middle' ? '左右倾向未突破阈值时进入；可设置多个平衡/余韵型收束。' : `命运值进入${endingDomainTitle(domain)}后，会根据已触发支线绑定和权重选择具体结局。`}
+                                </p>
+                              </div>
+                              {authoringCartridge.meta?.endingMode !== 'single' && (
+                                <button
+                                  type="button"
+                                  onClick={() => setAuthoringCartridge((prev: any) => {
+                                    const endings = [...(prev.endings || [])];
+                                    endings.push({
+                                      id: createEndingIdForDomain(domain),
+                                      chapter_num: 7,
+                                      title: `${endingDomainTitle(domain)}的新结局`,
+                                      text: '',
+                                    });
+                                    return { ...prev, endings };
+                                  })}
+                                  className={semanticButtonClass('secondary', { compact: true })}
+                                >
+                                  <Sparkles className="h-4 w-4" />
+                                  新增具体结局
+                                </button>
+                              )}
+                            </div>
+
+                            {visibleEndings.map((ending: any) => (
+                              <div id={`authoring-ending-${ending.id}`} key={ending.id} className="rounded-[1.25rem] border border-zinc-800 bg-zinc-950/50 p-4 space-y-3">
+                                <div className="text-sm font-black text-white">{authoringEndingIdToLabel(ending.id)}</div>
+                                <input
+                                  id={`authoring-ending-${ending.id}-title`}
+                                  value={ending.title || ''}
+                                  onChange={(event) => setAuthoringCartridge((prev: any) => ({
+                                    ...prev,
+                                    endings: prev.endings.map((item: any) => item.id === ending.id ? { ...item, title: event.target.value } : item),
+                                  }))}
+                                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                                  placeholder="结局标题"
+                                />
+                                <textarea
+                                  id={`authoring-ending-${ending.id}-text`}
+                                  value={ending.text || ''}
+                                  onChange={(event) => setAuthoringCartridge((prev: any) => ({
+                                    ...prev,
+                                    endings: prev.endings.map((item: any) => item.id === ending.id ? { ...item, text: event.target.value } : item),
+                                  }))}
+                                  className="authoring-resizable-textarea min-h-[240px] w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-sm text-white outline-none focus:border-indigo-500"
+                                  placeholder="结局正文"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })}
                   </div>
                 </section>
               </div>

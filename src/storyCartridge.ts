@@ -63,7 +63,7 @@ export interface StoryChapterDoc {
 }
 
 export interface StoryEndingDoc {
-  id: 'default' | 'left' | 'right';
+  id: string;
   chapter_num: 7;
   title?: string;
   text: string;

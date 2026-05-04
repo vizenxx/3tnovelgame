@@ -4,8 +4,7 @@ import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './
 import { generateGeminiJsonWithFallback, parseGeminiJson } from './_gemini.js';
 import { getRequestLogContext, logGenerationError, logGenerationInfo } from './_log.js';
 import { buildInterventionRewritePrompt, buildInterventionWorldStatePrompt } from '../Prompt/interventionRewrite.js';
-import { calculateEndingMechanics } from '../src/storyRunEngine.js';
-import { branchEffectiveWeight, normalizeEndingBias } from '../src/storyCartridge.js';
+import { branchEffectiveWeight, calculateEndingMechanics, normalizeEndingBias } from './_endingMechanics.js';
 
 type InterventionAction = 'bless' | 'curse';
 type InterventionHistoryItem = { chapterNum: number; charId: string; action: InterventionAction };
@@ -332,9 +331,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       throw new Error('Gemini response missed chapters array.');
     }
 
+    const rewriteEndChapter = Math.min(7, Math.max(safeChapterNum, asNumber(endingMechanics.rewriteRange?.endChapter, 7)));
+
     aiData.chapters = aiData.chapters.map((chapter: any) => {
       const normalized = normalizeChapter(chapter);
-      if (normalized.chapter_num >= safeChapterNum && normalized.chapter_num <= 7) {
+      if (normalized.chapter_num >= safeChapterNum && normalized.chapter_num <= rewriteEndChapter) {
         return { ...normalized, text: ensureParagraphing(normalized.text, { minParas: 6, maxParas: 10 }) };
       }
       return normalized;
@@ -342,7 +343,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const returnedChapterNums = new Set(aiData.chapters.map((chapter: any) => chapter.chapter_num));
     const missingChapterNums = safeChapters
-      .filter((chapter: any) => chapter.chapter_num >= safeChapterNum && chapter.chapter_num <= 7 && !returnedChapterNums.has(chapter.chapter_num))
+      .filter((chapter: any) => chapter.chapter_num >= safeChapterNum && chapter.chapter_num <= rewriteEndChapter && !returnedChapterNums.has(chapter.chapter_num))
       .map((chapter: any) => chapter.chapter_num);
     if (missingChapterNums.length > 0) {
       throw new Error(`Gemini response missed rewritten chapters: ${missingChapterNums.join(', ')}`);

@@ -3,7 +3,7 @@ import { getBearerToken, sendInternalError, sendMethodNotAllowed, verifyFirebase
 import { getRequestLogContext, logGenerationError, logGenerationInfo } from './_log.js';
 import { supabaseInsert, supabaseRequest, supabaseRpc, supabaseUpsert } from './_supabase.js';
 import { isStoryStoreAction } from './storyStoreContract.js';
-import { normalizeEndingBias } from '../src/storyCartridge.js';
+import { normalizeEndingBias } from './_endingMechanics.js';
 
 const nowIso = () => new Date().toISOString();
 const ADMIN_USER_IDS = new Set(['LWgIE31RtCTZBiMNF7S9viNE7Aw2']);
