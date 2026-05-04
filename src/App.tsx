@@ -1064,46 +1064,69 @@ export default function App() {
   const [authoringFindCompact, setAuthoringFindCompact] = useState(false);
   const [authoringFindMatchIndex, setAuthoringFindMatchIndex] = useState(0);
 
+  type AuthoringFindMatch = {
+    type: 'chapter' | 'ending' | 'character';
+    id: string;
+    label: string;
+    field: 'title' | 'text' | 'name' | 'desc';
+    selector: string;
+    index: number;
+  };
+
   const getAuthoringFindMatches = (cartridge = authoringCartridge) => {
-    if (!cartridge || !authoringFindQuery) return [] as Array<{ type: 'chapter' | 'ending' | 'character'; id: string; label: string }>;
+    if (!cartridge || !authoringFindQuery) return [] as AuthoringFindMatch[];
     const queryText = authoringFindQuery;
-    const matches: Array<{ type: 'chapter' | 'ending' | 'character'; id: string; label: string }> = [];
+    const matches: AuthoringFindMatch[] = [];
+    const pushMatch = (
+      type: AuthoringFindMatch['type'],
+      id: string,
+      label: string,
+      field: AuthoringFindMatch['field'],
+      value: unknown,
+    ) => {
+      const index = String(value || '').indexOf(queryText);
+      if (index >= 0) matches.push({ type, id, label, field, selector: `authoring-${type}-${id}-${field}`, index });
+    };
     if (authoringFindScope.chapters) {
       (cartridge.chapters || []).forEach((chapter: any) => {
         const chapterNum = Number(chapter.chapter_num);
         if (!authoringFindChapterNums.includes(chapterNum)) return;
-        if (`${chapter.title || ''}\n${chapter.text || ''}`.includes(queryText)) {
-          matches.push({ type: 'chapter', id: String(chapterNum), label: `第${chapterNum}章` });
-        }
+        pushMatch('chapter', String(chapterNum), `第${chapterNum}章标题`, 'title', chapter.title);
+        pushMatch('chapter', String(chapterNum), `第${chapterNum}章正文`, 'text', chapter.text);
       });
     }
     if (authoringFindScope.endings) {
       (cartridge.endings || []).forEach((ending: any) => {
         const endingId = String(ending.id || '');
         if (!authoringFindEndingIds.includes(endingId)) return;
-        if (`${ending.title || ''}\n${ending.text || ''}`.includes(queryText)) {
-          matches.push({ type: 'ending', id: endingId, label: ending.title || endingIdToLabel(ending.id) });
-        }
+        pushMatch('ending', endingId, `${ending.title || endingIdToLabel(ending.id)}标题`, 'title', ending.title);
+        pushMatch('ending', endingId, `${ending.title || endingIdToLabel(ending.id)}正文`, 'text', ending.text);
       });
     }
     if (authoringFindScope.characters) {
       (cartridge.meta?.characters || []).forEach((character: any, index: number) => {
-        if (`${character.name || ''}\n${character.desc || ''}`.includes(queryText)) {
-          matches.push({ type: 'character', id: String(index), label: character.name || `角色${index + 1}` });
-        }
+        pushMatch('character', String(index), `${character.name || `角色${index + 1}`}名称`, 'name', character.name);
+        pushMatch('character', String(index), `${character.name || `角色${index + 1}`}设定`, 'desc', character.desc);
       });
     }
     return matches;
   };
 
-  const scrollToAuthoringFindMatch = (match?: { type: 'chapter' | 'ending' | 'character'; id: string }) => {
+  const scrollToAuthoringFindMatch = (match?: AuthoringFindMatch) => {
     if (!match) return;
+    setAuthoringTab(match.type === 'character' ? 'branches' : 'mainline');
     const targetId = match.type === 'chapter'
       ? `authoring-chapter-${match.id}`
       : match.type === 'ending'
       ? `authoring-ending-${match.id}`
       : `authoring-character-${match.id}`;
-    document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    window.setTimeout(() => {
+      document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const field = document.getElementById(match.selector) as HTMLInputElement | HTMLTextAreaElement | null;
+      if (!field || typeof field.setSelectionRange !== 'function') return;
+      field.focus({ preventScroll: true });
+      field.setSelectionRange(match.index, match.index + authoringFindQuery.length);
+    }, 180);
   };
 
   const openCompactFindMode = () => {
@@ -1138,8 +1161,7 @@ export default function App() {
           chapters: (prev.chapters || []).map((chapter: any) => Number(chapter.chapter_num) === Number(match.id)
             ? {
                 ...chapter,
-                title: String(chapter.title || '').replace(authoringFindQuery, authoringReplaceQuery),
-                text: String(chapter.text || '').replace(authoringFindQuery, authoringReplaceQuery),
+                [match.field]: String(chapter[match.field] || '').replace(authoringFindQuery, authoringReplaceQuery),
               }
             : chapter),
         };
@@ -1150,8 +1172,7 @@ export default function App() {
           endings: (prev.endings || []).map((ending: any) => String(ending.id || '') === match.id
             ? {
                 ...ending,
-                title: String(ending.title || '').replace(authoringFindQuery, authoringReplaceQuery),
-                text: String(ending.text || '').replace(authoringFindQuery, authoringReplaceQuery),
+                [match.field]: String(ending[match.field] || '').replace(authoringFindQuery, authoringReplaceQuery),
               }
             : ending),
         };
@@ -1163,8 +1184,7 @@ export default function App() {
           characters: (prev.meta?.characters || []).map((character: any, index: number) => String(index) === match.id
             ? {
                 ...character,
-                name: String(character.name || '').replace(authoringFindQuery, authoringReplaceQuery),
-                desc: String(character.desc || '').replace(authoringFindQuery, authoringReplaceQuery),
+                [match.field]: String(character[match.field] || '').replace(authoringFindQuery, authoringReplaceQuery),
               }
             : character),
         },
@@ -5068,7 +5088,34 @@ export default function App() {
     );
 
     return (
-      <div className="mx-auto max-w-6xl px-6 pb-12 pt-24 lg:px-8">
+      <div className="relative mx-auto max-w-6xl px-6 pb-12 pt-24 lg:px-8">
+        <AnimatePresence>
+          {isLoadingStories && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[3200] flex items-center justify-center bg-zinc-950/55 px-6 backdrop-blur-sm"
+            >
+              <div className="w-full max-w-sm rounded-[1.75rem] border border-indigo-500/25 bg-zinc-950/90 p-5 text-center shadow-2xl shadow-black/40">
+                <Loader2 className="mx-auto h-8 w-8 animate-spin text-indigo-300" />
+                <div className="mt-4 text-sm font-black text-zinc-100">正在同步收藏馆</div>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-800">
+                  <motion.div
+                    className="h-full rounded-full bg-indigo-400"
+                    initial={{ x: '-100%' }}
+                    animate={{ x: '120%' }}
+                    transition={{ repeat: Infinity, duration: 1.2, ease: 'easeInOut' }}
+                    style={{ width: '55%' }}
+                  />
+                </div>
+                <p className="mt-3 text-xs leading-relaxed text-zinc-500">
+                  如果网络较慢，会先保留本机缓存，完成后自动更新列表。
+                </p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
         <div className="mb-10 flex items-start justify-between gap-4">
           <div>
             <div className="text-xs font-black uppercase tracking-[0.22em] text-zinc-500">命运收藏馆</div>
@@ -6303,6 +6350,7 @@ export default function App() {
               onClick={() => {
                 if (authoringFindCompact) {
                   setAuthoringFindCompact(false);
+                  setAuthoringFindReplaceOpen(true);
                   return;
                 }
                 setAuthoringFindReplaceOpen((prev) => !prev);
@@ -6317,19 +6365,24 @@ export default function App() {
               {authoringFindCompact ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
             </button>
             {authoringFindCompact && (
-              <div className="absolute bottom-0 left-16 flex w-[min(76vw,22rem)] items-center gap-1 rounded-full border border-indigo-500/30 bg-zinc-950/95 p-1.5 shadow-2xl shadow-black/40 backdrop-blur-xl">
-                <button type="button" onClick={() => moveAuthoringFindMatch(-1)} className={semanticButtonClass('ghost', { compact: true })}>
+              <div className="absolute bottom-16 left-0 grid w-44 gap-1.5 rounded-[1.25rem] border border-indigo-500/30 bg-zinc-950/95 p-2 shadow-2xl shadow-black/40 backdrop-blur-xl">
+                <button type="button" onClick={() => moveAuthoringFindMatch(-1)} className={semanticButtonClass('ghost', { compact: true, fullWidth: true })}>
                   上一个
                 </button>
-                <button type="button" onClick={() => moveAuthoringFindMatch(1)} className={semanticButtonClass('ghost', { compact: true })}>
+                <button type="button" onClick={() => moveAuthoringFindMatch(1)} className={semanticButtonClass('ghost', { compact: true, fullWidth: true })}>
                   下一个
                 </button>
-                <button type="button" onClick={replaceCurrentAuthoringMatch} disabled={!authoringFindQuery} className={semanticButtonClass('secondary', { compact: true })}>
+                <button
+                  type="button"
+                  onClick={replaceCurrentAuthoringMatch}
+                  disabled={!authoringFindQuery}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-400/40 bg-amber-500/15 px-3 py-2 text-xs font-black text-amber-100 transition-all hover:border-amber-300 hover:bg-amber-500/25 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                >
                   替换
                 </button>
-                <button type="button" onClick={() => { setAuthoringFindCompact(false); setAuthoringFindReplaceOpen(true); }} className={semanticButtonClass('primary', { compact: true })}>
-                  返回
-                </button>
+                <div className="px-1 text-center text-[10px] font-bold text-zinc-500">
+                  点击左下角 X 返回设置
+                </div>
               </div>
             )}
             {authoringFindReplaceOpen && (
@@ -6709,6 +6762,7 @@ export default function App() {
                       <div id={`authoring-chapter-${chapter.chapter_num}`} key={chapter.chapter_num} className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/40 p-4 space-y-3">
                         <div className="text-sm font-black text-white">{formatStoryHeading(chapter)}</div>
                         <input
+                          id={`authoring-chapter-${chapter.chapter_num}-title`}
                           value={chapter.title || ''}
                           onChange={(event) => setAuthoringCartridge((prev: any) => ({
                             ...prev,
@@ -6718,6 +6772,7 @@ export default function App() {
                           placeholder="章节标题"
                         />
                         <textarea
+                          id={`authoring-chapter-${chapter.chapter_num}-text`}
                           value={chapter.text || ''}
                           onChange={(event) => setAuthoringCartridge((prev: any) => ({
                             ...prev,
@@ -6736,6 +6791,7 @@ export default function App() {
                       <div id={`authoring-ending-${ending.id}`} key={ending.id} className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/40 p-4 space-y-3">
                         <div className="text-sm font-black text-white">{endingIdToLabel(ending.id)}</div>
                         <input
+                          id={`authoring-ending-${ending.id}-title`}
                           value={ending.title || ''}
                           onChange={(event) => setAuthoringCartridge((prev: any) => ({
                             ...prev,
@@ -6745,6 +6801,7 @@ export default function App() {
                           placeholder="结局标题"
                         />
                         <textarea
+                          id={`authoring-ending-${ending.id}-text`}
                           value={ending.text || ''}
                           onChange={(event) => setAuthoringCartridge((prev: any) => ({
                             ...prev,
@@ -6787,6 +6844,7 @@ export default function App() {
                     {(authoringCartridge.meta?.characters || []).map((character: any, index: number) => (
                       <div id={`authoring-character-${index}`} key={index} className="grid gap-3 md:grid-cols-[1fr_1.4fr_auto]">
                         <input
+                          id={`authoring-character-${index}-name`}
                           value={character.name || ''}
                           onChange={(event) => setAuthoringCartridge((prev: any) => ({
                             ...prev,
@@ -6799,6 +6857,7 @@ export default function App() {
                           placeholder="角色名"
                         />
                         <textarea
+                          id={`authoring-character-${index}-desc`}
                           value={character.desc || ''}
                           onChange={(event) => setAuthoringCartridge((prev: any) => ({
                             ...prev,
