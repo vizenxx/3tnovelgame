@@ -18,7 +18,7 @@ import {
   increment,
 } from 'firebase/firestore';
 import type { Firestore } from 'firebase/firestore';
-import { auth } from './firebase';
+import { storyApi } from './storyApiClient';
 import type {
   StoryBranchDoc,
   StoryChapterDoc,
@@ -27,6 +27,7 @@ import type {
   StoryMeta,
   Visibility,
 } from './storyCartridge';
+import { normalizeEndingBias } from './storyCartridge';
 
 const countWords = (text?: string) => {
   const value = (text || '').trim();
@@ -63,45 +64,6 @@ const canReadStoryRecord = (meta: StoryMeta, currentUserId?: string) => (
 // Story data is Supabase-first now. Firebase is retained only as an explicit
 // emergency fallback when VITE_STORY_BACKEND is set to "firebase".
 const useSupabaseStories = () => import.meta.env.VITE_STORY_BACKEND !== 'firebase';
-
-const STORY_API_TIMEOUT_MS = 12000;
-
-const getStoryApiFriendlyError = (action: string, error: unknown, fallback: string) => {
-  const message = String(error instanceof Error ? error.message : error || '');
-  if (/abort|timeout|timed out/i.test(message)) return `${fallback}：连接超时。`;
-  if (/quota|RESOURCE_EXHAUSTED|exceeded/i.test(message)) return `${fallback}：服务器额度暂时不足。`;
-  if (/permission|insufficient|unauthorized|forbidden/i.test(message)) return `${fallback}：权限不足或登录状态已过期。`;
-  return message || fallback;
-};
-
-async function storyApi<T = any>(action: string, payload: Record<string, any> = {}, options: { auth?: boolean; timeoutMs?: number; stage?: string } = {}) {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  const currentUser = auth?.currentUser;
-  if (options.auth || currentUser) {
-    const token = await currentUser?.getIdToken();
-    if (token) headers.Authorization = `Bearer ${token}`;
-  }
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), options.timeoutMs || STORY_API_TIMEOUT_MS);
-  try {
-    const response = await fetch('/api/story-store', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ action, ...payload }),
-      signal: controller.signal,
-    });
-    const data = await response.json().catch(() => null);
-    if (!response.ok) {
-      throw new Error(data?.error || data?.message || `story-store ${action} failed`);
-    }
-    return data as T;
-  } catch (error) {
-    console.error('storyApi failed:', { action, stage: options.stage || action, error });
-    throw new Error(getStoryApiFriendlyError(action, error, `${options.stage || action}失败`));
-  } finally {
-    window.clearTimeout(timeout);
-  }
-}
 
 export type StoryListItem = {
   id: string;
@@ -401,6 +363,7 @@ export async function createEmptyStory(db: Firestore, args: { authorId: string; 
     allowAdaptation: false,
     endingMode: 'dual',
     endingRates: { left: 40, right: 40 },
+    endingBias: { leftBaseWeight: 1, rightBaseWeight: 1 },
     endingNames: { left: '', right: '' },
     createdAt: now,
     updatedAt: now,
@@ -697,6 +660,7 @@ export async function adaptBlueprintToStory(db: Firestore, args: { authorId: str
     allowAdaptation: Boolean(bp.allowAdaptation),
     endingMode: bp.endingMode === 'single' ? 'single' : 'dual',
     endingRates: { left: bp.left_mainline_default || 40, right: bp.right_mainline_default || 40 },
+    endingBias: normalizeEndingBias(bp.endingBias || { left: bp.left_mainline_default, right: bp.right_mainline_default }),
     endingNames: { left: '', right: '' },
     createdAt: now,
     updatedAt: now,

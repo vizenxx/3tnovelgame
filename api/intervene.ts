@@ -4,6 +4,8 @@ import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './
 import { generateGeminiJsonWithFallback, parseGeminiJson } from './_gemini.js';
 import { getRequestLogContext, logGenerationError, logGenerationInfo } from './_log.js';
 import { buildInterventionRewritePrompt, buildInterventionWorldStatePrompt } from '../Prompt/interventionRewrite.js';
+import { calculateEndingMechanics } from '../src/storyRunEngine.js';
+import { branchEffectiveWeight, normalizeEndingBias } from '../src/storyCartridge.js';
 
 type InterventionAction = 'bless' | 'curse';
 type InterventionHistoryItem = { chapterNum: number; charId: string; action: InterventionAction };
@@ -269,27 +271,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       { chapterNum: safeChapterNum, charId: safeCharId, action },
     ];
 
-    const countTriggered = blueprint.branches.filter((branch: any) => isBranchTriggered(branch, justTriggeredHistory, safeChapterNum));
+    const normalizedBranches = blueprint.branches.map((branch: any) => ({
+      ...branch,
+      score: branchEffectiveWeight(branch),
+      is_hidden: Boolean(branch.is_hidden || branch.tier === 'hidden'),
+    }));
+    const countTriggered = normalizedBranches.filter((branch: any) => isBranchTriggered(branch, justTriggeredHistory, safeChapterNum));
     const unlocked = countTriggered[0];
     const newlyUnlocked = countTriggered.filter((branch: any) => !safeCurrentUnlockedBranches.some((existing: any) => existing.id === branch.id));
     const newUnlockedBranches = uniqueBranches([...safeCurrentUnlockedBranches, ...newlyUnlocked]);
 
-    const leftBranches = blueprint.branches.filter((branch: any) => branch.side === 'left');
-    const rightBranches = blueprint.branches.filter((branch: any) => branch.side === 'right');
-    const leftTotalWeight = leftBranches.reduce((sum: number, branch: any) => sum + asNumber(branch.score, 0), 0);
-    const rightTotalWeight = rightBranches.reduce((sum: number, branch: any) => sum + asNumber(branch.score, 0), 0);
-
-    let directEVChange = 0;
-    for (const branch of newlyUnlocked) {
-      const score = asNumber(branch.score, 0);
-      if (branch.side === 'left') {
-        directEVChange += (score / (leftTotalWeight || 1)) * 10;
-      } else if (branch.side === 'right') {
-        directEVChange -= (score / (rightTotalWeight || 1)) * 10;
-      }
-    }
-
-    const newEndingValue = Math.max(-25, Math.min(25, asNumber(currentEndingValue, 0) + directEVChange));
+    const endingMechanics = calculateEndingMechanics({
+      currentEndingValue: asNumber(currentEndingValue, 0),
+      endingBias: normalizeEndingBias(blueprint.endingBias || { left: blueprint.left_mainline_default, right: blueprint.right_mainline_default }),
+      allBranches: normalizedBranches,
+      unlockedBranches: newUnlockedBranches,
+      newlyUnlockedBranches: newlyUnlocked,
+      intervention: { chapterNum: safeChapterNum, charId: safeCharId, action },
+      historyLength: justTriggeredHistory.length,
+      endingMode: blueprint.endingMode === 'single' ? 'single' : 'dual',
+    });
+    const newEndingValue = endingMechanics.newEndingValue;
     const charName = blueprint.characters.find((character: any) => character.id === safeCharId)?.name || '未知角色';
     const endingProto = blueprint?.authorAssets?.endingPrototypes;
     const activeInjectedBranches = uniqueBranches(newUnlockedBranches)
@@ -321,6 +323,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       newlyUnlocked,
       injected,
       endingProto,
+      endingMechanics,
       targetWordCount: safeTargetWordCount,
     });
 
@@ -358,12 +361,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     logGenerationInfo(logContext, 'success', {
       chapterNum: safeChapterNum,
       newEndingValue,
+      endingDomain: endingMechanics.endingDomain,
+      selectedEndingId: endingMechanics.selectedEndingId,
+      rewriteRange: endingMechanics.rewriteRange,
       unlockedBranchId: unlocked?.id || null,
       returnedChapters: Array.isArray(aiData.chapters) ? aiData.chapters.length : 0,
     });
     return res.status(200).json({
       aiData,
       newEndingValue,
+      endingMechanics,
       newUnlockedBranches,
       unlockedBranch: unlocked && !safeCurrentUnlockedBranches.some((branch: any) => branch.id === unlocked.id) ? unlocked : null,
       uiFeedback: {

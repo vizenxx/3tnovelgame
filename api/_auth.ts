@@ -116,7 +116,8 @@ export function sendMethodNotAllowed(res: VercelResponse) {
 export function sendInternalError(
   res: VercelResponse,
   message: string,
-  error: unknown
+  error: unknown,
+  extra: Record<string, string> = {}
 ) {
   console.error(message, error);
   const isProd =
@@ -125,11 +126,12 @@ export function sendInternalError(
 
   if (isGeminiMisconfiguredError(error)) {
     return res.status(503).json({
+      ...extra,
       error: 'AI 服务配置未完成，请稍后再试。',
     });
   }
 
-  const body: Record<string, string> = { error: message };
+  const body: Record<string, string> = { ...extra, error: message };
   if (!isProd) {
     body.detail =
       error instanceof Error ? error.stack || error.message : String(error);

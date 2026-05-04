@@ -1,6 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getBearerToken, sendInternalError, sendMethodNotAllowed, verifyFirebaseToken } from './_auth.js';
+import { getRequestLogContext, logGenerationError, logGenerationInfo } from './_log.js';
 import { supabaseInsert, supabaseRequest, supabaseRpc, supabaseUpsert } from './_supabase.js';
+import { isStoryStoreAction } from './storyStoreContract.js';
+import { normalizeEndingBias } from '../src/storyCartridge.js';
 
 const nowIso = () => new Date().toISOString();
 const ADMIN_USER_IDS = new Set(['LWgIE31RtCTZBiMNF7S9viNE7Aw2']);
@@ -54,6 +57,18 @@ const asArray = (value: any) => Array.isArray(value) ? value : [];
 const asInt = (value: any, fallback = 0) => Number.isFinite(Number(value)) ? Math.round(Number(value)) : fallback;
 const guestName = (uid: string) => `游客+${String(uid || '').slice(0, 6).toUpperCase()}`;
 
+class StoryStoreHttpError extends Error {
+  status: number;
+  code: string;
+
+  constructor(status: number, code: string, message: string) {
+    super(message);
+    this.name = 'StoryStoreHttpError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
 function countWords(text?: string) {
   const value = (text || '').trim();
   if (!value) return 0;
@@ -103,12 +118,14 @@ function storyListItem(row: any) {
 }
 
 function storyMeta(row: any) {
+  const endingRates = row.ending_rates || { left: 40, right: 40 };
   return {
     ...storyListItem(row),
     main_axis: row.main_axis,
     characters: row.characters || [],
     endingMode: row.ending_mode,
-    endingRates: row.ending_rates || { left: 40, right: 40 },
+    endingRates,
+    endingBias: normalizeEndingBias(endingRates),
     endingNames: row.ending_names || {},
     defaults: row.defaults || { targetWordCount: 800, paragraphs: { min: 6, max: 10 } },
   };
@@ -164,7 +181,7 @@ function storyRowFromMeta(meta: any, id?: string) {
     card_excerpt: meta.cardExcerpt || '',
     allow_adaptation: Boolean(meta.allowAdaptation),
     ending_mode: meta.endingMode || 'dual',
-    ending_rates: meta.endingRates || { left: 40, right: 40 },
+    ending_rates: { ...(meta.endingRates || { left: 40, right: 40 }), ...normalizeEndingBias(meta.endingBias || meta.endingRates) },
     ending_names: meta.endingNames || {},
     defaults: meta.defaults || { targetWordCount: 800, paragraphs: { min: 6, max: 10 } },
     characters: asArray(meta.characters),
@@ -183,7 +200,11 @@ async function optionalUser(req: VercelRequest) {
 async function requireUser(req: VercelRequest, res: VercelResponse) {
   const user = await optionalUser(req);
   if (!user) {
-    res.status(401).json({ error: 'Unauthorized' });
+    res.status(401).json({
+      code: 'AUTH_REQUIRED',
+      requestId: String(res.getHeader('x-request-id') || ''),
+      error: 'Unauthorized',
+    });
     return null;
   }
   return user;
@@ -192,7 +213,7 @@ async function requireUser(req: VercelRequest, res: VercelResponse) {
 async function requireStoryOwner(storyId: string, uid: string) {
   const rows = await supabaseRequest<any[]>('stories', { query: { id: `eq.${storyId}`, select: 'id,author_id' } });
   if (!rows?.[0] || rows[0].author_id !== uid) {
-    throw new Error('无权修改这个作品。');
+    throw new StoryStoreHttpError(403, 'STORY_OWNER_REQUIRED', '无权修改这个作品。');
   }
 }
 
@@ -281,10 +302,21 @@ async function getCartridge(storyId: string, currentUserId?: string) {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return sendMethodNotAllowed(res);
+  const logContext = getRequestLogContext(req, 'story-store');
+  res.setHeader('x-request-id', logContext.requestId);
 
   try {
     const body = req.body || {};
     const action = String(body.action || '');
+    if (!isStoryStoreAction(action)) {
+      logGenerationInfo(logContext, 'unsupported-action', { action });
+      return res.status(400).json({
+        code: 'UNSUPPORTED_ACTION',
+        requestId: logContext.requestId,
+        error: `Unsupported story-store action: ${action}`,
+      });
+    }
+    logGenerationInfo(logContext, 'start', { action });
     const user = await optionalUser(req);
 
     if (action === 'listPublicStories') {
@@ -413,7 +445,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (action === 'saveAppSettings') {
-      if (!ADMIN_USER_IDS.has(authUser.uid)) return res.status(403).json({ error: 'Forbidden' });
+      if (!ADMIN_USER_IDS.has(authUser.uid)) {
+        return res.status(403).json({
+          code: 'ADMIN_REQUIRED',
+          requestId: logContext.requestId,
+          error: 'Forbidden',
+        });
+      }
       await supabaseUpsert('app_settings', [{
         id: 'global',
         payload: body.settings || {},
@@ -528,6 +566,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         allowAdaptation: false,
         endingMode: 'dual',
         endingRates: { left: 40, right: 40 },
+        endingBias: { leftBaseWeight: 1, rightBaseWeight: 1 },
         endingNames: { left: '', right: '' },
         characters: [
           { id: 'c1', name: '角色一', desc: '（待填写简介）' },
@@ -571,6 +610,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         allowAdaptation: Boolean(bp.allowAdaptation),
         endingMode: bp.endingMode === 'single' ? 'single' : 'dual',
         endingRates: { left: bp.left_mainline_default || 40, right: bp.right_mainline_default || 40 },
+        endingBias: normalizeEndingBias(bp.endingBias || { left: bp.left_mainline_default, right: bp.right_mainline_default }),
         endingNames: { left: '', right: '' },
         characters: characters.length ? characters : [{ id: 'c1', name: '角色一', desc: '（待填写简介）' }],
         coverUrl: bp.coverUrl || '',
@@ -723,8 +763,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ ok: true });
     }
 
-    return res.status(400).json({ error: `Unsupported story-store action: ${action}` });
+    return res.status(400).json({
+      code: 'UNSUPPORTED_ACTION',
+      requestId: logContext.requestId,
+      error: `Unsupported story-store action: ${action}`,
+    });
   } catch (error) {
-    return sendInternalError(res, 'story-store failed', error);
+    logGenerationError(logContext, 'failed', error);
+    if (error instanceof StoryStoreHttpError) {
+      return res.status(error.status).json({
+        code: error.code,
+        requestId: logContext.requestId,
+        error: error.message,
+      });
+    }
+    return sendInternalError(res, 'story-store failed', error, {
+      code: 'STORY_STORE_FAILED',
+      requestId: logContext.requestId,
+    });
   }
 }

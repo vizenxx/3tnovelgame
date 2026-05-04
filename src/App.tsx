@@ -4,8 +4,17 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp, Download, Sun, Moon, Search } from 'lucide-react';
 import { auth, db, firebaseInitError } from './firebase';
 import { createEmptyStory, createSharedStoryRecord, createStorySnapshot, adaptBlueprintToStory, createStoryBranch, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, favoriteStory, unfavoriteStory, getAppSettings, getSharedStoryRecord, getStoryCartridge, getStoryMeta, getUserProgress, incrementStoryMetric, likeStory, listMySharedStories, listMyStories, listPublicStories, refundCoverGenerationUsage, reportStory, reserveCoverGenerationUsage, saveAppSettings, saveStoryMainlineBundle, saveStoryMeta, saveUserProgress, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch } from './storyStore';
-import { isBranchUnlockedByHistory, tierToScore } from './storyCartridge';
+import { branchEffectiveWeight, isBranchUnlockedByHistory, normalizeEndingBias } from './storyCartridge';
 import { deleteLocalCache, getLocalCache, setLocalCache } from './localCache';
+import { useAppNavigation } from './navigation/useAppNavigation';
+import { evaluateStoryRunAfterIntervention } from './storyRunEngine';
+import { createIdleStoryListSyncState, updateStoryListSegmentState, type StoryListSegment, type SyncStatus } from './storySyncTypes';
+import { StartupShell } from './components/StartupShell';
+import { BackNavButton } from './components/BackNavButton';
+import { AuthView } from './components/AuthView';
+import { semanticButtonClass, semanticIconButtonClass, semanticMenuButtonClass } from './components/semanticClasses';
+import { areStoryChaptersEquivalent, hashStoryChapters } from './storyContentHash';
+import { getFriendlyServerError } from './friendlyErrors';
 import { 
   signInWithRedirect,
   signInWithPopup,
@@ -127,6 +136,7 @@ interface Blueprint {
   endings: Ending[];
   branches: Branch[];
   endingMode?: 'dual' | 'single';
+  endingBias?: { leftBaseWeight: number; rightBaseWeight: number };
   endingNames?: { left?: string; right?: string };
   authorAssets?: {
     defaultChapters?: Record<number, { text: string; title?: string; summary?: string }>;
@@ -241,89 +251,6 @@ const writeClipboardText = async (value: string) => {
   }
 };
 
-const normalizeStoryChaptersForHash = (chapters?: Array<{ chapter_num?: number; title?: string; summary?: string; text?: string }>) => (
-  (chapters || [])
-    .map((chapter) => ({
-      chapter_num: Number(chapter?.chapter_num || 0),
-      title: String(chapter?.title || '').trim(),
-      summary: String(chapter?.summary || '').trim(),
-      text: String(chapter?.text || '').replace(/\s+/g, ' ').trim(),
-    }))
-    .filter((chapter) => chapter.chapter_num >= 1 && chapter.chapter_num <= 7)
-    .sort((a, b) => a.chapter_num - b.chapter_num)
-);
-
-const hashStoryChapters = (chapters?: Array<{ chapter_num?: number; title?: string; summary?: string; text?: string }>) => {
-  const value = JSON.stringify(normalizeStoryChaptersForHash(chapters));
-  let hash = 2166136261;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0).toString(16).padStart(8, '0');
-};
-
-const areStoryChaptersEquivalent = (
-  a?: Array<{ chapter_num?: number; title?: string; summary?: string; text?: string }>,
-  b?: Array<{ chapter_num?: number; title?: string; summary?: string; text?: string }>
-) => hashStoryChapters(a) === hashStoryChapters(b);
-
-const semanticButtonClass = (
-  variant: 'primary' | 'secondary' | 'danger' | 'ghost',
-  options?: { fullWidth?: boolean; compact?: boolean }
-) => {
-  const base = `inline-flex items-center justify-center gap-2 rounded-xl transition-all duration-150 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 disabled:pointer-events-none disabled:opacity-50 ${
-    options?.compact ? 'px-3 py-2 text-xs font-bold' : 'px-4 py-3 text-sm font-bold'
-  } ${options?.fullWidth ? 'w-full' : ''}`;
-  const variants = {
-    primary: 'bg-white text-black shadow-lg hover:bg-zinc-200 hover:shadow-xl',
-    secondary: 'bg-zinc-900 border border-zinc-700 text-zinc-100 hover:border-zinc-500 hover:bg-zinc-800/90',
-    danger: 'bg-rose-500/90 text-white hover:bg-rose-500 hover:shadow-lg hover:shadow-rose-950/30',
-    ghost: 'bg-zinc-800 text-zinc-200 hover:bg-zinc-700 hover:text-white',
-  };
-  return `${base} ${variants[variant]}`;
-};
-
-const semanticIconButtonClass = (variant: 'secondary' | 'danger' | 'ghost' = 'ghost') => {
-  const variants = {
-    secondary: 'border-zinc-700 bg-zinc-900/90 text-zinc-100 hover:border-zinc-500 hover:text-white',
-    danger: 'border-rose-500/40 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 hover:border-rose-400/60',
-    ghost: 'border-zinc-800 bg-zinc-900 text-zinc-300 hover:border-zinc-600 hover:text-white',
-  };
-  return `inline-flex h-10 w-10 items-center justify-center rounded-xl border transition-all duration-150 hover:-translate-y-0.5 active:translate-y-0 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 ${variants[variant]}`;
-};
-
-const semanticMenuButtonClass = (variant: 'primary' | 'secondary' | 'danger' | 'ghost' = 'ghost') => {
-  const variants = {
-    primary: 'text-indigo-100 hover:bg-indigo-950/60',
-    secondary: 'text-emerald-100 hover:bg-emerald-950/60',
-    danger: 'text-rose-100 hover:bg-rose-950/60',
-    ghost: 'text-zinc-100 hover:bg-zinc-900',
-  };
-  return `flex w-full items-center gap-2 rounded-xl px-3 py-3 text-left text-sm transition-all duration-150 hover:translate-x-1 active:translate-x-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 disabled:pointer-events-none disabled:opacity-50 ${variants[variant]}`;
-};
-
-const BackNavButton = ({
-  label,
-  onClick,
-  className = '',
-}: {
-  label: string;
-  onClick: () => void;
-  className?: string;
-}) => (
-  <button
-    type="button"
-    onClick={onClick}
-    aria-label={label}
-    title={label}
-    className={`fixed left-4 top-[max(1rem,env(safe-area-inset-top))] z-[2300] inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950/85 text-zinc-200 shadow-xl backdrop-blur-md transition-all duration-150 hover:-translate-y-0.5 hover:border-zinc-600 hover:text-white active:translate-y-0 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 sm:left-6 ${className}`}
-  >
-    <ChevronLeft className="h-5 w-5" />
-    <span className="sr-only">{label}</span>
-  </button>
-);
-
 const renderParagraphWithHighlights = (text: unknown, characters: Character[] = []) => {
   const parts = String(text || '').split(/(<mark>.*?<\/mark>)/g);
   return parts.map((part, i) => {
@@ -407,52 +334,6 @@ const InstallAppBanner = ({
     </div>
   );
 };
-
-const SimulatedProgressBar = () => {
-  const [width, setWidth] = useState("18%");
-  const [percent, setPercent] = useState(0);
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => {
-      setTimeout(() => setWidth("86%"), 50);
-    });
-    const start = Date.now();
-    const interval = setInterval(() => {
-      const elapsed = Date.now() - start;
-      setPercent(Math.min(86, Math.round(18 + (elapsed / 6000) * 68)));
-    }, 180);
-    return () => {
-      cancelAnimationFrame(frame);
-      clearInterval(interval);
-    };
-  }, []);
-  return (
-    <>
-      <div className="app-boot-progress">
-        <div
-          className="app-boot-progress-fill"
-          style={{ width, transitionDuration: '6000ms' }}
-        />
-      </div>
-      <div className="app-boot-percent">{percent}%</div>
-    </>
-  );
-};
-
-const BootSplash = ({ message }: { message: string }) => (
-  <div className="app-boot-screen">
-    <div className="app-boot-cover-main">
-      <div className="app-boot-label">3T Novelgame</div>
-      <div className="app-boot-mark" aria-hidden="true">
-        <img src="/pwa-icon.svg" alt="" />
-      </div>
-      <div className="app-boot-title">命运干涉</div>
-    </div>
-    <div className="app-boot-progress-wrap">
-      <SimulatedProgressBar />
-      <div className="app-boot-subtitle">{message || '正在连接时空枢纽，请稍候片刻。'}</div>
-    </div>
-  </div>
-);
 
 const PwaUpdateModal = ({
   updateInfo,
@@ -928,26 +809,16 @@ export default function App() {
   const [isSessionHydrated, setIsSessionHydrated] = useState(false);
   const [startupMessage, setStartupMessage] = useState('正在连接时空枢纽...');
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [gameState, setGameState] = useState<GameState>('STORY_SELECT');
-  const navigationStackRef = useRef<GameState[]>([]);
-  const navigateTo = (nextState: GameState, options: { replace?: boolean; reset?: boolean } = {}) => {
-    setGameState((current) => {
-      if (options.reset) {
-        navigationStackRef.current = [];
-      } else if (!options.replace && current !== nextState) {
-        const stack = navigationStackRef.current;
-        navigationStackRef.current = stack[stack.length - 1] === current ? stack : [...stack, current];
-      }
-      return nextState;
-    });
-  };
+  const {
+    viewState: gameState,
+    setViewState: setGameState,
+    navigateTo,
+    resetTo: resetNavigationTo,
+    goBack,
+    returnStackRef: navigationStackRef,
+  } = useAppNavigation<GameState>('STORY_SELECT');
   const resetToHome = () => {
-    navigationStackRef.current = [];
-    setGameState('STORY_SELECT');
-  };
-  const goBack = (fallback: GameState = 'STORY_SELECT') => {
-    const previous = navigationStackRef.current.pop();
-    setGameState(previous || fallback);
+    resetNavigationTo('STORY_SELECT');
   };
   const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
   const [globalLoadingMessage, setGlobalLoadingMessage] = useState<string | null>(null);
@@ -1031,6 +902,7 @@ export default function App() {
   const [publicStories, setPublicStories] = useState<any[]>([]);
   const [myStories, setMyStories] = useState<any[]>([]);
   const [mySharedStories, setMySharedStories] = useState<any[]>([]);
+  const [storyListSyncState, setStoryListSyncState] = useState(createIdleStoryListSyncState);
   const [archiveFilter, setArchiveFilter] = useState<'all' | 'private' | 'unlisted'>('all');
   const [archiveSearch, setArchiveSearch] = useState('');
   const [archiveUpdatingIds, setArchiveUpdatingIds] = useState<Record<string, boolean>>({});
@@ -1781,6 +1653,7 @@ export default function App() {
         visibility: cartridge.meta?.visibility || 'private',
         tags: normalizeTagList(cartridge.meta?.tags || []),
         endingMode: cartridge.meta?.endingMode || 'dual',
+        endingBias: normalizeEndingBias(cartridge.meta?.endingBias || cartridge.meta?.endingRates),
         endingNames: {
           left: limitFiveChars(cartridge.meta?.endingNames?.left || ''),
           right: limitFiveChars(cartridge.meta?.endingNames?.right || ''),
@@ -1939,17 +1812,6 @@ export default function App() {
     });
   };
 
-  const getFriendlyFirebaseError = (error: any, fallback = '操作失败，请稍后重试。') => {
-    const message = String(error?.message || error || '');
-    if (/quota|RESOURCE_EXHAUSTED|exceeded/i.test(message)) {
-      return 'Firebase 今日免费读取额度已用尽。作品库会尽量显示本机缓存；需要等额度重置，或减少读取后重新部署。';
-    }
-    if (/permission|insufficient/i.test(message)) {
-      return 'Firebase 权限不足，请检查登录状态或资料权限。';
-    }
-    return message || fallback;
-  };
-
   const cacheScope = () => `${localDeviceIdRef.current}:${user?.uid || 'guest'}`;
   const storyListCacheKey = () => `story-list:${cacheScope()}`;
   const storyCartridgeCacheKey = (storyId: string) => `story-cartridge:${cacheScope()}:${storyId}`;
@@ -1996,6 +1858,10 @@ export default function App() {
 
   const cacheSharedStory = async (storyId: string, record: { meta: any; chapters: Chapter[] }) => {
     await setLocalCache(sharedStoryCacheKey(storyId), record);
+  };
+
+  const markStoryListSegment = (segment: StoryListSegment, status: SyncStatus, error?: string) => {
+    setStoryListSyncState((prev) => updateStoryListSegmentState(prev, segment, status, error));
   };
 
   const buildCurrentRunSnapshot = () => ({
@@ -2053,37 +1919,67 @@ export default function App() {
   const refreshStories = async (options: { force?: boolean; includeArchive?: boolean } = {}) => {
     if (!user || !db) return false;
     setIsLoadingStories(true);
+    markStoryListSegment('public', 'loading');
+    markStoryListSegment('mine', 'loading');
+    if (options.includeArchive) markStoryListSegment('archive', 'loading');
     try {
       const cached = await getStoryListCache();
       if (cached?.value) {
         applyStoryListCache(cached.value);
         if (!options.force && Date.now() - cached.updatedAt < STORY_LIST_CACHE_TTL_MS) {
           setStoryListLoadError(null);
+          markStoryListSegment('public', 'stale');
+          markStoryListSegment('mine', 'stale');
+          if (cached.value.shared) markStoryListSegment('archive', 'stale');
           return true;
         }
       }
-      const [pub, mine] = await withTimeout(
-        Promise.all([
-          listPublicStories(db as any, 18),
-          listMyStories(db as any, user.uid, 30),
-        ]),
-        8500,
-        "连接作品档案超时，请稍后重试。"
-      );
-      const shared = options.includeArchive
-        ? await withTimeout(listMySharedStories(db as any, user.uid, 30), 12000, '连接收藏馆超时，稍后进入收藏馆时会继续同步。')
-        : (cached?.value?.shared || mySharedStories);
+      markStoryListSegment('public', 'syncing');
+      markStoryListSegment('mine', 'syncing');
+      const [publicResult, mineResult] = await Promise.allSettled([
+        withTimeout(listPublicStories(db as any, 18), 8500, '公开作品同步超时。'),
+        withTimeout(listMyStories(db as any, user.uid, 30), 8500, '我的作品同步超时。'),
+      ]);
+      const pub = publicResult.status === 'fulfilled'
+        ? publicResult.value
+        : (cached?.value?.pub || publicStories);
+      const mine = mineResult.status === 'fulfilled'
+        ? mineResult.value
+        : (cached?.value?.mine || myStories);
+      if (publicResult.status === 'rejected') markStoryListSegment('public', 'error', String(publicResult.reason?.message || publicResult.reason || '公开作品同步失败'));
+      else markStoryListSegment('public', 'idle');
+      if (mineResult.status === 'rejected') markStoryListSegment('mine', 'error', String(mineResult.reason?.message || mineResult.reason || '我的作品同步失败'));
+      else markStoryListSegment('mine', 'idle');
+
+      let shared = cached?.value?.shared || mySharedStories;
+      if (options.includeArchive) {
+        markStoryListSegment('archive', 'syncing');
+        try {
+          shared = await withTimeout(listMySharedStories(db as any, user.uid, 30), 12000, '连接收藏馆超时，稍后进入收藏馆时会继续同步。');
+          markStoryListSegment('archive', 'idle');
+        } catch (archiveError: any) {
+          markStoryListSegment('archive', 'error', String(archiveError?.message || archiveError || '收藏馆同步失败'));
+        }
+      }
       setPublicStories(pub);
       setMyStories(mine);
       setMySharedStories(shared);
       await cacheStoryLists(pub, mine, shared);
-      setStoryListLoadError(null);
-      return true;
+      const segmentErrors = [publicResult, mineResult].filter((result) => result.status === 'rejected');
+      if (segmentErrors.length === 2 && !cached?.value) {
+        const message = '作品库同步失败，请稍后重试。';
+        setStoryListLoadError(message);
+        showError(message);
+        return false;
+      }
+      setStoryListLoadError(segmentErrors.length ? '部分作品列表同步失败，已保留可用内容。' : null);
+      if (segmentErrors.length) showError('部分作品列表同步失败，已保留可用内容。');
+      return segmentErrors.length < 2;
     } catch (error: any) {
       console.error(error);
       const cached = await getStoryListCache();
       if (cached?.value) applyStoryListCache(cached.value);
-      const message = getFriendlyFirebaseError(error, '作品库加载失败。');
+      const message = getFriendlyServerError(error, '作品库同步失败。');
       setStoryListLoadError(message);
       showError(message);
       return false;
@@ -2095,12 +1991,17 @@ export default function App() {
   const refreshArchiveStories = async (options: { force?: boolean } = {}) => {
     if (!user || !db) return;
     setIsLoadingStories(true);
+    markStoryListSegment('archive', 'loading');
     try {
       const cached = await getStoryListCache();
       if (cached?.value?.shared) {
         setMySharedStories(cached.value.shared);
-        if (!options.force && Date.now() - cached.updatedAt < STORY_LIST_CACHE_TTL_MS) return;
+        if (!options.force && Date.now() - cached.updatedAt < STORY_LIST_CACHE_TTL_MS) {
+          markStoryListSegment('archive', 'stale');
+          return;
+        }
       }
+      markStoryListSegment('archive', 'syncing');
       const shared = await withTimeout(
         listMySharedStories(db as any, user.uid, 30),
         14000,
@@ -2108,11 +2009,14 @@ export default function App() {
       );
       setMySharedStories(shared);
       await cacheStoryLists(publicStories, myStories, shared);
+      markStoryListSegment('archive', 'idle');
     } catch (error: any) {
       console.error(error);
       const cached = await getStoryListCache();
       if (cached?.value?.shared) setMySharedStories(cached.value.shared);
-      showError(getFriendlyFirebaseError(error, '收藏馆同步失败，已先显示本机缓存。'));
+      const message = getFriendlyServerError(error, '收藏馆同步失败，已先显示本机缓存。');
+      markStoryListSegment('archive', 'error', message);
+      showError(message);
     } finally {
       setIsLoadingStories(false);
     }
@@ -2206,6 +2110,7 @@ export default function App() {
         endings: [],
         left_mainline_default: 40,
         right_mainline_default: 40,
+        endingBias: { leftBaseWeight: 1, rightBaseWeight: 1 },
       };
       const resetArtstyleChapters = toDefaultArtstyleChapters(readonlyStoryData.chapters);
       const storyId = await adaptBlueprintToStory(db as any, {
@@ -2443,6 +2348,19 @@ export default function App() {
     }
   };
 
+  const handleAnonymousLogin = async () => {
+    if (!auth) return;
+    setIsLoggingIn(true);
+    try {
+      await signInAnonymously(auth);
+    } catch (error: any) {
+      console.error(error);
+      showError(error?.message || '游客登录失败，请重试。');
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
   useEffect(() => {
     if (!auth) {
       setIsAuthReady(true);
@@ -2673,7 +2591,7 @@ export default function App() {
       console.error(error);
       setIsSessionHydrated(true);
       resetToHome();
-      showError('同步会话失败，请检查 Firebase 权限配置后重试。');
+      showError('同步会话失败，请检查登录状态或服务器权限配置后重试。');
     });
 
     return () => {
@@ -2902,7 +2820,7 @@ export default function App() {
   */
 
   const showError = (msg: string) => {
-    setErrorMsg(getFriendlyFirebaseError(msg, msg));
+    setErrorMsg(getFriendlyServerError(msg, msg));
     setTimeout(() => setErrorMsg(null), 5000);
   };
 
@@ -2980,6 +2898,7 @@ export default function App() {
     left_mainline_default: 80,
     right_mainline_default: 40,
     endingMode: cartridge.meta.endingMode,
+    endingBias: normalizeEndingBias(cartridge.meta.endingBias || cartridge.meta.endingRates),
     endingNames: cartridge.meta.endingNames,
     characters: cartridge.meta.characters || [],
     chapters: (() => {
@@ -3012,7 +2931,7 @@ export default function App() {
       return {
         id: branch.id,
         name: branch.name,
-        score: tierToScore(branch.tier),
+        score: branchEffectiveWeight(branch),
         side: branch.side,
         condition_char: condition.charId,
         condition_action: condition.action,
@@ -3170,6 +3089,7 @@ export default function App() {
       }
       data.narrative_person = narrativePerson;
       data.endingMode = data.endingMode === 'single' ? 'single' : quickEndingMode;
+      data.endingBias = normalizeEndingBias(data.endingBias || { left: data.left_mainline_default, right: data.right_mainline_default });
       data.chapters = ensureSevenChapterShells(data.chapters || []);
       await setLocalCache(quickGenerationDraftCacheKey(), { signature: draftSignature, blueprint: data });
 
@@ -3679,7 +3599,18 @@ export default function App() {
 
   const handleIntervene = async (chapterNum: number, charId: string, action: 'bless' | 'curse', confirmedEarlierRewrite = false) => {
     if (interventionsLeft <= 0 || isRewriting || !blueprint || !user) return;
-    const willRewriteEarlierThanPastIntervention = interventionHistory.some((item) => item.chapterNum > chapterNum);
+    const runDecision = evaluateStoryRunAfterIntervention({
+      branches: (blueprint.branches || []) as any,
+      history: interventionHistory,
+      previousUnlockedBranches: unlockedBranches as any,
+      previousHistoricalBranches: historicallyUnlockedBranches as any,
+      intervention: { chapterNum, charId, action },
+      previousIntervenedChapters: intervenedChapters,
+      currentEndingValue: endingValue,
+      endingBias: blueprint?.endingBias || { left: blueprint?.left_mainline_default, right: blueprint?.right_mainline_default },
+      endingMode: blueprint?.endingMode === 'single' ? 'single' : 'dual',
+    });
+    const willRewriteEarlierThanPastIntervention = runDecision.shouldWarnAboutRewriteRisk;
     if (willRewriteEarlierThanPastIntervention && !confirmedEarlierRewrite) {
       const affectedChapters = Array.from(new Set(interventionHistory.filter((item) => item.chapterNum > chapterNum).map((item) => Number(item.chapterNum)))).sort((a, b) => Number(a) - Number(b));
       setConfirmationModal({
@@ -6827,6 +6758,38 @@ export default function App() {
                         );
                       })}
                     </div>
+                    <div className="mt-4 rounded-2xl border border-zinc-800/80 bg-zinc-950/60 p-4">
+                      <div className="text-sm font-black text-zinc-100">命运初始倾向权重</div>
+                      <p className="mt-1 text-xs leading-relaxed text-zinc-500">不会改变开局 EV（仍为 0），只代表原故事本身偏向左/右结局域的命运惯性。默认 1:1 为中性。</p>
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        {([
+                          { key: 'leftBaseWeight', label: '左域基础权重' },
+                          { key: 'rightBaseWeight', label: '右域基础权重' },
+                        ] as const).map((option) => {
+                          const bias = normalizeEndingBias(authoringCartridge.meta?.endingBias || authoringCartridge.meta?.endingRates);
+                          return (
+                            <label key={option.key} className="block space-y-2 text-xs font-bold text-zinc-400">
+                              <span>{option.label}</span>
+                              <input
+                                type="number"
+                                min={1}
+                                max={20}
+                                step={1}
+                                value={bias[option.key]}
+                                onChange={(event) => {
+                                  const raw = Math.max(1, Math.min(20, Number(event.target.value) || 1));
+                                  setAuthoringCartridge((prev: any) => {
+                                    const prevBias = normalizeEndingBias(prev.meta?.endingBias || prev.meta?.endingRates);
+                                    return { ...prev, meta: { ...prev.meta, endingBias: { ...prevBias, [option.key]: raw } } };
+                                  });
+                                }}
+                                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                              />
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </section>
                   <section className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
                     <div className="mb-3 text-sm font-black text-zinc-100">作品可见性</div>
@@ -7317,166 +7280,25 @@ export default function App() {
     </AnimatePresence>
   );
 
-  const renderAuthView = () => {
-    const isIos = isIosDevice();
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-950 px-6 py-12 text-zinc-100">
-        <div className="w-full max-w-md space-y-8">
-          <div className="space-y-4 text-center">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-900 text-indigo-300">
-              <Wand2 className="h-8 w-8" />
-            </div>
-            <div>
-              <h1 className="text-4xl font-black text-white">命运干涉</h1>
-              <p className="mt-3 text-sm leading-relaxed text-zinc-500">
-                使用邮箱和密码创建账户，之后在手机、PWA、桌面浏览器都能用同一方式进入。
-              </p>
-            </div>
-            {!isStandaloneMode && (
-              <button
-                type="button"
-                onClick={handleInstallApp}
-                className={`${semanticButtonClass('secondary', { compact: true })} mx-auto`}
-              >
-                <Download className="h-4 w-4" />
-                下载 App 到桌面
-              </button>
-            )}
-          </div>
-
-          <div className="space-y-4 rounded-3xl border border-zinc-800 bg-zinc-900/40 p-5">
-            <input
-              type="email"
-              value={authEmail}
-              onChange={(event) => setAuthEmail(event.target.value)}
-              placeholder="邮箱"
-              className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none transition-colors focus:border-indigo-500"
-            />
-            <input
-              type="password"
-              value={authPassword}
-              onChange={(event) => setAuthPassword(event.target.value)}
-              placeholder="密码（至少 6 位）"
-              className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none transition-colors focus:border-indigo-500"
-            />
-            <button
-              type="button"
-              onClick={handleEmailPasswordLogin}
-              disabled={isLoggingIn}
-              className={semanticButtonClass('primary', { fullWidth: true })}
-            >
-              {isLoggingIn ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
-              邮箱登录 / 创建账户
-            </button>
-            <button
-              type="button"
-              onClick={handlePasswordReset}
-              className="w-full text-center text-xs font-bold text-zinc-500 transition-colors hover:text-zinc-300"
-            >
-              忘记密码
-            </button>
-          </div>
-
-          {!isIos ? (
-            <div className="space-y-4">
-              <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-600">
-                <div className="h-px flex-1 bg-zinc-800" />
-                快捷入口
-                <div className="h-px flex-1 bg-zinc-800" />
-              </div>
-              <button
-                type="button"
-                onClick={handleGoogleLogin}
-                disabled={isLoggingIn}
-                className={semanticButtonClass('secondary', { fullWidth: true })}
-              >
-                {isLoggingIn ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
-                Google 快捷登录 / 绑定
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-600">
-                <div className="h-px flex-1 bg-zinc-800" />
-                Google 绑定
-                <div className="h-px flex-1 bg-zinc-800" />
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowSafariGuide(true)}
-                disabled={isLoggingIn}
-                className={semanticButtonClass('secondary', { fullWidth: true })}
-              >
-                <LogIn className="h-4 w-4" />
-                在 Safari 绑定 Google 账户
-              </button>
-            </div>
-          )}
-
-          <button
-            type="button"
-            onClick={async () => {
-              if (!auth) return;
-              setIsLoggingIn(true);
-              try {
-                await signInAnonymously(auth);
-              } catch (error: any) {
-                console.error(error);
-                showError(error?.message || '游客登录失败，请重试。');
-              } finally {
-                setIsLoggingIn(false);
-              }
-            }}
-            disabled={isLoggingIn}
-            className={semanticButtonClass('ghost', { fullWidth: true })}
-          >
-            <UserIcon className="h-4 w-4" />
-            先以游客身份游玩
-          </button>
-
-          <AnimatePresence>
-            {showSafariGuide && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className={`${safeModalBackdropClass} z-[6000] bg-black/80 backdrop-blur-md`}
-                onClick={() => setShowSafariGuide(false)}
-              >
-                <motion.div
-                  initial={{ y: 16, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  exit={{ y: 16, opacity: 0 }}
-                  className="w-full max-w-sm rounded-3xl border border-zinc-800 bg-zinc-950 p-6 shadow-2xl"
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <div className="mb-5 flex items-center justify-between">
-                    <h2 className="text-lg font-black text-white">iOS Google 绑定</h2>
-                    <button type="button" onClick={() => setShowSafariGuide(false)} className={semanticIconButtonClass('ghost')}>
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <div className="space-y-3 text-sm leading-relaxed text-zinc-400">
-                    <p>请在 Safari 打开当前网页，使用 Google 登录完成账户绑定。</p>
-                    <p>绑定后回到 PWA，就可以用同一邮箱密码登录并同步故事记录。</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleGoogleLogin}
-                    className={`${semanticButtonClass('primary', { fullWidth: true })} mt-6`}
-                  >
-                    <LogIn className="h-4 w-4" />
-                    继续 Google 登录
-                  </button>
-                </motion.div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      </div>
-    );
-  };
-
+  const renderAuthView = () => (
+    <AuthView
+      isIos={isIosDevice()}
+      isStandaloneMode={isStandaloneMode}
+      isLoggingIn={isLoggingIn}
+      authEmail={authEmail}
+      authPassword={authPassword}
+      showSafariGuide={showSafariGuide}
+      onAuthEmailChange={setAuthEmail}
+      onAuthPasswordChange={setAuthPassword}
+      onEmailPasswordLogin={handleEmailPasswordLogin}
+      onPasswordReset={handlePasswordReset}
+      onGoogleLogin={handleGoogleLogin}
+      onAnonymousLogin={handleAnonymousLogin}
+      onInstallApp={handleInstallApp}
+      onSafariGuideOpen={() => setShowSafariGuide(true)}
+      onSafariGuideClose={() => setShowSafariGuide(false)}
+    />
+  );
   const renderScrollToTopButton = () => (
     <AnimatePresence>
       {showScrollTopButton && (
@@ -7544,7 +7366,7 @@ export default function App() {
       {installGuideModal}
       
       {!isSessionHydrated ? (
-        <BootSplash message={startupMessage} />
+        <StartupShell message={startupMessage} />
       ) : gameState === 'READONLY_STORY' && readonlyStoryData ? (
         <>
           {renderReadonlyStoryView()}
@@ -7555,7 +7377,7 @@ export default function App() {
       ) : !user ? (
         renderAuthView()
       ) : isRecoveringInvalidGameState ? (
-        <BootSplash message="正在恢复页面状态..." />
+        <StartupShell message="正在恢复页面状态..." />
       ) : (
         <>
           {gameState === 'STORY_SELECT' && renderStorySelectView()}

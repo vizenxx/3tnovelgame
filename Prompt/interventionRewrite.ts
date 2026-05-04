@@ -40,15 +40,24 @@ export function buildInterventionRewritePrompt(args: {
   newlyUnlocked: any[];
   injected?: any[] | null;
   endingProto?: any;
+  endingMechanics?: any;
   targetWordCount: number;
 }) {
   const isSingleEnding = args.blueprint?.endingMode === 'single' || args.blueprint?.ending_mode === 'single';
+  const mechanics = args.endingMechanics || {};
+  const rewriteRange = mechanics.rewriteRange || { startChapter: args.safeChapterNum, endChapter: 7, reason: 'local' };
   return `你是一个互动小说引擎。玩家在第 ${args.safeChapterNum} 章进行了一次命运干涉。
 
 角色ID对照表：
 ${args.blueprint.characters.map((character: any) => `${character.name} (ID: ${character.id})`).join('\n')}
 
 ${args.worldStatePrompt}
+
+命运数学判定：
+- 作者初始倾向权重：左 ${mechanics.endingBias?.leftBaseWeight ?? 1} / 右 ${mechanics.endingBias?.rightBaseWeight ?? 1}
+- 结算池：左 ${Math.round((mechanics.leftPool ?? 1) * 100) / 100} / 右 ${Math.round((mechanics.rightPool ?? 1) * 100) / 100}
+- 结局域：${mechanics.endingDomain || 'middle'}；最高导向结局：${mechanics.selectedEndingId || 'default'}
+- 涟漪重写范围：第 ${rewriteRange.startChapter} 章到第 ${rewriteRange.endChapter} 章；原因：${rewriteRange.reason}
 
 各章情节概况（大纲）：
 ${args.safeChapters.map((chapter: any) => `第${chapter.chapter_num}章：${chapter.summary || String(chapter.text || '').substring(0, 80)}`).join('\n')}

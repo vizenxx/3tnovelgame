@@ -12,6 +12,8 @@
     "preview": "vite preview",
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "lint": "tsc --noEmit",
+    "test:engine": "tsx scripts/test-story-run-engine.ts",
+    "check:industrial": "node scripts/industrial-check.mjs",
     "migrate:firestore:export": "node scripts/export-firestore.mjs",
     "migrate:supabase:dry-run": "node scripts/import-supabase.mjs --dry-run",
     "migrate:supabase:import": "node scripts/import-supabase.mjs"

@@ -3,6 +3,12 @@ export type BranchSide = 'left' | 'right';
 export type BranchTier = 'small' | 'medium' | 'large' | 'hidden';
 export type InterventionAction = 'bless' | 'curse';
 export type EndingMode = 'dual' | 'single';
+export type EndingDomain = 'left' | 'middle' | 'right';
+
+export interface EndingBias {
+  leftBaseWeight: number;
+  rightBaseWeight: number;
+}
 
 export interface StoryCharacter {
   id: string; // c1, c2...
@@ -35,6 +41,7 @@ export interface StoryMeta {
   allowAdaptation?: boolean;
   endingMode?: EndingMode; // default: dual
   endingRates?: { left: number; right: number }; // 0-80, only meaningful in dual mode
+  endingBias?: EndingBias;
   /** 玩家总结界面展示用，各≤5字；双向模式下对应左/右倾向结局的「XX结局」 */
   endingNames?: { left?: string; right?: string };
   createdAt: string;
@@ -134,6 +141,7 @@ export interface RuntimeBlueprint {
   }>;
   endings: Array<{ type: 'good' | 'normal' | 'bad'; text: string }> & any[];
   endingMode?: EndingMode;
+  endingBias?: EndingBias;
   branches: RuntimeBranch[];
   // Cartridge-only author assets
   authorAssets?: {
@@ -146,7 +154,37 @@ export function tierToScore(tier: BranchTier): number {
   if (tier === 'small') return 1;
   if (tier === 'medium') return 2;
   if (tier === 'large') return 3;
-  return 5; // hidden
+  return 2; // legacy hidden means "small + hidden bonus"; hidden is no longer a strength tier.
+}
+
+export function branchBaseWeight(tier?: BranchTier): number {
+  if (tier === 'medium') return 2;
+  if (tier === 'large') return 3;
+  return 1;
+}
+
+export function branchHiddenBonus(branch: { tier?: BranchTier; is_hidden?: boolean; hidden?: boolean }): number {
+  return branch.tier === 'hidden' || branch.is_hidden || branch.hidden ? 1 : 0;
+}
+
+export function branchEffectiveWeight(branch: {
+  tier?: BranchTier;
+  score?: number;
+  is_hidden?: boolean;
+  hidden?: boolean;
+}): number {
+  const score = Number(branch.score);
+  if (Number.isFinite(score) && score > 0 && score <= 4) return Math.max(1, Math.min(4, Math.round(score)));
+  return branchBaseWeight(branch.tier) + branchHiddenBonus(branch);
+}
+
+export function normalizeEndingBias(input?: Partial<EndingBias> | { left?: number; right?: number } | null): EndingBias {
+  const rawLeft = Number((input as any)?.leftBaseWeight ?? (input as any)?.left);
+  const rawRight = Number((input as any)?.rightBaseWeight ?? (input as any)?.right);
+  return {
+    leftBaseWeight: Number.isFinite(rawLeft) && rawLeft > 0 ? Math.min(20, rawLeft) : 1,
+    rightBaseWeight: Number.isFinite(rawRight) && rawRight > 0 ? Math.min(20, rawRight) : 1,
+  };
 }
 
 export function isBranchUnlockedByHistory(args: {
