@@ -1488,7 +1488,20 @@ export default function App() {
     const storyId = story?.id || story?.storyId || story?.sourceStoryId;
     if (!storyId) throw new Error('找不到作品 ID。');
     const shareTitle = formatBookTitle(getStoryTitle(story));
-    const shareText = buildStoryShareText(shareTitle, []);
+    // Try to build a real excerpt from card data or cached cartridge
+    const excerptSource = story?.chapters || [];
+    const mainAxis = getStoryMainAxis(story);
+    const cardExcerpt = story?.cardExcerpt || story?.meta?.cardExcerpt || '';
+    let shareText: string;
+    if (excerptSource.length > 0) {
+      shareText = buildStoryShareText(shareTitle, excerptSource);
+    } else if (cardExcerpt) {
+      shareText = `《${stripBookTitle(shareTitle)}》\n${String(cardExcerpt).slice(0, 120)}${cardExcerpt.length > 120 ? '...' : ''}\n\n有人改写了命运，而这一页，留下了它偏离原轨的瞬间。`;
+    } else if (mainAxis) {
+      shareText = `《${stripBookTitle(shareTitle)}》\n${String(mainAxis).slice(0, 120)}${mainAxis.length > 120 ? '...' : ''}\n\n故事已经开场，命运还没有落笔。来看看它会把你带向哪里。`;
+    } else {
+      shareText = buildStoryShareText(shareTitle, []);
+    }
     await sharePayload({ title: shareTitle, text: shareText, url: buildOriginalStoryUrl(storyId) });
   };
 
@@ -2986,6 +2999,38 @@ export default function App() {
       console.error(e);
       showError("重置命运失败");
       setShowLeaveGameModal(false);
+    } finally {
+      setGlobalLoadingMessage(null);
+    }
+  };
+
+  const restartCurrentStory = async () => {
+    if (!user || !db || !activeStoryId) {
+      // No active story to restart — fall back to full reset
+      await resetGame();
+      return;
+    }
+    const storyId = activeStoryId;
+    try {
+      setGlobalLoadingMessage('正在重新加载故事...');
+      setShowLeaveGameModal(false);
+      await deleteLocalCache(activeRunCacheKey());
+      // Re-load the cartridge and apply with no progress data (fresh start)
+      let cartridge = await getCachedStoryCartridge(storyId);
+      if (!cartridge) {
+        cartridge = await getStoryCartridge(db as any, storyId);
+      }
+      if (!cartridge) {
+        showError('重新加载故事失败，已返回作品库。');
+        await resetGame();
+        return;
+      }
+      applyStoryCartridgeForPlay(storyId, cartridge); // no progressData = fresh start
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      showError('命运已重置，从第一章重新开始。');
+    } catch (e) {
+      console.error(e);
+      showError('重新干涉失败');
     } finally {
       setGlobalLoadingMessage(null);
     }
@@ -5826,7 +5871,12 @@ export default function App() {
           <div className="mt-6 grid gap-3 sm:grid-cols-3">
             <button
               type="button"
-              onClick={user ? handleInterveneFromReadonly : () => setIsAccountCenterOpen(true)}
+              onClick={user ? handleInterveneFromReadonly : () => {
+                setReadonlyStoryData(null);
+                window.history.replaceState({}, '', window.location.pathname);
+                resetToHome();
+                showError('请先注册或登录，然后再干涉故事。');
+              }}
               disabled={user ? !story.meta?.sourceStoryId : false}
               className={semanticButtonClass('primary', { compact: true })}
             >
@@ -5835,7 +5885,12 @@ export default function App() {
             </button>
             <button
               type="button"
-              onClick={user ? handleAdaptFromReadonly : () => setIsAccountCenterOpen(true)}
+              onClick={user ? handleAdaptFromReadonly : () => {
+                setReadonlyStoryData(null);
+                window.history.replaceState({}, '', window.location.pathname);
+                resetToHome();
+                showError('请先注册或登录，然后再改编故事。');
+              }}
               className={semanticButtonClass('secondary', { compact: true })}
             >
               <Wand2 className="h-4 w-4" />
@@ -7530,7 +7585,7 @@ export default function App() {
                   <button onClick={() => { setIsActionMenuOpen(false); handleAdaptCurrentStory(); }} disabled={!canAdaptCurrentStory() || isLoadingStories} className={semanticMenuButtonClass('secondary')}>
                     <Wand2 className="h-5 w-5" /> {activeStoryMeta?.authorId === user?.uid ? '改变命运' : '创作同人'}
                   </button>
-                  <button onClick={() => { setIsActionMenuOpen(false); resetGame(); }} className={semanticMenuButtonClass('ghost')}>
+                  <button onClick={() => { setIsActionMenuOpen(false); restartCurrentStory(); }} className={semanticMenuButtonClass('ghost')}>
                     <RefreshCcw className="h-5 w-5" /> 重新干涉
                   </button>
                 </>
