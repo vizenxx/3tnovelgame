@@ -6,6 +6,8 @@ import { getRequestLogContext, logGenerationError, logGenerationInfo } from './_
 import { buildInterventionRewritePrompt, buildInterventionWorldStatePrompt } from '../Prompt/interventionRewrite.js';
 import { branchEffectiveWeight, calculateEndingMechanics, normalizeEndingBias } from './_endingMechanics.js';
 
+export const maxDuration = 60;
+
 type InterventionAction = 'bless' | 'curse';
 type InterventionHistoryItem = { chapterNum: number; charId: string; action: InterventionAction };
 

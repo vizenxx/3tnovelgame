@@ -5,6 +5,8 @@ import { getGeminiApiKey } from './_gemini.js';
 import { getRequestLogContext, logGenerationError, logGenerationInfo } from './_log.js';
 import { buildCoverImagePrompt } from '../Prompt/coverImage.js';
 
+export const maxDuration = 60;
+
 const DEFAULT_IMAGE_MODEL = 'gemini-3.1-flash-image-preview';
 const MAX_IMAGE_DATA_CHARS = 3_600_000;
 

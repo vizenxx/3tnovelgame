@@ -5,6 +5,8 @@ import { generateGeminiJsonWithFallback, parseGeminiJson } from './_gemini.js';
 import { getRequestLogContext, logGenerationError, logGenerationInfo } from './_log.js';
 import { buildFinalSummaryPrompt } from '../Prompt/finalSummary.js';
 
+export const maxDuration = 60;
+
 const summarySchema = {
   type: Type.OBJECT,
   properties: {

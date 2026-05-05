@@ -5,6 +5,8 @@ import { generateGeminiJsonWithFallback, parseGeminiJson } from './_gemini.js';
 import { getRequestLogContext, logGenerationError, logGenerationInfo } from './_log.js';
 import { buildChapterContinuationPrompt, buildChapterWorldStatePrompt } from '../Prompt/chapterContinuation.js';
 
+export const maxDuration = 60;
+
 function ensureParagraphing(raw: string, opts?: { minParas?: number; maxParas?: number }) {
   const minParas = opts?.minParas ?? 6;
   const maxParas = opts?.maxParas ?? 10;

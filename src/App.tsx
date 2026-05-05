@@ -1390,9 +1390,16 @@ export default function App() {
     return merged;
   };
 
-  const apiFetch = async (url: string, init: RequestInit = {}, ms = 30000) => {
+  const apiFetch = async (url: string, init: RequestInit = {}, ms = 60000) => {
     const headers = await getAuthHeaders(init.headers);
-    return fetchWithTimeout(url, { ...init, headers }, ms);
+    try {
+      return await fetchWithTimeout(url, { ...init, headers }, ms);
+    } catch (e: any) {
+      if (e.name === 'AbortError' || /abort/i.test(e.message)) {
+        throw new Error('AI 响应耗时过长，连接超时（这通常是服务器拥挤或生成内容过多导致，请稍后重试）。');
+      }
+      throw e;
+    }
   };
 
   const resolveActiveStoryProvenance = async () => {
