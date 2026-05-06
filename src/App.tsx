@@ -1639,7 +1639,7 @@ export default function App() {
   };
 
   const ReadingTextControls = () => (
-    <div className="inline-flex flex-wrap items-center gap-2 rounded-2xl border border-zinc-800 bg-zinc-950/80 p-1 text-xs font-bold text-zinc-400">
+    <div className="inline-flex flex-wrap items-center gap-2 rounded-2xl border border-zinc-800/45 bg-zinc-950/45 p-1 text-xs font-bold text-zinc-400 backdrop-blur-sm">
       <button
         type="button"
         onClick={() => setReadingTextScale((value) => Math.max(0.9, Number((value - 0.1).toFixed(1))))}
@@ -5853,16 +5853,17 @@ export default function App() {
             </p>
           </div>
         )}
-        <div className="space-y-8">
+        <div className="mx-auto max-w-3xl space-y-14">
           {(story.chapters || []).map((chapter) => (
-            <section key={chapter.chapter_num} className="rounded-[2rem] border border-zinc-800 bg-zinc-900/20 p-8">
-              <div className="mb-4 flex items-center gap-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900/60 text-sm font-black text-zinc-400">
+            <section key={chapter.chapter_num} className="relative scroll-mt-28">
+              <div className="mb-6 flex items-center gap-4">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-800/60 bg-zinc-950/45 text-xs font-black text-zinc-500">
                   {chapter.chapter_num}
                 </div>
-                <h2 className="text-xl font-black text-white">{chapter.title || `第${chapter.chapter_num}章`}</h2>
+                <h2 className="text-xl font-black text-zinc-100">{chapter.title || `第${chapter.chapter_num}章`}</h2>
+                <div className="h-px flex-1 bg-gradient-to-r from-zinc-800/70 to-transparent" />
               </div>
-              <div className="space-y-4 text-zinc-300">
+              <div className="space-y-5 text-zinc-300">
                 {(chapter.text || '').split('\n').filter(Boolean).map((paragraph, idx) => (
                   <p key={idx} style={readingParagraphStyle} className="leading-relaxed">{renderParagraphWithHighlights(paragraph, story.meta?.characters || [])}</p>
                 ))}
@@ -6180,7 +6181,7 @@ export default function App() {
         <ReadingTextControls />
       </div>
 
-      <div className="space-y-12">
+      <div className="mx-auto max-w-3xl space-y-16">
         {chapters.map((chapter, idx) => (
           <motion.section
             id={`chapter-${chapter.chapter_num}`}
@@ -6191,14 +6192,14 @@ export default function App() {
             className="group relative"
           >
             <div className="mb-6 flex items-center gap-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900/50 text-sm font-black text-zinc-500 transition-colors group-hover:border-indigo-500/50 group-hover:text-indigo-400">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-800/60 bg-zinc-950/45 text-xs font-black text-zinc-500 transition-colors group-hover:border-indigo-500/40 group-hover:text-indigo-300">
                 {chapter.chapter_num}
               </div>
               <h2 className="text-xl font-bold text-zinc-100">{chapter.title || `第${chapter.chapter_num}章`}</h2>
-              <div className="h-px flex-1 bg-zinc-900" />
+              <div className="h-px flex-1 bg-gradient-to-r from-zinc-800/70 to-transparent" />
             </div>
             
-            <div className="relative rounded-[2rem] border border-zinc-800 bg-zinc-900/20 p-8 leading-relaxed text-zinc-300 shadow-2xl backdrop-blur-sm sm:p-10">
+            <div className="relative leading-relaxed text-zinc-300">
               <div className="prose prose-invert max-w-none space-y-6">
                 {isChapterTextReady(chapter) ? (
                   String(chapter.text || '').split('\n').filter(Boolean).map((p, pIdx) => (
