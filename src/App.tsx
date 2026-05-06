@@ -6128,21 +6128,19 @@ export default function App() {
   const floatingInterventionPanel = blueprint && gameState === 'PLAYING' && typeof document !== 'undefined'
     ? createPortal(
       <div className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-[1900] rounded-full border border-zinc-700/45 bg-zinc-900/78 px-3 py-2 shadow-xl backdrop-blur-xl sm:left-auto sm:right-6 sm:w-[24rem]">
-        <div className="flex min-h-10 items-center gap-2">
-          <div className="shrink-0 px-1 text-[11px] font-black text-zinc-300">
+        <div className="flex min-h-10 items-center justify-between gap-3 px-1">
+          <div className="shrink-0 text-sm font-black text-zinc-300">
             {interventionsLeft}/3 干涉数
           </div>
-          <div className="h-4 w-px shrink-0 bg-zinc-700/60" />
-          <div className="min-w-0 flex-1 truncate text-center text-[11px] font-black">
+          <div className="min-w-0 flex-1 text-center text-sm font-black">
             {(() => {
               const left = Math.round(uiFeedback.leftProgress || 0);
               const right = Math.round(uiFeedback.rightProgress || 0);
-              if (left <= 0 && right <= 0) return <span className="text-zinc-400">普通</span>;
+              if (left <= 0 && right <= 0) return <span className="text-zinc-400">均衡</span>;
               if (left >= right) return <span className="text-indigo-300/85">左{left}%</span>;
               return <span className="text-rose-300/85">右{right}%</span>;
             })()}
           </div>
-          <div className="h-4 w-px shrink-0 bg-zinc-700/60" />
           <button
             type="button"
             onClick={() => handleGenerateSummary(interventionsLeft > 0 ? 'manual' : 'auto_interventions')}
