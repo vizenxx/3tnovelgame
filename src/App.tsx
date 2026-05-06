@@ -6127,23 +6127,27 @@ export default function App() {
 
   const floatingInterventionPanel = blueprint && gameState === 'PLAYING' && typeof document !== 'undefined'
     ? createPortal(
-      <div className="fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-[1900] rounded-3xl border border-zinc-800 bg-zinc-950/92 px-4 py-3 shadow-2xl backdrop-blur-xl sm:left-auto sm:right-6 sm:w-[24rem]">
-        <div className="grid grid-cols-[auto_1fr] items-center gap-3 sm:grid-cols-[auto_1fr_auto]">
-          <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/10 px-3 py-2 text-center">
-            <div className="text-[10px] font-black uppercase tracking-[0.18em] text-indigo-300">干涉</div>
-            <div className="text-lg font-black leading-none text-indigo-100">{interventionsLeft} / 3</div>
+      <div className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-[1900] rounded-full border border-zinc-800/60 bg-zinc-950/72 px-2.5 py-2 shadow-xl backdrop-blur-xl sm:left-auto sm:right-6 sm:w-[25rem]">
+        <div className="flex min-h-10 items-center gap-2">
+          <div className="shrink-0 rounded-full bg-zinc-900/70 px-3 py-1.5 text-[11px] font-black text-zinc-300">
+            剩余 {interventionsLeft}/3
           </div>
-          <div className="min-w-0 text-center text-xs font-bold sm:text-sm">
-            <span className="text-indigo-300">左 {uiFeedback.leftProgress.toFixed(0)}%</span>
-            <span className="mx-2 text-zinc-600">/</span>
-            <span className="text-rose-300">右 {uiFeedback.rightProgress.toFixed(0)}%</span>
-            <div className="mt-1 truncate text-[10px] font-bold text-zinc-500">{uiFeedback.endingLabel}</div>
+          <div className="min-w-0 flex-1 truncate text-center text-[11px] font-bold text-zinc-500">
+            <span className="text-indigo-300/75">左 {uiFeedback.leftProgress.toFixed(0)}%</span>
+            <span className="mx-1.5 text-zinc-700">/</span>
+            <span className="text-rose-300/75">右 {uiFeedback.rightProgress.toFixed(0)}%</span>
+            <span className="mx-1.5 text-zinc-700">·</span>
+            <span className="truncate">{uiFeedback.endingLabel}</span>
           </div>
           <button
             type="button"
             onClick={() => handleGenerateSummary(interventionsLeft > 0 ? 'manual' : 'auto_interventions')}
             disabled={isRewriting || isGeneratingConclusion || !activeStoryId}
-            className={`${semanticButtonClass(storyConclusion ? 'secondary' : 'primary', { compact: true })} col-span-2 rounded-2xl whitespace-nowrap sm:col-span-1`}
+            className={`inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-black transition-all duration-150 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 ${
+              storyConclusion || interventionsLeft <= 0
+                ? 'border border-zinc-700 bg-zinc-900/80 text-zinc-100 hover:border-zinc-500'
+                : 'bg-zinc-100 text-zinc-950 hover:bg-white'
+            }`}
           >
             {isGeneratingConclusion ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
             {storyConclusion || interventionsLeft <= 0 ? '查看最终命运' : '命运确定'}
@@ -7645,7 +7649,7 @@ export default function App() {
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
           className={`fixed right-4 z-[1800] flex h-12 w-12 items-center justify-center rounded-2xl border border-zinc-700 bg-zinc-950/90 text-zinc-200 shadow-2xl backdrop-blur-xl transition-colors hover:border-indigo-400 hover:text-white sm:right-6 ${
             gameState === 'PLAYING'
-              ? 'bottom-[calc(max(1rem,env(safe-area-inset-bottom))+9.25rem)] sm:bottom-[calc(max(1rem,env(safe-area-inset-bottom))+1rem)] sm:right-[27.5rem]'
+              ? 'bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+4.5rem)] sm:bottom-[max(0.75rem,env(safe-area-inset-bottom))] sm:right-[27.5rem]'
               : 'bottom-[max(1rem,env(safe-area-inset-bottom))]'
           }`}
           aria-label="返回顶端"
