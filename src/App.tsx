@@ -325,14 +325,15 @@ const GlobalError = ({ errorMsg }: { errorMsg: string | null }) => (
   <AnimatePresence>
     {errorMsg && (
       <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -20 }}
+        initial={{ opacity: 0, y: 12, scale: 0.96 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 10, scale: 0.98 }}
         role="alert"
         aria-live="assertive"
-        className="fixed left-1/2 top-[max(1rem,env(safe-area-inset-top))] z-[6100] -translate-x-1/2 rounded-lg bg-rose-500 px-6 py-3 font-medium text-white shadow-lg"
+        className="fixed left-1/2 top-[max(5.5rem,calc(env(safe-area-inset-top)+4.5rem))] z-[6100] w-[min(92vw,28rem)] -translate-x-1/2 rounded-[1.5rem] border border-zinc-700/70 bg-zinc-950/92 px-5 py-4 text-center text-sm font-bold leading-relaxed text-zinc-100 shadow-2xl shadow-black/40 backdrop-blur-xl"
       >
-        {errorMsg}
+        <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-gradient-to-r from-indigo-400 to-sky-300" />
+        <div>{errorMsg}</div>
       </motion.div>
     )}
   </AnimatePresence>
@@ -469,7 +470,7 @@ const LoadingOverlay = ({ progress, status, subtext, variant = 'default' }: { pr
     'bg-zinc-950/90'
   }`}>
     <motion.div 
-      animate={{ rotate: variant === 'ending' ? 180 : 360, scale: [1, 1.1, 1] }}
+      animate={{ rotate: variant === 'ending' ? 180 : -360, scale: [1, 1.1, 1] }}
       transition={{ rotate: { repeat: Infinity, duration: variant === 'ending' ? 8 : 3, ease: 'linear' }, scale: { repeat: Infinity, duration: 2 } }}
       className="mb-8 relative"
     >
@@ -1046,6 +1047,8 @@ export default function App() {
   const [showIosInstallModal, setShowIosInstallModal] = useState<boolean>(false);
   const [isStandaloneMode, setIsStandaloneMode] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
+  const [optimisticLikedStoryIds, setOptimisticLikedStoryIds] = useState<Set<string>>(() => new Set());
+  const [optimisticFavoritedStoryIds, setOptimisticFavoritedStoryIds] = useState<Set<string>>(() => new Set());
   const [sharedStoryId, setSharedStoryId] = useState<string | null>(null);
   const [readonlyStoryData, setReadonlyStoryData] = useState<{ meta: any, chapters: Chapter[] } | null>(null);
   const [readonlyCanGoBack, setReadonlyCanGoBack] = useState(false);
@@ -3236,7 +3239,12 @@ export default function App() {
       
       const progressData = await getUserProgress(db as any, user.uid, storyId);
       
-      if (progressData) {
+      const canResumeProgress =
+        progressData &&
+        Number(progressData.interventionsLeft ?? 0) > 0 &&
+        !progressData.storyConclusion;
+
+      if (canResumeProgress) {
         setPendingProgressToLoad({ id: storyId, data: { ...progressData, cartridge } });
         return;
       }
@@ -4052,6 +4060,39 @@ export default function App() {
     await incrementStoryMetric(db as any, storyId, field);
   };
 
+  const setStoryActionState = (kind: 'like' | 'favorite', storyId: string, active: boolean) => {
+    const setter = kind === 'like' ? setOptimisticLikedStoryIds : setOptimisticFavoritedStoryIds;
+    setter((prev) => {
+      const next = new Set(prev);
+      if (active) next.add(storyId);
+      else next.delete(storyId);
+      return next;
+    });
+  };
+
+  const hasOptimisticStoryAction = (kind: 'like' | 'favorite', storyId?: string | null) => {
+    if (!storyId) return false;
+    return kind === 'like' ? optimisticLikedStoryIds.has(storyId) : optimisticFavoritedStoryIds.has(storyId);
+  };
+
+  const applyStoryCountDelta = (storyId: string, field: 'likeCount' | 'favoriteCount', delta: number) => {
+    const patchStory = (story: any) => {
+      if (!story || (story.id !== storyId && story.storyId !== storyId && story.sourceStoryId !== storyId)) return story;
+      const current = Number(story[field] ?? story.meta?.[field] ?? 0);
+      const nextValue = Math.max(0, current + delta);
+      return {
+        ...story,
+        [field]: nextValue,
+        meta: story.meta ? { ...story.meta, [field]: nextValue } : story.meta,
+      };
+    };
+    setPublicStories((prev) => prev.map(patchStory));
+    setMyStories((prev) => prev.map(patchStory));
+    setMySharedStories((prev) => prev.map(patchStory));
+    setStoryDetailStory((prev) => patchStory(prev));
+    setActiveStoryMeta((prev: any) => patchStory(prev));
+  };
+
   const handleGenerateSummary = async (source: 'auto_interventions' | 'manual') => {
     if (!activeStoryId || isGeneratingConclusion || !blueprint) return;
     if (storyConclusion) {
@@ -4229,16 +4270,31 @@ export default function App() {
   const handleStoryInteraction = async (kind: 'like' | 'favorite' | 'report', targetId?: string, targetMeta?: any) => {
     const idToUse = targetId || activeStoryId;
     if (!idToUse || !db || !user) { if (!user) setIsAccountCenterOpen(true); return; }
+    if ((kind === 'like' || kind === 'favorite') && hasOptimisticStoryAction(kind, idToUse)) {
+      showError(kind === 'like' ? '你已经点过赞了。' : '已在馆藏中。');
+      return;
+    }
     try {
       if (kind === 'like') {
+        setStoryActionState('like', idToUse, true);
+        applyStoryCountDelta(idToUse, 'likeCount', 1);
         const result = await likeStory(db as any, idToUse, user.uid);
-        if (result?.alreadyExists) throw new Error('already-liked');
+        if (result?.alreadyExists) {
+          applyStoryCountDelta(idToUse, 'likeCount', -1);
+          showError('你已经点过赞了。');
+          return;
+        }
         showError('已点赞。');
         return;
       }
       if (kind === 'favorite') {
+        setStoryActionState('favorite', idToUse, true);
+        applyStoryCountDelta(idToUse, 'favoriteCount', 1);
         const favoriteResult = await favoriteStory(db as any, idToUse, user.uid);
         const alreadyFavorited = Boolean(favoriteResult?.alreadyExists);
+        if (alreadyFavorited) {
+          applyStoryCountDelta(idToUse, 'favoriteCount', -1);
+        }
         const sourceMeta = targetMeta || activeStoryMeta || await getStoryMeta(db as any, idToUse).catch(() => null);
         if (sourceMeta) {
           setMySharedStories((prev) => {
@@ -4327,6 +4383,14 @@ export default function App() {
         return;
       }
       console.error(error);
+      if (kind === 'like') {
+        setStoryActionState('like', idToUse, false);
+        applyStoryCountDelta(idToUse, 'likeCount', -1);
+      }
+      if (kind === 'favorite') {
+        setStoryActionState('favorite', idToUse, false);
+        applyStoryCountDelta(idToUse, 'favoriteCount', -1);
+      }
       showError('操作失败，请稍后再试。');
     }
   };
@@ -4892,10 +4956,10 @@ export default function App() {
     const coverUrl = getStoryCoverUrl(story);
     const tags = getStoryTags(story);
     const storyStats = [
-      { label: '点赞', value: getStoryLikeCount(story) },
-      { label: '干涉', value: getStoryInterventionCount(story) },
-      { label: '收藏', value: getStoryFavoriteCount(story) },
-      { label: '均章', value: `${getStoryAverageChapterWords(story) || '未知'} 字` },
+      { label: '点赞', value: getStoryLikeCount(story), icon: Heart },
+      { label: '干涉', value: getStoryInterventionCount(story), icon: Sparkles },
+      { label: '收藏', value: getStoryFavoriteCount(story), icon: Bookmark },
+      { label: '均章', value: `${getStoryAverageChapterWords(story) || '未知'} 字`, icon: BookOpen },
     ];
     return (
       <motion.div
@@ -4914,13 +4978,16 @@ export default function App() {
                 </div>
               )}
             </button>
-            <div className="mt-2 grid gap-1.5 text-[11px] font-black text-zinc-400">
-              {storyStats.map((stat) => (
-                <div key={stat.label} className="flex items-center justify-between rounded-xl border border-zinc-800/70 bg-zinc-950/70 px-2 py-1.5">
-                  <span>{stat.label}</span>
-                  <span className="text-zinc-200">{stat.value}</span>
-                </div>
-              ))}
+            <div className="mt-2 grid grid-cols-2 gap-x-2 gap-y-1.5 text-[11px] font-black text-zinc-500">
+              {storyStats.map((stat) => {
+                const Icon = stat.icon;
+                return (
+                  <div key={stat.label} className="flex items-center gap-1.5">
+                    <Icon className="h-3.5 w-3.5 text-zinc-600" />
+                    <span className="text-zinc-200">{stat.value}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
           <div className="flex min-w-0 flex-1 flex-col">
@@ -5006,15 +5073,15 @@ export default function App() {
                   )}
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-1">
-                  <button type="button" onClick={() => handleStoryInteraction('like', storyDetailStory?.id || storyDetailStory?.storyId, storyDetailStory)} className="group flex flex-col justify-between rounded-2xl border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-left transition-all hover:border-pink-500/30 hover:bg-pink-500/10 active:scale-[0.98]">
-                    <div className="flex w-full items-center justify-between text-[11px] font-black text-zinc-500 transition-colors group-hover:text-pink-400">
-                      点赞 <Heart className="h-3.5 w-3.5" />
+                  <button type="button" onClick={() => handleStoryInteraction('like', storyDetailStory?.id || storyDetailStory?.storyId, storyDetailStory)} className={`group flex flex-col justify-between rounded-2xl border px-3 py-2 text-left transition-all active:scale-[0.98] ${hasOptimisticStoryAction('like', storyDetailStory?.id || storyDetailStory?.storyId) ? 'border-pink-500/40 bg-pink-500/10' : 'border-zinc-800 bg-zinc-900/60 hover:border-pink-500/30 hover:bg-pink-500/10'}`}>
+                    <div className={`flex w-full items-center justify-between text-[11px] font-black transition-colors ${hasOptimisticStoryAction('like', storyDetailStory?.id || storyDetailStory?.storyId) ? 'text-pink-300' : 'text-zinc-500 group-hover:text-pink-400'}`}>
+                      点赞 <Heart className={`h-3.5 w-3.5 transition-transform ${hasOptimisticStoryAction('like', storyDetailStory?.id || storyDetailStory?.storyId) ? 'scale-110 fill-current' : ''}`} />
                     </div>
                     <div className="mt-0.5 text-sm font-black text-zinc-100">{storyDetailStory ? getStoryLikeCount(storyDetailStory) : 0}</div>
                   </button>
-                  <button type="button" onClick={() => handleStoryInteraction('favorite', storyDetailStory?.id || storyDetailStory?.storyId, storyDetailStory)} className="group flex flex-col justify-between rounded-2xl border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-left transition-all hover:border-amber-500/30 hover:bg-amber-500/10 active:scale-[0.98]">
-                    <div className="flex w-full items-center justify-between text-[11px] font-black text-zinc-500 transition-colors group-hover:text-amber-400">
-                      收藏 <Bookmark className="h-3.5 w-3.5" />
+                  <button type="button" onClick={() => handleStoryInteraction('favorite', storyDetailStory?.id || storyDetailStory?.storyId, storyDetailStory)} className={`group flex flex-col justify-between rounded-2xl border px-3 py-2 text-left transition-all active:scale-[0.98] ${hasOptimisticStoryAction('favorite', storyDetailStory?.id || storyDetailStory?.storyId) ? 'border-amber-500/40 bg-amber-500/10' : 'border-zinc-800 bg-zinc-900/60 hover:border-amber-500/30 hover:bg-amber-500/10'}`}>
+                    <div className={`flex w-full items-center justify-between text-[11px] font-black transition-colors ${hasOptimisticStoryAction('favorite', storyDetailStory?.id || storyDetailStory?.storyId) ? 'text-amber-300' : 'text-zinc-500 group-hover:text-amber-400'}`}>
+                      收藏 <Bookmark className={`h-3.5 w-3.5 transition-transform ${hasOptimisticStoryAction('favorite', storyDetailStory?.id || storyDetailStory?.storyId) ? 'scale-110 fill-current' : ''}`} />
                     </div>
                     <div className="mt-0.5 text-sm font-black text-zinc-100">{storyDetailStory ? getStoryFavoriteCount(storyDetailStory) : 0}</div>
                   </button>
@@ -6488,11 +6555,11 @@ export default function App() {
             <div className="text-xs text-zinc-600">平均每章 {getAverageChapterWords(chapters) || '未知'} 字</div>
           </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <button type="button" onClick={() => handleStoryInteraction('like')} className={semanticButtonClass('ghost', { compact: true })}>
-              <Heart className="h-4 w-4" /> 点赞
+            <button type="button" onClick={() => handleStoryInteraction('like')} className={`${semanticButtonClass(hasOptimisticStoryAction('like', activeStoryId) ? 'secondary' : 'ghost', { compact: true })} ${hasOptimisticStoryAction('like', activeStoryId) ? 'text-pink-200' : ''}`}>
+              <Heart className={`h-4 w-4 ${hasOptimisticStoryAction('like', activeStoryId) ? 'fill-current' : ''}`} /> 点赞
             </button>
-            <button type="button" onClick={() => handleStoryInteraction('favorite')} className={semanticButtonClass('ghost', { compact: true })}>
-              <Bookmark className="h-4 w-4" /> 收藏
+            <button type="button" onClick={() => handleStoryInteraction('favorite')} className={`${semanticButtonClass(hasOptimisticStoryAction('favorite', activeStoryId) ? 'secondary' : 'ghost', { compact: true })} ${hasOptimisticStoryAction('favorite', activeStoryId) ? 'text-amber-200' : ''}`}>
+              <Bookmark className={`h-4 w-4 ${hasOptimisticStoryAction('favorite', activeStoryId) ? 'fill-current' : ''}`} /> 收藏
             </button>
             <button type="button" onClick={handleShareStory} disabled={isSharing || !blueprint} className={semanticButtonClass('secondary', { compact: true })}>
               {isSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />} 分享
@@ -7709,10 +7776,10 @@ export default function App() {
                   <section className="grid gap-2">
                     <div className="px-1 text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">作品互动</div>
                     <button onClick={() => { setIsActionMenuOpen(false); handleStoryInteraction('like'); }} className={semanticMenuButtonClass('ghost')}>
-                      <Heart className="h-5 w-5" /> 点赞
+                      <Heart className={`h-5 w-5 ${hasOptimisticStoryAction('like', activeStoryId) ? 'fill-current text-pink-300' : ''}`} /> 点赞
                     </button>
                     <button onClick={() => { setIsActionMenuOpen(false); handleStoryInteraction('favorite'); }} className={semanticMenuButtonClass('ghost')}>
-                      <Bookmark className="h-5 w-5" /> 收藏
+                      <Bookmark className={`h-5 w-5 ${hasOptimisticStoryAction('favorite', activeStoryId) ? 'fill-current text-amber-300' : ''}`} /> 收藏
                     </button>
                     <button
                       onClick={() => {
