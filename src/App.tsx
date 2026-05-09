@@ -2187,7 +2187,12 @@ export default function App() {
   };
 
   const refreshArchiveStories = async (options: { force?: boolean } = {}) => {
-    if (!user || !db) return;
+    if (!user || !db) {
+      const message = '收藏馆暂时无法连接账号资料，请稍后重试。';
+      markStoryListSegment('archive', 'error', message);
+      showError(message);
+      return;
+    }
     setIsLoadingStories(true);
     markStoryListSegment('archive', 'loading');
     try {
@@ -2443,6 +2448,8 @@ export default function App() {
     setArchiveReturnTarget(returnTarget);
     setIsActionMenuOpen(false);
     setIsAccountCenterOpen(false);
+    setArchiveChoiceStoryId(null);
+    markStoryListSegment('archive', 'loading');
     navigateTo('ARCHIVE');
     void refreshArchiveStories({ force: true });
   };
@@ -5250,8 +5257,8 @@ export default function App() {
         </div>
       )}
 
-      <section className="rounded-[2rem] border border-zinc-800 bg-zinc-900/20 p-4 sm:p-5">
-        <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <section className="space-y-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex rounded-2xl border border-zinc-800 bg-zinc-950/70 p-1">
             {[
               { id: 'public', label: '作品列表', count: publicStories.length },
@@ -5378,21 +5385,23 @@ export default function App() {
 
   const renderArchiveView = () => {
     const keyword = archiveSearch.trim().toLowerCase();
+    const archiveStories = Array.isArray(mySharedStories) ? mySharedStories.filter(Boolean) : [];
+    const archiveSegment = storyListSyncState?.archive || { status: 'idle' as SyncStatus };
     const matchesKeyword = (story: any) => {
       if (!keyword) return true;
       const haystack = `${story.title || ''}\n${story.main_axis || ''}`.toLowerCase();
       return haystack.includes(keyword);
     };
 
-    const favoriteStories = mySharedStories.filter(
+    const favoriteStories = archiveStories.filter(
       (story: any) => story.archiveKind === 'favorite' && matchesKeyword(story)
     );
-    const savedStories = mySharedStories.filter((story: any) => {
+    const savedStories = archiveStories.filter((story: any) => {
       if (story.archiveKind === 'favorite') return false;
       if (archiveFilter !== 'all' && story.visibility !== archiveFilter) return false;
       return matchesKeyword(story);
     });
-    const isArchiveSyncing = storyListSyncState.archive.status === 'loading' || storyListSyncState.archive.status === 'syncing';
+    const isArchiveSyncing = archiveSegment.status === 'loading' || archiveSegment.status === 'syncing';
 
     const renderFavoriteCard = (story: any) => {
       const isChoosingThis = archiveChoiceStoryId === story.id;
@@ -5564,6 +5573,12 @@ export default function App() {
         </div>
 
         <section className="rounded-[2rem] border border-zinc-800 bg-zinc-900/20 p-4 sm:p-5">
+          {archiveSegment.status === 'error' && (
+            <div className="mb-5 rounded-3xl border border-amber-500/25 bg-amber-500/10 p-4 text-sm leading-relaxed text-amber-100/85">
+              <div className="font-black text-amber-100">收藏馆同步暂时不顺利</div>
+              <p className="mt-1 text-xs text-amber-100/70">{archiveSegment.error || '已保留当前可用内容，你可以稍后刷新重试。'}</p>
+            </div>
+          )}
           {/* Tab 切换栏 */}
           <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex rounded-2xl border border-zinc-800 bg-zinc-950/70 p-1 shrink-0">
@@ -5579,7 +5594,7 @@ export default function App() {
                     archiveTab === tab.id ? 'bg-indigo-600 text-white shadow-lg' : 'text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200'
                   }`}
                 >
-                  {tab.label} <span className="ml-1 text-[10px] opacity-70">{mySharedStories.filter((s: any) => tab.id === 'favorite' ? s.archiveKind === 'favorite' : s.archiveKind !== 'favorite').length}</span>
+                  {tab.label} <span className="ml-1 text-[10px] opacity-70">{archiveStories.filter((s: any) => tab.id === 'favorite' ? s.archiveKind === 'favorite' : s.archiveKind !== 'favorite').length}</span>
                 </button>
               ))}
             </div>
@@ -6441,13 +6456,13 @@ export default function App() {
                 const isAlreadyIntervened = intervenedChapters.includes(chapter.chapter_num);
 
                 return (
-                  <div className="mt-12 border-t border-zinc-800/50 pt-8">
-                    <div className="flex justify-end">
+                  <div className="mt-10">
+                    <div className="flex justify-center">
                       <button
                         type="button"
                         onClick={() => setActiveInterventionChapter(isExpanded ? null : chapter.chapter_num)}
                         disabled={isRewriting || isGeneratingConclusion || activeInterventionOverlay !== null}
-                        className={`${semanticButtonClass(isAlreadyIntervened ? 'secondary' : 'primary', { compact: true })} rounded-2xl`}
+                        className={`${semanticButtonClass(isAlreadyIntervened ? 'secondary' : 'primary', { compact: true })} rounded-full px-5`}
                       >
                         <Sparkles className="h-4 w-4" />
                         {isAlreadyIntervened ? '再次干涉' : '干涉命运'}
@@ -6529,6 +6544,9 @@ export default function App() {
                   </div>
                 );
               })()}
+              {idx < chapters.length - 1 && (
+                <div className="mt-12 h-px bg-gradient-to-r from-transparent via-zinc-800/80 to-transparent" />
+              )}
             </div>
           </motion.section>
         ))}
