@@ -525,13 +525,15 @@ const endingDomainSummaryText = (source?: any) => {
   const bias = getEndingBias(source);
   if (bias.leftBaseWeight === bias.rightBaseWeight) return '左右结局域的基础倾向均衡，玩家干涉与支线更容易决定最终偏向。';
   const dominant = bias.leftBaseWeight > bias.rightBaseWeight ? '左结局域' : '右结局域';
-  const ratio = `${bias.leftBaseWeight}:${bias.rightBaseWeight}`;
-  return `${dominant}拥有更高基础倾向（${ratio}），故事本身会更自然地朝该方向收束，但玩家仍可通过支线改变走向。`;
+  return `${dominant}拥有更高基础倾向，故事本身会更自然地朝该方向收束，但玩家仍可通过支线改变走向。`;
 };
 
-const endingDomainCards = (source?: any) => {
+const endingDomainCards = (source?: any, options: { showNumbers?: boolean } = {}) => {
+  const showNumbers = options.showNumbers ?? true;
   const bias = getEndingBias(source);
   const names = source?.endingNames || {};
+  const leftTone = weightToneLabel(bias.leftBaseWeight);
+  const rightTone = weightToneLabel(bias.rightBaseWeight);
   return [
     {
       id: 'middle',
@@ -544,14 +546,14 @@ const endingDomainCards = (source?: any) => {
       id: 'left',
       title: `${names.left || '左'}结局域`,
       label: '左域默认结局',
-      weight: `${bias.leftBaseWeight} · ${weightToneLabel(bias.leftBaseWeight)}`,
+      weight: showNumbers ? `${bias.leftBaseWeight} · ${leftTone}` : leftTone,
       hint: '命运值明显偏向左域时进入。左向支线可绑定到域内不同具体结局。',
     },
     {
       id: 'right',
       title: `${names.right || '右'}结局域`,
       label: '右域默认结局',
-      weight: `${bias.rightBaseWeight} · ${weightToneLabel(bias.rightBaseWeight)}`,
+      weight: showNumbers ? `${bias.rightBaseWeight} · ${rightTone}` : rightTone,
       hint: '命运值明显偏向右域时进入。右向支线可绑定到域内不同具体结局。',
     },
   ];
@@ -929,6 +931,9 @@ export default function App() {
   const [interventionEffect, setInterventionEffect] = useState<'bless' | 'curse' | null>(null);
   const [activeInterventionOverlay, setActiveInterventionOverlay] = useState<{ type: 'bless' | 'curse' | 'ending', targetChapter: number, statusRaw: string } | null>(null);
   const [branchUnlockNotice, setBranchUnlockNotice] = useState<Branch | null>(null);
+  const [interventionStatusNotice, setInterventionStatusNotice] = useState<{
+    updates: Array<{ id: string; name: string; status: string; isDead: boolean }>;
+  } | null>(null);
   const [characterStatuses, setCharacterStatuses] = useState<Record<string, { status: string, isDead: boolean }>>({});
   const [storyConclusion, setStoryConclusion] = useState<string | null>(null);
   const [isGeneratingConclusion, setIsGeneratingConclusion] = useState(false);
@@ -1293,8 +1298,7 @@ export default function App() {
     globalLoadingMessage ||
     authoringSaving ||
     isSharing ||
-    isGeneratingCover ||
-    isGeneratingConclusion
+    isGeneratingCover
   );
   const globalBlockingLoadingMessage = globalLoadingMessage ||
     (authoringSaving
@@ -1303,8 +1307,6 @@ export default function App() {
       ? '正在生成分享链接...'
       : isGeneratingCover
       ? '正在绘制封面...'
-      : isGeneratingConclusion
-      ? '正在生成前情提要...'
       : '正在处理...');
   const isRecoveringInvalidGameState = isSessionHydrated && Boolean(user) && (
     (gameState === 'READONLY_STORY' && !readonlyStoryData) ||
@@ -2365,6 +2367,7 @@ export default function App() {
     setIsActionMenuOpen(false);
     setIsAccountCenterOpen(false);
     navigateTo('ARCHIVE');
+    void refreshArchiveStories({ force: true });
   };
 
   const leaveArchiveView = () => {
@@ -3115,6 +3118,7 @@ export default function App() {
     setInterventionsLeft(progressData?.interventionsLeft ?? 3);
     setEndingValue(progressData?.endingValue || 0);
     setUnlockedBranches(progressData?.unlockedBranches || []);
+    setHistoricallyUnlockedBranches(progressData?.historicallyUnlockedBranches || progressData?.unlockedBranches || []);
     setIntervenedChapters(progressData?.intervenedChapters || []);
     setNaturalChapters(progressData?.naturalChapters || nextBlueprint.chapters);
     setInitialNaturalChapters(progressData?.initialNaturalChapters || nextBlueprint.chapters);
@@ -3825,8 +3829,12 @@ export default function App() {
       const aiData = result?.aiData || {};
       
       const newHistory = [...interventionHistory, { chapterNum, charId, action }];
+      const nextInterventionsLeft = Math.max(0, interventionsLeft - 1);
+      const nextEndingValue = typeof result?.newEndingValue === 'number' ? result.newEndingValue : endingValue;
+      let nextChapters = chapters;
+      let nextCharacterStatuses = { ...(characterStatuses || {}) } as Record<string, { status: string; isDead: boolean }>;
       setInterventionHistory(newHistory);
-      setInterventionsLeft(prev => prev - 1);
+      setInterventionsLeft(nextInterventionsLeft);
       
       if (Array.isArray(aiData?.chapters) && aiData.chapters.length > 0) {
         const previousByNum = new Map<number, any>((chapters || []).map((chapter) => [chapter.chapter_num, chapter as any]));
@@ -3848,36 +3856,53 @@ export default function App() {
           }
         });
         mergedChapters.sort((a: any, b: any) => a.chapter_num - b.chapter_num);
-        setChapters(mergedChapters as any);
+        nextChapters = mergedChapters as any;
+        setChapters(nextChapters as any);
       }
 
+      const characterNameById = new Map((blueprint.characters || []).map((character: any) => [character.id, character.name]));
+      const changedStatusUpdates: Array<{ id: string; name: string; status: string; isDead: boolean }> = [];
       if (Array.isArray(aiData?.character_updates) && aiData.character_updates.length > 0) {
-        setCharacterStatuses((prev) => {
-          const next = { ...(prev || {}) } as Record<string, { status: string; isDead: boolean }>;
-          aiData.character_updates.forEach((update: any) => {
-            if (!update?.id) return;
-            next[update.id] = {
-              status: String(update.status || next[update.id]?.status || '存活'),
-              isDead: Boolean(update.is_dead),
-            };
-          });
-          return next;
+        aiData.character_updates.forEach((update: any) => {
+          if (!update?.id) return;
+          const previous = nextCharacterStatuses[update.id];
+          const nextStatus = String(update.status || previous?.status || '存活');
+          const nextIsDead = Boolean(update.is_dead);
+          if (!previous || previous.status !== nextStatus || Boolean(previous.isDead) !== nextIsDead) {
+            changedStatusUpdates.push({
+              id: update.id,
+              name: String(characterNameById.get(update.id) || update.name || update.id),
+              status: nextStatus,
+              isDead: nextIsDead,
+            });
+          }
+          nextCharacterStatuses[update.id] = {
+            status: nextStatus,
+            isDead: nextIsDead,
+          };
         });
+        setCharacterStatuses(nextCharacterStatuses);
       }
+      setInterventionStatusNotice({ updates: changedStatusUpdates });
 
-      if (typeof result?.newEndingValue === 'number') {
-        setEndingValue(result.newEndingValue);
-      }
-      if (Array.isArray(result?.newUnlockedBranches)) {
-        setUnlockedBranches(result.newUnlockedBranches);
-      }
+      setEndingValue(nextEndingValue);
+      const nextUnlockedBranches = Array.isArray(result?.newUnlockedBranches)
+        ? result.newUnlockedBranches
+        : unlockedBranches;
+      setUnlockedBranches(nextUnlockedBranches);
+      const historicalBranchById = new Map<string, any>();
+      (historicallyUnlockedBranches || []).forEach((branch: any) => {
+        if (branch?.id) historicalBranchById.set(branch.id, branch);
+      });
+      (nextUnlockedBranches || []).forEach((branch: any) => {
+        if (branch?.id) historicalBranchById.set(branch.id, branch);
+      });
       if (result?.unlockedBranch) {
         setBranchUnlockNotice(result.unlockedBranch);
-        setHistoricallyUnlockedBranches((prev) => {
-          if ((prev || []).some((branch: any) => branch.id === result.unlockedBranch.id)) return prev;
-          return [...(prev || []), result.unlockedBranch];
-        });
+        if (result.unlockedBranch.id) historicalBranchById.set(result.unlockedBranch.id, result.unlockedBranch);
       }
+      const nextHistoricalBranches = Array.from(historicalBranchById.values());
+      setHistoricallyUnlockedBranches(nextHistoricalBranches);
       if (result?.uiFeedback) {
         setUiFeedback(result.uiFeedback);
       }
@@ -3892,6 +3917,23 @@ export default function App() {
 
       const nextIntervenedChapters = [...intervenedChapters, chapterNum];
       setIntervenedChapters(nextIntervenedChapters);
+      if (activeStoryId && db) {
+        const progressPayload = {
+          ...buildCurrentRunSnapshot(),
+          interventionsLeft: nextInterventionsLeft,
+          endingValue: nextEndingValue,
+          unlockedBranches: nextUnlockedBranches,
+          historicallyUnlockedBranches: nextHistoricalBranches,
+          intervenedChapters: nextIntervenedChapters,
+          characterStatuses: nextCharacterStatuses,
+          interventionHistory: newHistory,
+          currentChapters: nextChapters,
+          uiFeedback: result?.uiFeedback || uiFeedback,
+        };
+        void saveUserProgress(db as any, user.uid, activeStoryId, progressPayload).catch((error) => {
+          console.warn('[progress:auto-save-after-intervention]', error);
+        });
+      }
       if (nextIntervenedChapters.length >= 3) {
         setPendingSummaryRequest('auto_interventions');
       }
@@ -4654,6 +4696,62 @@ export default function App() {
     </AnimatePresence>
   );
 
+  const renderInterventionStatusNotice = () => (
+    <AnimatePresence>
+      {interventionStatusNotice && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className={`${safeModalBackdropClass} z-[5250] bg-black/65 backdrop-blur-md`}
+          onClick={() => setInterventionStatusNotice(null)}
+        >
+          <motion.div
+            initial={{ y: 18, opacity: 0, scale: 0.96 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: 18, opacity: 0, scale: 0.96 }}
+            className="w-full max-w-md rounded-3xl border border-zinc-800 bg-zinc-950 p-6 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="text-xs font-black uppercase tracking-[0.22em] text-indigo-300">命运涟漪</div>
+            {interventionStatusNotice.updates.length > 0 ? (
+              <>
+                <h3 className="mt-2 text-2xl font-black text-white">众人的命运因干涉而有了变化...</h3>
+                <div className="mt-5 grid gap-3">
+                  {interventionStatusNotice.updates.map((update) => (
+                    <div key={update.id} className="rounded-2xl border border-zinc-800 bg-zinc-900/45 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="font-black text-zinc-100">{update.name}</div>
+                        <div className={`rounded-full px-2.5 py-1 text-[11px] font-black ${update.isDead ? 'bg-red-500/20 text-red-300' : 'bg-emerald-500/20 text-emerald-300'}`}>
+                          {update.status}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 className="mt-2 text-2xl font-black text-white">干涉的涟漪似乎没能碰触到众人...</h3>
+                <p className="mt-4 text-sm leading-relaxed text-zinc-400">
+                  这次变化更多停留在情节与命运走向之中，角色状态暂未出现可记录的改变。
+                </p>
+              </>
+            )}
+            <button
+              type="button"
+              onClick={() => setInterventionStatusNotice(null)}
+              className={`${semanticButtonClass('primary', { fullWidth: true })} mt-7`}
+            >
+              <Check className="h-4 w-4" />
+              关闭
+            </button>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
   const renderSummaryModal = () => (
     <AnimatePresence>
       {showSummaryModal && storyConclusion && (
@@ -4687,7 +4785,7 @@ export default function App() {
               <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4">
                 <div className="text-xs font-black uppercase tracking-[0.18em] text-zinc-500">本局结局倾向参考</div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                  {endingDomainCards(blueprint).map((domain) => (
+                  {endingDomainCards(blueprint, { showNumbers: false }).map((domain) => (
                     <div key={domain.id} className="rounded-xl border border-zinc-800 bg-zinc-950/45 p-3">
                       <div className="text-xs font-black text-zinc-100">{domain.title}</div>
                       <div className="mt-1 text-[11px] font-bold text-indigo-300">{domain.weight}</div>
@@ -5933,8 +6031,8 @@ export default function App() {
           className="fixed inset-y-0 right-0 z-[2200] w-full max-w-sm border-l border-zinc-800 bg-zinc-950/90 shadow-2xl backdrop-blur-xl"
         >
           <div className="flex h-full flex-col">
-            <div className="flex items-center justify-between border-b border-zinc-800 p-6">
-              <h3 className="text-xl font-black text-white">故事档案</h3>
+            <div className="flex items-center justify-between border-b border-zinc-800 px-6 pb-6 pt-[max(1.5rem,calc(env(safe-area-inset-top)+1rem))]">
+              <h3 className="text-xl font-black text-white">故事信息</h3>
               <button
                 type="button"
                 onClick={() => setIsStoryInfoOpen(false)}
@@ -5973,7 +6071,7 @@ export default function App() {
                     <div className="rounded-2xl border border-zinc-800 bg-zinc-900/35 p-4">
                       <p className="text-sm leading-relaxed text-zinc-300">{endingDomainSummaryText(blueprint)}</p>
                       <div className="mt-4 grid gap-2">
-                        {endingDomainCards(blueprint).map((domain) => (
+                        {endingDomainCards(blueprint, { showNumbers: false }).map((domain) => (
                           <div key={domain.id} className="rounded-xl border border-zinc-800 bg-zinc-950/45 p-3">
                             <div className="flex items-center justify-between gap-3">
                               <span className="text-sm font-black text-zinc-100">{domain.title}</span>
@@ -7551,69 +7649,81 @@ export default function App() {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="grid gap-3">
-              <button
-                onClick={() => {
-                  setIsActionMenuOpen(false);
-                  setIsStoryInfoOpen(true);
-                }}
-                className={semanticMenuButtonClass('ghost')}
-              >
-                <BookOpen className="h-5 w-5" />
-                故事档案
-              </button>
-              <button
-                onClick={() => openArchiveView('PLAYING')}
-                className={semanticMenuButtonClass('ghost')}
-              >
-                <Archive className="h-5 w-5" />
-                命运收藏馆
-              </button>
+            <div className="grid max-h-[min(72vh,34rem)] gap-5 overflow-y-auto pr-1">
+              <section className="grid gap-2">
+                <div className="px-1 text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">阅读与资料</div>
+                <button
+                  onClick={() => {
+                    setIsActionMenuOpen(false);
+                    setIsStoryInfoOpen(true);
+                  }}
+                  className={semanticMenuButtonClass('ghost')}
+                >
+                  <BookOpen className="h-5 w-5" />
+                  故事信息
+                </button>
+                <button
+                  onClick={() => openArchiveView('PLAYING')}
+                  className={semanticMenuButtonClass('ghost')}
+                >
+                  <Archive className="h-5 w-5" />
+                  命运收藏馆
+                </button>
+              </section>
               {gameState === 'PLAYING' && (
                 <>
-                  <button onClick={() => { setIsActionMenuOpen(false); handleStoryInteraction('like'); }} className={semanticMenuButtonClass('ghost')}>
-                    <Heart className="h-5 w-5" /> 点赞
-                  </button>
-                  <button onClick={() => { setIsActionMenuOpen(false); handleStoryInteraction('favorite'); }} className={semanticMenuButtonClass('ghost')}>
-                    <Bookmark className="h-5 w-5" /> 收藏
-                  </button>
-                  <button
-                    onClick={() => {
-                      setIsActionMenuOpen(false);
-                      void handleShareStory();
-                    }}
-                    disabled={isSharing || !blueprint}
-                    className={semanticMenuButtonClass('secondary')}
-                  >
-                    {isSharing ? <Loader2 className="h-5 w-5 animate-spin" /> : <Copy className="h-5 w-5" />}
-                    分享故事
-                  </button>
-                  <button onClick={() => { setIsActionMenuOpen(false); handleSaveWorkAndReturn(); }} className={semanticMenuButtonClass('ghost')}>
-                    <Archive className="h-5 w-5" /> 保存当前故事
-                  </button>
-                  {!activeStoryId && (
-                    <button onClick={() => { setIsActionMenuOpen(false); handleRegenerateQuickStory(); }} className={semanticMenuButtonClass('ghost')}>
-                      <RefreshCcw className="h-5 w-5" /> 重新生成
+                  <section className="grid gap-2">
+                    <div className="px-1 text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">作品互动</div>
+                    <button onClick={() => { setIsActionMenuOpen(false); handleStoryInteraction('like'); }} className={semanticMenuButtonClass('ghost')}>
+                      <Heart className="h-5 w-5" /> 点赞
                     </button>
-                  )}
-                  <button onClick={() => { setIsActionMenuOpen(false); handleAdaptCurrentStory(); }} disabled={!canAdaptCurrentStory() || isLoadingStories} className={semanticMenuButtonClass('secondary')}>
-                    <Wand2 className="h-5 w-5" /> {activeStoryMeta?.authorId === user?.uid ? '改变命运' : '创作同人'}
-                  </button>
-                  <button onClick={() => { setIsActionMenuOpen(false); restartCurrentStory(); }} className={semanticMenuButtonClass('ghost')}>
-                    <RefreshCcw className="h-5 w-5" /> 重新干涉
-                  </button>
+                    <button onClick={() => { setIsActionMenuOpen(false); handleStoryInteraction('favorite'); }} className={semanticMenuButtonClass('ghost')}>
+                      <Bookmark className="h-5 w-5" /> 收藏
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsActionMenuOpen(false);
+                        void handleShareStory();
+                      }}
+                      disabled={isSharing || !blueprint}
+                      className={semanticMenuButtonClass('secondary')}
+                    >
+                      {isSharing ? <Loader2 className="h-5 w-5 animate-spin" /> : <Copy className="h-5 w-5" />}
+                      分享故事
+                    </button>
+                    <button onClick={() => { setIsActionMenuOpen(false); handleSaveWorkAndReturn(); }} className={semanticMenuButtonClass('ghost')}>
+                      <Archive className="h-5 w-5" /> 保存当前故事
+                    </button>
+                  </section>
+                  <section className="grid gap-2">
+                    <div className="px-1 text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">创作与重开</div>
+                    {!activeStoryId && (
+                      <button onClick={() => { setIsActionMenuOpen(false); handleRegenerateQuickStory(); }} className={semanticMenuButtonClass('ghost')}>
+                        <RefreshCcw className="h-5 w-5" /> 重新生成
+                      </button>
+                    )}
+                    <button onClick={() => { setIsActionMenuOpen(false); handleAdaptCurrentStory(); }} disabled={!canAdaptCurrentStory() || isLoadingStories} className={semanticMenuButtonClass('secondary')}>
+                      <Wand2 className="h-5 w-5" /> {activeStoryMeta?.authorId === user?.uid ? '改变命运' : '创作同人'}
+                    </button>
+                    <button onClick={() => { setIsActionMenuOpen(false); restartCurrentStory(); }} className={semanticMenuButtonClass('ghost')}>
+                      <RefreshCcw className="h-5 w-5" /> 重新干涉
+                    </button>
+                  </section>
                 </>
               )}
-              <button
-                onClick={() => {
-                  setIsActionMenuOpen(false);
-                  resetToHome();
-                }}
-                className={semanticMenuButtonClass('ghost')}
-              >
-                <LogIn className="h-5 w-5" />
-                退出游玩
-              </button>
+              <section className="grid gap-2">
+                <div className="px-1 text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">离开</div>
+                <button
+                  onClick={() => {
+                    setIsActionMenuOpen(false);
+                    resetToHome();
+                  }}
+                  className={semanticMenuButtonClass('ghost')}
+                >
+                  <LogIn className="h-5 w-5" />
+                  退出游玩
+                </button>
+              </section>
             </div>
           </motion.div>
         </motion.div>
@@ -7753,6 +7863,7 @@ export default function App() {
           {renderResumePromptModal()}
           {renderLeaveGameModal()}
           {renderBranchUnlockModal()}
+          {renderInterventionStatusNotice()}
           {renderSummaryModal()}
           
           <AnimatePresence>
