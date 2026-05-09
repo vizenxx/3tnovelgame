@@ -125,7 +125,7 @@ export type SharedStoryRecord = {
 
 export type StoryListSort = 'updated' | 'likes' | 'interventions' | 'favorites' | 'words';
 
-export async function listPublicStories(db: Firestore, pageSize = 20, sort: StoryListSort = 'interventions') {
+export async function listPublicStories(db: Firestore, pageSize = 20, sort: StoryListSort = 'updated') {
   if (useSupabaseStories()) {
     return storyApi<StoryListItem[]>('listPublicStories', { pageSize, sort }, { timeoutMs: 9000, stage: '公开作品列表同步' });
   }

@@ -335,7 +335,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         favorites: 'favorite_count.desc',
         words: 'average_chapter_words.desc',
         updated: 'updated_at.desc',
-      } as Record<string, string>)[String(body.sort || 'interventions')] || 'intervention_count.desc';
+      } as Record<string, string>)[String(body.sort || 'updated')] || 'updated_at.desc';
       const rows = await supabaseRequest<any[]>('stories', {
         query: {
           visibility: 'eq.public',
@@ -568,7 +568,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (action === 'updateAuthorNameEverywhere') {
-      await supabaseRequest('stories', { method: 'PATCH', query: { author_id: `eq.${authUser.uid}` }, body: { author_name: body.authorName || guestName(authUser.uid), updated_at: nowIso() } });
+      await supabaseRequest('stories', { method: 'PATCH', query: { author_id: `eq.${authUser.uid}` }, body: { author_name: body.authorName || guestName(authUser.uid) } });
       await supabaseRequest('shared_stories', { method: 'PATCH', query: { author_id: `eq.${authUser.uid}` }, body: { author_name: body.authorName || guestName(authUser.uid), intervener_name: body.authorName || guestName(authUser.uid), updated_at: nowIso() } });
       await supabaseRequest('shared_stories', { method: 'PATCH', query: { original_author_id: `eq.${authUser.uid}` }, body: { original_author_name: body.authorName || guestName(authUser.uid), updated_at: nowIso() } });
       return res.status(200).json({ ok: true });
@@ -760,6 +760,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         scene_text: branch.sceneText || '',
         updated_at: nowIso(),
       }], 'id');
+      await supabaseRequest('stories', { method: 'PATCH', query: { id: `eq.${body.storyId}` }, body: { updated_at: nowIso() } });
       return res.status(200).json({ ok: true });
     }
 
@@ -781,12 +782,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         inject: { ...(branch.inject || { mustHappen: [], mustReveal: [], mustChange: [] }), hidden: isHidden },
         scene_text: branch.sceneText || '',
       }]);
+      await supabaseRequest('stories', { method: 'PATCH', query: { id: `eq.${body.storyId}` }, body: { updated_at: nowIso() } });
       return res.status(200).json(created.id);
     }
 
     if (action === 'deleteStoryBranch') {
       await requireStoryOwner(body.storyId, authUser.uid);
       await supabaseRequest('story_branches', { method: 'DELETE', query: { id: `eq.${body.branchId}`, story_id: `eq.${body.storyId}` } });
+      await supabaseRequest('stories', { method: 'PATCH', query: { id: `eq.${body.storyId}` }, body: { updated_at: nowIso() } });
       return res.status(200).json({ ok: true });
     }
 
