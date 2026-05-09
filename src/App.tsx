@@ -330,7 +330,7 @@ const GlobalError = ({ errorMsg }: { errorMsg: string | null }) => (
         exit={{ opacity: 0, y: 10, scale: 0.98 }}
         role="alert"
         aria-live="assertive"
-        className="fixed left-1/2 top-[max(5.5rem,calc(env(safe-area-inset-top)+4.5rem))] z-[6100] w-[min(92vw,28rem)] -translate-x-1/2 rounded-[1.5rem] border border-zinc-700/70 bg-zinc-950/92 px-5 py-4 text-center text-sm font-bold leading-relaxed text-zinc-100 shadow-2xl shadow-black/40 backdrop-blur-xl"
+        className="app-toast fixed left-1/2 top-[max(5.5rem,calc(env(safe-area-inset-top)+4.5rem))] z-[6100] w-[min(92vw,28rem)] -translate-x-1/2 rounded-[1.5rem] px-5 py-4 text-center text-sm font-bold leading-relaxed text-zinc-100 backdrop-blur-xl"
       >
         <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-gradient-to-r from-indigo-400 to-sky-300" />
         <div>{errorMsg}</div>
@@ -469,19 +469,19 @@ const LoadingOverlay = ({ progress, status, subtext, variant = 'default' }: { pr
     variant === 'ending' ? 'bg-amber-950/90' :
     'bg-zinc-950/90'
   }`}>
-    <motion.div 
+    <motion.div
       animate={{ rotate: variant === 'ending' ? 180 : -360, scale: [1, 1.1, 1] }}
       transition={{ rotate: { repeat: Infinity, duration: variant === 'ending' ? 8 : 3, ease: 'linear' }, scale: { repeat: Infinity, duration: 2 } }}
-      className="mb-8 relative"
+      className="relative mb-7"
     >
       {variant === 'bless' ? (
-        <Zap className="w-20 h-20 text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.6)]" />
+        <Zap className="h-16 w-16 text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.6)]" />
       ) : variant === 'curse' ? (
-        <Skull className="w-20 h-20 text-rose-500 drop-shadow-[0_0_15px_rgba(244,63,94,0.6)]" />
+        <Skull className="h-16 w-16 text-rose-500 drop-shadow-[0_0_15px_rgba(244,63,94,0.6)]" />
       ) : variant === 'ending' ? (
-        <Sparkles className="w-20 h-20 text-amber-400 drop-shadow-[0_0_20px_rgba(251,191,36,0.8)]" />
+        <Sparkles className="h-16 w-16 text-amber-400 drop-shadow-[0_0_20px_rgba(251,191,36,0.8)]" />
       ) : (
-        <RefreshCcw className="w-16 h-16 text-indigo-500" />
+        <RefreshCcw className="h-14 w-14 text-indigo-500" />
       )}
     </motion.div>
     
@@ -493,9 +493,9 @@ const LoadingOverlay = ({ progress, status, subtext, variant = 'default' }: { pr
     }`}>
       {status}
     </h2>
-    {subtext && <p className="text-zinc-400 text-sm mb-8 max-w-md italic">{subtext}</p>}
+    {subtext && <p className="mb-8 max-w-md text-sm leading-relaxed text-zinc-400">{subtext}</p>}
     
-    <div className="w-full max-w-md bg-zinc-900 h-3 rounded-full overflow-hidden mb-4 border border-zinc-800 shadow-inner">
+    <div className="mb-4 h-2 w-full max-w-md overflow-hidden rounded-full border border-zinc-800 bg-zinc-900 shadow-inner">
       <motion.div 
         className={`h-full transition-all duration-500 ${
           variant === 'bless' ? 'bg-gradient-to-r from-emerald-600 to-teal-400' : 
@@ -528,13 +528,13 @@ const BlockingSyncOverlay = ({
     initial={{ opacity: 0 }}
     animate={{ opacity: 1 }}
     exit={{ opacity: 0 }}
-    className={`${safeModalBackdropClass} ${zIndexClass} bg-zinc-950/60 backdrop-blur-sm`}
+    className={`${safeModalBackdropClass} ${zIndexClass} bg-zinc-950/55 backdrop-blur-md`}
   >
     <motion.div
       initial={{ y: 14, opacity: 0, scale: 0.97 }}
       animate={{ y: 0, opacity: 1, scale: 1 }}
       exit={{ y: 10, opacity: 0, scale: 0.98 }}
-      className="w-full max-w-sm rounded-[1.75rem] border border-indigo-500/25 bg-zinc-950/90 p-5 text-center shadow-2xl shadow-black/40"
+      className="app-modal-surface w-full max-w-sm rounded-[1.75rem] p-5 text-center backdrop-blur-xl"
     >
       <Loader2 className="mx-auto h-8 w-8 animate-spin text-indigo-300" />
       <div className="mt-4 text-sm font-black text-zinc-100">{title}</div>
@@ -589,12 +589,12 @@ const endingBiasPercentLabel = (value: number) => {
   return '极弱';
 };
 
-const endingBiasStoryCardLabel = (source?: any) => {
+const endingBiasStoryCardLabels = (source?: any) => {
   const bias = getEndingBias(source);
-  if (bias.leftBaseWeight === bias.rightBaseWeight) return `均衡倾向 · ${endingBiasPercentLabel(bias.leftBaseWeight)}`;
-  const dominant = bias.leftBaseWeight > bias.rightBaseWeight ? '左向倾向' : '右向倾向';
-  const dominantValue = Math.max(bias.leftBaseWeight, bias.rightBaseWeight);
-  return `${dominant} · ${endingBiasPercentLabel(dominantValue)}`;
+  return [
+    { side: 'left', label: '左向', value: endingBiasPercentLabel(bias.leftBaseWeight), active: bias.leftBaseWeight >= bias.rightBaseWeight },
+    { side: 'right', label: '右向', value: endingBiasPercentLabel(bias.rightBaseWeight), active: bias.rightBaseWeight >= bias.leftBaseWeight },
+  ];
 };
 
 const endingDomainCards = (source?: any) => {
@@ -4097,6 +4097,20 @@ export default function App() {
     return kind === 'like' ? optimisticLikedStoryIds.has(storyId) : optimisticFavoritedStoryIds.has(storyId);
   };
 
+  const hasStoryCardAction = (kind: 'like' | 'favorite', story: any) => {
+    const storyId = story?.id || story?.storyId || story?.sourceStoryId;
+    if (!storyId) return false;
+    if (hasOptimisticStoryAction(kind, storyId)) return true;
+    if (kind === 'like') {
+      return Boolean(story?.likedByMe || story?.isLiked || story?.meta?.likedByMe || story?.meta?.isLiked);
+    }
+    if (story?.favoritedByMe || story?.isFavorited || story?.meta?.favoritedByMe || story?.meta?.isFavorited) return true;
+    return mySharedStories.some((item: any) => (
+      item?.archiveKind === 'favorite' &&
+      (item?.id === storyId || item?.storyId === storyId || item?.sourceStoryId === storyId)
+    ));
+  };
+
   const applyStoryCountDelta = (storyId: string, field: 'likeCount' | 'favoriteCount', delta: number) => {
     const patchStory = (story: any) => {
       if (!story || (story.id !== storyId && story.storyId !== storyId && story.sourceStoryId !== storyId)) return story;
@@ -4977,21 +4991,26 @@ export default function App() {
   const renderStoryCard = (story: any, isPublic: boolean) => {
     const coverUrl = getStoryCoverUrl(story);
     const tags = getStoryTags(story);
+    const storyId = story?.id || story?.storyId || story?.sourceStoryId;
+    const isLiked = hasStoryCardAction('like', story);
+    const isFavorited = hasStoryCardAction('favorite', story);
     const storyStats = [
-      { label: '点赞', value: getStoryLikeCount(story), icon: Heart },
+      { label: '点赞', value: getStoryLikeCount(story), icon: Heart, active: isLiked, activeClass: 'text-pink-300 bg-pink-500/10 border-pink-500/25' },
       { label: '干涉', value: getStoryInterventionCount(story), icon: Sparkles },
-      { label: '收藏', value: getStoryFavoriteCount(story), icon: Bookmark },
+      { label: '收藏', value: getStoryFavoriteCount(story), icon: Bookmark, active: isFavorited, activeClass: 'text-amber-300 bg-amber-500/10 border-amber-500/25' },
       { label: '均章', value: `${getStoryAverageChapterWords(story) || '未知'} 字`, icon: BookOpen },
     ];
     return (
       <motion.div
-        key={story.id}
+        key={storyId || story.id}
         whileHover={{ y: -4, scale: 1.01 }}
-        className="group relative overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900/50 p-4 shadow-xl transition-all hover:border-indigo-500/50 hover:bg-zinc-900"
+        className={`app-card group relative overflow-hidden rounded-3xl p-4 transition-all hover:border-indigo-500/50 ${
+          isLiked ? 'ring-1 ring-pink-500/18' : isFavorited ? 'ring-1 ring-amber-500/18' : ''
+        }`}
       >
         <div className="flex gap-4">
           <div className="w-28 shrink-0 sm:w-32">
-            <button type="button" onClick={() => setStoryDetailStory(story)} className="relative h-28 w-28 overflow-hidden rounded-2xl border border-zinc-800 bg-gradient-to-br from-zinc-800 via-zinc-950 to-indigo-950 sm:h-32 sm:w-32 cursor-pointer transition-all hover:ring-2 hover:ring-indigo-500 hover:ring-offset-2 hover:ring-offset-zinc-950">
+            <button type="button" onClick={() => setStoryDetailStory(story)} className="relative h-28 w-28 cursor-pointer overflow-hidden rounded-2xl border border-zinc-800 bg-gradient-to-br from-zinc-800 via-zinc-950 to-indigo-950 transition-all hover:ring-2 hover:ring-indigo-500 hover:ring-offset-2 hover:ring-offset-zinc-950 sm:h-32 sm:w-32">
               {coverUrl ? (
                 <img src={coverUrl} alt={`${formatBookTitle(getStoryTitle(story))} 封面`} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
               ) : (
@@ -5000,16 +5019,23 @@ export default function App() {
                 </div>
               )}
             </button>
-            <div className="mt-2 grid grid-cols-2 overflow-hidden rounded-2xl border border-zinc-800/45 bg-zinc-950/35 text-[10px] font-black text-zinc-500">
+            <div className="mt-2 space-y-1.5 rounded-2xl border border-zinc-800/45 bg-zinc-950/25 p-2 text-[10px] font-black text-zinc-500">
               {storyStats.map((stat) => {
                 const Icon = stat.icon;
                 return (
-                  <div key={stat.label} className="min-w-0 border-zinc-800/45 px-2 py-1.5 odd:border-r [&:nth-child(-n+2)]:border-b">
-                    <div className="flex items-center gap-1 text-zinc-600">
-                      <Icon className="h-3 w-3 shrink-0" />
-                      <span className="truncate">{stat.label}</span>
+                  <div
+                    key={stat.label}
+                    className={`flex min-w-0 items-center justify-between gap-2 rounded-xl border px-2 py-1.5 transition-colors ${
+                      stat.active
+                        ? stat.activeClass
+                        : 'border-transparent bg-zinc-900/25 text-zinc-500'
+                    }`}
+                  >
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <Icon className={`h-3.5 w-3.5 shrink-0 ${stat.active ? 'fill-current' : ''}`} />
+                      <span className="truncate">{stat.active && stat.label === '点赞' ? '已点赞' : stat.active && stat.label === '收藏' ? '已收藏' : stat.label}</span>
                     </div>
-                    <div className="mt-0.5 truncate text-[11px] text-zinc-100">{stat.value}</div>
+                    <div className="shrink-0 truncate text-[11px] text-zinc-100">{stat.value}</div>
                   </div>
                 );
               })}
@@ -5022,17 +5048,26 @@ export default function App() {
                   {tag}
                 </span>
               ))}
-              <span className="rounded-lg bg-zinc-800/70 px-2.5 py-1 text-[11px] font-black text-zinc-300">
-                {endingBiasStoryCardLabel(story)}
-              </span>
+              {endingBiasStoryCardLabels(story).map((bias) => (
+                <span
+                  key={bias.side}
+                  className={`rounded-lg px-2.5 py-1 text-[11px] font-black ${
+                    bias.side === 'left'
+                      ? bias.active ? 'bg-indigo-500/15 text-indigo-200' : 'bg-zinc-800/55 text-zinc-400'
+                      : bias.active ? 'bg-rose-500/15 text-rose-200' : 'bg-zinc-800/55 text-zinc-400'
+                  }`}
+                >
+                  {bias.label} · {bias.value}
+                </span>
+              ))}
             </div>
-            <h3 className="mb-1 whitespace-normal break-words text-xl font-black leading-tight text-white transition-colors group-hover:text-indigo-300 sm:text-2xl">
+            <h3 className="mb-1 whitespace-normal break-words text-[1.35rem] font-black leading-tight text-white transition-colors group-hover:text-indigo-300 sm:text-2xl">
               {formatBookTitle(getStoryTitle(story))}
             </h3>
             <div className="mb-2 text-sm font-bold text-zinc-500">
               作者：{getStoryAuthorName(story)}
             </div>
-            <p className="mb-3 line-clamp-3 text-sm leading-relaxed text-zinc-400 transition-colors group-hover:text-zinc-300">
+            <p className="mb-3 line-clamp-3 text-[0.95rem] leading-relaxed text-zinc-400 transition-colors group-hover:text-zinc-300">
               {getStoryMainAxis(story)}
             </p>
             <div className="mt-auto grid gap-2 sm:grid-cols-2">
@@ -5081,13 +5116,13 @@ export default function App() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className={`${safeModalBackdropClass} z-[5400] bg-black/75 backdrop-blur-md`}
+          className={`${safeModalBackdropClass} z-[5400] bg-black/70 backdrop-blur-md`}
         >
           <motion.div
             initial={{ y: 18, opacity: 0, scale: 0.96 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 12, opacity: 0, scale: 0.98 }}
-            className="relative mt-[env(safe-area-inset-top)] max-h-[calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-full max-w-3xl overflow-y-auto rounded-[2rem] border border-zinc-800 bg-zinc-950 p-5 shadow-2xl sm:p-7"
+            className="app-modal-surface relative mt-[env(safe-area-inset-top)] max-h-[calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-full max-w-3xl overflow-y-auto rounded-[2rem] p-5 backdrop-blur-xl sm:p-7"
           >
             <div className="grid gap-5 sm:grid-cols-[180px_minmax(0,1fr)]">
               <div>
@@ -5138,7 +5173,7 @@ export default function App() {
                 </div>
                 <h3 className="break-words text-3xl font-black leading-tight text-white">{title}</h3>
                 <div className="mt-2 text-sm font-bold text-zinc-500">作者：{getStoryAuthorName(storyDetailStory)}</div>
-                <div className="mt-5 max-h-[40vh] overflow-y-auto rounded-3xl border border-zinc-800 bg-zinc-900/45 p-4 text-base leading-relaxed text-zinc-300">
+                <div className="mt-5 max-h-[40vh] overflow-y-auto rounded-3xl border border-zinc-800/60 bg-zinc-900/25 p-4 text-base leading-relaxed text-zinc-300">
                   {getStoryMainAxis(storyDetailStory) || '这部作品暂时还没有填写完整介绍。'}
                 </div>
                 <div className="mt-5 grid gap-3">
@@ -5340,8 +5375,18 @@ export default function App() {
           </div>
         </div>
         {isLoadingStories ? (
-          <div className="flex h-64 items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-zinc-700" />
+          <div className="app-card-quiet flex h-64 flex-col items-center justify-center rounded-[2rem] text-center">
+            <Loader2 className="h-8 w-8 animate-spin text-indigo-300" />
+            <div className="mt-4 text-sm font-black text-zinc-200">正在同步作品库</div>
+            <div className="mt-2 h-1.5 w-48 overflow-hidden rounded-full bg-zinc-800">
+              <motion.div
+                className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-sky-300 to-indigo-500"
+                initial={{ x: '-100%' }}
+                animate={{ x: '120%' }}
+                transition={{ repeat: Infinity, duration: 1.25, ease: 'easeInOut' }}
+                style={{ width: '55%' }}
+              />
+            </div>
           </div>
         ) : storyListLoadError && visibleStories.length === 0 ? (
           <div className="rounded-3xl border border-amber-500/30 bg-amber-500/10 p-8 text-center">
@@ -5427,7 +5472,7 @@ export default function App() {
     const renderFavoriteCard = (story: any) => {
       const isChoosingThis = archiveChoiceStoryId === story.id;
       return (
-        <div key={story.id} className="rounded-[1.5rem] border border-indigo-500/20 bg-indigo-500/5 p-5 transition-all duration-150">
+        <div key={story.id} className="app-card rounded-[1.5rem] p-5 transition-all duration-150">
           <div className="mb-2 flex items-start justify-between gap-2">
             <div className="line-clamp-2 text-sm font-black text-white leading-snug">{formatBookTitle(story.title)}</div>
             <div className="shrink-0 rounded-full bg-indigo-500/15 px-2 py-1 text-[10px] font-black text-indigo-300">收藏原作</div>
@@ -5519,7 +5564,7 @@ export default function App() {
         : 'bg-zinc-800/80 border-zinc-700 text-zinc-400 hover:bg-zinc-700';
 
     const renderSavedCard = (story: any) => (
-      <div key={story.id} className="rounded-[1.5rem] border border-zinc-800 bg-zinc-900/30 p-5 flex flex-col">
+      <div key={story.id} className="app-card flex flex-col rounded-[1.5rem] p-5">
         <div className="mb-2 flex items-start justify-between gap-2">
           <div className="line-clamp-2 text-sm font-black text-white leading-snug">{formatBookTitle(story.title)}</div>
           <div className="relative shrink-0">
@@ -5593,7 +5638,7 @@ export default function App() {
           <BackNavButton label={archiveReturnTarget === 'PLAYING' ? '返回游玩页' : '返回作品库'} onClick={leaveArchiveView} />
         </div>
 
-        <section className="rounded-[2rem] border border-zinc-800 bg-zinc-900/20 p-4 sm:p-5">
+        <section className="app-card-quiet rounded-[2rem] p-4 sm:p-5">
           {archiveSegment.status === 'error' && (
             <div className="mb-5 rounded-3xl border border-amber-500/25 bg-amber-500/10 p-4 text-sm leading-relaxed text-amber-100/85">
               <div className="font-black text-amber-100">收藏馆同步暂时不顺利</div>
@@ -6060,7 +6105,7 @@ export default function App() {
     const isReadonlyOwner = Boolean(user && readonlyArchiveId && story.meta?.authorId === user.uid);
     const isReadonlyUpdating = Boolean(readonlyArchiveId && archiveUpdatingIds[readonlyArchiveId]);
     return (
-      <div className="mx-auto max-w-4xl px-6 pb-16 pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] sm:px-8">
+      <div className="reading-page mx-auto max-w-4xl rounded-b-[2.5rem] px-6 pb-16 pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] sm:px-8">
         <div className="mb-10 flex items-start justify-between gap-4">
           <div className="flex min-w-0 gap-4">
             {story.meta?.coverUrl && (
@@ -6077,14 +6122,14 @@ export default function App() {
           </div>
           {readonlyCanGoBack && <BackNavButton label="返回上一页" onClick={leaveReadonlyStory} />}
         </div>
-        <div className="mb-10 rounded-[2rem] border border-zinc-800 bg-zinc-900/30 p-6 text-sm leading-relaxed text-zinc-300">
+        <div className="app-card-quiet mb-10 rounded-[2rem] p-6 text-sm leading-relaxed text-zinc-300">
           {story.meta?.main_axis || '暂无故事主轴摘要。'}
         </div>
         <div className="mb-8 flex justify-end">
           <ReadingTextControls />
         </div>
         {isReadonlyOwner && (
-          <div className="mb-8 rounded-[2rem] border border-zinc-800 bg-zinc-900/35 p-5">
+          <div className="app-card-quiet mb-8 rounded-[2rem] p-5">
             <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="text-xs font-black uppercase tracking-[0.22em] text-zinc-500">馆藏管理</div>
@@ -6138,7 +6183,7 @@ export default function App() {
         )}
         <div className="mx-auto max-w-3xl space-y-14">
           {(story.chapters || []).map((chapter) => (
-            <section key={chapter.chapter_num} className="relative scroll-mt-28">
+            <section key={chapter.chapter_num} className="reading-chapter relative">
               <div className="mb-6 flex items-center gap-4">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-800/60 bg-zinc-950/45 text-xs font-black text-zinc-500">
                   {chapter.chapter_num}
@@ -6151,10 +6196,11 @@ export default function App() {
                   <p key={idx} style={readingParagraphStyle} className="leading-relaxed">{renderParagraphWithHighlights(paragraph, story.meta?.characters || [])}</p>
                 ))}
               </div>
+              <div className="reading-divider mt-12" />
             </section>
           ))}
         </div>
-        <div className="mt-12 rounded-[2rem] border border-indigo-500/20 bg-indigo-500/10 p-6 text-center">
+        <div className="app-card mt-12 rounded-[2rem] p-6 text-center">
           <h3 className="text-2xl font-black text-white">想亲手改变这条命运线吗？</h3>
           <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-zinc-400">
             这页是只读故事记录。注册或登录后，你可以从原版故事开始干涉命运，也可以一键改编成自己的版本。
@@ -6393,12 +6439,12 @@ export default function App() {
 
   const floatingInterventionPanel = blueprint && gameState === 'PLAYING' && typeof document !== 'undefined'
     ? createPortal(
-      <div className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-[1900] rounded-full border border-zinc-700/45 bg-zinc-900/78 px-3 py-2 shadow-xl backdrop-blur-xl sm:left-auto sm:right-6 sm:w-[24rem]">
-        <div className="flex min-h-10 items-center justify-between gap-3 px-1">
-          <div className="shrink-0 text-sm font-black text-zinc-300">
+      <div className="destiny-dock fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-[1900] rounded-full px-3 py-1.5 backdrop-blur-xl sm:left-auto sm:right-6 sm:w-[23rem]">
+        <div className="flex min-h-9 items-center justify-between gap-2 px-1">
+          <div className="shrink-0 text-xs font-black text-zinc-300 sm:text-sm">
             {interventionsLeft}/3 干涉数
           </div>
-          <div className="min-w-0 flex-1 text-center text-sm font-black">
+          <div className="min-w-0 flex-1 text-center text-xs font-black sm:text-sm">
             {(() => {
               const left = Math.round(uiFeedback.leftProgress || 0);
               const right = Math.round(uiFeedback.rightProgress || 0);
@@ -6411,7 +6457,7 @@ export default function App() {
             type="button"
             onClick={() => handleGenerateSummary(interventionsLeft > 0 ? 'manual' : 'auto_interventions')}
             disabled={isRewriting || isGeneratingConclusion || !activeStoryId}
-            className={`inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-black transition-all duration-150 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 ${
+            className={`inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-black transition-all duration-150 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 sm:h-9 ${
               storyConclusion || interventionsLeft <= 0
                 ? 'border border-zinc-700 bg-zinc-900/80 text-zinc-100 hover:border-zinc-500'
                 : 'bg-zinc-100 text-zinc-950 hover:bg-white'
@@ -6427,7 +6473,7 @@ export default function App() {
     : null;
 
   const renderPlayingView = () => (
-    <div className="relative mx-auto max-w-4xl px-6 pb-40 pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] sm:px-8 sm:pb-32">
+    <div className="reading-page relative mx-auto max-w-4xl rounded-b-[2.5rem] px-6 pb-40 pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] sm:px-8 sm:pb-32">
       {blueprint && (
         <div className="mb-16 space-y-4 text-center">
           <motion.div
@@ -6461,7 +6507,7 @@ export default function App() {
             initial={{ opacity: 0, x: -20 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
-            className="group relative"
+            className="reading-chapter group relative"
           >
             <div className="mb-6 flex items-center gap-4">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-800/60 bg-zinc-950/45 text-xs font-black text-zinc-500 transition-colors group-hover:border-indigo-500/40 group-hover:text-indigo-300">
@@ -6595,9 +6641,7 @@ export default function App() {
                   </div>
                 );
               })()}
-              {idx < chapters.length - 1 && (
-                <div className="mt-12 h-px bg-gradient-to-r from-transparent via-zinc-800/80 to-transparent" />
-              )}
+              {idx < chapters.length - 1 && <div className="reading-divider mt-12" />}
             </div>
           </motion.section>
         ))}
@@ -6615,7 +6659,7 @@ export default function App() {
         </div>
       )}
       {blueprint && (
-        <div className="mt-16 rounded-3xl border border-zinc-800 bg-zinc-900/30 p-5">
+        <div className="app-card-quiet mt-16 rounded-3xl p-5">
           <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="text-sm font-black text-white">{formatBookTitle(blueprint.title)}</div>
@@ -6893,7 +6937,7 @@ export default function App() {
                       await selectAuthoringStory(story.id);
                       setAuthoringLoadingStoryId(null);
                     }}
-                    className={`relative overflow-hidden flex flex-col justify-between rounded-2xl border border-zinc-800 bg-zinc-950/60 p-5 text-left transition-all hover:-translate-y-1 hover:border-indigo-500/50 hover:bg-indigo-500/10 hover:shadow-xl active:scale-[0.98] ${authoringLoadingStoryId === story.id ? 'opacity-70 pointer-events-none' : ''}`}
+                    className={`app-card relative flex flex-col justify-between overflow-hidden rounded-2xl p-5 text-left transition-all hover:-translate-y-1 hover:border-indigo-500/50 hover:bg-indigo-500/10 hover:shadow-xl active:scale-[0.98] ${authoringLoadingStoryId === story.id ? 'opacity-70 pointer-events-none' : ''}`}
                   >
                     {authoringLoadingStoryId === story.id && (
                       <div className="absolute inset-0 z-10 flex items-center justify-center bg-zinc-950/60 backdrop-blur-sm">
@@ -7208,7 +7252,7 @@ export default function App() {
                       </div>
                     </label>
                   </div>
-                  <section className="rounded-2xl border border-zinc-800 bg-zinc-950/40 p-4">
+                  <section className="app-card-quiet rounded-2xl p-4">
                     <div className="mb-4 flex flex-col gap-4 sm:flex-row">
                       <div className="h-32 w-32 shrink-0 overflow-hidden rounded-2xl border border-zinc-800 bg-gradient-to-br from-zinc-800 via-zinc-950 to-indigo-950">
                         {authoringCartridge.meta?.coverUrl ? (
@@ -7270,7 +7314,7 @@ export default function App() {
                       className="authoring-resizable-textarea min-h-[180px] w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-white outline-none focus:border-indigo-500"
                     />
                   </label>
-                  <section className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
+                  <section className="app-card-quiet rounded-2xl p-4">
                     <div className="mb-3 text-sm font-black text-zinc-100">结局结构</div>
                     <div className="grid gap-2 sm:grid-cols-2">
                       {([
@@ -7303,7 +7347,7 @@ export default function App() {
                         );
                       })}
                     </div>
-                    <div className="mt-4 rounded-2xl border border-zinc-800/80 bg-zinc-950/60 p-4">
+                    <div className="app-card-quiet mt-4 rounded-2xl p-4">
                       <div className="text-sm font-black text-zinc-100">故事倾向</div>
                       <p className="mt-1 text-xs leading-relaxed text-zinc-500">设置作品本身比较容易走向哪一种收束。读者只会感受到故事倾向，不会看到这些后台设定。</p>
                       <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -7314,7 +7358,7 @@ export default function App() {
                           const bias = normalizeEndingBias(authoringCartridge.meta?.endingBias || authoringCartridge.meta?.endingRates);
                           const value = normalizeEndingBiasPercent(bias[option.key]);
                           return (
-                            <label key={option.key} className="block space-y-3 rounded-2xl border border-zinc-800/80 bg-zinc-950/70 p-3 text-xs font-bold text-zinc-400">
+                            <label key={option.key} className="block space-y-3 rounded-2xl border border-zinc-800/60 bg-zinc-950/45 p-3 text-xs font-bold text-zinc-400">
                               <div className="flex items-center justify-between gap-3">
                                 <span>{option.label}</span>
                                 <span className="text-sm font-black text-zinc-100">{value}% · {endingBiasPercentLabel(value)}</span>
@@ -7346,7 +7390,7 @@ export default function App() {
                       <p className="mt-3 text-[11px] leading-relaxed text-zinc-500">如果不确定，保持两边相同即可；支线与玩家干涉会继续影响故事最终走向。</p>
                     </div>
                   </section>
-                  <section className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
+                  <section className="app-card-quiet rounded-2xl p-4">
                     <div className="mb-3 text-sm font-black text-zinc-100">作品可见性</div>
                     <div className="grid gap-2 sm:grid-cols-3">
                       {[

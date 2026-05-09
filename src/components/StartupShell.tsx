@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 const SimulatedProgressBar = () => {
   const [width, setWidth] = useState('18%');
-  const [percent, setPercent] = useState(0);
+  const [percent, setPercent] = useState(18);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
@@ -35,10 +35,10 @@ const SimulatedProgressBar = () => {
 export const StartupShell = ({ message }: { message: string }) => (
   <div className="app-boot-screen">
     <div className="app-boot-cover-main">
-      <div className="app-boot-label">3T Novelgame</div>
       <div className="app-boot-mark" aria-hidden="true">
         <img src="/pwa-icon.svg" alt="" />
       </div>
+      <div className="app-boot-label">3T Novelgame</div>
       <div className="app-boot-title">命运干涉</div>
     </div>
     <div className="app-boot-progress-wrap">

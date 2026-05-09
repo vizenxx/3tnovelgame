@@ -22,6 +22,13 @@
   --app-faint-text: color-mix(in srgb, #858585 calc(var(--app-reading-brightness) * 100%), #626262);
   --app-soft-white: #d9d9d9;
   --app-soft-black: #262626;
+  --app-shell-card: color-mix(in srgb, var(--app-surface) 64%, transparent);
+  --app-shell-card-strong: color-mix(in srgb, var(--app-surface) 86%, transparent);
+  --app-shell-border: color-mix(in srgb, var(--app-border) 72%, transparent);
+  --app-shell-border-soft: color-mix(in srgb, var(--app-border) 42%, transparent);
+  --app-reading-paper: color-mix(in srgb, var(--app-bg) 88%, transparent);
+  --app-pill-bg: color-mix(in srgb, var(--app-surface-soft) 68%, transparent);
+  --app-shadow-soft: 0 22px 70px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.045);
 }
 
 html {
@@ -44,6 +51,95 @@ html[data-theme="light"] {
   --app-brand-aura: rgba(79, 95, 187, 0.13);
   --app-brand-warm: rgba(180, 113, 76, 0.1);
   --app-brand-line: rgba(41, 37, 34, 0.055);
+}
+
+.app-card {
+  border: 1px solid var(--app-shell-border-soft);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.035), transparent 38%),
+    var(--app-shell-card);
+  box-shadow: var(--app-shadow-soft);
+}
+
+.app-card-quiet {
+  border: 1px solid var(--app-shell-border-soft);
+  background: color-mix(in srgb, var(--app-surface) 42%, transparent);
+}
+
+.app-modal-surface {
+  border: 1px solid var(--app-shell-border);
+  background:
+    radial-gradient(circle at 20% 0%, var(--app-brand-aura), transparent 34%),
+    color-mix(in srgb, var(--app-soft-black) 94%, transparent);
+  box-shadow: var(--app-shadow-soft);
+}
+
+.app-toast {
+  border: 1px solid var(--app-shell-border);
+  background:
+    radial-gradient(circle at top, var(--app-brand-aura), transparent 42%),
+    color-mix(in srgb, var(--app-soft-black) 92%, transparent);
+  box-shadow: var(--app-shadow-soft);
+}
+
+.app-button-primary {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--app-soft-white) 88%, var(--app-accent)), var(--app-soft-white));
+  color: var(--app-soft-black);
+}
+
+.app-button-secondary,
+.app-button-ghost,
+.app-icon-secondary,
+.app-icon-ghost {
+  border-color: var(--app-shell-border);
+  background: color-mix(in srgb, var(--app-surface) 82%, transparent);
+  color: var(--app-readable-text);
+}
+
+.app-button-secondary:hover,
+.app-button-ghost:hover,
+.app-icon-secondary:hover,
+.app-icon-ghost:hover {
+  border-color: color-mix(in srgb, var(--app-accent) 46%, var(--app-border));
+  background: color-mix(in srgb, var(--app-surface-soft) 86%, transparent);
+}
+
+.app-button-danger,
+.app-icon-danger {
+  border-color: rgba(244, 63, 94, 0.34);
+  background: rgba(244, 63, 94, 0.14);
+  color: #fda4af;
+}
+
+.reading-page {
+  background:
+    linear-gradient(90deg, transparent, var(--app-brand-line), transparent),
+    var(--app-reading-paper);
+}
+
+.reading-chapter {
+  scroll-margin-top: max(7rem, calc(env(safe-area-inset-top) + 6rem));
+}
+
+.reading-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--app-shell-border-soft), transparent);
+}
+
+.destiny-dock {
+  border: 1px solid var(--app-shell-border-soft);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.05), transparent 42%),
+    color-mix(in srgb, var(--app-surface) 84%, transparent);
+  color: var(--app-readable-text);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.2);
+}
+
+html[data-theme="light"] .app-modal-surface,
+html[data-theme="light"] .app-toast {
+  background:
+    radial-gradient(circle at top, var(--app-brand-aura), transparent 42%),
+    color-mix(in srgb, var(--app-surface) 96%, transparent);
 }
 
 /* Hide page scrollbars, but keep textarea scrollbars/resizers visible for long-form editing. */
