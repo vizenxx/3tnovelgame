@@ -49,8 +49,12 @@ type GameState = 'STORY_SELECT' | 'AUTHORING' | 'THEME_SELECTION' | 'GENERATING_
 type NarrativePerson = 'first' | 'second' | 'third';
 type EndingMode = 'single' | 'dual';
 type AppTheme = 'dark' | 'light';
+type StoryLibrarySort = 'updated' | 'likes' | 'interventions' | 'favorites' | 'words';
 
 const safeModalBackdropClass = "fixed inset-0 flex items-center justify-center overflow-y-auto overscroll-contain px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]";
+const PUBLIC_STORY_LIST_LIMIT = 100;
+const MY_STORY_LIST_LIMIT = 80;
+const ARCHIVE_STORY_LIST_LIMIT = 80;
 
 enum OperationType {
   CREATE = 'create',
@@ -440,7 +444,7 @@ const PwaUpdateModal = ({
 };
 
 const LoadingOverlay = ({ progress, status, subtext, variant = 'default' }: { progress: number, status: string, subtext?: string, variant?: 'default' | 'bless' | 'curse' | 'ending' }) => (
-  <div className={`fixed inset-0 z-[6000] backdrop-blur-xl flex flex-col items-center justify-center p-8 text-center transition-colors duration-700 ${
+  <div className={`fixed inset-0 z-[6000] backdrop-blur-xl flex flex-col items-center justify-center px-8 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(2rem,env(safe-area-inset-top))] text-center transition-colors duration-700 ${
     variant === 'bless' ? 'bg-emerald-950/90' : 
     variant === 'curse' ? 'bg-rose-950/90' : 
     variant === 'ending' ? 'bg-amber-950/90' :
@@ -490,6 +494,43 @@ const LoadingOverlay = ({ progress, status, subtext, variant = 'default' }: { pr
       <span>{Math.round(progress)}%</span>
     </div>
   </div>
+);
+
+const BlockingSyncOverlay = ({
+  title,
+  detail,
+  zIndexClass = 'z-[5200]',
+}: {
+  title: string;
+  detail?: string;
+  zIndexClass?: string;
+}) => (
+  <motion.div
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    exit={{ opacity: 0 }}
+    className={`${safeModalBackdropClass} ${zIndexClass} bg-zinc-950/60 backdrop-blur-sm`}
+  >
+    <motion.div
+      initial={{ y: 14, opacity: 0, scale: 0.97 }}
+      animate={{ y: 0, opacity: 1, scale: 1 }}
+      exit={{ y: 10, opacity: 0, scale: 0.98 }}
+      className="w-full max-w-sm rounded-[1.75rem] border border-indigo-500/25 bg-zinc-950/90 p-5 text-center shadow-2xl shadow-black/40"
+    >
+      <Loader2 className="mx-auto h-8 w-8 animate-spin text-indigo-300" />
+      <div className="mt-4 text-sm font-black text-zinc-100">{title}</div>
+      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-zinc-800">
+        <motion.div
+          className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-sky-300 to-indigo-500"
+          initial={{ x: '-100%' }}
+          animate={{ x: '120%' }}
+          transition={{ repeat: Infinity, duration: 1.2, ease: 'easeInOut' }}
+          style={{ width: '55%' }}
+        />
+      </div>
+      {detail && <p className="mt-3 text-xs leading-relaxed text-zinc-500">{detail}</p>}
+    </motion.div>
+  </motion.div>
 );
 
 const countChars = (text: string) => text?.trim()?.length || 0;
@@ -1008,7 +1049,7 @@ export default function App() {
   const [storyLibraryTab, setStoryLibraryTab] = useState<'mine' | 'public'>('public');
   const [storyLibrarySearch, setStoryLibrarySearch] = useState('');
   const [storyLibraryVisibilityFilter, setStoryLibraryVisibilityFilter] = useState<'all' | 'public' | 'private' | 'unlisted'>('all');
-  const [storyLibrarySort, setStoryLibrarySort] = useState<'updated' | 'likes' | 'interventions' | 'favorites' | 'words'>('updated');
+  const [storyLibrarySort, setStoryLibrarySort] = useState<StoryLibrarySort>('interventions');
   const [storyDetailStory, setStoryDetailStory] = useState<any | null>(null);
   const storySelectScrollYRef = useRef(0);
   const [storyImportCode, setStoryImportCode] = useState('');
@@ -1953,11 +1994,11 @@ export default function App() {
     setMySharedStories(Array.isArray(data?.shared) ? data.shared : []);
   };
 
-  const cacheStoryLists = async (pub: any[], mine: any[], shared: any[]) => {
-    await setLocalCache(storyListCacheKey(), { pub, mine, shared });
+  const cacheStoryLists = async (pub: any[], mine: any[], shared: any[], publicSort: StoryLibrarySort = storyLibrarySort) => {
+    await setLocalCache(storyListCacheKey(), { pub, mine, shared, publicSort });
   };
 
-  const getStoryListCache = async () => getLocalCache<{ pub: any[]; mine: any[]; shared: any[] }>(storyListCacheKey());
+  const getStoryListCache = async () => getLocalCache<{ pub: any[]; mine: any[]; shared: any[]; publicSort?: StoryLibrarySort }>(storyListCacheKey());
 
   const getCachedStoryCartridge = async (storyId: string, expectedStory?: any) => {
     const cached = await getLocalCache<any>(storyCartridgeCacheKey(storyId));
@@ -2037,8 +2078,9 @@ export default function App() {
     return true;
   };
 
-  const refreshStories = async (options: { force?: boolean; includeArchive?: boolean } = {}) => {
+  const refreshStories = async (options: { force?: boolean; includeArchive?: boolean; publicSort?: StoryLibrarySort } = {}) => {
     if (!user || !db) return false;
+    const requestedPublicSort = options.publicSort || storyLibrarySort;
     setIsLoadingStories(true);
     markStoryListSegment('public', 'loading');
     markStoryListSegment('mine', 'loading');
@@ -2047,7 +2089,7 @@ export default function App() {
       const cached = await getStoryListCache();
       if (cached?.value) {
         applyStoryListCache(cached.value);
-        if (!options.force && Date.now() - cached.updatedAt < STORY_LIST_CACHE_TTL_MS) {
+        if (!options.force && cached.value.publicSort === requestedPublicSort && Date.now() - cached.updatedAt < STORY_LIST_CACHE_TTL_MS) {
           setStoryListLoadError(null);
           markStoryListSegment('public', 'stale');
           markStoryListSegment('mine', 'stale');
@@ -2058,8 +2100,8 @@ export default function App() {
       markStoryListSegment('public', 'syncing');
       markStoryListSegment('mine', 'syncing');
       const [publicResult, mineResult] = await Promise.allSettled([
-        withTimeout(listPublicStories(db as any, 18), 8500, '公开作品同步超时。'),
-        withTimeout(listMyStories(db as any, user.uid, 30), 8500, '我的作品同步超时。'),
+        withTimeout(listPublicStories(db as any, PUBLIC_STORY_LIST_LIMIT, requestedPublicSort), 8500, '公开作品同步超时。'),
+        withTimeout(listMyStories(db as any, user.uid, MY_STORY_LIST_LIMIT), 8500, '我的作品同步超时。'),
       ]);
       const pub = publicResult.status === 'fulfilled'
         ? publicResult.value
@@ -2076,7 +2118,7 @@ export default function App() {
       if (options.includeArchive) {
         markStoryListSegment('archive', 'syncing');
         try {
-          shared = await withTimeout(listMySharedStories(db as any, user.uid, 30), 12000, '连接收藏馆超时，稍后进入收藏馆时会继续同步。');
+          shared = await withTimeout(listMySharedStories(db as any, user.uid, ARCHIVE_STORY_LIST_LIMIT), 12000, '连接收藏馆超时，稍后进入收藏馆时会继续同步。');
           markStoryListSegment('archive', 'idle');
         } catch (archiveError: any) {
           markStoryListSegment('archive', 'error', String(archiveError?.message || archiveError || '收藏馆同步失败'));
@@ -2085,7 +2127,7 @@ export default function App() {
       setPublicStories(pub);
       setMyStories(mine);
       setMySharedStories(shared);
-      await cacheStoryLists(pub, mine, shared);
+      await cacheStoryLists(pub, mine, shared, requestedPublicSort);
       const segmentErrors = [publicResult, mineResult].filter((result) => result.status === 'rejected');
       if (segmentErrors.length === 2 && !cached?.value) {
         const message = '作品库同步失败，请稍后重试。';
@@ -2124,7 +2166,7 @@ export default function App() {
       }
       markStoryListSegment('archive', 'syncing');
       const shared = await withTimeout(
-        listMySharedStories(db as any, user.uid, 30),
+        listMySharedStories(db as any, user.uid, ARCHIVE_STORY_LIST_LIMIT),
         14000,
         '连接收藏馆超时，已先显示本机缓存。'
       );
@@ -5038,10 +5080,17 @@ export default function App() {
       });
   };
 
+  const handleStoryLibrarySortChange = (nextSort: StoryLibrarySort) => {
+    setStoryLibrarySort(nextSort);
+    if (storyLibraryTab === 'public') {
+      void refreshStories({ force: true, publicSort: nextSort });
+    }
+  };
+
   const renderStorySelectView = () => {
     const visibleStories = getVisibleStoryLibraryItems();
     return (
-    <div className="mx-auto max-w-7xl px-6 py-12 lg:px-8">
+    <div className="mx-auto max-w-7xl px-6 pb-12 pt-[max(3rem,calc(env(safe-area-inset-top)+3rem))] lg:px-8">
       <div className="mb-12 flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 className="text-3xl font-black text-white sm:text-4xl">选择命运篇章</h2>
@@ -5166,14 +5215,14 @@ export default function App() {
             )}
             <select
               value={storyLibrarySort}
-              onChange={(event) => setStoryLibrarySort(event.target.value as any)}
+              onChange={(event) => handleStoryLibrarySortChange(event.target.value as StoryLibrarySort)}
               className="rounded-xl border border-zinc-800 bg-zinc-950/80 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500"
             >
-              <option value="updated">最近更新</option>
-              <option value="likes">点赞最多</option>
               <option value="interventions">干涉最多</option>
+              <option value="likes">点赞最多</option>
               <option value="favorites">收藏最多</option>
               <option value="words">平均字数</option>
+              <option value="updated">最近更新</option>
             </select>
             <button
               type="button"
@@ -5267,6 +5316,7 @@ export default function App() {
       if (archiveFilter !== 'all' && story.visibility !== archiveFilter) return false;
       return matchesKeyword(story);
     });
+    const isArchiveSyncing = storyListSyncState.archive.status === 'loading' || storyListSyncState.archive.status === 'syncing';
 
     const renderFavoriteCard = (story: any) => {
       const isChoosingThis = archiveChoiceStoryId === story.id;
@@ -5419,32 +5469,14 @@ export default function App() {
     );
 
     return (
-      <div className="relative mx-auto max-w-6xl px-6 pb-12 pt-24 lg:px-8">
+      <div className="relative mx-auto max-w-6xl px-6 pb-12 pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] lg:px-8">
         <AnimatePresence>
-          {isLoadingStories && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[3200] flex items-center justify-center bg-zinc-950/55 px-6 backdrop-blur-sm"
-            >
-              <div className="w-full max-w-sm rounded-[1.75rem] border border-indigo-500/25 bg-zinc-950/90 p-5 text-center shadow-2xl shadow-black/40">
-                <Loader2 className="mx-auto h-8 w-8 animate-spin text-indigo-300" />
-                <div className="mt-4 text-sm font-black text-zinc-100">正在同步收藏馆</div>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-800">
-                  <motion.div
-                    className="h-full rounded-full bg-indigo-400"
-                    initial={{ x: '-100%' }}
-                    animate={{ x: '120%' }}
-                    transition={{ repeat: Infinity, duration: 1.2, ease: 'easeInOut' }}
-                    style={{ width: '55%' }}
-                  />
-                </div>
-                <p className="mt-3 text-xs leading-relaxed text-zinc-500">
-                  如果网络较慢，会先保留本机缓存，完成后自动更新列表。
-                </p>
-              </div>
-            </motion.div>
+          {isArchiveSyncing && (
+            <BlockingSyncOverlay
+              title="正在同步命运收藏馆"
+              detail="如果网络较慢，会先保留本机缓存，完成后自动更新列表。"
+              zIndexClass="z-[3200]"
+            />
           )}
         </AnimatePresence>
         <div className="mb-10 flex items-start justify-between gap-4">
@@ -5477,13 +5509,24 @@ export default function App() {
             </div>
 
             <div className="flex min-w-0 flex-1 flex-col gap-3">
-              <input
-                type="search"
-                value={archiveSearch}
-                onChange={(event) => { setArchiveSearch(event.target.value); setArchiveChoiceStoryId(null); }}
-                placeholder="搜索标题或主轴内容"
-                className="w-full rounded-xl border border-zinc-800 bg-zinc-950/80 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500"
-              />
+              <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                <input
+                  type="search"
+                  value={archiveSearch}
+                  onChange={(event) => { setArchiveSearch(event.target.value); setArchiveChoiceStoryId(null); }}
+                  placeholder="搜索标题或主轴内容"
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950/80 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => refreshArchiveStories({ force: true })}
+                  disabled={isArchiveSyncing}
+                  className={semanticButtonClass('ghost', { compact: true })}
+                >
+                  <RefreshCcw className={`h-4 w-4 ${isArchiveSyncing ? 'animate-spin' : ''}`} />
+                  刷新馆藏
+                </button>
+              </div>
               {archiveTab === 'saved' && (
                 <div className="flex flex-wrap gap-1.5">
                   {([
@@ -5532,7 +5575,7 @@ export default function App() {
     );
   };
   const renderThemeSelectionView = () => (
-    <div className="mx-auto flex min-h-[100dvh] max-w-5xl flex-col justify-center px-6 pb-20 pt-28 text-center lg:px-8">
+    <div className="mx-auto flex min-h-[100dvh] max-w-5xl flex-col justify-center px-6 pb-20 pt-[max(7rem,calc(env(safe-area-inset-top)+6rem))] text-center lg:px-8">
       <div className="mb-8 flex items-center justify-between">
         <BackNavButton label="返回上一页" onClick={() => goBack('STORY_SELECT')} />
         <div className="h-10 w-10" />
@@ -5875,7 +5918,7 @@ export default function App() {
     const isReadonlyOwner = Boolean(user && readonlyArchiveId && story.meta?.authorId === user.uid);
     const isReadonlyUpdating = Boolean(readonlyArchiveId && archiveUpdatingIds[readonlyArchiveId]);
     return (
-      <div className="mx-auto max-w-4xl px-6 pb-16 pt-24 sm:px-8">
+      <div className="mx-auto max-w-4xl px-6 pb-16 pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] sm:px-8">
         <div className="mb-10 flex items-start justify-between gap-4">
           <div className="flex min-w-0 gap-4">
             {story.meta?.coverUrl && (
@@ -6259,7 +6302,7 @@ export default function App() {
     : null;
 
   const renderPlayingView = () => (
-    <div className="relative mx-auto max-w-4xl px-6 py-24 pb-40 sm:px-8 sm:pb-32">
+    <div className="relative mx-auto max-w-4xl px-6 pb-40 pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] sm:px-8 sm:pb-32">
       {blueprint && (
         <div className="mb-16 space-y-4 text-center">
           <motion.div
@@ -6484,7 +6527,7 @@ export default function App() {
   );
 
   const renderSummaryView = () => (
-    <div className="mx-auto max-w-4xl px-6 pb-24 pt-28 sm:px-8">
+    <div className="mx-auto max-w-4xl px-6 pb-24 pt-[max(7rem,calc(env(safe-area-inset-top)+6rem))] sm:px-8">
       <div className="mb-16 text-center space-y-4">
         <div className="inline-block rounded-full bg-amber-500/10 px-4 py-1 text-[10px] font-bold tracking-[0.2em] text-amber-500 uppercase">
           命运之卷已封存
@@ -6687,7 +6730,7 @@ export default function App() {
   );
 
   const renderAuthoringView = () => (
-    <div className="mx-auto max-w-5xl px-6 pb-12 pt-24 lg:px-8">
+    <div className="mx-auto max-w-5xl px-6 pb-12 pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] lg:px-8">
       {!authoringCartridge ? (
         <>
           <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
@@ -7835,7 +7878,7 @@ export default function App() {
           {gameState === 'ARCHIVE' && renderArchiveView()}
           {gameState === 'THEME_SELECTION' && renderThemeSelectionView()}
           {gameState === 'GENERATING_BLUEPRINT' && (
-            <div className="fixed inset-0 z-[5000] flex flex-col items-center justify-center bg-zinc-950 p-6 text-center">
+            <div className="fixed inset-0 z-[5000] flex flex-col items-center justify-center bg-zinc-950 px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))] text-center">
               <motion.div
                 animate={{ rotate: 360 }}
                 transition={{ repeat: Infinity, duration: 4, ease: "linear" }}
@@ -7884,19 +7927,11 @@ export default function App() {
           </AnimatePresence>
           <AnimatePresence>
             {isGlobalBlockingLoading && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm"
-              >
-                <div className="flex flex-col items-center gap-4">
-                  <Loader2 className="h-12 w-12 animate-spin text-indigo-500" />
-                  <p className="text-sm font-bold tracking-widest text-zinc-300 animate-pulse">
-                    {globalBlockingLoadingMessage}
-                  </p>
-                </div>
-              </motion.div>
+              <BlockingSyncOverlay
+                title={globalBlockingLoadingMessage}
+                detail="正在处理当前操作，请稍候。"
+                zIndexClass="z-[9999]"
+              />
             )}
           </AnimatePresence>
         </>

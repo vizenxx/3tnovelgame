@@ -123,14 +123,25 @@ export type SharedStoryRecord = {
   visibility: 'private' | 'unlisted';
 };
 
-export async function listPublicStories(db: Firestore, pageSize = 20) {
+export type StoryListSort = 'updated' | 'likes' | 'interventions' | 'favorites' | 'words';
+
+export async function listPublicStories(db: Firestore, pageSize = 20, sort: StoryListSort = 'interventions') {
   if (useSupabaseStories()) {
-    return storyApi<StoryListItem[]>('listPublicStories', { pageSize }, { timeoutMs: 9000, stage: '公开作品列表同步' });
+    return storyApi<StoryListItem[]>('listPublicStories', { pageSize, sort }, { timeoutMs: 9000, stage: '公开作品列表同步' });
   }
+  const orderField = sort === 'likes'
+    ? 'likeCount'
+    : sort === 'favorites'
+    ? 'favoriteCount'
+    : sort === 'words'
+    ? 'averageChapterWords'
+    : sort === 'interventions'
+    ? 'interventionCount'
+    : 'updatedAt';
   const q = query(
     collection(db, 'stories'),
     where('visibility', '==', 'public'),
-    orderBy('updatedAt', 'desc'),
+    orderBy(orderField, 'desc'),
     limit(pageSize)
   );
   const snap = await getDocs(q);

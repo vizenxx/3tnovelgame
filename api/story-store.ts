@@ -329,7 +329,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const user = await optionalUser(req);
 
     if (action === 'listPublicStories') {
-      const rows = await supabaseRequest<any[]>('stories', { query: { visibility: 'eq.public', select: STORY_CARD_SELECT, order: 'updated_at.desc', limit: body.pageSize || 20 } });
+      const publicSortOrder = ({
+        likes: 'like_count.desc',
+        interventions: 'intervention_count.desc',
+        favorites: 'favorite_count.desc',
+        words: 'average_chapter_words.desc',
+        updated: 'updated_at.desc',
+      } as Record<string, string>)[String(body.sort || 'interventions')] || 'intervention_count.desc';
+      const rows = await supabaseRequest<any[]>('stories', {
+        query: {
+          visibility: 'eq.public',
+          select: STORY_CARD_SELECT,
+          order: `${publicSortOrder},updated_at.desc`,
+          limit: body.pageSize || 20,
+        },
+      });
       return res.status(200).json(rows.map(storyListItem));
     }
 
