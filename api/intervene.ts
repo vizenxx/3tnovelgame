@@ -60,6 +60,15 @@ function ensureParagraphing(raw: string, opts?: { minParas?: number; maxParas?: 
   return paragraphs.join('\n\n').trim();
 }
 
+function stripGeneratedMarkup(raw: unknown) {
+  return String(raw ?? '')
+    .replace(/&lt;\s*\/?\s*mark\s*&gt;/gi, '')
+    .replace(/<\s*\/?\s*mark\s*>/gi, '')
+    .replace(/```(?:json|html|xml|markdown|md)?/gi, '')
+    .replace(/<\/?(?:span|strong|em|b|i)>/gi, '')
+    .trim();
+}
+
 function asNumber(value: unknown, fallback = 0) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -71,10 +80,30 @@ function normalizeChapter(chapter: any) {
     ...chapter,
     chapter_num: chapterNum,
     title: String(chapter?.title || (chapterNum ? `第${chapterNum}章` : '章节')),
-    text: String(chapter?.text || ''),
-    summary: String(chapter?.summary || ''),
+    text: stripGeneratedMarkup(chapter?.text || ''),
+    summary: stripGeneratedMarkup(chapter?.summary || ''),
     present_characters: Array.isArray(chapter?.present_characters) ? chapter.present_characters : [],
   };
+}
+
+function normalizeChangeHighlights(raw: any, chapters: any[]) {
+  const chapterTextByNum = new Map<number, string>();
+  chapters.forEach((chapter) => {
+    chapterTextByNum.set(asNumber(chapter?.chapter_num, 0), String(chapter?.text || ''));
+  });
+  return (Array.isArray(raw) ? raw : [])
+    .map((item: any) => {
+      const chapterNum = asNumber(item?.chapter_num ?? item?.chapterNum, 0);
+      const quote = stripGeneratedMarkup(item?.quote || '').replace(/\s+/g, ' ').trim();
+      const reason = stripGeneratedMarkup(item?.reason || '').replace(/\s+/g, ' ').trim();
+      return { chapter_num: chapterNum, quote, reason };
+    })
+    .filter((item) => {
+      if (!item.chapter_num || item.quote.length < 4 || item.quote.length > 160) return false;
+      const chapterText = chapterTextByNum.get(item.chapter_num) || '';
+      return chapterText.includes(item.quote);
+    })
+    .slice(0, 12);
 }
 
 function normalizeHistoryItem(item: any): InterventionHistoryItem | null {
@@ -192,6 +221,19 @@ const rewriteSchema = {
         },
         required: ['id', 'status', 'is_dead'],
       },
+    },
+    change_highlights: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          chapter_num: { type: Type.INTEGER, description: '发生变化摘录所在章节' },
+          quote: { type: Type.STRING, description: '正文中已经存在的纯文本原句或短句，不包含任何标签' },
+          reason: { type: Type.STRING, description: '简短说明该摘录为何是干涉造成的变化' },
+        },
+        required: ['chapter_num', 'quote'],
+      },
+      description: '供前端临时高亮的变化摘录，正文自身必须保持纯文本',
     },
   },
   required: ['chapters', 'character_updates'],
@@ -355,6 +397,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!Array.isArray(aiData.character_updates)) {
       aiData.character_updates = [];
     }
+    aiData.change_highlights = normalizeChangeHighlights(aiData.change_highlights, aiData.chapters);
 
     const leftProgress = Math.min(100, Math.max(0, (newEndingValue / 25) * 100));
     const rightProgress = Math.min(100, Math.max(0, (-newEndingValue / 25) * 100));

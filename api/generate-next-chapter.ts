@@ -57,6 +57,15 @@ function ensureParagraphing(raw: string, opts?: { minParas?: number; maxParas?: 
   return paragraphs.join('\n\n').trim();
 }
 
+function stripGeneratedMarkup(raw: unknown) {
+  return String(raw ?? '')
+    .replace(/&lt;\s*\/?\s*mark\s*&gt;/gi, '')
+    .replace(/<\s*\/?\s*mark\s*>/gi, '')
+    .replace(/```(?:json|html|xml|markdown|md)?/gi, '')
+    .replace(/<\/?(?:span|strong|em|b|i)>/gi, '')
+    .trim();
+}
+
 const chapterSchema = {
   type: Type.OBJECT,
   properties: {
@@ -74,7 +83,7 @@ function normalizeGeneratedChapter(raw: any, chapterNum: number) {
   if (!raw || typeof raw !== 'object') {
     throw new Error('AI_RESPONSE_INVALID: chapter response is not an object.');
   }
-  const text = String(raw.text || '').trim();
+  const text = stripGeneratedMarkup(raw.text || '');
   if (text.length < 50) {
     throw new Error('AI_RESPONSE_INVALID: chapter text is empty or too short.');
   }

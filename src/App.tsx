@@ -273,33 +273,51 @@ const writeClipboardText = async (value: string) => {
   }
 };
 
-const renderParagraphWithHighlights = (text: unknown, characters: Character[] = []) => {
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const renderCharacterHighlights = (text: string, keyPrefix: string, characters: Character[] = []) => {
+  if (characters.length > 0) {
+    const names = characters.map(c => c.name).filter(Boolean);
+    if (names.length > 0) {
+      names.sort((a, b) => b.length - a.length);
+      const regex = new RegExp(`(${names.map(escapeRegExp).join('|')})`, 'g');
+      const subParts = text.split(regex);
+      return subParts.map((subPart, j) => {
+        if (names.includes(subPart)) {
+          return <span key={`${keyPrefix}-c-${j}`} className="text-indigo-300 font-medium">{subPart}</span>;
+        }
+        return <span key={`${keyPrefix}-t-${j}`}>{subPart}</span>;
+      });
+    }
+  }
+  return <span key={`${keyPrefix}-plain`}>{text}</span>;
+};
+
+const renderParagraphWithHighlights = (text: unknown, characters: Character[] = [], changeQuotes: string[] = []) => {
   const parts = String(text || '').split(/(<mark>.*?<\/mark>)/g);
   return parts.map((part, i) => {
     if (part.startsWith('<mark>') && part.endsWith('</mark>')) {
       return <span key={i} className="text-amber-400 font-bold bg-amber-400/10 px-1 rounded">{part.slice(6, -7)}</span>;
     }
-    
-    if (characters.length > 0) {
-      const names = characters.map(c => c.name).filter(Boolean);
-      if (names.length > 0) {
-        names.sort((a, b) => b.length - a.length);
-        const regex = new RegExp(`(${names.join('|')})`, 'g');
-        const subParts = part.split(regex);
-        return (
-          <span key={i}>
-            {subParts.map((subPart, j) => {
-              if (names.includes(subPart)) {
-                return <span key={j} className="text-indigo-300 font-medium">{subPart}</span>;
-              }
-              return <span key={j}>{subPart}</span>;
-            })}
-          </span>
-        );
-      }
+
+    const quotes = changeQuotes
+      .map((quote) => String(quote || '').trim())
+      .filter((quote) => quote.length >= 4 && part.includes(quote))
+      .sort((a, b) => b.length - a.length);
+    if (quotes.length > 0) {
+      const regex = new RegExp(`(${quotes.map(escapeRegExp).join('|')})`, 'g');
+      return (
+        <span key={i}>
+          {part.split(regex).map((subPart, j) => (
+            quotes.includes(subPart)
+              ? <span key={`${i}-h-${j}`} className="rounded bg-amber-400/12 px-1 font-bold text-amber-300">{renderCharacterHighlights(subPart, `${i}-h-${j}`, characters)}</span>
+              : renderCharacterHighlights(subPart, `${i}-${j}`, characters)
+          ))}
+        </span>
+      );
     }
-    
-    return <span key={i}>{part}</span>;
+
+    return <span key={i}>{renderCharacterHighlights(part, String(i), characters)}</span>;
   });
 };
 
@@ -729,6 +747,26 @@ const sanitizeTextForAdaptation = (input?: string) => {
     .trim();
 };
 
+const stripGeneratedMarkup = (value: unknown) => String(value || '')
+  .replace(/&lt;\s*\/?\s*mark\s*&gt;/gi, '')
+  .replace(/<\s*\/?\s*mark\s*>/gi, '')
+  .replace(/```(?:json|html|xml|markdown|md)?/gi, '')
+  .replace(/<\/?(?:span|strong|em|b|i)>/gi, '')
+  .trim();
+
+const normalizeChangeHighlightsForClient = (raw: any) => {
+  const next: Record<number, string[]> = {};
+  (Array.isArray(raw) ? raw : []).forEach((item: any) => {
+    const chapterNum = Number(item?.chapter_num ?? item?.chapterNum);
+    const quote = stripGeneratedMarkup(item?.quote || '').replace(/\s+/g, ' ').trim();
+    if (!Number.isFinite(chapterNum) || quote.length < 4 || quote.length > 160) return;
+    next[chapterNum] = [...(next[chapterNum] || []), quote];
+  });
+  return Object.fromEntries(
+    Object.entries(next).map(([chapterNum, quotes]) => [chapterNum, Array.from(new Set(quotes)).slice(0, 6)])
+  ) as Record<number, string[]>;
+};
+
 const toDefaultArtstyleChapters = (chapters?: Chapter[]) =>
   (chapters || []).map((chapter) => ({
     ...chapter,
@@ -962,6 +1000,7 @@ export default function App() {
   const [customOutline, setCustomOutline] = useState<string>('');
   const [blueprint, setBlueprint] = useState<Blueprint | null>(null);
   const [chapters, setChapters] = useState<Chapter[]>([]);
+  const [changeHighlights, setChangeHighlights] = useState<Record<number, string[]>>({});
   const [interventionsLeft, setInterventionsLeft] = useState(3);
   const [endingValue, setEndingValue] = useState(0);
   const [unlockedBranches, setUnlockedBranches] = useState<Branch[]>([]);
@@ -2046,6 +2085,7 @@ export default function App() {
     canonicalWorldState,
     deltaWorldStateByChapter,
     currentChapters: chapters,
+    changeHighlights,
     uiFeedback,
     savedLocallyAt: Date.now(),
   });
@@ -2056,6 +2096,7 @@ export default function App() {
     setSelectedThemes(snapshot.selectedThemes || []);
     setBlueprint(snapshot.blueprint);
     setChapters(snapshot.currentChapters || []);
+    setChangeHighlights(snapshot.changeHighlights || {});
     setInterventionsLeft(snapshot.interventionsLeft ?? 3);
     setEndingValue(snapshot.endingValue || 0);
     setUnlockedBranches(snapshot.unlockedBranches || []);
@@ -2777,6 +2818,7 @@ export default function App() {
     activeStoryId,
     activeStoryMeta,
     chapters,
+    changeHighlights,
     interventionsLeft,
     endingValue,
     unlockedBranches,
@@ -2894,6 +2936,7 @@ export default function App() {
   const handleRegenerateQuickStory = () => {
     setBlueprint(null);
     setChapters([]);
+    setChangeHighlights({});
     setNaturalChapters([]);
     setInitialNaturalChapters([]);
     setUnlockedBranches([]);
@@ -3027,6 +3070,7 @@ export default function App() {
       setSelectedThemes([]);
       setBlueprint(null);
       setChapters([]);
+      setChangeHighlights({});
       setInterventionsLeft(3);
       setEndingValue(0);
       setUnlockedBranches([]);
@@ -3157,6 +3201,7 @@ export default function App() {
     setActiveStoryMeta(cartridge.meta);
     setSelectedThemes(nextBlueprint.tags || []);
     setChapters(baseChapters);
+    setChangeHighlights(progressData?.changeHighlights || {});
     setInterventionsLeft(progressData?.interventionsLeft ?? 3);
     setEndingValue(progressData?.endingValue || 0);
     setUnlockedBranches(progressData?.unlockedBranches || []);
@@ -3336,6 +3381,7 @@ export default function App() {
 
       setBlueprint(data);
       setChapters(data.chapters || []);
+      setChangeHighlights({});
       setNaturalChapters(data.chapters || []);
       setInitialNaturalChapters((data.chapters || []).map((chapter: any) => ({
         ...chapter,
@@ -3418,7 +3464,7 @@ export default function App() {
                   title: chapterData.title || chapter.title,
                   summary: chapterData.summary || chapter.summary,
                   present_characters: Array.isArray(chapterData.present_characters) ? chapterData.present_characters : chapter.present_characters,
-                  text: chapterData.text,
+                  text: stripGeneratedMarkup(chapterData.text),
                 }
               : chapter
           ));
@@ -3875,6 +3921,7 @@ export default function App() {
       const nextEndingValue = typeof result?.newEndingValue === 'number' ? result.newEndingValue : endingValue;
       let nextChapters = chapters;
       let nextCharacterStatuses = { ...(characterStatuses || {}) } as Record<string, { status: string; isDead: boolean }>;
+      let nextChangeHighlights = { ...(changeHighlights || {}) } as Record<number, string[]>;
       setInterventionHistory(newHistory);
       setInterventionsLeft(nextInterventionsLeft);
       
@@ -3888,7 +3935,7 @@ export default function App() {
             title: chapter.title || previous.title || `第${chapter.chapter_num}章`,
             summary: chapter.summary || previous.summary || '',
             present_characters: Array.isArray(chapter.present_characters) ? chapter.present_characters : (previous.present_characters || []),
-            text: chapter.text || previous.text || '',
+            text: stripGeneratedMarkup(chapter.text || previous.text || ''),
           });
         });
         const mergedChapters = (chapters || []).map((chapter) => rewrittenByNum.get(chapter.chapter_num) || chapter);
@@ -3900,6 +3947,16 @@ export default function App() {
         mergedChapters.sort((a: any, b: any) => a.chapter_num - b.chapter_num);
         nextChapters = mergedChapters as any;
         setChapters(nextChapters as any);
+        const returnedChapterNums = new Set<number>(aiData.chapters.map((chapter: any) => Number(chapter.chapter_num)).filter(Number.isFinite));
+        const normalizedHighlights = normalizeChangeHighlightsForClient(aiData.change_highlights);
+        returnedChapterNums.forEach((chapterNum) => {
+          if (normalizedHighlights[chapterNum]?.length) {
+            nextChangeHighlights[chapterNum] = normalizedHighlights[chapterNum];
+          } else {
+            delete nextChangeHighlights[chapterNum];
+          }
+        });
+        setChangeHighlights(nextChangeHighlights);
       }
 
       const characterNameById = new Map((blueprint.characters || []).map((character: any) => [character.id, character.name]));
@@ -3925,8 +3982,6 @@ export default function App() {
         });
         setCharacterStatuses(nextCharacterStatuses);
       }
-      setInterventionStatusNotice({ updates: changedStatusUpdates });
-
       setEndingValue(nextEndingValue);
       const nextUnlockedBranches = Array.isArray(result?.newUnlockedBranches)
         ? result.newUnlockedBranches
@@ -3970,6 +4025,7 @@ export default function App() {
           characterStatuses: nextCharacterStatuses,
           interventionHistory: newHistory,
           currentChapters: nextChapters,
+          changeHighlights: nextChangeHighlights,
           uiFeedback: result?.uiFeedback || uiFeedback,
         };
         void saveUserProgress(db as any, user.uid, activeStoryId, progressPayload).catch((error) => {
@@ -3978,6 +4034,8 @@ export default function App() {
       }
       if (nextIntervenedChapters.length >= 3) {
         setPendingSummaryRequest('auto_interventions');
+      } else {
+        setInterventionStatusNotice({ updates: changedStatusUpdates });
       }
       
       setActiveInterventionOverlay(null);
@@ -4823,20 +4881,6 @@ export default function App() {
                 <p key={index}>{paragraph}</p>
               ))}
             </div>
-            {blueprint && (
-              <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4">
-                <div className="text-xs font-black uppercase tracking-[0.18em] text-zinc-500">本局结局倾向参考</div>
-                <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                  {endingDomainCards(blueprint, { showNumbers: false }).map((domain) => (
-                    <div key={domain.id} className="rounded-xl border border-zinc-800 bg-zinc-950/45 p-3">
-                      <div className="text-xs font-black text-zinc-100">{domain.title}</div>
-                      <div className="mt-1 text-[11px] font-bold text-indigo-300">{domain.weight}</div>
-                    </div>
-                  ))}
-                </div>
-                <p className="mt-3 text-xs leading-relaxed text-zinc-500">{endingDomainSummaryText(blueprint)}</p>
-              </div>
-            )}
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
               <button type="button" onClick={() => setShowSummaryModal(false)} className={semanticButtonClass('secondary', { fullWidth: true })}>
                 <BookOpen className="h-4 w-4" />
@@ -6351,7 +6395,7 @@ export default function App() {
                 {isChapterTextReady(chapter) ? (
                   String(chapter.text || '').split('\n').filter(Boolean).map((p, pIdx) => (
                     <p key={pIdx} style={readingParagraphStyle} className="leading-relaxed first-letter:text-3xl first-letter:font-black first-letter:text-indigo-400 first-letter:mr-1">
-                      {renderParagraphWithHighlights(p, blueprint?.characters)}
+                      {renderParagraphWithHighlights(p, blueprint?.characters, changeHighlights[chapter.chapter_num] || [])}
                     </p>
                   ))
                 ) : (
