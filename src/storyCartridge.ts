@@ -10,6 +10,10 @@ export interface EndingBias {
   rightBaseWeight: number;
 }
 
+export const ENDING_BIAS_MIN_PERCENT = 10;
+export const ENDING_BIAS_MAX_PERCENT = 80;
+export const ENDING_BIAS_INTERNAL_BASE = 20;
+
 export interface StoryCharacter {
   id: string; // c1, c2...
   name: string;
@@ -40,7 +44,7 @@ export interface StoryMeta {
   cardExcerpt?: string;
   allowAdaptation?: boolean;
   endingMode?: EndingMode; // default: dual
-  endingRates?: { left: number; right: number }; // 0-80, only meaningful in dual mode
+  endingRates?: { left: number; right: number }; // 10-80%, only meaningful in dual mode
   endingBias?: EndingBias;
   /** 玩家总结界面展示用，各≤5字；双向模式下对应左/右倾向结局的「XX结局」 */
   endingNames?: { left?: string; right?: string };
@@ -184,9 +188,29 @@ export function branchEffectiveWeight(branch: {
 export function normalizeEndingBias(input?: Partial<EndingBias> | { left?: number; right?: number } | null): EndingBias {
   const rawLeft = Number((input as any)?.leftBaseWeight ?? (input as any)?.left);
   const rawRight = Number((input as any)?.rightBaseWeight ?? (input as any)?.right);
+  const normalize = (value: number) => {
+    if (!Number.isFinite(value) || value <= 0) return 40;
+    if (value < ENDING_BIAS_MIN_PERCENT) {
+      return Math.round(Math.max(ENDING_BIAS_MIN_PERCENT, Math.min(ENDING_BIAS_MAX_PERCENT, value * 10)));
+    }
+    return Math.round(Math.max(ENDING_BIAS_MIN_PERCENT, Math.min(ENDING_BIAS_MAX_PERCENT, value)));
+  };
   return {
-    leftBaseWeight: Number.isFinite(rawLeft) && rawLeft > 0 ? Math.min(20, rawLeft) : 1,
-    rightBaseWeight: Number.isFinite(rawRight) && rawRight > 0 ? Math.min(20, rawRight) : 1,
+    leftBaseWeight: normalize(rawLeft),
+    rightBaseWeight: normalize(rawRight),
+  };
+}
+
+export function endingBiasPercentToInternalWeight(percent: number): number {
+  const normalized = normalizeEndingBias({ leftBaseWeight: percent, rightBaseWeight: percent }).leftBaseWeight;
+  return Math.round((normalized / 100) * ENDING_BIAS_INTERNAL_BASE * 100) / 100;
+}
+
+export function normalizeEndingBiasForMechanics(input?: Partial<EndingBias> | { left?: number; right?: number } | null): EndingBias {
+  const displayBias = normalizeEndingBias(input);
+  return {
+    leftBaseWeight: endingBiasPercentToInternalWeight(displayBias.leftBaseWeight),
+    rightBaseWeight: endingBiasPercentToInternalWeight(displayBias.rightBaseWeight),
   };
 }
 

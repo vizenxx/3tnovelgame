@@ -1,6 +1,9 @@
 type InterventionAction = 'bless' | 'curse';
 type EndingDomain = 'left' | 'middle' | 'right';
 type EndingBias = { leftBaseWeight: number; rightBaseWeight: number };
+const ENDING_BIAS_MIN_PERCENT = 10;
+const ENDING_BIAS_MAX_PERCENT = 80;
+const ENDING_BIAS_INTERNAL_BASE = 20;
 
 type RuntimeBranchLike = {
   id?: string;
@@ -41,12 +44,28 @@ export function branchEffectiveWeight(branch: RuntimeBranchLike): number {
   return branchBaseWeight(branch.tier) + hiddenBonus;
 }
 
-export function normalizeEndingBias(input?: Partial<EndingBias> | { left?: number; right?: number } | null): EndingBias {
+export function normalizeEndingBiasDisplay(input?: Partial<EndingBias> | { left?: number; right?: number } | null): EndingBias {
   const rawLeft = Number((input as any)?.leftBaseWeight ?? (input as any)?.left);
   const rawRight = Number((input as any)?.rightBaseWeight ?? (input as any)?.right);
+  const normalizePercent = (value: number) => {
+    if (!Number.isFinite(value) || value <= 0) return 40;
+    if (value < ENDING_BIAS_MIN_PERCENT) {
+      return Math.round(Math.max(ENDING_BIAS_MIN_PERCENT, Math.min(ENDING_BIAS_MAX_PERCENT, value * 10)));
+    }
+    return Math.round(Math.max(ENDING_BIAS_MIN_PERCENT, Math.min(ENDING_BIAS_MAX_PERCENT, value)));
+  };
   return {
-    leftBaseWeight: Number.isFinite(rawLeft) && rawLeft > 0 ? Math.min(20, rawLeft) : 1,
-    rightBaseWeight: Number.isFinite(rawRight) && rawRight > 0 ? Math.min(20, rawRight) : 1,
+    leftBaseWeight: normalizePercent(rawLeft),
+    rightBaseWeight: normalizePercent(rawRight),
+  };
+}
+
+export function normalizeEndingBias(input?: Partial<EndingBias> | { left?: number; right?: number } | null): EndingBias {
+  const displayBias = normalizeEndingBiasDisplay(input);
+  const percentToWeight = (percent: number) => Math.round((percent / 100) * ENDING_BIAS_INTERNAL_BASE * 100) / 100;
+  return {
+    leftBaseWeight: percentToWeight(displayBias.leftBaseWeight),
+    rightBaseWeight: percentToWeight(displayBias.rightBaseWeight),
   };
 }
 

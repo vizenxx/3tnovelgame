@@ -3,7 +3,7 @@ import { getBearerToken, sendInternalError, sendMethodNotAllowed, verifyFirebase
 import { getRequestLogContext, logGenerationError, logGenerationInfo } from './_log.js';
 import { supabaseInsert, supabaseRequest, supabaseRpc, supabaseUpsert } from './_supabase.js';
 import { isStoryStoreAction } from './storyStoreContract.js';
-import { normalizeEndingBias } from './_endingMechanics.js';
+import { normalizeEndingBiasDisplay as normalizeEndingBias } from './_endingMechanics.js';
 
 const nowIso = () => new Date().toISOString();
 const ADMIN_USER_IDS = new Set(['LWgIE31RtCTZBiMNF7S9viNE7Aw2']);
@@ -589,7 +589,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         allowAdaptation: false,
         endingMode: 'dual',
         endingRates: { left: 40, right: 40 },
-        endingBias: { leftBaseWeight: 1, rightBaseWeight: 1 },
+        endingBias: { leftBaseWeight: 40, rightBaseWeight: 40 },
         endingNames: { left: '', right: '' },
         characters: [
           { id: 'c1', name: '角色一', desc: '（待填写简介）' },

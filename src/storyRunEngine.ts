@@ -1,5 +1,5 @@
 import type { BranchTrigger, InterventionAction, StoryBranchDoc } from './storyCartridge';
-import { branchEffectiveWeight, isBranchUnlockedByHistory, normalizeEndingBias } from './storyCartridge';
+import { branchEffectiveWeight, isBranchUnlockedByHistory, normalizeEndingBiasForMechanics } from './storyCartridge';
 import type { EndingBias, EndingDomain } from './storyCartridge';
 
 export type StoryInterventionEvent = {
@@ -128,7 +128,7 @@ export function calculateEndingMechanics(args: {
   historyLength: number;
   endingMode?: 'single' | 'dual';
 }) {
-  const endingBias = normalizeEndingBias(args.endingBias);
+  const endingBias = normalizeEndingBiasForMechanics(args.endingBias);
   const leftBranchPool = args.unlockedBranches
     .filter((branch) => branch.side === 'left')
     .reduce((sum, branch) => sum + branchWeight(branch), 0);

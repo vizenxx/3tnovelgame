@@ -379,7 +379,7 @@ export async function createEmptyStory(db: Firestore, args: { authorId: string; 
     allowAdaptation: false,
     endingMode: 'dual',
     endingRates: { left: 40, right: 40 },
-    endingBias: { leftBaseWeight: 1, rightBaseWeight: 1 },
+    endingBias: { leftBaseWeight: 40, rightBaseWeight: 40 },
     endingNames: { left: '', right: '' },
     createdAt: now,
     updatedAt: now,

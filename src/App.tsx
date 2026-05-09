@@ -573,18 +573,29 @@ const getEndingBias = (source?: any) => normalizeEndingBias(source?.endingBias |
   right: source?.right_mainline_default,
 });
 
-const endingBiasPresets = [
-  { value: 1, label: '很弱' },
-  { value: 3, label: '轻微' },
-  { value: 5, label: '普通' },
-  { value: 9, label: '明显' },
-  { value: 13, label: '强烈' },
-] as const;
+const normalizeEndingBiasPercent = (value: number) => normalizeEndingBias({
+  leftBaseWeight: value,
+  rightBaseWeight: value,
+}).leftBaseWeight;
 
-const nearestEndingBiasPreset = (value: number) =>
-  endingBiasPresets.reduce((closest, preset) =>
-    Math.abs(preset.value - value) < Math.abs(closest.value - value) ? preset : closest
-  , endingBiasPresets[0]).value;
+const endingBiasPercentLabel = (value: number) => {
+  const percent = normalizeEndingBiasPercent(value);
+  if (percent >= 75) return '极强';
+  if (percent >= 65) return '强';
+  if (percent >= 55) return '明显';
+  if (percent >= 40) return '普通';
+  if (percent >= 30) return '轻微';
+  if (percent >= 20) return '较弱';
+  return '极弱';
+};
+
+const endingBiasStoryCardLabel = (source?: any) => {
+  const bias = getEndingBias(source);
+  if (bias.leftBaseWeight === bias.rightBaseWeight) return `均衡倾向 · ${endingBiasPercentLabel(bias.leftBaseWeight)}`;
+  const dominant = bias.leftBaseWeight > bias.rightBaseWeight ? '左向倾向' : '右向倾向';
+  const dominantValue = Math.max(bias.leftBaseWeight, bias.rightBaseWeight);
+  return `${dominant} · ${endingBiasPercentLabel(dominantValue)}`;
+};
 
 const endingDomainCards = (source?: any) => {
   const names = source?.endingNames || {};
@@ -1040,7 +1051,7 @@ export default function App() {
   const [targetWordCount, setTargetWordCount] = useState(600);
   const [narrativePerson, setNarrativePerson] = useState<NarrativePerson>('third');
   const [quickEndingMode, setQuickEndingMode] = useState<EndingMode>('dual');
-  const [quickEndingBias, setQuickEndingBias] = useState({ leftBaseWeight: 1, rightBaseWeight: 1 });
+  const [quickEndingBias, setQuickEndingBias] = useState({ leftBaseWeight: 40, rightBaseWeight: 40 });
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationStatus, setGenerationStatus] = useState("");
   const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
@@ -1077,6 +1088,7 @@ export default function App() {
   const [archiveChoiceStoryId, setArchiveChoiceStoryId] = useState<string | null>(null);
   const [archiveTab, setArchiveTab] = useState<'favorite' | 'saved'>('favorite');
   const [showScrollTopButton, setShowScrollTopButton] = useState(false);
+  const [playingTocOpen, setPlayingTocOpen] = useState(false);
   const [readonlyReturnTarget, setReadonlyReturnTarget] = useState<GameState>('STORY_SELECT');
   const [archiveReturnTarget, setArchiveReturnTarget] = useState<GameState>('STORY_SELECT');
   const [storyLibraryTab, setStoryLibraryTab] = useState<'mine' | 'public'>('public');
@@ -2313,7 +2325,7 @@ export default function App() {
         endings: [],
         left_mainline_default: 40,
         right_mainline_default: 40,
-        endingBias: { leftBaseWeight: 1, rightBaseWeight: 1 },
+        endingBias: { leftBaseWeight: 40, rightBaseWeight: 40 },
       };
       const resetArtstyleChapters = toDefaultArtstyleChapters(readonlyStoryData.chapters);
       const storyId = await adaptBlueprintToStory(db as any, {
@@ -2875,6 +2887,7 @@ export default function App() {
         interventionsLeft,
         endingValue,
         unlockedBranches,
+        historicallyUnlockedBranches,
         intervenedChapters,
         naturalChapters,
         initialNaturalChapters,
@@ -2884,6 +2897,8 @@ export default function App() {
         canonicalWorldState,
         deltaWorldStateByChapter,
         currentChapters: chapters,
+        changeHighlights,
+        uiFeedback,
       });
       await resetGame();
     } catch (e) {
@@ -4985,13 +5000,16 @@ export default function App() {
                 </div>
               )}
             </button>
-            <div className="mt-2 grid grid-cols-2 gap-x-2 gap-y-1.5 text-[11px] font-black text-zinc-500">
+            <div className="mt-2 grid grid-cols-2 overflow-hidden rounded-2xl border border-zinc-800/45 bg-zinc-950/35 text-[10px] font-black text-zinc-500">
               {storyStats.map((stat) => {
                 const Icon = stat.icon;
                 return (
-                  <div key={stat.label} className="flex items-center gap-1.5">
-                    <Icon className="h-3.5 w-3.5 text-zinc-600" />
-                    <span className="text-zinc-200">{stat.value}</span>
+                  <div key={stat.label} className="min-w-0 border-zinc-800/45 px-2 py-1.5 odd:border-r [&:nth-child(-n+2)]:border-b">
+                    <div className="flex items-center gap-1 text-zinc-600">
+                      <Icon className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{stat.label}</span>
+                    </div>
+                    <div className="mt-0.5 truncate text-[11px] text-zinc-100">{stat.value}</div>
                   </div>
                 );
               })}
@@ -5004,6 +5022,9 @@ export default function App() {
                   {tag}
                 </span>
               ))}
+              <span className="rounded-lg bg-zinc-800/70 px-2.5 py-1 text-[11px] font-black text-zinc-300">
+                {endingBiasStoryCardLabel(story)}
+              </span>
             </div>
             <h3 className="mb-1 whitespace-normal break-words text-xl font-black leading-tight text-white transition-colors group-hover:text-indigo-300 sm:text-2xl">
               {formatBookTitle(getStoryTitle(story))}
@@ -5786,6 +5807,36 @@ export default function App() {
                 </button>
               ))}
             </div>
+            {quickEndingMode === 'dual' && (
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                {([
+                  { key: 'leftBaseWeight', label: '左向结局域' },
+                  { key: 'rightBaseWeight', label: '右向结局域' },
+                ] as const).map((option) => {
+                  const value = normalizeEndingBiasPercent(quickEndingBias[option.key]);
+                  return (
+                    <label key={option.key} className="block space-y-2 rounded-2xl border border-zinc-800/80 bg-zinc-950/60 p-3 text-xs font-bold text-zinc-400">
+                      <div className="flex items-center justify-between gap-3">
+                        <span>{option.label}</span>
+                        <span className="text-sm font-black text-indigo-200">{value}% · {endingBiasPercentLabel(value)}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={10}
+                        max={80}
+                        step={10}
+                        value={value}
+                        onChange={(event) => {
+                          const raw = normalizeEndingBiasPercent(Number(event.target.value));
+                          setQuickEndingBias((prev) => ({ ...normalizeEndingBias(prev), [option.key]: raw }));
+                        }}
+                        className="w-full accent-indigo-500"
+                      />
+                    </label>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
         <div className="mt-6 space-y-3">
@@ -7257,28 +7308,37 @@ export default function App() {
                       <p className="mt-1 text-xs leading-relaxed text-zinc-500">设置作品本身比较容易走向哪一种收束。读者只会感受到故事倾向，不会看到这些后台设定。</p>
                       <div className="mt-3 grid gap-3 sm:grid-cols-2">
                         {([
-                          { key: 'leftBaseWeight', label: '左向结局' },
-                          { key: 'rightBaseWeight', label: '右向结局' },
+                          { key: 'leftBaseWeight', label: '左向结局域' },
+                          { key: 'rightBaseWeight', label: '右向结局域' },
                         ] as const).map((option) => {
                           const bias = normalizeEndingBias(authoringCartridge.meta?.endingBias || authoringCartridge.meta?.endingRates);
+                          const value = normalizeEndingBiasPercent(bias[option.key]);
                           return (
-                            <label key={option.key} className="block space-y-2 text-xs font-bold text-zinc-400">
-                              <span>{option.label}</span>
-                              <select
-                                value={nearestEndingBiasPreset(bias[option.key])}
+                            <label key={option.key} className="block space-y-3 rounded-2xl border border-zinc-800/80 bg-zinc-950/70 p-3 text-xs font-bold text-zinc-400">
+                              <div className="flex items-center justify-between gap-3">
+                                <span>{option.label}</span>
+                                <span className="text-sm font-black text-zinc-100">{value}% · {endingBiasPercentLabel(value)}</span>
+                              </div>
+                              <input
+                                type="range"
+                                min={10}
+                                max={80}
+                                step={10}
+                                value={value}
                                 onChange={(event) => {
-                                  const raw = Number(event.target.value) || 1;
+                                  const raw = normalizeEndingBiasPercent(Number(event.target.value));
                                   setAuthoringCartridge((prev: any) => {
                                     const prevBias = normalizeEndingBias(prev.meta?.endingBias || prev.meta?.endingRates);
                                     return { ...prev, meta: { ...prev.meta, endingBias: { ...prevBias, [option.key]: raw } } };
                                   });
                                 }}
-                                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500"
-                              >
-                                {endingBiasPresets.map((preset) => (
-                                  <option key={preset.value} value={preset.value}>{preset.label}</option>
-                                ))}
-                              </select>
+                                className="w-full accent-indigo-400"
+                              />
+                              <div className="flex justify-between text-[10px] font-black text-zinc-600">
+                                <span>10%</span>
+                                <span>40%</span>
+                                <span>80%</span>
+                              </div>
                             </label>
                           );
                         })}
@@ -7891,6 +7951,58 @@ export default function App() {
     </AnimatePresence>
   );
 
+  const renderPlayingQuickNav = () => (
+    <AnimatePresence>
+      {gameState === 'PLAYING' && chapters.length > 0 && (
+        <>
+          {playingTocOpen && (
+            <motion.div
+              key="playing-toc-panel"
+              initial={{ opacity: 0, y: 10, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.97 }}
+              className="fixed bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+4.5rem)] left-4 z-[1801] flex max-h-[min(52dvh,24rem)] w-48 flex-col gap-1 overflow-y-auto rounded-2xl border border-zinc-800 bg-zinc-950/92 p-2 shadow-2xl shadow-black/40 backdrop-blur-xl sm:bottom-[max(0.75rem,env(safe-area-inset-bottom))] sm:left-6"
+            >
+              <div className="px-2 pb-1 pt-1 text-center text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">快速浏览</div>
+              {chapters.map((chapter) => {
+                const ready = isChapterTextReady(chapter);
+                return (
+                  <button
+                    type="button"
+                    key={chapter.chapter_num}
+                    onClick={() => {
+                      setPlayingTocOpen(false);
+                      scrollToChapter(chapter.chapter_num);
+                    }}
+                    className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+                  >
+                    <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-black ${ready ? 'bg-indigo-500/15 text-indigo-300' : 'bg-zinc-800 text-zinc-500'}`}>
+                      {chapter.chapter_num}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate">{chapter.title || `第${chapter.chapter_num}章`}</span>
+                    {!ready && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-zinc-600" />}
+                  </button>
+                );
+              })}
+            </motion.div>
+          )}
+          <motion.button
+            type="button"
+            key="playing-toc-button"
+            initial={{ opacity: 0, y: 12, scale: 0.92 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 12, scale: 0.92 }}
+            onClick={() => setPlayingTocOpen((prev) => !prev)}
+            className="fixed bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+1.25rem)] left-4 z-[1802] flex h-12 w-12 items-center justify-center rounded-2xl border border-zinc-700 bg-zinc-950/90 text-zinc-200 shadow-2xl backdrop-blur-xl transition-colors hover:border-indigo-400 hover:text-white sm:bottom-[max(0.75rem,env(safe-area-inset-bottom))] sm:left-6"
+            aria-label={playingTocOpen ? '关闭快速浏览' : '打开快速浏览'}
+          >
+            {playingTocOpen ? <X className="h-5 w-5" /> : <BookOpen className="h-5 w-5" />}
+          </motion.button>
+        </>
+      )}
+    </AnimatePresence>
+  );
+
   const installGuideModal = (
     <AnimatePresence>
       {showIosInstallModal && (
@@ -7970,6 +8082,7 @@ export default function App() {
           {gameState === 'READONLY_STORY' && renderReadonlyStoryView()}
 
           {gameState === 'PLAYING' && actionMenuButton}
+          {renderPlayingQuickNav()}
           {renderScrollToTopButton()}
           {accountEntryButton}
           {floatingInterventionPanel}
