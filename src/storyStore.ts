@@ -82,6 +82,8 @@ export type StoryListItem = {
   likeCount?: number;
   interventionCount?: number;
   favoriteCount?: number;
+  likedByMe?: boolean;
+  favoritedByMe?: boolean;
   reportCount?: number;
   averageChapterWords?: number;
   chapterCount?: number;

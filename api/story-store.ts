@@ -124,6 +124,24 @@ function storyListItem(row: any) {
   };
 }
 
+async function enrichStoryActionState(items: any[], userId?: string | null) {
+  if (!userId || items.length === 0) return items;
+  const storyIds = items.map((item) => String(item.id || '')).filter(Boolean);
+  if (storyIds.length === 0) return items;
+  const inFilter = `in.(${storyIds.join(',')})`;
+  const [likeRows, favoriteRows] = await Promise.all([
+    supabaseRequest<any[]>('story_likes', { query: { user_id: `eq.${userId}`, story_id: inFilter, select: 'story_id' } }).catch(() => []),
+    supabaseRequest<any[]>('story_favorites', { query: { user_id: `eq.${userId}`, story_id: inFilter, select: 'story_id' } }).catch(() => []),
+  ]);
+  const likedIds = new Set(likeRows.map((row) => String(row.story_id || '')));
+  const favoritedIds = new Set(favoriteRows.map((row) => String(row.story_id || '')));
+  return items.map((item) => ({
+    ...item,
+    likedByMe: likedIds.has(String(item.id || '')),
+    favoritedByMe: favoritedIds.has(String(item.id || '')),
+  }));
+}
+
 function storyMeta(row: any) {
   const endingRates = row.ending_rates || { left: 40, right: 40 };
   return {
@@ -344,14 +362,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           limit: body.pageSize || 20,
         },
       });
-      return res.status(200).json(rows.map(storyListItem));
+      return res.status(200).json(await enrichStoryActionState(rows.map(storyListItem), user?.uid));
     }
 
     if (action === 'listMyStories') {
       const authUser = await requireUser(req, res);
       if (!authUser) return;
       const rows = await supabaseRequest<any[]>('stories', { query: { author_id: `eq.${authUser.uid}`, select: STORY_CARD_SELECT, order: 'updated_at.desc', limit: body.pageSize || 50 } });
-      return res.status(200).json(rows.map(storyListItem));
+      return res.status(200).json(await enrichStoryActionState(rows.map(storyListItem), authUser.uid));
     }
 
     if (action === 'listMySharedStories') {

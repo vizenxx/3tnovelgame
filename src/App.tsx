@@ -552,6 +552,59 @@ const BlockingSyncOverlay = ({
   </motion.div>
 );
 
+const InlineSyncState = ({
+  tone = 'loading',
+  title,
+  detail,
+  actionLabel,
+  onAction,
+}: {
+  tone?: 'loading' | 'error' | 'empty';
+  title: string;
+  detail?: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}) => (
+  <div className={`app-card-quiet flex min-h-56 flex-col items-center justify-center rounded-[2rem] p-8 text-center ${
+    tone === 'error' ? 'border-amber-500/30 bg-amber-500/10' : ''
+  }`}>
+    {tone === 'loading' ? (
+      <Loader2 className="h-8 w-8 animate-spin text-indigo-300" />
+    ) : tone === 'error' ? (
+      <AlertCircle className="h-8 w-8 text-amber-300" />
+    ) : (
+      <BookOpen className="h-8 w-8 text-zinc-500" />
+    )}
+    <div className={`mt-4 text-sm font-black ${tone === 'error' ? 'text-amber-100' : 'text-zinc-200'}`}>{title}</div>
+    {tone === 'loading' && (
+      <div className="mt-3 h-1.5 w-48 overflow-hidden rounded-full bg-zinc-800">
+        <motion.div
+          className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-sky-300 to-indigo-500"
+          initial={{ x: '-100%' }}
+          animate={{ x: '120%' }}
+          transition={{ repeat: Infinity, duration: 1.2, ease: 'easeInOut' }}
+          style={{ width: '55%' }}
+        />
+      </div>
+    )}
+    {detail && (
+      <p className={`mx-auto mt-3 max-w-xl text-xs leading-relaxed ${tone === 'error' ? 'text-amber-100/75' : 'text-zinc-500'}`}>
+        {detail}
+      </p>
+    )}
+    {actionLabel && onAction && (
+      <button
+        type="button"
+        onClick={onAction}
+        className={`${semanticButtonClass(tone === 'error' ? 'primary' : 'secondary', { compact: true })} mt-5`}
+      >
+        <RefreshCcw className="h-4 w-4" />
+        {actionLabel}
+      </button>
+    )}
+  </div>
+);
+
 const countChars = (text: string) => text?.trim()?.length || 0;
 
 function summaryEndingCategoryLabel(args: {
@@ -1015,6 +1068,7 @@ export default function App() {
   };
   const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
   const [globalLoadingMessage, setGlobalLoadingMessage] = useState<string | null>(null);
+  const [globalLoadingDetail, setGlobalLoadingDetail] = useState<string | null>(null);
   const [themeInputText, setThemeInputText] = useState('');
   useEffect(() => {
     if (selectedThemes.length > 0 && !themeInputText) {
@@ -1415,6 +1469,14 @@ export default function App() {
       : isGeneratingCover
       ? '正在绘制封面...'
       : '正在处理...');
+  const globalBlockingLoadingDetail = globalLoadingDetail ||
+    (authoringSaving
+      ? '正在同步作品内容，请不要关闭页面。'
+      : isSharing
+      ? '正在准备分享内容，并尝试调用系统分享。'
+      : isGeneratingCover
+      ? '正在生成封面图像，完成后会自动回到编辑状态。'
+      : '正在处理当前操作，请稍候。');
   const isRecoveringInvalidGameState = isSessionHydrated && Boolean(user) && (
     (gameState === 'READONLY_STORY' && !readonlyStoryData) ||
     ((gameState === 'PLAYING' || gameState === 'SUMMARY') && !blueprint)
@@ -1626,6 +1688,8 @@ export default function App() {
     if (!storyId || !authoringSaveSuccessStory) return;
     try {
       setIsSharing(true);
+      setGlobalLoadingMessage('正在准备分享作品...');
+      setGlobalLoadingDetail('正在生成作品链接，并尝试调用系统分享。');
       let meta = {
         ...(authoringSaveSuccessStory.meta || {}),
         id: storyId,
@@ -1650,6 +1714,8 @@ export default function App() {
       showError(error?.message || '分享作品失败。');
     } finally {
       setIsSharing(false);
+      setGlobalLoadingMessage(null);
+      setGlobalLoadingDetail(null);
     }
   };
 
@@ -2304,6 +2370,8 @@ export default function App() {
     if (!db) return;
     try {
       setIsLoadingStories(true);
+      setGlobalLoadingMessage('正在打开故事记录...');
+      setGlobalLoadingDetail('正在读取保存的命运线；如果本机已有缓存，会先进入阅读页再校验云端记录。');
       const cached = await getCachedSharedStory(storyId);
       if (cached?.value) {
         setReadonlyStoryData({ meta: cached.value.meta, chapters: cached.value.chapters as any });
@@ -2328,6 +2396,8 @@ export default function App() {
       showError('载入故事记录失败。');
     } finally {
       setIsLoadingStories(false);
+      setGlobalLoadingMessage(null);
+      setGlobalLoadingDetail(null);
     }
   };
 
@@ -2462,6 +2532,8 @@ export default function App() {
     if (!story || !user || (!archiveId && !sourceStoryId)) return;
     try {
       setIsSharing(true);
+      setGlobalLoadingMessage('正在准备分享...');
+      setGlobalLoadingDetail('正在确认馆藏记录的可见范围，并准备非公开链接。');
       if (archiveId && story.meta?.visibility !== 'unlisted') {
         await handleArchiveVisibilityChange({ id: archiveId }, 'unlisted');
       }
@@ -2478,6 +2550,8 @@ export default function App() {
       showError(error?.message || '分享失败。');
     } finally {
       setIsSharing(false);
+      setGlobalLoadingMessage(null);
+      setGlobalLoadingDetail(null);
     }
   };
 
@@ -2740,6 +2814,8 @@ export default function App() {
     if (!story) return;
     try {
       setIsSharing(true);
+      setGlobalLoadingMessage('正在准备分享...');
+      setGlobalLoadingDetail('正在确认馆藏记录的可见范围，并准备分享内容。');
       if (story.archiveKind !== 'favorite' && story.visibility !== 'unlisted') {
         await handleArchiveVisibilityChange(story, 'unlisted');
       }
@@ -2757,6 +2833,8 @@ export default function App() {
       showError(error?.message || '分享失败。');
     } finally {
       setIsSharing(false);
+      setGlobalLoadingMessage(null);
+      setGlobalLoadingDetail(null);
     }
   };
 
@@ -2933,6 +3011,7 @@ export default function App() {
     if (!user || !activeStoryId || !blueprint) return;
     try {
       setGlobalLoadingMessage('正在保存进度...');
+      setGlobalLoadingDetail('正在把当前游玩进度写入云端，方便之后从同一作品继续。');
       await saveUserProgress(db as any, user.uid, activeStoryId, {
         userId: user.uid,
         storyId: activeStoryId,
@@ -2960,6 +3039,7 @@ export default function App() {
       setShowLeaveGameModal(false);
     } finally {
       setGlobalLoadingMessage(null);
+      setGlobalLoadingDetail(null);
     }
   };
 
@@ -2967,6 +3047,7 @@ export default function App() {
     if (!user || !blueprint) return;
     try {
       setGlobalLoadingMessage('正在保存至馆藏...');
+      setGlobalLoadingDetail('正在确认当前故事是否与原作相同；只有变化后的命运线才会保存为独立记录。');
       if (activeStoryId && currentRunMatchesOriginal()) {
         await favoriteStory(db as any, activeStoryId, user.uid);
         showError('原作已加入馆藏，不会重复保存一份相同文本。');
@@ -2984,6 +3065,7 @@ export default function App() {
       setShowLeaveGameModal(false);
     } finally {
       setGlobalLoadingMessage(null);
+      setGlobalLoadingDetail(null);
     }
   };
 
@@ -3302,9 +3384,14 @@ export default function App() {
       setIsLoadingStories(true);
       const expectedStory = [...publicStories, ...myStories].find((story: any) => story.id === storyId);
       let cartridge = await getCachedStoryCartridge(storyId, expectedStory);
+      if (cartridge) {
+        setStoryLaunchOverlay({ progress: 34, status: '已读取本机故事档案...' });
+      }
       if (!cartridge) {
         try {
+          setStoryLaunchOverlay({ progress: 28, status: '正在连接云端故事档案...' });
           cartridge = await getStoryCartridge(db as any, storyId);
+          setStoryLaunchOverlay({ progress: 58, status: '正在缓存完整故事...' });
           await cacheStoryCartridge(storyId, cartridge);
         } catch (error) {
           const staleCartridge = await getCachedStoryCartridge(storyId);
@@ -3317,6 +3404,7 @@ export default function App() {
         throw new Error('story-not-found-or-denied');
       }
       
+      setStoryLaunchOverlay({ progress: 72, status: '正在检查云端进度...' });
       const progressData = await getUserProgress(db as any, user.uid, storyId);
       
       const canResumeProgress =
@@ -3325,10 +3413,12 @@ export default function App() {
         !progressData.storyConclusion;
 
       if (canResumeProgress) {
+        setStoryLaunchOverlay({ progress: 100, status: '发现可继承的命运线' });
         setPendingProgressToLoad({ id: storyId, data: { ...progressData, cartridge } });
         return;
       }
       
+      setStoryLaunchOverlay({ progress: 92, status: '正在进入故事...' });
       await startNewStoryPlay(storyId, cartridge, progressData);
     } catch (e) {
       console.error(e);
@@ -3665,6 +3755,8 @@ export default function App() {
     }
     try {
       setAuthoringSaving(true);
+      setGlobalLoadingMessage('正在保存支线...');
+      setGlobalLoadingDetail('正在同步角色、条件、隐藏设置和支线情节。');
       await upsertStoryBranch(db as any, authoringStoryId, selectedBranchId, {
         id: selectedBranchId,
         side: branchForm.side,
@@ -3695,6 +3787,8 @@ export default function App() {
       showError(error?.message || '保存支线失败。');
     } finally {
       setAuthoringSaving(false);
+      setGlobalLoadingMessage(null);
+      setGlobalLoadingDetail(null);
     }
   };
 
@@ -3702,6 +3796,8 @@ export default function App() {
     if (!authoringStoryId || !authoringCartridge || !db) return;
     try {
       setAuthoringSaving(true);
+      setGlobalLoadingMessage('正在保存作品更改...');
+      setGlobalLoadingDetail('正在同步作品设置、章节、结局与作品卡资料。');
       const normalizedCharacters = normalizeCharacters(authoringCartridge.meta?.characters || []);
       const normalizedTags = parseTagInput(authoringCustomTagsInput || (authoringCartridge.meta?.tags || []).join('，'));
       const normalizedChapters = (authoringCartridge.chapters || []).map((chapter: any) => ({
@@ -3752,6 +3848,8 @@ export default function App() {
       showError(error?.message || '保存作品失败。');
     } finally {
       setAuthoringSaving(false);
+      setGlobalLoadingMessage(null);
+      setGlobalLoadingDetail(null);
     }
   };
 
@@ -4142,12 +4240,45 @@ export default function App() {
     await incrementStoryMetric(db as any, storyId, field);
   };
 
+  const storyActionCacheKey = (kind: 'like' | 'favorite') => `3t-story-${kind}s:${user?.uid || 'anonymous'}`;
+
+  const readStoryActionCache = (kind: 'like' | 'favorite'): Set<string> => {
+    if (typeof window === 'undefined') return new Set<string>();
+    try {
+      const raw = window.localStorage.getItem(storyActionCacheKey(kind));
+      const parsed = raw ? JSON.parse(raw) : [];
+      return new Set<string>(Array.isArray(parsed) ? parsed.map(String) : []);
+    } catch {
+      return new Set<string>();
+    }
+  };
+
+  const writeStoryActionCache = (kind: 'like' | 'favorite', ids: Set<string>) => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(storyActionCacheKey(kind), JSON.stringify(Array.from(ids)));
+    } catch {
+      // Local cache is only a UX hint; backend remains authoritative.
+    }
+  };
+
+  useEffect(() => {
+    if (!user?.uid) {
+      setOptimisticLikedStoryIds(new Set());
+      setOptimisticFavoritedStoryIds(new Set());
+      return;
+    }
+    setOptimisticLikedStoryIds(readStoryActionCache('like'));
+    setOptimisticFavoritedStoryIds(readStoryActionCache('favorite'));
+  }, [user?.uid]);
+
   const setStoryActionState = (kind: 'like' | 'favorite', storyId: string, active: boolean) => {
     const setter = kind === 'like' ? setOptimisticLikedStoryIds : setOptimisticFavoritedStoryIds;
     setter((prev) => {
-      const next = new Set(prev);
+      const next = new Set<string>(prev);
       if (active) next.add(storyId);
       else next.delete(storyId);
+      writeStoryActionCache(kind, next);
       return next;
     });
   };
@@ -4260,18 +4391,23 @@ export default function App() {
     let createdShareId = '';
     try {
       setIsSharing(true);
+      setGlobalLoadingMessage('正在准备分享...');
+      setGlobalLoadingDetail('正在判断分享原作还是当前命运线，并尽快调用系统分享。');
       const shareTitle = formatBookTitle(blueprint?.title || "未命名故事");
       const shareText = buildStoryShareText(shareTitle, chapters);
       if (activeStoryId && currentRunMatchesOriginal()) {
         shareStage = 'deliverOriginalShare';
+        setGlobalLoadingDetail('正在调用设备的分享功能。');
         await sharePayload({ title: shareTitle, text: shareText, url: buildOriginalStoryUrl(activeStoryId) });
         return;
       }
       shareStage = 'createStorySnapshot';
+      setGlobalLoadingDetail('当前故事已发生变化，正在保存非公开链接快照。');
       const { shareId, sharedRecord } = await createCurrentStorySnapshot('unlisted', 'intervened');
       createdShareId = shareId;
       setSharedStoryId(shareId);
       shareStage = 'deliverPreparedShare';
+      setGlobalLoadingDetail('分享记录已准备好，正在调用设备的分享功能。');
       await sharePayload({ title: shareTitle, text: shareText, url: buildSharedStoryUrl(shareId) });
       cacheSharedSnapshotAfterCreate(shareId, sharedRecord);
       if ((globalThis as any).__legacyShareRecord__) {
@@ -4360,13 +4496,15 @@ export default function App() {
       showError(`${hasShareId ? '分享记录已创建，但' : ''}${stageLabel}失败：${error?.name || error?.message || '未知错误'}`);
     } finally {
       setIsSharing(false);
+      setGlobalLoadingMessage(null);
+      setGlobalLoadingDetail(null);
     }
   };
 
   const handleStoryInteraction = async (kind: 'like' | 'favorite' | 'report', targetId?: string, targetMeta?: any) => {
     const idToUse = targetId || activeStoryId;
     if (!idToUse || !db || !user) { if (!user) setIsAccountCenterOpen(true); return; }
-    if ((kind === 'like' || kind === 'favorite') && hasOptimisticStoryAction(kind, idToUse)) {
+    if ((kind === 'like' || kind === 'favorite') && (hasOptimisticStoryAction(kind, idToUse) || (targetMeta && hasStoryCardAction(kind, targetMeta)))) {
       showError(kind === 'like' ? '你已经点过赞了。' : '已在馆藏中。');
       return;
     }
@@ -5153,8 +5291,11 @@ export default function App() {
     const coverUrl = storyDetailStory ? getStoryCoverUrl(storyDetailStory) : '';
     const tags = storyDetailStory ? getStoryTags(storyDetailStory) : [];
     const title = storyDetailStory ? formatBookTitle(getStoryTitle(storyDetailStory)) : '';
+    const detailStoryId = storyDetailStory?.id || storyDetailStory?.storyId || storyDetailStory?.sourceStoryId;
+    const isDetailLiked = hasStoryCardAction('like', storyDetailStory);
+    const isDetailFavorited = hasStoryCardAction('favorite', storyDetailStory);
     const handlePlayFromDetail = () => {
-      const targetStoryId = storyDetailStory?.id || storyDetailStory?.storyId;
+      const targetStoryId = detailStoryId;
       if (!targetStoryId) return;
       setStoryDetailStory(null);
       void startStoryPlay(targetStoryId);
@@ -5163,12 +5304,16 @@ export default function App() {
       if (!storyDetailStory) return;
       try {
         setIsSharing(true);
+        setGlobalLoadingMessage('正在准备分享作品...');
+        setGlobalLoadingDetail('正在生成作品链接，并尝试调用系统分享。');
         await shareOriginalStoryByCard(storyDetailStory);
       } catch (error: any) {
         console.error(error);
         showError(error?.message || '分享失败。');
       } finally {
         setIsSharing(false);
+        setGlobalLoadingMessage(null);
+        setGlobalLoadingDetail(null);
       }
     };
 
@@ -5187,6 +5332,14 @@ export default function App() {
             exit={{ y: 12, opacity: 0, scale: 0.98 }}
             className="app-modal-surface relative mt-[env(safe-area-inset-top)] max-h-[calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-full max-w-3xl overflow-y-auto rounded-[2rem] p-5 backdrop-blur-xl sm:p-7"
           >
+            <button
+              type="button"
+              onClick={() => setStoryDetailStory(null)}
+              aria-label="关闭作品详情"
+              className={`${semanticIconButtonClass('ghost')} absolute right-4 top-4 z-10`}
+            >
+              <X className="h-5 w-5" />
+            </button>
             <div className="grid gap-5 sm:grid-cols-[180px_minmax(0,1fr)]">
               <div>
                 <div className="aspect-square overflow-hidden rounded-3xl border border-zinc-800 bg-gradient-to-br from-zinc-800 via-zinc-950 to-indigo-950 shadow-xl">
@@ -5199,15 +5352,15 @@ export default function App() {
                   )}
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-1">
-                  <button type="button" onClick={() => handleStoryInteraction('like', storyDetailStory?.id || storyDetailStory?.storyId, storyDetailStory)} className={`group flex flex-col justify-between rounded-2xl border px-3 py-2 text-left transition-all active:scale-[0.98] ${hasOptimisticStoryAction('like', storyDetailStory?.id || storyDetailStory?.storyId) ? 'border-pink-500/40 bg-pink-500/10' : 'border-zinc-800 bg-zinc-900/60 hover:border-pink-500/30 hover:bg-pink-500/10'}`}>
-                    <div className={`flex w-full items-center justify-between text-[11px] font-black transition-colors ${hasOptimisticStoryAction('like', storyDetailStory?.id || storyDetailStory?.storyId) ? 'text-pink-300' : 'text-zinc-500 group-hover:text-pink-400'}`}>
-                      点赞 <Heart className={`h-3.5 w-3.5 transition-transform ${hasOptimisticStoryAction('like', storyDetailStory?.id || storyDetailStory?.storyId) ? 'scale-110 fill-current' : ''}`} />
+                  <button type="button" onClick={() => handleStoryInteraction('like', detailStoryId, storyDetailStory)} className={`group flex flex-col justify-between rounded-2xl border px-3 py-2 text-left transition-all active:scale-[0.98] ${isDetailLiked ? 'border-pink-500/40 bg-pink-500/10' : 'border-zinc-800 bg-zinc-900/60 hover:border-pink-500/30 hover:bg-pink-500/10'}`}>
+                    <div className={`flex w-full items-center justify-between text-[11px] font-black transition-colors ${isDetailLiked ? 'text-pink-300' : 'text-zinc-500 group-hover:text-pink-400'}`}>
+                      {isDetailLiked ? '已点赞' : '点赞'} <Heart className={`h-3.5 w-3.5 transition-transform ${isDetailLiked ? 'scale-110 fill-current' : ''}`} />
                     </div>
                     <div className="mt-0.5 text-sm font-black text-zinc-100">{storyDetailStory ? getStoryLikeCount(storyDetailStory) : 0}</div>
                   </button>
-                  <button type="button" onClick={() => handleStoryInteraction('favorite', storyDetailStory?.id || storyDetailStory?.storyId, storyDetailStory)} className={`group flex flex-col justify-between rounded-2xl border px-3 py-2 text-left transition-all active:scale-[0.98] ${hasOptimisticStoryAction('favorite', storyDetailStory?.id || storyDetailStory?.storyId) ? 'border-amber-500/40 bg-amber-500/10' : 'border-zinc-800 bg-zinc-900/60 hover:border-amber-500/30 hover:bg-amber-500/10'}`}>
-                    <div className={`flex w-full items-center justify-between text-[11px] font-black transition-colors ${hasOptimisticStoryAction('favorite', storyDetailStory?.id || storyDetailStory?.storyId) ? 'text-amber-300' : 'text-zinc-500 group-hover:text-amber-400'}`}>
-                      收藏 <Bookmark className={`h-3.5 w-3.5 transition-transform ${hasOptimisticStoryAction('favorite', storyDetailStory?.id || storyDetailStory?.storyId) ? 'scale-110 fill-current' : ''}`} />
+                  <button type="button" onClick={() => handleStoryInteraction('favorite', detailStoryId, storyDetailStory)} className={`group flex flex-col justify-between rounded-2xl border px-3 py-2 text-left transition-all active:scale-[0.98] ${isDetailFavorited ? 'border-amber-500/40 bg-amber-500/10' : 'border-zinc-800 bg-zinc-900/60 hover:border-amber-500/30 hover:bg-amber-500/10'}`}>
+                    <div className={`flex w-full items-center justify-between text-[11px] font-black transition-colors ${isDetailFavorited ? 'text-amber-300' : 'text-zinc-500 group-hover:text-amber-400'}`}>
+                      {isDetailFavorited ? '已收藏' : '收藏'} <Bookmark className={`h-3.5 w-3.5 transition-transform ${isDetailFavorited ? 'scale-110 fill-current' : ''}`} />
                     </div>
                     <div className="mt-0.5 text-sm font-black text-zinc-100">{storyDetailStory ? getStoryFavoriteCount(storyDetailStory) : 0}</div>
                   </button>
@@ -5438,38 +5591,20 @@ export default function App() {
           </div>
         </div>
         {isLoadingStories ? (
-          <div className="app-card-quiet flex h-64 flex-col items-center justify-center rounded-[2rem] text-center">
-            <Loader2 className="h-8 w-8 animate-spin text-indigo-300" />
-            <div className="mt-4 text-sm font-black text-zinc-200">正在同步作品库</div>
-            <div className="mt-2 h-1.5 w-48 overflow-hidden rounded-full bg-zinc-800">
-              <motion.div
-                className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-sky-300 to-indigo-500"
-                initial={{ x: '-100%' }}
-                animate={{ x: '120%' }}
-                transition={{ repeat: Infinity, duration: 1.25, ease: 'easeInOut' }}
-                style={{ width: '55%' }}
-              />
-            </div>
-          </div>
+          <InlineSyncState
+            title="正在同步作品库"
+            detail="公开作品和我的作品会分段读取，任何一段较慢时都会保留当前可用内容。"
+          />
         ) : storyListLoadError && visibleStories.length === 0 ? (
-          <div className="rounded-3xl border border-amber-500/30 bg-amber-500/10 p-8 text-center">
-            <div className="text-sm font-black text-amber-100">作品列表暂时无法同步</div>
-            <p className="mx-auto mt-2 max-w-xl text-xs leading-relaxed text-amber-100/75">
-              {storyListLoadError}
-            </p>
-            <button
-              type="button"
-              onClick={() => refreshStories({ force: true })}
-              className={`${semanticButtonClass('primary', { compact: true })} mt-5`}
-            >
-              <RefreshCcw className="h-4 w-4" />
-              重新读取作品库
-            </button>
-          </div>
+          <InlineSyncState
+            tone="error"
+            title="作品列表暂时无法同步"
+            detail={storyListLoadError}
+            actionLabel="重新读取作品库"
+            onAction={() => refreshStories({ force: true })}
+          />
         ) : visibleStories.length === 0 ? (
-          <div className="rounded-3xl border border-dashed border-zinc-800 bg-zinc-950/40 p-10 text-center text-sm font-bold text-zinc-500">
-            没有符合条件的作品。
-          </div>
+          <InlineSyncState tone="empty" title="没有符合条件的作品" detail="可以调整搜索、筛选或排序条件后再试。" />
         ) : (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {visibleStories.map((story) => renderStoryCard(story, storyLibraryTab === 'public'))}
@@ -5685,7 +5820,7 @@ export default function App() {
     return (
       <div className="relative mx-auto max-w-6xl px-6 pb-12 pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] lg:px-8">
         <AnimatePresence>
-          {isArchiveSyncing && (
+          {isArchiveSyncing && archiveStories.length === 0 && (
             <BlockingSyncOverlay
               title="正在同步命运收藏馆"
               detail="如果网络较慢，会先保留本机缓存，完成后自动更新列表。"
@@ -5701,8 +5836,14 @@ export default function App() {
           <BackNavButton label={archiveReturnTarget === 'PLAYING' ? '返回游玩页' : '返回作品库'} onClick={leaveArchiveView} />
         </div>
 
-        <section className="app-card-quiet rounded-[2rem] p-4 sm:p-5">
-          {archiveSegment.status === 'error' && (
+        <section className="app-card-quiet relative overflow-hidden rounded-[2rem] p-4 sm:p-5">
+          {isArchiveSyncing && archiveStories.length > 0 && (
+            <div className="mb-5 flex items-center gap-3 rounded-2xl border border-indigo-500/20 bg-indigo-500/10 px-4 py-3 text-xs font-bold text-indigo-100/85">
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin text-indigo-300" />
+              <span>正在后台同步收藏馆，当前列表会保持可用。</span>
+            </div>
+          )}
+          {archiveSegment.status === 'error' && archiveStories.length > 0 && (
             <div className="mb-5 rounded-3xl border border-amber-500/25 bg-amber-500/10 p-4 text-sm leading-relaxed text-amber-100/85">
               <div className="font-black text-amber-100">收藏馆同步暂时不顺利</div>
               <p className="mt-1 text-xs text-amber-100/70">{archiveSegment.error || '已保留当前可用内容，你可以稍后刷新重试。'}</p>
@@ -5769,11 +5910,26 @@ export default function App() {
           </div>
 
           {/* Tab 内容 */}
-          {archiveTab === 'favorite' ? (
+          {archiveSegment.status === 'error' && archiveStories.length === 0 ? (
+            <InlineSyncState
+              tone="error"
+              title="收藏馆暂时无法同步"
+              detail={archiveSegment.error || '没有可用的本机缓存。你可以重新读取，或先返回作品库继续浏览。'}
+              actionLabel="重新读取收藏馆"
+              onAction={() => refreshArchiveStories({ force: true })}
+            />
+          ) : isArchiveSyncing && archiveStories.length === 0 ? (
+            <InlineSyncState
+              title="正在同步命运收藏馆"
+              detail="正在读取收藏原作和保存记录。弱网时会先尝试恢复本机缓存。"
+            />
+          ) : archiveTab === 'favorite' ? (
             favoriteStories.length === 0 ? (
-              <div className="rounded-3xl border border-dashed border-zinc-800 bg-zinc-950/40 p-10 text-center text-sm font-bold text-zinc-500">
-                {keyword ? '没有符合搜索词的收藏原作' : '还没有收藏任何原作。在游玩页点击「收藏」后会出现在这里。'}
-              </div>
+              <InlineSyncState
+                tone="empty"
+                title={keyword ? '没有符合搜索词的收藏原作' : '还没有收藏任何原作'}
+                detail={keyword ? '换个关键词再试，或清空搜索条件。' : '在游玩页点击「收藏」后，原作会出现在这里。'}
+              />
             ) : (
               <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                 {favoriteStories.map(renderFavoriteCard)}
@@ -5781,9 +5937,11 @@ export default function App() {
             )
           ) : (
             savedStories.length === 0 ? (
-              <div className="rounded-3xl border border-dashed border-zinc-800 bg-zinc-950/40 p-10 text-center text-sm font-bold text-zinc-500">
-                {keyword || archiveFilter !== 'all' ? '没有符合条件的保存记录' : '还没有保存任何干涉记录。在游玩页点击「保存作品」后会出现在这里。'}
-              </div>
+              <InlineSyncState
+                tone="empty"
+                title={keyword || archiveFilter !== 'all' ? '没有符合条件的保存记录' : '还没有保存任何干涉记录'}
+                detail={keyword || archiveFilter !== 'all' ? '可以调整搜索或可见性筛选条件。' : '在游玩页点击「保存当前故事」后，当前命运线会出现在这里。'}
+              />
             ) : (
               <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                 {savedStories.map(renderSavedCard)}
@@ -8221,7 +8379,7 @@ export default function App() {
             {isGlobalBlockingLoading && (
               <BlockingSyncOverlay
                 title={globalBlockingLoadingMessage}
-                detail="正在处理当前操作，请稍候。"
+                detail={globalBlockingLoadingDetail}
                 zIndexClass="z-[9999]"
               />
             )}
