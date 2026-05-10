@@ -5189,18 +5189,98 @@ export default function App() {
     </AnimatePresence>
   );
 
+  const getStoryStats = (story: any) => {
+    const isLiked = hasStoryCardAction('like', story);
+    const isFavorited = hasStoryCardAction('favorite', story);
+    return [
+      { key: 'like', label: '点赞', activeLabel: '已点赞', value: getStoryLikeCount(story), icon: Heart, active: isLiked, tone: 'like' },
+      { key: 'intervention', label: '干涉', value: getStoryInterventionCount(story), icon: Sparkles },
+      { key: 'favorite', label: '收藏', activeLabel: '已收藏', value: getStoryFavoriteCount(story), icon: Bookmark, active: isFavorited, tone: 'favorite' },
+      { key: 'words', label: '字/章', detailLabel: '均章字数', value: getStoryAverageChapterWords(story) || '未知', valueSuffix: ' 字', icon: BookOpen },
+    ];
+  };
+
+  const renderStoryStats = (
+    story: any,
+    variant: 'card' | 'detail',
+    actions?: {
+      storyId?: string;
+      onLike?: () => void;
+      onFavorite?: () => void;
+    }
+  ) => {
+    const stats = getStoryStats(story);
+    if (variant === 'card') {
+      return (
+        <div className="story-card-stat-list">
+          {stats.map((stat) => {
+            const Icon = stat.icon;
+            return (
+              <div
+                key={stat.key}
+                data-active={stat.active ? 'true' : undefined}
+                data-tone={stat.tone}
+                className="story-card-stat transition-colors"
+              >
+                <div className="story-card-stat-label">
+                  <Icon className={`h-3.5 w-3.5 shrink-0 ${stat.active ? 'fill-current' : ''}`} />
+                  <span className="truncate">{stat.active ? stat.activeLabel || stat.label : stat.label}</span>
+                </div>
+                <div className="story-card-stat-value">{stat.value}</div>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    return (
+      <div className="story-detail-stat-grid sm:grid-cols-1">
+        {stats.map((stat) => {
+          const Icon = stat.icon;
+          const isAction = stat.key === 'like' || stat.key === 'favorite';
+          const onClick = stat.key === 'like' ? actions?.onLike : stat.key === 'favorite' ? actions?.onFavorite : undefined;
+          const content = (
+            <>
+              <div className={`story-detail-stat-label transition-colors ${stat.active && stat.tone === 'like' ? 'text-pink-300' : stat.active && stat.tone === 'favorite' ? 'text-amber-300' : ''}`}>
+                {stat.active ? stat.activeLabel || stat.label : stat.detailLabel || stat.label}
+                <Icon className={`h-3.5 w-3.5 transition-transform ${stat.active ? 'scale-110 fill-current' : ''}`} />
+              </div>
+              <div className="story-detail-stat-value">{stat.value}{stat.valueSuffix && stat.value !== '未知' ? stat.valueSuffix : ''}</div>
+            </>
+          );
+
+          if (isAction) {
+            return (
+              <button
+                key={stat.key}
+                type="button"
+                onClick={onClick}
+                data-active={stat.active ? 'true' : undefined}
+                data-tone={stat.tone}
+                className="story-detail-stat group text-left transition-all active:scale-[0.98]"
+              >
+                {content}
+              </button>
+            );
+          }
+
+          return (
+            <div key={stat.key} className="story-detail-stat">
+              {content}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   const renderStoryCard = (story: any, isPublic: boolean) => {
     const coverUrl = getStoryCoverUrl(story);
     const tags = getStoryTags(story);
     const storyId = story?.id || story?.storyId || story?.sourceStoryId;
     const isLiked = hasStoryCardAction('like', story);
     const isFavorited = hasStoryCardAction('favorite', story);
-    const storyStats = [
-      { label: '点赞', value: getStoryLikeCount(story), icon: Heart, active: isLiked, tone: 'like' },
-      { label: '干涉', value: getStoryInterventionCount(story), icon: Sparkles, tone: undefined },
-      { label: '收藏', value: getStoryFavoriteCount(story), icon: Bookmark, active: isFavorited, tone: 'favorite' },
-      { label: '字/章', value: getStoryAverageChapterWords(story) || '未知', icon: BookOpen, tone: undefined },
-    ];
     return (
       <motion.div
         key={storyId || story.id}
@@ -5220,25 +5300,7 @@ export default function App() {
                 </div>
               )}
             </button>
-            <div className="story-card-stat-list">
-              {storyStats.map((stat) => {
-                const Icon = stat.icon;
-                return (
-                  <div
-                    key={stat.label}
-                    data-active={stat.active ? 'true' : undefined}
-                    data-tone={stat.tone}
-                    className="story-card-stat transition-colors"
-                  >
-                    <div className="story-card-stat-label">
-                      <Icon className={`h-3.5 w-3.5 shrink-0 ${stat.active ? 'fill-current' : ''}`} />
-                      <span className="truncate">{stat.active && stat.label === '点赞' ? '已点赞' : stat.active && stat.label === '收藏' ? '已收藏' : stat.label}</span>
-                    </div>
-                    <div className="story-card-stat-value">{stat.value}</div>
-                  </div>
-                );
-              })}
-            </div>
+            {renderStoryStats(story, 'card')}
           </div>
           <div className="flex min-w-0 flex-1 flex-col">
             <div className="mb-2 flex min-w-0 flex-wrap gap-1.5">
@@ -5290,8 +5352,6 @@ export default function App() {
     const tags = storyDetailStory ? getStoryTags(storyDetailStory) : [];
     const title = storyDetailStory ? formatBookTitle(getStoryTitle(storyDetailStory)) : '';
     const detailStoryId = storyDetailStory?.id || storyDetailStory?.storyId || storyDetailStory?.sourceStoryId;
-    const isDetailLiked = hasStoryCardAction('like', storyDetailStory);
-    const isDetailFavorited = hasStoryCardAction('favorite', storyDetailStory);
     const handlePlayFromDetail = () => {
       const targetStoryId = detailStoryId;
       if (!targetStoryId) return;
@@ -5349,32 +5409,11 @@ export default function App() {
                     </div>
                   )}
                 </div>
-                <div className="story-detail-stat-grid sm:grid-cols-1">
-                  <button type="button" onClick={() => handleStoryInteraction('like', detailStoryId, storyDetailStory)} data-active={isDetailLiked ? 'true' : undefined} data-tone="like" className="story-detail-stat group text-left transition-all active:scale-[0.98]">
-                    <div className={`story-detail-stat-label transition-colors ${isDetailLiked ? 'text-pink-300' : 'group-hover:text-pink-400'}`}>
-                      {isDetailLiked ? '已点赞' : '点赞'} <Heart className={`h-3.5 w-3.5 transition-transform ${isDetailLiked ? 'scale-110 fill-current' : ''}`} />
-                    </div>
-                    <div className="story-detail-stat-value">{storyDetailStory ? getStoryLikeCount(storyDetailStory) : 0}</div>
-                  </button>
-                  <button type="button" onClick={() => handleStoryInteraction('favorite', detailStoryId, storyDetailStory)} data-active={isDetailFavorited ? 'true' : undefined} data-tone="favorite" className="story-detail-stat group text-left transition-all active:scale-[0.98]">
-                    <div className={`story-detail-stat-label transition-colors ${isDetailFavorited ? 'text-amber-300' : 'group-hover:text-amber-400'}`}>
-                      {isDetailFavorited ? '已收藏' : '收藏'} <Bookmark className={`h-3.5 w-3.5 transition-transform ${isDetailFavorited ? 'scale-110 fill-current' : ''}`} />
-                    </div>
-                    <div className="story-detail-stat-value">{storyDetailStory ? getStoryFavoriteCount(storyDetailStory) : 0}</div>
-                  </button>
-                  <div className="story-detail-stat">
-                    <div className="story-detail-stat-label">
-                      干涉 <Sparkles className="h-3.5 w-3.5" />
-                    </div>
-                    <div className="story-detail-stat-value">{storyDetailStory ? getStoryInterventionCount(storyDetailStory) : 0}</div>
-                  </div>
-                  <div className="story-detail-stat">
-                    <div className="story-detail-stat-label">
-                      均章字数 <BookOpen className="h-3.5 w-3.5" />
-                    </div>
-                    <div className="story-detail-stat-value">{storyDetailStory ? getStoryAverageChapterWords(storyDetailStory) || '未知' : '未知'} 字</div>
-                  </div>
-                </div>
+                {renderStoryStats(storyDetailStory, 'detail', {
+                  storyId: detailStoryId,
+                  onLike: () => handleStoryInteraction('like', detailStoryId, storyDetailStory),
+                  onFavorite: () => handleStoryInteraction('favorite', detailStoryId, storyDetailStory),
+                })}
               </div>
 
               <div className="min-w-0">
