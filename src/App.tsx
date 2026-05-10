@@ -5405,17 +5405,17 @@ export default function App() {
       <motion.div
         key={storyId || story.id}
         whileHover={{ y: -4, scale: 1.01 }}
-        className={`app-card group relative overflow-hidden rounded-3xl p-4 transition-all hover:border-indigo-500/50 ${
+        className={`story-library-card group p-4 transition-all ${
           isLiked ? 'ring-1 ring-pink-500/18' : isFavorited ? 'ring-1 ring-amber-500/18' : ''
         }`}
       >
-        <div className="flex gap-4">
+        <div className="relative flex gap-4">
           <div className="w-28 shrink-0 sm:w-32">
-            <button type="button" onClick={() => setStoryDetailStory(story)} className="relative h-28 w-28 cursor-pointer overflow-hidden rounded-2xl border border-zinc-800 bg-gradient-to-br from-zinc-800 via-zinc-950 to-indigo-950 transition-all hover:ring-2 hover:ring-indigo-500 hover:ring-offset-2 hover:ring-offset-zinc-950 sm:h-32 sm:w-32">
+            <button type="button" onClick={() => setStoryDetailStory(story)} className="story-library-cover h-28 w-28 cursor-pointer transition-all hover:ring-2 hover:ring-indigo-400/70 hover:ring-offset-2 hover:ring-offset-zinc-950 sm:h-32 sm:w-32">
               {coverUrl ? (
                 <img src={coverUrl} alt={`${formatBookTitle(getStoryTitle(story))} 封面`} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
               ) : (
-                <div className="flex h-full w-full items-center justify-center p-4 text-center text-[11px] font-black uppercase tracking-[0.18em] text-zinc-500">
+                <div className="flex h-full w-full items-center justify-center p-4 text-center text-[11px] font-black uppercase tracking-[0.18em] text-zinc-400">
                   3T NOVEL
                 </div>
               )}
@@ -5429,7 +5429,7 @@ export default function App() {
           <div className="flex min-w-0 flex-1 flex-col">
             <div className="mb-2 flex min-w-0 flex-wrap gap-1.5">
               {(tags.length > 0 ? tags.slice(0, 2) : ['未标签']).map((tag: string) => (
-                <span key={tag} className="rounded-lg bg-indigo-500/10 px-2.5 py-1 text-[11px] font-black text-indigo-300">
+                <span key={tag} className="rounded-lg border border-indigo-400/15 bg-indigo-500/10 px-2.5 py-1 text-[11px] font-black text-indigo-200">
                   {tag}
                 </span>
               ))}
@@ -5446,13 +5446,13 @@ export default function App() {
                 </span>
               ))}
             </div>
-            <h3 className="mb-1 whitespace-normal break-words text-[1.35rem] font-black leading-tight text-white transition-colors group-hover:text-indigo-300 sm:text-2xl">
+            <h3 className="mb-1 whitespace-normal break-words text-[1.45rem] font-black leading-tight text-white transition-colors group-hover:text-indigo-200 sm:text-2xl">
               {formatBookTitle(getStoryTitle(story))}
             </h3>
-            <div className="mb-2 text-sm font-bold text-zinc-500">
+            <div className="mb-2 text-sm font-bold text-zinc-400/85">
               作者：{getStoryAuthorName(story)}
             </div>
-            <p className="mb-3 line-clamp-3 text-[0.95rem] leading-relaxed text-zinc-400 transition-colors group-hover:text-zinc-300">
+            <p className="mb-3 line-clamp-3 text-[0.98rem] leading-relaxed text-zinc-300/85 transition-colors group-hover:text-zinc-200">
               {getStoryMainAxis(story)}
             </p>
             <div className="mt-auto grid gap-2 sm:grid-cols-2">
@@ -5606,13 +5606,23 @@ export default function App() {
   const renderStorySelectView = () => {
     const visibleStories = getVisibleStoryLibraryItems();
     return (
-    <div className="mx-auto max-w-7xl px-6 pb-12 pt-[max(3rem,calc(env(safe-area-inset-top)+3rem))] lg:px-8">
-      <div className="mb-12 flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 className="text-3xl font-black text-white sm:text-4xl">选择命运篇章</h2>
-          <p className="mt-2 text-zinc-500">挑选一个世界，或直接生成新世界、进入作者后台与个人馆藏。</p>
+    <div className="story-library-page mx-auto max-w-7xl px-5 pb-12 pt-[max(3rem,calc(env(safe-area-inset-top)+3rem))] sm:px-6 lg:px-8">
+      <div className="story-library-hero mb-10 overflow-hidden p-5 sm:p-7 lg:p-8">
+        <div className="flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
+        <div className="max-w-3xl">
+          <div className="story-library-eyebrow mb-4">
+            <Sparkles className="h-3.5 w-3.5" />
+            命运馆
+          </div>
+          <h2 className="story-library-title text-4xl font-black leading-[0.95] sm:text-5xl lg:text-6xl">
+            选择一条<br className="hidden sm:block" />
+            <span className="story-library-title-accent">可以被干涉的命运</span>
+          </h2>
+          <p className="mt-5 max-w-2xl text-base font-medium leading-relaxed text-zinc-400 sm:text-lg">
+            从作品库进入故事，阅读、干涉、收藏，或把自己的世界继续写成新的命运记录。
+          </p>
         </div>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-3 lg:justify-end">
           {!isStandaloneMode && (
             <button
               type="button"
@@ -5637,6 +5647,7 @@ export default function App() {
             <Sparkles className="h-4 w-4" />
             作者后台
           </button>
+        </div>
         </div>
       </div>
 
@@ -5691,8 +5702,8 @@ export default function App() {
       )}
 
       <section className="space-y-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex rounded-2xl border border-zinc-800 bg-zinc-950/70 p-1">
+        <div className="story-library-toolbar flex flex-col gap-4 p-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="story-library-tabbar">
             {[
               { id: 'public', label: '作品列表', count: publicStories.length },
               { id: 'mine', label: '我的作品', count: myStories.length },
@@ -5701,9 +5712,8 @@ export default function App() {
                 key={tab.id}
                 type="button"
                 onClick={() => setStoryLibraryTab(tab.id as 'public' | 'mine')}
-                className={`rounded-xl px-4 py-2 text-sm font-black transition-all duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 ${
-                  storyLibraryTab === tab.id ? 'bg-indigo-600 text-white shadow-lg' : 'text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200'
-                }`}
+                data-active={storyLibraryTab === tab.id ? 'true' : undefined}
+                className="story-library-tab focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70"
               >
                 {tab.label} <span className="ml-1 text-[10px] opacity-70">{tab.count}</span>
               </button>
@@ -5715,13 +5725,13 @@ export default function App() {
               value={storyLibrarySearch}
               onChange={(event) => setStoryLibrarySearch(event.target.value)}
               placeholder="搜索标题、作者、标签或主轴"
-              className="min-w-0 rounded-xl border border-zinc-800 bg-zinc-950/80 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500 sm:w-72"
+              className="story-library-control min-w-0 px-3 py-2 text-sm sm:w-72"
             />
             {storyLibraryTab === 'mine' && (
               <select
                 value={storyLibraryVisibilityFilter}
                 onChange={(event) => setStoryLibraryVisibilityFilter(event.target.value as any)}
-                className="rounded-xl border border-zinc-800 bg-zinc-950/80 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+                className="story-library-control px-3 py-2 text-sm"
               >
                 <option value="all">全部权限</option>
                 <option value="private">私密</option>
@@ -5732,7 +5742,7 @@ export default function App() {
             <select
               value={storyLibrarySort}
               onChange={(event) => handleStoryLibrarySortChange(event.target.value as StoryLibrarySort)}
-              className="rounded-xl border border-zinc-800 bg-zinc-950/80 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+              className="story-library-control px-3 py-2 text-sm"
             >
               <option value="updated">最近更新</option>
               <option value="interventions">干涉最多</option>
