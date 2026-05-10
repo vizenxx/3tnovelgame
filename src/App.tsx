@@ -5310,8 +5310,8 @@ export default function App() {
     const isFavorited = hasStoryCardAction('favorite', story);
     return [
       { key: 'like', label: '点赞', activeLabel: '已点赞', value: getStoryLikeCount(story), icon: Heart, active: isLiked, tone: 'like' },
-      { key: 'intervention', label: '干涉', value: getStoryInterventionCount(story), icon: Sparkles },
       { key: 'favorite', label: '收藏', activeLabel: '已收藏', value: getStoryFavoriteCount(story), icon: Bookmark, active: isFavorited, tone: 'favorite' },
+      { key: 'intervention', label: '干涉', value: getStoryInterventionCount(story), icon: Sparkles },
       { key: 'words', label: '字/章', detailLabel: '均章字数', value: getStoryAverageChapterWords(story) || '未知', valueSuffix: ' 字', icon: BookOpen },
     ];
   };
@@ -5395,6 +5395,26 @@ export default function App() {
     );
   };
 
+  const renderStoryBiasBar = (story: any) => {
+    const labels = endingBiasStoryCardLabels(story);
+    const left = labels.find((bias) => bias.side === 'left');
+    const right = labels.find((bias) => bias.side === 'right');
+    if (!left && !right) return null;
+    return (
+      <div className="story-bias-bar" aria-label="作品结局倾向">
+        <div className="story-bias-side story-bias-left" data-active={left?.active ? 'true' : undefined}>
+          <span>{left?.label || '左倾'}</span>
+          <strong>{left?.value || '普通'}</strong>
+        </div>
+        <div className="story-bias-divider" />
+        <div className="story-bias-side story-bias-right" data-active={right?.active ? 'true' : undefined}>
+          <strong>{right?.value || '普通'}</strong>
+          <span>{right?.label || '右倾'}</span>
+        </div>
+      </div>
+    );
+  };
+
   const renderStoryCard = (story: any, isPublic: boolean) => {
     const coverUrl = getStoryCoverUrl(story);
     const tags = getStoryTags(story);
@@ -5427,25 +5447,7 @@ export default function App() {
             })}
           </div>
           <div className="flex min-w-0 flex-1 flex-col">
-            <div className="mb-2 flex min-w-0 flex-wrap gap-1.5">
-              {(tags.length > 0 ? tags.slice(0, 2) : ['未标签']).map((tag: string) => (
-                <span key={tag} className="rounded-lg border border-indigo-400/15 bg-indigo-500/10 px-2.5 py-1 text-[11px] font-black text-indigo-200">
-                  {tag}
-                </span>
-              ))}
-              {endingBiasStoryCardLabels(story).map((bias) => (
-                <span
-                  key={bias.side}
-                  className={`rounded-lg px-2.5 py-1 text-[11px] font-black ${
-                    bias.side === 'left'
-                      ? bias.active ? 'bg-indigo-500/15 text-indigo-200' : 'bg-zinc-800/55 text-zinc-400'
-                      : bias.active ? 'bg-rose-500/15 text-rose-200' : 'bg-zinc-800/55 text-zinc-400'
-                  }`}
-                >
-                  {bias.label} · {bias.value}
-                </span>
-              ))}
-            </div>
+            {renderStoryBiasBar(story)}
             <h3 className="mb-1 whitespace-normal break-words text-[1.45rem] font-black leading-tight text-white transition-colors group-hover:text-indigo-200 sm:text-2xl">
               {formatBookTitle(getStoryTitle(story))}
             </h3>
@@ -5455,6 +5457,13 @@ export default function App() {
             <p className="mb-3 line-clamp-3 text-[0.98rem] leading-relaxed text-zinc-300/85 transition-colors group-hover:text-zinc-200">
               {getStoryMainAxis(story)}
             </p>
+            <div className="mb-3 flex min-w-0 flex-wrap gap-1.5">
+              {(tags.length > 0 ? tags.slice(0, 3) : ['未标签']).map((tag: string) => (
+                <span key={tag} className="rounded-lg border border-indigo-400/15 bg-indigo-500/10 px-2.5 py-1 text-[11px] font-black text-indigo-200">
+                  {tag}
+                </span>
+              ))}
+            </div>
             <div className="mt-auto grid gap-2 sm:grid-cols-2">
               <button type="button" onClick={() => setStoryDetailStory(story)} className={`${semanticButtonClass('secondary', { fullWidth: true, compact: true })} text-sm`}>
                 <BookOpen className="h-4 w-4" />
