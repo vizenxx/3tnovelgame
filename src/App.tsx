@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp, Download, Sun, Moon, Search } from 'lucide-react';
 import { auth, db, firebaseInitError } from './firebase';
-import { createEmptyStory, createSharedStoryRecord, createStorySnapshot, adaptBlueprintToStory, createStoryBranch, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, favoriteStory, unfavoriteStory, getAppSettings, getSharedStoryRecord, getStoryCartridge, getStoryMeta, getUserProgress, incrementStoryMetric, likeStory, listMySharedStories, listMyStories, listPublicStories, refundCoverGenerationUsage, reportStory, reserveCoverGenerationUsage, saveAppSettings, saveStoryMainlineBundle, saveStoryMeta, saveUserProgress, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch } from './storyStore';
+import { createEmptyStory, createSharedStoryRecord, createStorySnapshot, adaptBlueprintToStory, createStoryBranch, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, favoriteStory, unfavoriteStory, getAppSettings, getSharedStoryRecord, getStoryCartridge, getStoryMeta, getUserProgress, incrementStoryMetric, likeStory, unlikeStory, listMySharedStories, listMyStories, listPublicStories, refundCoverGenerationUsage, reportStory, reserveCoverGenerationUsage, saveAppSettings, saveStoryMainlineBundle, saveStoryMeta, saveUserProgress, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch } from './storyStore';
 import { branchEffectiveWeight, isBranchUnlockedByHistory, normalizeEndingBias } from './storyCartridge';
 import { deleteLocalCache, getLocalCache, setLocalCache } from './localCache';
 import { useAppNavigation } from './navigation/useAppNavigation';
@@ -1443,6 +1443,7 @@ export default function App() {
   const [interventionHistory, setInterventionHistory] = useState<Array<{ chapterNum: number; charId: string; action: 'bless' | 'curse' }>>([]);
   const localDeviceIdRef = useRef(getLocalDeviceId());
   const hasLoadedInitialStoryListRef = useRef(false);
+  const archiveRefreshInFlightRef = useRef<Promise<void> | null>(null);
   const fetchingChapterRef = useRef<number | null>(null);
   const [backgroundGeneratingChapter, setBackgroundGeneratingChapter] = useState<number | null>(null);
 
@@ -2318,6 +2319,11 @@ export default function App() {
   };
 
   const refreshArchiveStories = async (options: { force?: boolean } = {}) => {
+    if (archiveRefreshInFlightRef.current) {
+      if (options.force) markStoryListSegment('archive', 'syncing');
+      return archiveRefreshInFlightRef.current;
+    }
+    const refreshTask = (async () => {
     if (!user || !db) {
       const message = '收藏馆暂时无法连接账号资料，请稍后重试。';
       markStoryListSegment('archive', 'error', message);
@@ -2353,6 +2359,15 @@ export default function App() {
       showError(message);
     } finally {
       setIsLoadingStories(false);
+    }
+    })();
+    archiveRefreshInFlightRef.current = refreshTask;
+    try {
+      await refreshTask;
+    } finally {
+      if (archiveRefreshInFlightRef.current === refreshTask) {
+        archiveRefreshInFlightRef.current = null;
+      }
     }
   };
 
@@ -3225,6 +3240,7 @@ export default function App() {
       setInterventionsLeft(3);
       setEndingValue(0);
       setUnlockedBranches([]);
+      setHistoricallyUnlockedBranches([]);
       setIntervenedChapters([]);
       setNaturalChapters([]);
       setInitialNaturalChapters([]);
@@ -3405,7 +3421,13 @@ export default function App() {
       }
       
       setStoryLaunchOverlay({ progress: 72, status: '正在检查云端进度...' });
-      const progressData = await getUserProgress(db as any, user.uid, storyId);
+      let progressData: any = null;
+      try {
+        progressData = await getUserProgress(db as any, user.uid, storyId);
+      } catch (progressError: any) {
+        console.warn('[story-progress:load]', progressError);
+        showError(getFriendlyServerError(progressError, '云端进度暂时无法读取，已先开启原始故事。'));
+      }
       
       const canResumeProgress =
         progressData &&
@@ -4283,6 +4305,60 @@ export default function App() {
     });
   };
 
+  const applyStoryActionFlag = (kind: 'like' | 'favorite', storyId: string, active: boolean) => {
+    const patchStory = (story: any) => {
+      if (!story || (story.id !== storyId && story.storyId !== storyId && story.sourceStoryId !== storyId)) return story;
+      const flagPatch = kind === 'like'
+        ? { likedByMe: active, isLiked: active }
+        : { favoritedByMe: active, isFavorited: active };
+      return {
+        ...story,
+        ...flagPatch,
+        meta: story.meta ? { ...story.meta, ...flagPatch } : story.meta,
+      };
+    };
+    setPublicStories((prev) => prev.map(patchStory));
+    setMyStories((prev) => prev.map(patchStory));
+    setMySharedStories((prev) => prev.map(patchStory));
+    setStoryDetailStory((prev) => patchStory(prev));
+    setActiveStoryMeta((prev: any) => patchStory(prev));
+  };
+
+  const patchCachedStoryAction = async (
+    kind: 'like' | 'favorite',
+    storyId: string,
+    active: boolean,
+    field: 'likeCount' | 'favoriteCount',
+    delta: number
+  ) => {
+    const cached = await getStoryListCache();
+    if (!cached?.value) return;
+    const flagPatch = kind === 'like'
+      ? { likedByMe: active, isLiked: active }
+      : { favoritedByMe: active, isFavorited: active };
+    const patchStory = (story: any) => {
+      if (!story || (story.id !== storyId && story.storyId !== storyId && story.sourceStoryId !== storyId)) return story;
+      const current = Number(story[field] ?? story.meta?.[field] ?? 0);
+      const nextValue = Math.max(0, current + delta);
+      return {
+        ...story,
+        ...flagPatch,
+        [field]: nextValue,
+        meta: story.meta ? { ...story.meta, ...flagPatch, [field]: nextValue } : story.meta,
+      };
+    };
+    await setLocalCache(storyListCacheKey(), {
+      ...cached.value,
+      pub: Array.isArray(cached.value.pub) ? cached.value.pub.map(patchStory) : [],
+      mine: Array.isArray(cached.value.mine) ? cached.value.mine.map(patchStory) : [],
+      shared: Array.isArray(cached.value.shared)
+        ? cached.value.shared
+            .filter((story: any) => !(kind === 'favorite' && !active && story?.archiveKind === 'favorite' && (story.id === storyId || story.storyId === storyId || story.sourceStoryId === storyId)))
+            .map(patchStory)
+        : [],
+    });
+  };
+
   const hasOptimisticStoryAction = (kind: 'like' | 'favorite', storyId?: string | null) => {
     if (!storyId) return false;
     return kind === 'like' ? optimisticLikedStoryIds.has(storyId) : optimisticFavoritedStoryIds.has(storyId);
@@ -4504,30 +4580,66 @@ export default function App() {
   const handleStoryInteraction = async (kind: 'like' | 'favorite' | 'report', targetId?: string, targetMeta?: any) => {
     const idToUse = targetId || activeStoryId;
     if (!idToUse || !db || !user) { if (!user) setIsAccountCenterOpen(true); return; }
-    if ((kind === 'like' || kind === 'favorite') && (hasOptimisticStoryAction(kind, idToUse) || (targetMeta && hasStoryCardAction(kind, targetMeta)))) {
-      showError(kind === 'like' ? '你已经点过赞了。' : '已在馆藏中。');
-      return;
-    }
+    const wasActionActive = kind === 'like' || kind === 'favorite'
+      ? Boolean(hasOptimisticStoryAction(kind, idToUse) || (targetMeta && hasStoryCardAction(kind, targetMeta)))
+      : false;
     try {
       if (kind === 'like') {
+        const isActive = wasActionActive;
+        if (isActive) {
+          setStoryActionState('like', idToUse, false);
+          applyStoryActionFlag('like', idToUse, false);
+          applyStoryCountDelta(idToUse, 'likeCount', -1);
+          void patchCachedStoryAction('like', idToUse, false, 'likeCount', -1);
+          const result = await unlikeStory(db as any, idToUse, user.uid);
+          if (!result?.removed) {
+            applyStoryCountDelta(idToUse, 'likeCount', 1);
+            void patchCachedStoryAction('like', idToUse, false, 'likeCount', 1);
+          }
+          showError('已取消点赞。');
+          return;
+        }
         setStoryActionState('like', idToUse, true);
+        applyStoryActionFlag('like', idToUse, true);
         applyStoryCountDelta(idToUse, 'likeCount', 1);
+        void patchCachedStoryAction('like', idToUse, true, 'likeCount', 1);
         const result = await likeStory(db as any, idToUse, user.uid);
         if (result?.alreadyExists) {
           applyStoryCountDelta(idToUse, 'likeCount', -1);
-          showError('你已经点过赞了。');
+          void patchCachedStoryAction('like', idToUse, true, 'likeCount', -1);
           return;
         }
         showError('已点赞。');
         return;
       }
       if (kind === 'favorite') {
+        const isActive = wasActionActive;
+        if (isActive) {
+          setStoryActionState('favorite', idToUse, false);
+          applyStoryActionFlag('favorite', idToUse, false);
+          applyStoryCountDelta(idToUse, 'favoriteCount', -1);
+          setMySharedStories((prev) => prev.filter((story: any) => !(
+            story?.archiveKind === 'favorite' &&
+            (story.id === idToUse || story.storyId === idToUse || story.sourceStoryId === idToUse)
+          )));
+          void patchCachedStoryAction('favorite', idToUse, false, 'favoriteCount', -1);
+          const result = await unfavoriteStory(db as any, idToUse, user.uid);
+          if (!result?.removed) {
+            applyStoryCountDelta(idToUse, 'favoriteCount', 1);
+            void patchCachedStoryAction('favorite', idToUse, false, 'favoriteCount', 1);
+          }
+          showError('已取消收藏。');
+          return;
+        }
         setStoryActionState('favorite', idToUse, true);
+        applyStoryActionFlag('favorite', idToUse, true);
         applyStoryCountDelta(idToUse, 'favoriteCount', 1);
+        void patchCachedStoryAction('favorite', idToUse, true, 'favoriteCount', 1);
         const favoriteResult = await favoriteStory(db as any, idToUse, user.uid);
         const alreadyFavorited = Boolean(favoriteResult?.alreadyExists);
         if (alreadyFavorited) {
           applyStoryCountDelta(idToUse, 'favoriteCount', -1);
+          void patchCachedStoryAction('favorite', idToUse, true, 'favoriteCount', -1);
         }
         const sourceMeta = targetMeta || activeStoryMeta || await getStoryMeta(db as any, idToUse).catch(() => null);
         if (sourceMeta) {
@@ -4618,12 +4730,16 @@ export default function App() {
       }
       console.error(error);
       if (kind === 'like') {
-        setStoryActionState('like', idToUse, false);
-        applyStoryCountDelta(idToUse, 'likeCount', -1);
+        setStoryActionState('like', idToUse, wasActionActive);
+        applyStoryActionFlag('like', idToUse, wasActionActive);
+        applyStoryCountDelta(idToUse, 'likeCount', wasActionActive ? 1 : -1);
+        void patchCachedStoryAction('like', idToUse, wasActionActive, 'likeCount', wasActionActive ? 1 : -1);
       }
       if (kind === 'favorite') {
-        setStoryActionState('favorite', idToUse, false);
-        applyStoryCountDelta(idToUse, 'favoriteCount', -1);
+        setStoryActionState('favorite', idToUse, wasActionActive);
+        applyStoryActionFlag('favorite', idToUse, wasActionActive);
+        applyStoryCountDelta(idToUse, 'favoriteCount', wasActionActive ? 1 : -1);
+        void patchCachedStoryAction('favorite', idToUse, wasActionActive, 'favoriteCount', wasActionActive ? 1 : -1);
       }
       showError('操作失败，请稍后再试。');
     }
@@ -5215,19 +5331,23 @@ export default function App() {
         <div className="story-card-stat-list">
           {stats.map((stat) => {
             const Icon = stat.icon;
+            const onClick = stat.key === 'like' ? actions?.onLike : stat.key === 'favorite' ? actions?.onFavorite : undefined;
             return (
-              <div
+              <button
                 key={stat.key}
+                type="button"
+                onClick={onClick}
+                disabled={!onClick}
                 data-active={stat.active ? 'true' : undefined}
                 data-tone={stat.tone}
-                className="story-card-stat transition-colors"
+                className="story-card-stat text-left transition-colors disabled:cursor-default"
               >
                 <div className="story-card-stat-label">
                   <Icon className={`h-3.5 w-3.5 shrink-0 ${stat.active ? 'fill-current' : ''}`} />
                   <span className="truncate">{stat.active ? stat.activeLabel || stat.label : stat.label}</span>
                 </div>
                 <div className="story-card-stat-value">{stat.value}</div>
-              </div>
+              </button>
             );
           })}
         </div>
@@ -5300,7 +5420,11 @@ export default function App() {
                 </div>
               )}
             </button>
-            {renderStoryStats(story, 'card')}
+            {renderStoryStats(story, 'card', {
+              storyId,
+              onLike: () => handleStoryInteraction('like', storyId, story),
+              onFavorite: () => handleStoryInteraction('favorite', storyId, story),
+            })}
           </div>
           <div className="flex min-w-0 flex-1 flex-col">
             <div className="mb-2 flex min-w-0 flex-wrap gap-1.5">

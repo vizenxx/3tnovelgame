@@ -520,6 +520,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json(await supabaseRpc('like_story_once', { p_story_id: body.storyId, p_user_id: authUser.uid }));
     }
 
+    if (action === 'unlikeStory') {
+      return res.status(200).json(await supabaseRpc('unlike_story_once', { p_story_id: body.storyId, p_user_id: authUser.uid }));
+    }
+
     if (action === 'favoriteStory') {
       return res.status(200).json(await supabaseRpc('favorite_story_once', { p_story_id: body.storyId, p_user_id: authUser.uid }));
     }

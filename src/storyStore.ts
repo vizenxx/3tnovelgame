@@ -256,6 +256,23 @@ export async function likeStory(db: Firestore, storyId: string, userId: string) 
   return { alreadyExists };
 }
 
+export async function unlikeStory(db: Firestore, storyId: string, userId: string) {
+  if (useSupabaseStories()) {
+    return storyApi<{ removed: boolean }>('unlikeStory', { storyId }, { auth: true });
+  }
+  const storyRef = doc(db, 'stories', storyId);
+  const likeRef = doc(db, 'stories', storyId, 'likes', userId);
+  let removed = false;
+  await runTransaction(db as any, async (transaction: any) => {
+    const likeSnap = await transaction.get(likeRef);
+    if (!likeSnap.exists()) return;
+    removed = true;
+    transaction.delete(likeRef);
+    transaction.update(storyRef, { likeCount: increment(-1) });
+  });
+  return { removed };
+}
+
 export async function favoriteStory(db: Firestore, storyId: string, userId: string) {
   if (useSupabaseStories()) {
     return storyApi<{ alreadyExists: boolean }>('favoriteStory', { storyId }, { auth: true });

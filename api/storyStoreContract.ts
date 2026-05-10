@@ -13,6 +13,7 @@ export const STORY_STORE_ACTIONS = [
   'refundCoverUsage',
   'incrementStoryMetric',
   'likeStory',
+  'unlikeStory',
   'favoriteStory',
   'unfavoriteStory',
   'reportStory',
