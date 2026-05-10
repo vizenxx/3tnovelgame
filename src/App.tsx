@@ -5196,10 +5196,10 @@ export default function App() {
     const isLiked = hasStoryCardAction('like', story);
     const isFavorited = hasStoryCardAction('favorite', story);
     const storyStats = [
-      { label: '点赞', value: getStoryLikeCount(story), icon: Heart, active: isLiked, activeClass: 'text-pink-300 bg-pink-500/10 border-pink-500/25' },
-      { label: '干涉', value: getStoryInterventionCount(story), icon: Sparkles },
-      { label: '收藏', value: getStoryFavoriteCount(story), icon: Bookmark, active: isFavorited, activeClass: 'text-amber-300 bg-amber-500/10 border-amber-500/25' },
-      { label: '字/章', value: getStoryAverageChapterWords(story) || '未知', icon: BookOpen },
+      { label: '点赞', value: getStoryLikeCount(story), icon: Heart, active: isLiked, tone: 'like' },
+      { label: '干涉', value: getStoryInterventionCount(story), icon: Sparkles, tone: undefined },
+      { label: '收藏', value: getStoryFavoriteCount(story), icon: Bookmark, active: isFavorited, tone: 'favorite' },
+      { label: '字/章', value: getStoryAverageChapterWords(story) || '未知', icon: BookOpen, tone: undefined },
     ];
     return (
       <motion.div
@@ -5220,23 +5220,21 @@ export default function App() {
                 </div>
               )}
             </button>
-            <div className="mt-2 space-y-1.5 rounded-2xl border border-zinc-800/45 bg-zinc-950/25 p-2 text-[10px] font-black text-zinc-500">
+            <div className="story-card-stat-list">
               {storyStats.map((stat) => {
                 const Icon = stat.icon;
                 return (
                   <div
                     key={stat.label}
-                    className={`flex min-w-0 items-center justify-between gap-2 rounded-xl border px-2 py-1.5 transition-colors ${
-                      stat.active
-                        ? stat.activeClass
-                        : 'border-transparent bg-zinc-900/25 text-zinc-500'
-                    }`}
+                    data-active={stat.active ? 'true' : undefined}
+                    data-tone={stat.tone}
+                    className="story-card-stat transition-colors"
                   >
-                    <div className="flex min-w-0 items-center gap-1.5">
+                    <div className="story-card-stat-label">
                       <Icon className={`h-3.5 w-3.5 shrink-0 ${stat.active ? 'fill-current' : ''}`} />
                       <span className="truncate">{stat.active && stat.label === '点赞' ? '已点赞' : stat.active && stat.label === '收藏' ? '已收藏' : stat.label}</span>
                     </div>
-                    <div className="shrink-0 truncate text-[11px] text-zinc-100">{stat.value}</div>
+                    <div className="story-card-stat-value">{stat.value}</div>
                   </div>
                 );
               })}
@@ -5330,7 +5328,7 @@ export default function App() {
             initial={{ y: 18, opacity: 0, scale: 0.96 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 12, opacity: 0, scale: 0.98 }}
-            className="app-modal-surface relative mt-[env(safe-area-inset-top)] max-h-[calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-full max-w-3xl overflow-y-auto rounded-[2rem] p-5 backdrop-blur-xl sm:p-7"
+            className="app-modal-surface app-modal-safe-height relative mt-[env(safe-area-inset-top)] w-full max-w-3xl overflow-y-auto rounded-[2rem] p-5 backdrop-blur-xl sm:p-7"
           >
             <button
               type="button"
@@ -5351,30 +5349,30 @@ export default function App() {
                     </div>
                   )}
                 </div>
-                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-1">
-                  <button type="button" onClick={() => handleStoryInteraction('like', detailStoryId, storyDetailStory)} className={`group flex flex-col justify-between rounded-2xl border px-3 py-2 text-left transition-all active:scale-[0.98] ${isDetailLiked ? 'border-pink-500/40 bg-pink-500/10' : 'border-zinc-800 bg-zinc-900/60 hover:border-pink-500/30 hover:bg-pink-500/10'}`}>
-                    <div className={`flex w-full items-center justify-between text-[11px] font-black transition-colors ${isDetailLiked ? 'text-pink-300' : 'text-zinc-500 group-hover:text-pink-400'}`}>
+                <div className="story-detail-stat-grid sm:grid-cols-1">
+                  <button type="button" onClick={() => handleStoryInteraction('like', detailStoryId, storyDetailStory)} data-active={isDetailLiked ? 'true' : undefined} data-tone="like" className="story-detail-stat group text-left transition-all active:scale-[0.98]">
+                    <div className={`story-detail-stat-label transition-colors ${isDetailLiked ? 'text-pink-300' : 'group-hover:text-pink-400'}`}>
                       {isDetailLiked ? '已点赞' : '点赞'} <Heart className={`h-3.5 w-3.5 transition-transform ${isDetailLiked ? 'scale-110 fill-current' : ''}`} />
                     </div>
-                    <div className="mt-0.5 text-sm font-black text-zinc-100">{storyDetailStory ? getStoryLikeCount(storyDetailStory) : 0}</div>
+                    <div className="story-detail-stat-value">{storyDetailStory ? getStoryLikeCount(storyDetailStory) : 0}</div>
                   </button>
-                  <button type="button" onClick={() => handleStoryInteraction('favorite', detailStoryId, storyDetailStory)} className={`group flex flex-col justify-between rounded-2xl border px-3 py-2 text-left transition-all active:scale-[0.98] ${isDetailFavorited ? 'border-amber-500/40 bg-amber-500/10' : 'border-zinc-800 bg-zinc-900/60 hover:border-amber-500/30 hover:bg-amber-500/10'}`}>
-                    <div className={`flex w-full items-center justify-between text-[11px] font-black transition-colors ${isDetailFavorited ? 'text-amber-300' : 'text-zinc-500 group-hover:text-amber-400'}`}>
+                  <button type="button" onClick={() => handleStoryInteraction('favorite', detailStoryId, storyDetailStory)} data-active={isDetailFavorited ? 'true' : undefined} data-tone="favorite" className="story-detail-stat group text-left transition-all active:scale-[0.98]">
+                    <div className={`story-detail-stat-label transition-colors ${isDetailFavorited ? 'text-amber-300' : 'group-hover:text-amber-400'}`}>
                       {isDetailFavorited ? '已收藏' : '收藏'} <Bookmark className={`h-3.5 w-3.5 transition-transform ${isDetailFavorited ? 'scale-110 fill-current' : ''}`} />
                     </div>
-                    <div className="mt-0.5 text-sm font-black text-zinc-100">{storyDetailStory ? getStoryFavoriteCount(storyDetailStory) : 0}</div>
+                    <div className="story-detail-stat-value">{storyDetailStory ? getStoryFavoriteCount(storyDetailStory) : 0}</div>
                   </button>
-                  <div className="flex flex-col justify-between rounded-2xl border border-zinc-800 bg-zinc-900/60 px-3 py-2">
-                    <div className="flex w-full items-center justify-between text-[11px] font-black text-zinc-500">
+                  <div className="story-detail-stat">
+                    <div className="story-detail-stat-label">
                       干涉 <Sparkles className="h-3.5 w-3.5" />
                     </div>
-                    <div className="mt-0.5 text-sm font-black text-zinc-100">{storyDetailStory ? getStoryInterventionCount(storyDetailStory) : 0}</div>
+                    <div className="story-detail-stat-value">{storyDetailStory ? getStoryInterventionCount(storyDetailStory) : 0}</div>
                   </div>
-                  <div className="flex flex-col justify-between rounded-2xl border border-zinc-800 bg-zinc-900/60 px-3 py-2">
-                    <div className="flex w-full items-center justify-between text-[11px] font-black text-zinc-500">
+                  <div className="story-detail-stat">
+                    <div className="story-detail-stat-label">
                       均章字数 <BookOpen className="h-3.5 w-3.5" />
                     </div>
-                    <div className="mt-0.5 text-sm font-black text-zinc-100">{storyDetailStory ? getStoryAverageChapterWords(storyDetailStory) || '未知' : '未知'} 字</div>
+                    <div className="story-detail-stat-value">{storyDetailStory ? getStoryAverageChapterWords(storyDetailStory) || '未知' : '未知'} 字</div>
                   </div>
                 </div>
               </div>
@@ -7123,7 +7121,7 @@ export default function App() {
   );
 
   const renderAuthoringView = () => (
-    <div className="mx-auto max-w-5xl px-6 pb-12 pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] lg:px-8">
+    <div className="authoring-studio mx-auto max-w-5xl px-6 pb-12 pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] lg:px-8">
       {!authoringCartridge ? (
         <>
           <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
@@ -7206,7 +7204,14 @@ export default function App() {
                 }
               }}
             />
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <div
+                className="authoring-save-pill inline-flex min-h-10 items-center gap-2 rounded-full px-3 py-2 text-xs font-black"
+                data-state={authoringSaving ? 'saving' : authoringDirty ? 'dirty' : 'saved'}
+              >
+                {authoringSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : authoringDirty ? <AlertCircle className="h-4 w-4" /> : <Check className="h-4 w-4" />}
+                {authoringSaving ? '保存中' : authoringDirty ? '有未保存更改' : '已保存'}
+              </div>
               <button type="button" onClick={() => handleDeleteAuthoringStory()} disabled={authoringSaving} className={semanticButtonClass('danger', { compact: true })}>
                 <Trash2 className="h-4 w-4" />
                 删除作品
@@ -7219,13 +7224,13 @@ export default function App() {
           </div>
 
           <div className="mb-6 flex gap-1 overflow-x-auto whitespace-nowrap rounded-2xl border border-zinc-800 bg-zinc-950/70 p-1">
-            <button type="button" onClick={() => setAuthoringTab('settings')} className={`flex-1 flex flex-col items-center justify-center rounded-xl px-1 py-2 text-[10px] sm:text-[11px] font-black transition-colors ${authoringTab === 'settings' ? 'bg-indigo-600 text-white shadow-md' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'}`}>
+            <button type="button" onClick={() => setAuthoringTab('settings')} className={`flex-1 flex min-h-12 flex-col items-center justify-center rounded-xl px-1 py-2 text-[10px] sm:text-[11px] font-black transition-colors ${authoringTab === 'settings' ? 'bg-indigo-600 text-white shadow-md' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'}`}>
               <Copy className="mb-1 h-4 w-4 shrink-0" />作品设置
             </button>
-            <button type="button" onClick={() => setAuthoringTab('mainline')} className={`flex-1 flex flex-col items-center justify-center rounded-xl px-1 py-2 text-[10px] sm:text-[11px] font-black transition-colors ${authoringTab === 'mainline' ? 'bg-indigo-600 text-white shadow-md' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'}`}>
+            <button type="button" onClick={() => setAuthoringTab('mainline')} className={`flex-1 flex min-h-12 flex-col items-center justify-center rounded-xl px-1 py-2 text-[10px] sm:text-[11px] font-black transition-colors ${authoringTab === 'mainline' ? 'bg-indigo-600 text-white shadow-md' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'}`}>
               <BookOpen className="mb-1 h-4 w-4 shrink-0" />主线和结局
             </button>
-            <button type="button" onClick={() => setAuthoringTab('branches')} className={`flex-1 flex flex-col items-center justify-center rounded-xl px-1 py-2 text-[10px] sm:text-[11px] font-black transition-colors ${authoringTab === 'branches' ? 'bg-indigo-600 text-white shadow-md' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'}`}>
+            <button type="button" onClick={() => setAuthoringTab('branches')} className={`flex-1 flex min-h-12 flex-col items-center justify-center rounded-xl px-1 py-2 text-[10px] sm:text-[11px] font-black transition-colors ${authoringTab === 'branches' ? 'bg-indigo-600 text-white shadow-md' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'}`}>
               <Sparkles className="mb-1 h-4 w-4 shrink-0" />角色和支线
             </button>
           </div>
