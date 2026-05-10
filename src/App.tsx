@@ -6438,7 +6438,7 @@ export default function App() {
   );
 
   const actionMenuButton = (
-    <div className="fixed left-4 right-4 top-[max(1rem,env(safe-area-inset-top))] z-[2000] flex items-center justify-between gap-3 sm:left-auto sm:right-6">
+    <div className="play-top-bar flex items-center justify-between gap-3">
       {gameState === 'PLAYING' && (
         <button
           type="button"
@@ -6502,7 +6502,7 @@ export default function App() {
 
   const floatingInterventionPanel = blueprint && gameState === 'PLAYING' && typeof document !== 'undefined'
     ? createPortal(
-      <div className="destiny-dock fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-[1900] rounded-full px-3 py-1.5 backdrop-blur-xl sm:left-auto sm:right-6 sm:w-[23rem]">
+      <div className="destiny-dock play-destiny-dock rounded-full px-3 py-1.5 backdrop-blur-xl">
         <div className="flex min-h-9 items-center justify-between gap-2 px-1">
           <div className="shrink-0 text-xs font-black text-zinc-300 sm:text-sm">
             {interventionsLeft}/3 干涉数
@@ -8045,11 +8045,7 @@ export default function App() {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 12, scale: 0.92 }}
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          className={`fixed right-4 z-[1800] flex h-12 w-12 items-center justify-center rounded-2xl border border-zinc-700 bg-zinc-950/90 text-zinc-200 shadow-2xl backdrop-blur-xl transition-colors hover:border-indigo-400 hover:text-white sm:right-6 ${
-            gameState === 'PLAYING'
-              ? 'bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+4.5rem)] sm:bottom-[max(0.75rem,env(safe-area-inset-bottom))] sm:right-[27.5rem]'
-              : 'bottom-[max(1rem,env(safe-area-inset-bottom))]'
-          }`}
+          className={`play-float-button ${gameState === 'PLAYING' ? 'play-scroll-top-button' : 'app-scroll-top-button'}`}
           aria-label="返回顶端"
         >
           <ArrowUp className="h-5 w-5" />
@@ -8068,7 +8064,7 @@ export default function App() {
               initial={{ opacity: 0, y: 10, scale: 0.96 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 8, scale: 0.97 }}
-              className="fixed bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+8.5rem)] left-4 z-[1801] flex max-h-[min(44dvh,20rem)] w-48 flex-col gap-1 overflow-y-auto rounded-2xl border border-zinc-800 bg-zinc-950/92 p-2 shadow-2xl shadow-black/40 backdrop-blur-xl sm:bottom-[max(0.75rem,env(safe-area-inset-bottom))] sm:left-6"
+              className="play-quick-panel p-2"
             >
               <div className="px-2 pb-1 pt-1 text-center text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">快速浏览</div>
               {chapters.map((chapter) => {
@@ -8100,7 +8096,7 @@ export default function App() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.92 }}
             onClick={() => setPlayingTocOpen((prev) => !prev)}
-            className="fixed bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+4.75rem)] left-4 z-[1802] flex h-12 w-12 items-center justify-center rounded-2xl border border-zinc-700 bg-zinc-950/90 text-zinc-200 shadow-2xl backdrop-blur-xl transition-colors hover:border-indigo-400 hover:text-white sm:bottom-[max(0.75rem,env(safe-area-inset-bottom))] sm:left-6"
+            className="play-float-button play-quick-button"
             aria-label={playingTocOpen ? '关闭快速浏览' : '打开快速浏览'}
           >
             {playingTocOpen ? <X className="h-5 w-5" /> : <BookOpen className="h-5 w-5" />}

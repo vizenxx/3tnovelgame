@@ -135,6 +135,111 @@ html[data-theme="light"] {
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.2);
 }
 
+.play-top-bar {
+  position: fixed;
+  left: 1rem;
+  right: 1rem;
+  top: max(1rem, env(safe-area-inset-top));
+  z-index: 2000;
+}
+
+.play-destiny-dock {
+  position: fixed;
+  left: 0.75rem;
+  right: 0.75rem;
+  bottom: max(0.75rem, env(safe-area-inset-bottom));
+  z-index: 1900;
+}
+
+.play-float-button {
+  position: fixed;
+  z-index: 1802;
+  display: flex;
+  width: 3rem;
+  height: 3rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--app-shell-border);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--app-surface) 88%, transparent);
+  color: var(--app-readable-text);
+  box-shadow: 0 18px 52px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(18px);
+  transition: border-color 150ms ease, color 150ms ease, transform 150ms ease, background 150ms ease;
+}
+
+.play-float-button:hover {
+  border-color: color-mix(in srgb, var(--app-accent) 55%, var(--app-border));
+  background: color-mix(in srgb, var(--app-surface-soft) 88%, transparent);
+}
+
+.play-float-button:active {
+  transform: scale(0.96);
+}
+
+.play-quick-button {
+  left: 1rem;
+  bottom: calc(max(0.75rem, env(safe-area-inset-bottom)) + 4.75rem);
+}
+
+.play-scroll-top-button {
+  right: 1rem;
+  bottom: calc(max(0.75rem, env(safe-area-inset-bottom)) + 4.75rem);
+}
+
+.play-quick-panel {
+  position: fixed;
+  left: 1rem;
+  bottom: calc(max(0.75rem, env(safe-area-inset-bottom)) + 8.5rem);
+  z-index: 1801;
+  display: flex;
+  width: 12rem;
+  max-height: min(44dvh, 20rem);
+  flex-direction: column;
+  gap: 0.25rem;
+  overflow-y: auto;
+  border: 1px solid var(--app-shell-border);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--app-soft-black) 92%, transparent);
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(18px);
+}
+
+.app-scroll-top-button {
+  position: fixed;
+  right: 1rem;
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  z-index: 1800;
+}
+
+@media (min-width: 640px) {
+  .play-top-bar {
+    left: 1.5rem;
+    right: 1.5rem;
+  }
+
+  .play-destiny-dock {
+    left: auto;
+    right: 1.5rem;
+    width: 23rem;
+  }
+
+  .play-quick-button {
+    left: 1.5rem;
+    bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+
+  .play-quick-panel {
+    left: 1.5rem;
+    bottom: calc(max(0.75rem, env(safe-area-inset-bottom)) + 4rem);
+  }
+
+  .play-scroll-top-button {
+    right: 27.5rem;
+    bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+}
+
 html[data-theme="light"] .app-modal-surface,
 html[data-theme="light"] .app-toast {
   background:
