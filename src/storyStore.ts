@@ -82,6 +82,7 @@ export type StoryListItem = {
   likeCount?: number;
   interventionCount?: number;
   favoriteCount?: number;
+  shareCount?: number;
   likedByMe?: boolean;
   favoritedByMe?: boolean;
   reportCount?: number;
@@ -233,6 +234,14 @@ export async function incrementStoryMetric(db: Firestore, storyId: string, field
   await updateDoc(doc(db, 'stories', storyId), { [field]: increment(1) } as any);
 }
 
+export async function incrementShareMetric(db: Firestore, storyId: string) {
+  if (useSupabaseStories()) {
+    return storyApi<{ shareCount: number }>('incrementShareMetric', { storyId }, { auth: true });
+  }
+  await updateDoc(doc(db, 'stories', storyId), { shareCount: increment(1) } as any);
+  return { shareCount: 0 };
+}
+
 export async function likeStory(db: Firestore, storyId: string, userId: string) {
   if (useSupabaseStories()) {
     return storyApi<{ alreadyExists: boolean }>('likeStory', { storyId }, { auth: true });
@@ -313,6 +322,35 @@ export async function reportStory(db: Firestore, storyId: string, userId: string
   return { alreadyExists: false };
 }
 
+export async function followAuthor(db: Firestore, authorId: string, authorName?: string) {
+  if (useSupabaseStories()) {
+    return storyApi<{ following: boolean; self?: boolean }>('followAuthor', { authorId, authorName }, { auth: true });
+  }
+  return { following: true };
+}
+
+export async function unfollowAuthor(db: Firestore, authorId: string) {
+  if (useSupabaseStories()) {
+    return storyApi<{ following: boolean }>('unfollowAuthor', { authorId }, { auth: true });
+  }
+  return { following: false };
+}
+
+export async function getAuthorFollowState(db: Firestore, authorId: string) {
+  if (useSupabaseStories()) {
+    return storyApi<{ following: boolean }>('getAuthorFollowState', { authorId }, { auth: true });
+  }
+  return { following: false };
+}
+
+export async function getPushConfig() {
+  return storyApi<{ publicKey: string; enabled: boolean }>('getPushConfig');
+}
+
+export async function savePushSubscription(subscription: PushSubscriptionJSON) {
+  return storyApi('savePushSubscription', { subscription }, { auth: true });
+}
+
 export async function listMyStories(db: Firestore, authorId: string, pageSize = 50) {
   if (useSupabaseStories()) {
     return storyApi<StoryListItem[]>('listMyStories', { pageSize }, { auth: true, timeoutMs: 9000, stage: '我的作品同步' });
@@ -320,6 +358,21 @@ export async function listMyStories(db: Firestore, authorId: string, pageSize = 
   const q = query(
     collection(db, 'stories'),
     where('authorId', '==', authorId),
+    orderBy('updatedAt', 'desc'),
+    limit(pageSize)
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as StoryListItem[];
+}
+
+export async function listAuthorStories(db: Firestore, authorId: string, pageSize = 50) {
+  if (useSupabaseStories()) {
+    return storyApi<StoryListItem[]>('listAuthorStories', { authorId, pageSize }, { auth: true, timeoutMs: 9000, stage: '作者作品同步' });
+  }
+  const q = query(
+    collection(db, 'stories'),
+    where('authorId', '==', authorId),
+    where('visibility', 'in', ['public', 'unlisted']),
     orderBy('updatedAt', 'desc'),
     limit(pageSize)
   );

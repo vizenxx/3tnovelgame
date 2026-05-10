@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp, Download, Sun, Moon, Search } from 'lucide-react';
+import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp, Download, Sun, Moon, Search, GitBranch, Bell, BarChart3 } from 'lucide-react';
 import { auth, db, firebaseInitError } from './firebase';
-import { createEmptyStory, createSharedStoryRecord, createStorySnapshot, adaptBlueprintToStory, createStoryBranch, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, favoriteStory, unfavoriteStory, getAppSettings, getSharedStoryRecord, getStoryCartridge, getStoryMeta, getUserProgress, incrementStoryMetric, likeStory, unlikeStory, listMySharedStories, listMyStories, listPublicStories, refundCoverGenerationUsage, reportStory, reserveCoverGenerationUsage, saveAppSettings, saveStoryMainlineBundle, saveStoryMeta, saveUserProgress, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch } from './storyStore';
+import { createEmptyStory, createSharedStoryRecord, createStorySnapshot, adaptBlueprintToStory, createStoryBranch, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, favoriteStory, unfavoriteStory, followAuthor, getAppSettings, getAuthorFollowState, getPushConfig, getSharedStoryRecord, getStoryCartridge, getStoryMeta, getUserProgress, incrementShareMetric, incrementStoryMetric, likeStory, unlikeStory, listAuthorStories, listMySharedStories, listMyStories, listPublicStories, refundCoverGenerationUsage, reportStory, reserveCoverGenerationUsage, saveAppSettings, savePushSubscription, saveStoryMainlineBundle, saveStoryMeta, saveUserProgress, unfollowAuthor, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch } from './storyStore';
 import { branchEffectiveWeight, isBranchUnlockedByHistory, normalizeEndingBias } from './storyCartridge';
 import { deleteLocalCache, getLocalCache, setLocalCache } from './localCache';
 import { useAppNavigation } from './navigation/useAppNavigation';
@@ -50,6 +50,7 @@ type NarrativePerson = 'first' | 'second' | 'third';
 type EndingMode = 'single' | 'dual';
 type AppTheme = 'dark' | 'light';
 type StoryLibrarySort = 'updated' | 'likes' | 'interventions' | 'favorites' | 'words';
+type AuthoringListSort = 'updated' | 'created' | 'likes' | 'favorites' | 'shares' | 'interventions';
 
 const safeModalBackdropClass = "fixed inset-0 flex items-center justify-center overflow-y-auto overscroll-contain px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]";
 const PUBLIC_STORY_LIST_LIMIT = 100;
@@ -650,6 +651,24 @@ const endingBiasStoryCardLabels = (source?: any) => {
   ];
 };
 
+const endingDomainFromValue = (value: number): 'left' | 'right' | 'middle' => {
+  if (value >= 15) return 'left';
+  if (value <= -15) return 'right';
+  return 'middle';
+};
+
+const endingDomainUserLabel = (domain: 'left' | 'right' | 'middle') => {
+  if (domain === 'left') return '左域';
+  if (domain === 'right') return '右域';
+  return '均衡';
+};
+
+const endingDomainToneClass = (domain: 'left' | 'right' | 'middle') => {
+  if (domain === 'left') return 'text-indigo-200 bg-indigo-500/12 border-indigo-400/20';
+  if (domain === 'right') return 'text-rose-200 bg-rose-500/12 border-rose-400/20';
+  return 'text-zinc-200 bg-zinc-500/12 border-zinc-400/20';
+};
+
 const endingDomainCards = (source?: any) => {
   const names = source?.endingNames || {};
   return [
@@ -787,11 +806,26 @@ const getStoryLikeCount = (story: any) => Number(story?.likeCount ?? story?.meta
 const getStoryInterventionCount = (story: any) =>
   Number(story?.interventionCount ?? story?.meta?.interventionCount ?? story?.popularity ?? story?.meta?.popularity ?? 0);
 const getStoryFavoriteCount = (story: any) => Number(story?.favoriteCount ?? story?.meta?.favoriteCount ?? 0);
+const getStoryShareCount = (story: any) => Number(story?.shareCount ?? story?.meta?.shareCount ?? 0);
+const getStoryBranchCount = (story: any) => Number(story?.branchCount ?? story?.meta?.branchCount ?? story?.branches?.length ?? story?.meta?.branches?.length ?? 0);
+const getStoryUnlockedBranchCount = (story: any) => Number(story?.unlockedBranchCount ?? story?.meta?.unlockedBranchCount ?? 0);
 const getStoryUpdatedMs = (story: any) => {
   const value = story?.updatedAt?.toDate?.() || story?.updatedAt || story?.createdAt?.toDate?.() || story?.createdAt;
   const ms = value instanceof Date ? value.getTime() : Date.parse(String(value || ''));
   return Number.isFinite(ms) ? ms : 0;
 };
+const getStoryCreatedMs = (story: any) => {
+  const value = story?.createdAt?.toDate?.() || story?.createdAt || story?.meta?.createdAt?.toDate?.() || story?.meta?.createdAt;
+  const ms = value instanceof Date ? value.getTime() : Date.parse(String(value || ''));
+  return Number.isFinite(ms) ? ms : 0;
+};
+const formatShortDate = (value: number) => {
+  if (!value) return '未记录';
+  return new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit' }).format(new Date(value));
+};
+const getVisibilityLabel = (visibility?: string) => (
+  visibility === 'public' ? '公开' : visibility === 'unlisted' ? '非公开链接' : '私人'
+);
 
 const sanitizeTextForAdaptation = (input?: string) => {
   const value = String(input || '');
@@ -1171,6 +1205,25 @@ export default function App() {
   const [storyLibraryVisibilityFilter, setStoryLibraryVisibilityFilter] = useState<'all' | 'public' | 'private' | 'unlisted'>('all');
   const [storyLibrarySort, setStoryLibrarySort] = useState<StoryLibrarySort>('updated');
   const [storyDetailStory, setStoryDetailStory] = useState<any | null>(null);
+  const [authoringListSearch, setAuthoringListSearch] = useState('');
+  const [authoringListVisibilityFilter, setAuthoringListVisibilityFilter] = useState<'all' | 'public' | 'private' | 'unlisted'>('all');
+  const [authoringCreatedFilter, setAuthoringCreatedFilter] = useState<'all' | '7d' | '30d' | '365d'>('all');
+  const [authoringListSort, setAuthoringListSort] = useState<AuthoringListSort>('updated');
+  const [authorPulseNotifications, setAuthorPulseNotifications] = useState<Array<{
+    id: string;
+    storyId?: string;
+    title: string;
+    detail: string;
+    tone: 'like' | 'favorite' | 'share' | 'intervention' | 'encourage';
+  }>>([]);
+  const [authorProfileTarget, setAuthorProfileTarget] = useState<{ authorId: string; authorName: string } | null>(null);
+  const [authorProfileStories, setAuthorProfileStories] = useState<any[]>([]);
+  const [authorProfileLoading, setAuthorProfileLoading] = useState(false);
+  const [authorProfileFollowing, setAuthorProfileFollowing] = useState(false);
+  const [authorProfileBusy, setAuthorProfileBusy] = useState(false);
+  const [pushSubscribeBusy, setPushSubscribeBusy] = useState(false);
+  const authorMetricSnapshotRef = useRef<Map<string, { like: number; favorite: number; share: number; intervention: number }>>(new Map());
+  const authorPulseInitializedRef = useRef(false);
   const storySelectScrollYRef = useRef(0);
   const [storyImportCode, setStoryImportCode] = useState('');
   const [authoringCustomTagsInput, setAuthoringCustomTagsInput] = useState('');
@@ -1682,6 +1735,7 @@ export default function App() {
       shareText = buildStoryShareText(shareTitle, []);
     }
     await sharePayload({ title: shareTitle, text: shareText, url: buildOriginalStoryUrl(storyId) });
+    await recordStoryShare(storyId);
   };
 
   const handleShareSavedAuthoringStory = async () => {
@@ -1706,6 +1760,7 @@ export default function App() {
       const shareTitle = formatBookTitle(getStoryTitle(meta));
       const shareText = buildStoryShareText(shareTitle, authoringSaveSuccessStory.chapters || []);
       await sharePayload({ title: shareTitle, text: shareText, url: buildOriginalStoryUrl(storyId) });
+      await recordStoryShare(storyId);
     } catch (error: any) {
       console.error(error);
       if (error?.name === 'AbortError') {
@@ -2371,6 +2426,87 @@ export default function App() {
     }
   };
 
+  useEffect(() => {
+    if (!user?.uid) {
+      authorMetricSnapshotRef.current = new Map();
+      authorPulseInitializedRef.current = false;
+      setAuthorPulseNotifications([]);
+      return;
+    }
+
+    const nextSnapshot = new Map<string, { like: number; favorite: number; share: number; intervention: number }>();
+    myStories.forEach((story: any) => {
+      const storyId = String(story?.id || '');
+      if (!storyId) return;
+      nextSnapshot.set(storyId, {
+        like: getStoryLikeCount(story),
+        favorite: getStoryFavoriteCount(story),
+        share: getStoryShareCount(story),
+        intervention: getStoryInterventionCount(story),
+      });
+    });
+
+    if (!authorPulseInitializedRef.current) {
+      authorMetricSnapshotRef.current = nextSnapshot;
+      authorPulseInitializedRef.current = true;
+      const lastKey = `author-pulse:last-encouragement:${user.uid}`;
+      const lastSentAt = Number(localStorage.getItem(lastKey) || 0);
+      const hasEnoughGap = Date.now() - lastSentAt > 1000 * 60 * 60 * 20;
+      const topStory = [...myStories].sort((a: any, b: any) => (
+        (getStoryLikeCount(b) + getStoryFavoriteCount(b) + getStoryShareCount(b) + getStoryInterventionCount(b))
+        - (getStoryLikeCount(a) + getStoryFavoriteCount(a) + getStoryShareCount(a) + getStoryInterventionCount(a))
+      ))[0];
+      if (hasEnoughGap && topStory) {
+        const title = formatBookTitle(getStoryTitle(topStory));
+        const likes = getStoryLikeCount(topStory);
+        const favorites = getStoryFavoriteCount(topStory);
+        const shares = getStoryShareCount(topStory);
+        const interventions = getStoryInterventionCount(topStory);
+        pushAuthorPulseNotification({
+          storyId: topStory.id,
+          tone: 'encourage',
+          title: '创作脉搏',
+          detail: `${title} 目前收获 ${likes} 个点赞、${favorites} 个收藏、${shares} 次分享、${interventions} 次干涉，可以优先看看它的数据与后续开发方向。`,
+        });
+        localStorage.setItem(lastKey, String(Date.now()));
+      }
+      return;
+    }
+
+    const previousSnapshot = authorMetricSnapshotRef.current;
+    myStories.forEach((story: any) => {
+      const storyId = String(story?.id || '');
+      const previous = previousSnapshot.get(storyId);
+      if (!storyId || !previous) return;
+      const title = formatBookTitle(getStoryTitle(story));
+      const likeDelta = getStoryLikeCount(story) - previous.like;
+      const favoriteDelta = getStoryFavoriteCount(story) - previous.favorite;
+      const shareDelta = getStoryShareCount(story) - previous.share;
+      const interventionDelta = getStoryInterventionCount(story) - previous.intervention;
+      if (likeDelta > 0) {
+        pushAuthorPulseNotification({ storyId, tone: 'like', title: '新的点赞', detail: `${title} 新增 ${likeDelta} 个点赞。` });
+      }
+      if (favoriteDelta > 0) {
+        pushAuthorPulseNotification({ storyId, tone: 'favorite', title: '新的收藏', detail: `${title} 新增 ${favoriteDelta} 个收藏。` });
+      }
+      if (shareDelta > 0) {
+        pushAuthorPulseNotification({ storyId, tone: 'share', title: '新的分享', detail: `${title} 新增 ${shareDelta} 次分享。` });
+      }
+      if (interventionDelta > 0) {
+        pushAuthorPulseNotification({ storyId, tone: 'intervention', title: '新的干涉', detail: `${title} 新增 ${interventionDelta} 次干涉。` });
+      }
+    });
+    authorMetricSnapshotRef.current = nextSnapshot;
+  }, [myStories, user?.uid]);
+
+  useEffect(() => {
+    if (gameState !== 'AUTHORING' || authoringCartridge || !user || !db) return;
+    const timer = window.setInterval(() => {
+      void refreshStories({ force: true });
+    }, 60000);
+    return () => window.clearInterval(timer);
+  }, [gameState, authoringCartridge, user?.uid, db, storyLibrarySort]);
+
   const toggleTheme = (theme: string) => {
     setSelectedThemes((prev) => (
       prev.includes(theme)
@@ -2556,6 +2692,7 @@ export default function App() {
       const shareTitle = formatBookTitle(story.meta?.title || '未命名故事');
       const shareText = buildStoryShareText(shareTitle, story.chapters);
       await sharePayload({ title: shareTitle, text: shareText, url: shareUrl });
+      await recordStoryShare(sourceStoryId);
     } catch (error: any) {
       console.error(error);
       if (error?.name === 'AbortError') {
@@ -2839,6 +2976,7 @@ export default function App() {
       const shareTitle = formatBookTitle(story.title || '未命名故事');
       const shareText = buildStoryShareText(shareTitle, story.chapters || []);
       await sharePayload({ title: shareTitle, text: shareText, url: shareUrl });
+      await recordStoryShare(story.archiveKind === 'favorite' ? storyId : story.sourceStoryId);
     } catch (error: any) {
       console.error(error);
       if (error?.name === 'AbortError') {
@@ -3195,6 +3333,104 @@ export default function App() {
   const showError = (msg: string) => {
     setErrorMsg(getFriendlyServerError(msg, msg));
     setTimeout(() => setErrorMsg(null), 5000);
+  };
+
+  const pushAuthorPulseNotification = (notification: Omit<typeof authorPulseNotifications[number], 'id'>) => {
+    const id = `author-pulse-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setAuthorPulseNotifications((prev) => [
+      { ...notification, id },
+      ...prev.filter((item) => item.storyId !== notification.storyId || item.tone !== notification.tone).slice(0, 5),
+    ].slice(0, 6));
+  };
+
+  const dismissAuthorPulseNotification = (id: string) => {
+    setAuthorPulseNotifications((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const openAuthorProfile = async (authorId?: string | null, authorName?: string) => {
+    if (!authorId) return;
+    setAuthorProfileTarget({ authorId, authorName: authorName || `游客+${shortUserId(authorId)}` });
+    setAuthorProfileStories([]);
+    setAuthorProfileLoading(true);
+    try {
+      if (db) {
+        const [stories, followState] = await Promise.all([
+          listAuthorStories(db as any, authorId, 50),
+          user && authorId !== user.uid ? getAuthorFollowState(db as any, authorId) : Promise.resolve({ following: false }),
+        ]);
+        setAuthorProfileStories(stories || []);
+        setAuthorProfileFollowing(Boolean(followState?.following));
+      }
+    } catch (error: any) {
+      console.error(error);
+      showError(error?.message || '作者资料载入失败。');
+    } finally {
+      setAuthorProfileLoading(false);
+    }
+  };
+
+  const toggleAuthorFollow = async () => {
+    if (!authorProfileTarget || !user || !db) {
+      setIsAccountCenterOpen(true);
+      return;
+    }
+    if (authorProfileTarget.authorId === user.uid) return;
+    try {
+      setAuthorProfileBusy(true);
+      const result = authorProfileFollowing
+        ? await unfollowAuthor(db as any, authorProfileTarget.authorId)
+        : await followAuthor(db as any, authorProfileTarget.authorId, authorProfileTarget.authorName);
+      setAuthorProfileFollowing(Boolean(result?.following));
+      showError(result?.following ? '已追踪作者。' : '已取消追踪。');
+    } catch (error: any) {
+      console.error(error);
+      showError(error?.message || '追踪操作失败。');
+    } finally {
+      setAuthorProfileBusy(false);
+    }
+  };
+
+  const urlBase64ToUint8Array = (base64String: string) => {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
+  };
+
+  const enablePushNotifications = async () => {
+    if (!user) {
+      setIsAccountCenterOpen(true);
+      return;
+    }
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+      showError('这个设备暂时不支持 PWA 推送通知。');
+      return;
+    }
+    try {
+      setPushSubscribeBusy(true);
+      const config = await getPushConfig();
+      if (!config.publicKey || !config.enabled) {
+        showError('服务器还没有配置推送密钥，暂时只能使用 App 内通知。');
+        return;
+      }
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        showError('你还没有允许通知权限。');
+        return;
+      }
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(config.publicKey),
+      });
+      await savePushSubscription(subscription.toJSON());
+      showError('手机通知已开启。');
+    } catch (error: any) {
+      console.error(error);
+      showError(error?.message || '开启手机通知失败。');
+    } finally {
+      setPushSubscribeBusy(false);
+    }
   };
 
   const returnToStoryLibraryFallback = () => {
@@ -3688,7 +3924,7 @@ export default function App() {
     setAuthoringStoryId(null);
     setAuthoringCartridge(null);
     setAuthoringTab('settings');
-    await refreshStories();
+    await refreshStories({ force: true });
   };
 
   const selectAuthoringStory = async (storyId: string) => {
@@ -4378,7 +4614,7 @@ export default function App() {
     ));
   };
 
-  const applyStoryCountDelta = (storyId: string, field: 'likeCount' | 'favoriteCount', delta: number) => {
+  const applyStoryCountDelta = (storyId: string, field: 'likeCount' | 'favoriteCount' | 'shareCount', delta: number) => {
     const patchStory = (story: any) => {
       if (!story || (story.id !== storyId && story.storyId !== storyId && story.sourceStoryId !== storyId)) return story;
       const current = Number(story[field] ?? story.meta?.[field] ?? 0);
@@ -4394,6 +4630,17 @@ export default function App() {
     setMySharedStories((prev) => prev.map(patchStory));
     setStoryDetailStory((prev) => patchStory(prev));
     setActiveStoryMeta((prev: any) => patchStory(prev));
+  };
+
+  const recordStoryShare = async (storyId?: string | null) => {
+    if (!storyId || !db || !user) return;
+    applyStoryCountDelta(storyId, 'shareCount', 1);
+    try {
+      await incrementShareMetric(db as any, storyId);
+    } catch (error) {
+      console.warn('increment share metric failed:', error);
+      applyStoryCountDelta(storyId, 'shareCount', -1);
+    }
   };
 
   const handleGenerateSummary = async (source: 'auto_interventions' | 'manual') => {
@@ -4475,6 +4722,7 @@ export default function App() {
         shareStage = 'deliverOriginalShare';
         setGlobalLoadingDetail('正在调用设备的分享功能。');
         await sharePayload({ title: shareTitle, text: shareText, url: buildOriginalStoryUrl(activeStoryId) });
+        await recordStoryShare(activeStoryId);
         return;
       }
       shareStage = 'createStorySnapshot';
@@ -4485,6 +4733,7 @@ export default function App() {
       shareStage = 'deliverPreparedShare';
       setGlobalLoadingDetail('分享记录已准备好，正在调用设备的分享功能。');
       await sharePayload({ title: shareTitle, text: shareText, url: buildSharedStoryUrl(shareId) });
+      await recordStoryShare(activeStoryId || sharedRecord?.sourceStoryId);
       cacheSharedSnapshotAfterCreate(shareId, sharedRecord);
       if ((globalThis as any).__legacyShareRecord__) {
       shareStage = 'resolveProvenance';
@@ -5260,7 +5509,30 @@ export default function App() {
     </AnimatePresence>
   );
 
-  const renderSummaryModal = () => (
+  const getCurrentBranchExplorationStats = () => {
+    const total = (blueprint?.branches || []).length;
+    const runById = new Map<string, any>();
+    (unlockedBranches || []).forEach((branch: any) => {
+      const id = String(branch?.id || branch?.name || '');
+      if (id) runById.set(id, branch);
+    });
+    const historicalById = new Map<string, any>();
+    (historicallyUnlockedBranches || []).forEach((branch: any) => {
+      const id = String(branch?.id || branch?.name || '');
+      if (id) historicalById.set(id, branch);
+    });
+    runById.forEach((branch, id) => historicalById.set(id, branch));
+    return {
+      total,
+      runUnlocked: Array.from(runById.values()),
+      historicalUnlockedCount: historicalById.size,
+    };
+  };
+
+  const renderSummaryModal = () => {
+    const domain = endingDomainFromValue(endingValue);
+    const branchStats = getCurrentBranchExplorationStats();
+    return (
     <AnimatePresence>
       {showSummaryModal && storyConclusion && (
         <motion.div
@@ -5284,6 +5556,31 @@ export default function App() {
                 <X className="h-5 w-5" />
               </button>
             </div>
+            <div className={`mb-4 rounded-2xl border px-4 py-3 text-sm font-black ${endingDomainToneClass(domain)}`}>
+              当前结局归属：{endingDomainUserLabel(domain)}
+            </div>
+            <div className="mb-4 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-900/35 p-4">
+                <div className="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-500">本次解锁</div>
+                <div className="mt-1 text-2xl font-black text-white">{branchStats.runUnlocked.length}</div>
+              </div>
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-900/35 p-4">
+                <div className="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-500">解锁统计</div>
+                <div className="mt-1 text-2xl font-black text-white">{branchStats.historicalUnlockedCount}/{branchStats.total}</div>
+              </div>
+            </div>
+            {branchStats.runUnlocked.length > 0 && (
+              <div className="mb-4 rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4">
+                <div className="mb-2 text-[11px] font-black uppercase tracking-[0.18em] text-zinc-500">本次触及支线</div>
+                <div className="flex flex-wrap gap-2">
+                  {branchStats.runUnlocked.map((branch: any) => (
+                    <span key={branch.id || branch.name} className="rounded-full bg-indigo-500/10 px-2.5 py-1 text-xs font-black text-indigo-200">
+                      {branch.name || '未命名支线'}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 text-lg font-medium leading-relaxed text-amber-100">
               {String(storyConclusion || '').split('\n').filter(Boolean).map((paragraph, index) => (
                 <p key={index}>{paragraph}</p>
@@ -5303,7 +5600,8 @@ export default function App() {
         </motion.div>
       )}
     </AnimatePresence>
-  );
+    );
+  };
 
   const getStoryStats = (story: any) => {
     const isLiked = hasStoryCardAction('like', story);
@@ -5311,8 +5609,10 @@ export default function App() {
     return [
       { key: 'like', label: '点赞', activeLabel: '已点赞', value: getStoryLikeCount(story), icon: Heart, active: isLiked, tone: 'like' },
       { key: 'favorite', label: '收藏', activeLabel: '已收藏', value: getStoryFavoriteCount(story), icon: Bookmark, active: isFavorited, tone: 'favorite' },
+      { key: 'share', label: '分享', value: getStoryShareCount(story), icon: ExternalLink },
       { key: 'intervention', label: '干涉', value: getStoryInterventionCount(story), icon: Sparkles },
-      { key: 'words', label: '字/章', detailLabel: '均章字数', value: getStoryAverageChapterWords(story) || '未知', valueSuffix: ' 字', icon: BookOpen },
+      { key: 'branches', label: '支线', value: `${getStoryUnlockedBranchCount(story)}/${getStoryBranchCount(story) || 0}`, icon: GitBranch },
+      { key: 'words', label: '均字', detailLabel: '均字', value: getStoryAverageChapterWords(story) || '未知', valueSuffix: ' 字', icon: BookOpen },
     ];
   };
 
@@ -5452,7 +5752,7 @@ export default function App() {
               {formatBookTitle(getStoryTitle(story))}
             </h3>
             <div className="mb-2 text-sm font-bold text-zinc-400/85">
-              作者：{getStoryAuthorName(story)}
+              <AuthorNameButton authorId={story.authorId || story.meta?.authorId} authorName={getStoryAuthorName(story)} />
             </div>
             <p className="mb-3 line-clamp-3 text-[0.98rem] leading-relaxed text-zinc-300/85 transition-colors group-hover:text-zinc-200">
               {getStoryMainAxis(story)}
@@ -5558,7 +5858,9 @@ export default function App() {
                   ))}
                 </div>
                 <h3 className="break-words text-3xl font-black leading-tight text-white">{title}</h3>
-                <div className="mt-2 text-sm font-bold text-zinc-500">作者：{getStoryAuthorName(storyDetailStory)}</div>
+                <div className="mt-2 text-sm font-bold text-zinc-500">
+                  <AuthorNameButton authorId={storyDetailStory.authorId || storyDetailStory.meta?.authorId} authorName={getStoryAuthorName(storyDetailStory)} />
+                </div>
                 <div className="mt-5 max-h-[40vh] overflow-y-auto rounded-3xl border border-zinc-800/60 bg-zinc-900/25 p-4 text-base leading-relaxed text-zinc-300">
                   {getStoryMainAxis(storyDetailStory) || '这部作品暂时还没有填写完整介绍。'}
                 </div>
@@ -5856,7 +6158,7 @@ export default function App() {
             <div className="shrink-0 rounded-full bg-indigo-500/15 px-2 py-1 text-[10px] font-black text-indigo-300">收藏原作</div>
           </div>
           <div className="mb-3 text-[11px] font-bold text-zinc-500">
-            原作者：{getOriginalAuthorName(story)}
+            <AuthorNameButton prefix="原作者：" authorId={story.originalAuthorId || story.sourceStoryId || story.authorId} authorName={getOriginalAuthorName(story)} />
           </div>
           <div className="line-clamp-3 text-xs leading-relaxed text-zinc-500 mb-4">{story.main_axis || '暂无主轴摘要。'}</div>
 
@@ -5962,7 +6264,7 @@ export default function App() {
           </div>
         </div>
         <div className="mb-3 grid gap-1 text-[11px] font-bold text-zinc-500">
-          <div>原作者：{getOriginalAuthorName(story)}</div>
+          <div><AuthorNameButton prefix="原作者：" authorId={story.originalAuthorId || story.sourceStoryId || story.authorId} authorName={getOriginalAuthorName(story)} /></div>
           {getIntervenerName(story) && <div>干涉者：{getIntervenerName(story)}</div>}
         </div>
         <div className="line-clamp-3 text-xs leading-relaxed text-zinc-500 flex-1">{story.main_axis || '暂无主轴摘要。'}</div>
@@ -6516,7 +6818,7 @@ export default function App() {
               <div className="text-xs font-black uppercase tracking-[0.24em] text-zinc-500">故事记录</div>
               <h1 className="break-words text-4xl font-black text-white">{formatBookTitle(story.meta?.title)}</h1>
               <div className="space-y-1 text-sm font-bold text-zinc-500">
-                <div>原作者：{getOriginalAuthorName(story.meta)}</div>
+                <div><AuthorNameButton prefix="原作者：" authorId={story.meta?.originalAuthorId || story.meta?.sourceStoryId || story.meta?.authorId} authorName={getOriginalAuthorName(story.meta)} /></div>
                 {getIntervenerName(story.meta) && <div>干涉者：{getIntervenerName(story.meta)}</div>}
               </div>
             </div>
@@ -6679,6 +6981,27 @@ export default function App() {
                   <section className="space-y-3">
                     <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">故事背景</h4>
                     <p className="text-sm leading-relaxed text-zinc-300">{blueprint.main_axis}</p>
+                  </section>
+                  <section className="space-y-3">
+                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">作者预设倾向</h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      {endingBiasStoryCardLabels(blueprint).map((bias) => (
+                        <div
+                          key={bias.side}
+                          className={`rounded-2xl border p-4 ${
+                            bias.side === 'left'
+                              ? 'border-indigo-400/20 bg-indigo-500/10 text-indigo-100'
+                              : 'border-rose-400/20 bg-rose-500/10 text-rose-100'
+                          }`}
+                        >
+                          <div className="text-[11px] font-black text-zinc-400">{bias.label}</div>
+                          <div className="mt-1 text-lg font-black">{bias.value}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs leading-relaxed text-zinc-500">
+                      这是作者为左右结局域设置的基础倾向，只作为命运走向参考，不代表最终结局必然落点。
+                    </p>
                   </section>
                   <section className="space-y-4">
                     <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">登场角色</h4>
@@ -6847,6 +7170,10 @@ export default function App() {
           </div>
           <div className="min-w-0 flex-1 text-center text-xs font-black sm:text-sm">
             {(() => {
+              if (storyConclusion || interventionsLeft <= 0) {
+                const domain = endingDomainFromValue(endingValue);
+                return <span className={domain === 'left' ? 'text-indigo-300/90' : domain === 'right' ? 'text-rose-300/90' : 'text-zinc-300'}>{endingDomainUserLabel(domain)}</span>;
+              }
               const left = Math.round(uiFeedback.leftProgress || 0);
               const right = Math.round(uiFeedback.rightProgress || 0);
               if (left <= 0 && right <= 0) return <span className="text-zinc-400">均衡</span>;
@@ -6885,7 +7212,12 @@ export default function App() {
             正在干涉世界线
           </motion.div>
           <h1 className="text-4xl font-black text-white sm:text-6xl">{formatBookTitle(blueprint.title)}</h1>
-          <div className="text-sm font-bold text-zinc-500">作者：{getStoryAuthorName(activeStoryMeta || { authorId: user?.uid, authorName: getUserAuthorName(user) })}</div>
+          <div className="text-sm font-bold text-zinc-500">
+            <AuthorNameButton
+              authorId={(activeStoryMeta || { authorId: user?.uid }).authorId}
+              authorName={getStoryAuthorName(activeStoryMeta || { authorId: user?.uid, authorName: getUserAuthorName(user) })}
+            />
+          </div>
           <div className="flex flex-wrap justify-center gap-2">
             {selectedThemes.map(tag => (
               <span key={tag} className="rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-1 text-xs font-medium text-zinc-400">
@@ -7064,7 +7396,12 @@ export default function App() {
           <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="text-sm font-black text-white">{formatBookTitle(blueprint.title)}</div>
-              <div className="text-xs font-bold text-zinc-500">作者：{getStoryAuthorName(activeStoryMeta || { authorId: user?.uid, authorName: getUserAuthorName(user) })}</div>
+              <div className="text-xs font-bold text-zinc-500">
+                <AuthorNameButton
+                  authorId={(activeStoryMeta || { authorId: user?.uid }).authorId}
+                  authorName={getStoryAuthorName(activeStoryMeta || { authorId: user?.uid, authorName: getUserAuthorName(user) })}
+                />
+              </div>
             </div>
             <div className="text-xs text-zinc-600">平均每章 {getAverageChapterWords(chapters) || '未知'} 字</div>
           </div>
@@ -7302,6 +7639,179 @@ export default function App() {
     </div>
   );
 
+  const getFilteredAuthoringStories = () => {
+    const query = authoringListSearch.trim().toLowerCase();
+    return [...myStories]
+      .filter((story: any) => {
+        if (authoringListVisibilityFilter !== 'all' && (story.visibility || 'private') !== authoringListVisibilityFilter) return false;
+        if (authoringCreatedFilter !== 'all') {
+          const createdAt = getStoryCreatedMs(story);
+          const maxAgeMs = authoringCreatedFilter === '7d'
+            ? 7 * 24 * 60 * 60 * 1000
+            : authoringCreatedFilter === '30d'
+            ? 30 * 24 * 60 * 60 * 1000
+            : 365 * 24 * 60 * 60 * 1000;
+          if (!createdAt || Date.now() - createdAt > maxAgeMs) return false;
+        }
+        if (!query) return true;
+        const haystack = [
+          getStoryTitle(story),
+          story?.authorName,
+          story?.mainAxis,
+          ...(story?.tags || story?.meta?.tags || []),
+        ].join(' ').toLowerCase();
+        return haystack.includes(query);
+      })
+      .sort((a: any, b: any) => {
+        if (authoringListSort === 'created') return getStoryCreatedMs(b) - getStoryCreatedMs(a);
+        if (authoringListSort === 'likes') return getStoryLikeCount(b) - getStoryLikeCount(a);
+        if (authoringListSort === 'favorites') return getStoryFavoriteCount(b) - getStoryFavoriteCount(a);
+        if (authoringListSort === 'shares') return getStoryShareCount(b) - getStoryShareCount(a);
+        if (authoringListSort === 'interventions') return getStoryInterventionCount(b) - getStoryInterventionCount(a);
+        return getStoryUpdatedMs(b) - getStoryUpdatedMs(a);
+      });
+  };
+
+  const renderAuthoringStatChip = (label: string, value: string | number, Icon: any, tone = 'text-zinc-300') => (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-800/80 bg-zinc-950/55 px-2.5 py-1 text-[11px] font-black text-zinc-300">
+      <Icon className={`h-3.5 w-3.5 ${tone}`} />
+      <span className="text-zinc-500">{label}</span>
+      <span className="text-zinc-100">{value}</span>
+    </span>
+  );
+
+  const renderAuthorPulsePanel = () => {
+    if (authorPulseNotifications.length === 0) return null;
+    return (
+      <div className="mb-5 grid gap-2">
+        {authorPulseNotifications.map((notification) => (
+          <div
+            key={notification.id}
+            className={`app-card flex items-start justify-between gap-3 rounded-2xl px-4 py-3 ${
+              notification.tone === 'like'
+                ? 'border-rose-400/25 bg-rose-500/10'
+                : notification.tone === 'favorite'
+                ? 'border-amber-400/25 bg-amber-500/10'
+                : notification.tone === 'share'
+                ? 'border-cyan-400/25 bg-cyan-500/10'
+                : notification.tone === 'intervention'
+                ? 'border-indigo-400/25 bg-indigo-500/10'
+                : 'border-emerald-400/25 bg-emerald-500/10'
+            }`}
+          >
+            <div className="flex min-w-0 items-start gap-3">
+              <div className="mt-0.5 rounded-full border border-white/10 bg-white/10 p-2">
+                <Bell className="h-4 w-4 text-zinc-100" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm font-black text-white">{notification.title}</div>
+                <div className="mt-1 text-xs font-semibold leading-relaxed text-zinc-300">{notification.detail}</div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => dismissAuthorPulseNotification(notification.id)}
+              className="rounded-full p-1 text-zinc-500 transition-colors hover:bg-white/10 hover:text-zinc-100 active:scale-95"
+              aria-label="关闭通知"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const AuthorNameButton = ({ authorId, authorName, prefix = '作者：' }: { authorId?: string | null; authorName?: string; prefix?: string }) => (
+    <span className="inline-flex items-center gap-1">
+      {prefix}
+      <button
+        type="button"
+        onClick={() => openAuthorProfile(authorId, authorName)}
+        className="font-black text-zinc-300 underline decoration-zinc-700 underline-offset-4 transition-colors hover:text-indigo-200 hover:decoration-indigo-300"
+      >
+        {authorName || (authorId ? `游客+${shortUserId(authorId)}` : '未知作者')}
+      </button>
+    </span>
+  );
+
+  const renderAuthorProfileModal = () => (
+    <AnimatePresence>
+      {authorProfileTarget && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className={`${safeModalBackdropClass} z-[5400] bg-black/65 backdrop-blur-md`}
+          onClick={() => setAuthorProfileTarget(null)}
+        >
+          <motion.div
+            initial={{ y: 20, opacity: 0, scale: 0.96 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: 14, opacity: 0, scale: 0.98 }}
+            className="w-full max-w-xl rounded-[2rem] border border-zinc-800 bg-zinc-950 p-6 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <div className="text-xs font-black uppercase tracking-[0.2em] text-indigo-300">作者档案</div>
+                <h3 className="mt-2 text-2xl font-black text-white">{authorProfileTarget.authorName}</h3>
+                <p className="mt-1 text-xs font-semibold text-zinc-500">查看这个作者公开或非公开链接作品，并决定是否追踪后续更新。</p>
+              </div>
+              <button type="button" onClick={() => setAuthorProfileTarget(null)} className={semanticIconButtonClass('ghost')} aria-label="关闭作者档案">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="mb-5 flex flex-wrap gap-2">
+              {authorProfileTarget.authorId !== user?.uid && (
+                <button type="button" onClick={toggleAuthorFollow} disabled={authorProfileBusy} className={semanticButtonClass(authorProfileFollowing ? 'secondary' : 'primary', { compact: true })}>
+                  {authorProfileBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
+                  {authorProfileFollowing ? '已追踪' : '追踪作者'}
+                </button>
+              )}
+              <button type="button" onClick={enablePushNotifications} disabled={pushSubscribeBusy} className={semanticButtonClass('ghost', { compact: true })}>
+                {pushSubscribeBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
+                开启手机通知
+              </button>
+            </div>
+            {authorProfileLoading ? (
+              <div className="flex items-center justify-center gap-2 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-8 text-sm font-black text-zinc-400">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                正在读取作者作品...
+              </div>
+            ) : authorProfileStories.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/30 p-8 text-center text-sm font-semibold text-zinc-500">
+                暂时没有可查看的作者作品。
+              </div>
+            ) : (
+              <div className="grid max-h-[50vh] gap-3 overflow-y-auto pr-1">
+                {authorProfileStories.map((story: any) => (
+                  <button
+                    key={story.id}
+                    type="button"
+                    onClick={() => {
+                      setAuthorProfileTarget(null);
+                      void startStoryPlay(story.id);
+                    }}
+                    className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4 text-left transition-colors hover:border-indigo-400/50 hover:bg-indigo-500/10"
+                  >
+                    <div className="font-black text-zinc-100">{formatBookTitle(getStoryTitle(story))}</div>
+                    <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-black text-zinc-500">
+                      <span>点赞 {getStoryLikeCount(story)}</span>
+                      <span>收藏 {getStoryFavoriteCount(story)}</span>
+                      <span>分享 {getStoryShareCount(story)}</span>
+                      <span>干涉 {getStoryInterventionCount(story)}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
   const renderAuthoringView = () => (
     <div className="authoring-studio mx-auto max-w-5xl px-6 pb-12 pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] lg:px-8">
       {!authoringCartridge ? (
@@ -7321,14 +7831,71 @@ export default function App() {
           </div>
 
           <div className="rounded-[2rem] border border-zinc-800 bg-zinc-900/30 p-6 sm:p-8">
-            <div className="mb-6 text-2xl font-black text-white">我的作品</div>
+            <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2 text-2xl font-black text-white">
+                  <BarChart3 className="h-5 w-5 text-indigo-300" />
+                  我的作品
+                </div>
+                <div className="mt-1 text-xs font-semibold text-zinc-500">用数据判断哪些命运线值得继续扩写、改版或推广。</div>
+              </div>
+              <div className="text-xs font-black text-zinc-500">{myStories.length} 部作品</div>
+            </div>
+            {renderAuthorPulsePanel()}
+            <div className="mb-5 grid gap-3 lg:grid-cols-[1fr_auto_auto_auto]">
+              <label className="relative block">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                <input
+                  value={authoringListSearch}
+                  onChange={(event) => setAuthoringListSearch(event.target.value)}
+                  placeholder="搜索作品、标签或主轴"
+                  className="w-full rounded-2xl border border-zinc-800 bg-zinc-950/60 py-3 pl-10 pr-4 text-sm font-semibold text-zinc-100 outline-none transition-colors placeholder:text-zinc-600 focus:border-indigo-400/70"
+                />
+              </label>
+              <select
+                value={authoringListVisibilityFilter}
+                onChange={(event) => setAuthoringListVisibilityFilter(event.target.value as typeof authoringListVisibilityFilter)}
+                className="rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-sm font-black text-zinc-200 outline-none focus:border-indigo-400/70"
+              >
+                <option value="all">全部可见性</option>
+                <option value="public">公开</option>
+                <option value="unlisted">非公开链接</option>
+                <option value="private">私人</option>
+              </select>
+              <select
+                value={authoringCreatedFilter}
+                onChange={(event) => setAuthoringCreatedFilter(event.target.value as typeof authoringCreatedFilter)}
+                className="rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-sm font-black text-zinc-200 outline-none focus:border-indigo-400/70"
+              >
+                <option value="all">全部创作日期</option>
+                <option value="7d">近 7 天</option>
+                <option value="30d">近 30 天</option>
+                <option value="365d">近 1 年</option>
+              </select>
+              <select
+                value={authoringListSort}
+                onChange={(event) => setAuthoringListSort(event.target.value as AuthoringListSort)}
+                className="rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-sm font-black text-zinc-200 outline-none focus:border-indigo-400/70"
+              >
+                <option value="updated">最近更新</option>
+                <option value="created">创作日期</option>
+                <option value="likes">点赞最多</option>
+                <option value="favorites">收藏最多</option>
+                <option value="shares">分享最多</option>
+                <option value="interventions">干涉最多</option>
+              </select>
+            </div>
             {myStories.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/40 p-10 text-center text-zinc-500">
                 还没有作品，点击“新建作品”开始创作。
               </div>
+            ) : getFilteredAuthoringStories().length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/40 p-8 text-center text-sm font-semibold text-zinc-500">
+                没有符合当前筛选的作品。
+              </div>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2">
-                {myStories.map((story: any) => (
+                {getFilteredAuthoringStories().map((story: any) => (
                   <button
                     key={story.id}
                     type="button"
@@ -7338,7 +7905,7 @@ export default function App() {
                       await selectAuthoringStory(story.id);
                       setAuthoringLoadingStoryId(null);
                     }}
-                    className={`app-card relative flex flex-col justify-between overflow-hidden rounded-2xl p-5 text-left transition-all hover:-translate-y-1 hover:border-indigo-500/50 hover:bg-indigo-500/10 hover:shadow-xl active:scale-[0.98] ${authoringLoadingStoryId === story.id ? 'opacity-70 pointer-events-none' : ''}`}
+                    className={`app-card relative flex min-h-44 flex-col justify-between overflow-hidden rounded-2xl p-5 text-left transition-all hover:-translate-y-1 hover:border-indigo-500/50 hover:bg-indigo-500/10 hover:shadow-xl active:scale-[0.98] ${authoringLoadingStoryId === story.id ? 'opacity-70 pointer-events-none' : ''}`}
                   >
                     {authoringLoadingStoryId === story.id && (
                       <div className="absolute inset-0 z-10 flex items-center justify-center bg-zinc-950/60 backdrop-blur-sm">
@@ -7352,10 +7919,17 @@ export default function App() {
                         ? 'border-sky-400/25 bg-sky-500/15 text-sky-200'
                         : 'border-zinc-700 bg-zinc-900/80 text-zinc-300'
                     }`}>
-                      {story.visibility === 'public' ? '公开' : story.visibility === 'unlisted' ? '非公开链接' : '私人'}
+                      {getVisibilityLabel(story.visibility)}
                     </span>
                     <div className="pr-24">
                       <div className="line-clamp-3 text-lg font-black text-white leading-tight">{formatBookTitle(getStoryTitle(story))}</div>
+                      <div className="mt-2 text-xs font-semibold text-zinc-500">创作 {formatShortDate(getStoryCreatedMs(story))} · 更新 {formatShortDate(getStoryUpdatedMs(story))}</div>
+                    </div>
+                    <div className="mt-5 flex flex-wrap gap-2">
+                      {renderAuthoringStatChip('点赞', getStoryLikeCount(story), Heart, 'text-rose-300')}
+                      {renderAuthoringStatChip('收藏', getStoryFavoriteCount(story), Bookmark, 'text-amber-300')}
+                      {renderAuthoringStatChip('分享', getStoryShareCount(story), ExternalLink, 'text-cyan-300')}
+                      {renderAuthoringStatChip('干涉', getStoryInterventionCount(story), Sparkles, 'text-indigo-300')}
                     </div>
                   </button>
                 ))}
@@ -8502,6 +9076,7 @@ export default function App() {
           {renderReadonlyStoryView()}
           {renderScrollToTopButton()}
           {accountEntryButton}
+          {renderAuthorProfileModal()}
           {accountCenterModal}
         </>
       ) : !user ? (
@@ -8537,6 +9112,7 @@ export default function App() {
           {actionMenuOverlay}
           {storyInfoPanel}
           {renderStoryDetailModal()}
+          {renderAuthorProfileModal()}
           {accountCenterModal}
           {renderConfirmationModal()}
           {renderAuthoringSaveSuccessModal()}

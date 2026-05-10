@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import webPush from 'web-push';
 import { getBearerToken, sendInternalError, sendMethodNotAllowed, verifyFirebaseToken } from './_auth.js';
 import { getRequestLogContext, logGenerationError, logGenerationInfo } from './_log.js';
 import { supabaseInsert, supabaseRequest, supabaseRpc, supabaseUpsert } from './_supabase.js';
@@ -20,6 +21,7 @@ const STORY_CARD_SELECT = [
   'like_count',
   'intervention_count',
   'favorite_count',
+  'share_count',
   'report_count',
   'average_chapter_words',
   'chapter_count',
@@ -32,6 +34,10 @@ const STORY_CARD_SELECT = [
   'created_at',
   'version',
 ].join(',');
+const LEGACY_STORY_CARD_SELECT = STORY_CARD_SELECT
+  .split(',')
+  .filter((field) => field !== 'share_count')
+  .join(',');
 const SHARED_CARD_SELECT = [
   'id',
   'snapshot_kind',
@@ -109,6 +115,7 @@ function storyListItem(row: any) {
     likeCount: row.like_count,
     interventionCount: row.intervention_count,
     favoriteCount: row.favorite_count,
+    shareCount: row.share_count,
     reportCount: row.report_count,
     averageChapterWords: row.average_chapter_words,
     chapterCount: row.chapter_count,
@@ -124,21 +131,49 @@ function storyListItem(row: any) {
   };
 }
 
+async function fetchStoryCardRows(query: Record<string, string | number | boolean | undefined>) {
+  try {
+    return await supabaseRequest<any[]>('stories', { query: { ...query, select: STORY_CARD_SELECT } });
+  } catch (error: any) {
+    if (!/share_count/i.test(String(error?.message || error))) throw error;
+    console.warn('[story-store] share_count column unavailable, using legacy story card select.');
+    return supabaseRequest<any[]>('stories', { query: { ...query, select: LEGACY_STORY_CARD_SELECT } });
+  }
+}
+
 async function enrichStoryActionState(items: any[], userId?: string | null) {
-  if (!userId || items.length === 0) return items;
-  const storyIds = items.map((item) => String(item.id || '')).filter(Boolean);
+  if (items.length === 0) return items;
+  const storyIds = Array.from(new Set(items
+    .map((item) => String(item.sourceStoryId || item.id || ''))
+    .filter(Boolean)));
   if (storyIds.length === 0) return items;
   const inFilter = `in.(${storyIds.join(',')})`;
-  const [likeRows, favoriteRows] = await Promise.all([
-    supabaseRequest<any[]>('story_likes', { query: { user_id: `eq.${userId}`, story_id: inFilter, select: 'story_id' } }).catch(() => []),
-    supabaseRequest<any[]>('story_favorites', { query: { user_id: `eq.${userId}`, story_id: inFilter, select: 'story_id' } }).catch(() => []),
+  const [likeRows, favoriteRows, branchRows, progressRows] = await Promise.all([
+    userId ? supabaseRequest<any[]>('story_likes', { query: { user_id: `eq.${userId}`, story_id: inFilter, select: 'story_id' } }).catch(() => []) : Promise.resolve([]),
+    userId ? supabaseRequest<any[]>('story_favorites', { query: { user_id: `eq.${userId}`, story_id: inFilter, select: 'story_id' } }).catch(() => []) : Promise.resolve([]),
+    supabaseRequest<any[]>('story_branches', { query: { story_id: inFilter, select: 'story_id,id' } }).catch(() => []),
+    userId ? supabaseRequest<any[]>('user_progress', { query: { user_id: `eq.${userId}`, story_id: inFilter, select: 'story_id,payload' } }).catch(() => []) : Promise.resolve([]),
   ]);
   const likedIds = new Set(likeRows.map((row) => String(row.story_id || '')));
   const favoritedIds = new Set(favoriteRows.map((row) => String(row.story_id || '')));
+  const branchCountByStory = new Map<string, number>();
+  branchRows.forEach((row) => {
+    const storyId = String(row.story_id || '');
+    if (storyId) branchCountByStory.set(storyId, (branchCountByStory.get(storyId) || 0) + 1);
+  });
+  const unlockedCountByStory = new Map<string, number>();
+  progressRows.forEach((row) => {
+    const storyId = String(row.story_id || '');
+    const historical = asArray(row.payload?.historicallyUnlockedBranches || row.payload?.unlockedBranches);
+    const ids = new Set(historical.map((branch: any) => String(branch?.id || '')).filter(Boolean));
+    if (storyId) unlockedCountByStory.set(storyId, ids.size);
+  });
   return items.map((item) => ({
     ...item,
-    likedByMe: likedIds.has(String(item.id || '')),
-    favoritedByMe: favoritedIds.has(String(item.id || '')),
+    likedByMe: likedIds.has(String(item.sourceStoryId || item.id || '')),
+    favoritedByMe: favoritedIds.has(String(item.sourceStoryId || item.id || '')),
+    branchCount: branchCountByStory.get(String(item.sourceStoryId || item.id || '')) || item.branchCount || 0,
+    unlockedBranchCount: unlockedCountByStory.get(String(item.sourceStoryId || item.id || '')) || item.unlockedBranchCount || 0,
   }));
 }
 
@@ -200,6 +235,7 @@ function storyRowFromMeta(meta: any, id?: string) {
     like_count: asInt(meta.likeCount),
     intervention_count: asInt(meta.interventionCount ?? meta.popularity),
     favorite_count: asInt(meta.favoriteCount),
+    share_count: asInt(meta.shareCount),
     report_count: asInt(meta.reportCount),
     average_chapter_words: asInt(meta.averageChapterWords),
     chapter_count: asInt(meta.chapterCount),
@@ -220,6 +256,89 @@ async function optionalUser(req: VercelRequest) {
   const token = getBearerToken(req);
   if (!token) return null;
   return verifyFirebaseToken(token);
+}
+
+function getPushConfig() {
+  const publicKey = process.env.VAPID_PUBLIC_KEY || '';
+  const privateKey = process.env.VAPID_PRIVATE_KEY || '';
+  const subject = process.env.VAPID_SUBJECT || 'mailto:admin@3tnovelgame.local';
+  return { publicKey, privateKey, subject, enabled: Boolean(publicKey && privateKey) };
+}
+
+async function sendPushNotification(userIds: string[], payload: { title: string; body: string; url?: string }) {
+  const config = getPushConfig();
+  if (!config.enabled || userIds.length === 0) return;
+  webPush.setVapidDetails(config.subject, config.publicKey, config.privateKey);
+  const rows = await supabaseRequest<any[]>('push_subscriptions', {
+    query: {
+      user_id: `in.(${Array.from(new Set(userIds)).join(',')})`,
+      select: 'user_id,endpoint,subscription',
+    },
+  }).catch(() => []);
+  await Promise.all(rows.map(async (row) => {
+    try {
+      await webPush.sendNotification(row.subscription, JSON.stringify(payload));
+    } catch (error: any) {
+      if ([404, 410].includes(Number(error?.statusCode))) {
+        await supabaseRequest('push_subscriptions', {
+          method: 'DELETE',
+          query: { endpoint: `eq.${row.endpoint}` },
+        }).catch(() => null);
+      } else {
+        console.warn('[push-notification:send-failed]', { userId: row.user_id, statusCode: error?.statusCode, message: error?.message });
+      }
+    }
+  }));
+}
+
+async function notifyUsers(rows: Array<{
+  userId: string;
+  type: string;
+  title: string;
+  body: string;
+  storyId?: string | null;
+  authorId?: string | null;
+  url?: string;
+}>) {
+  const notifications = rows
+    .filter((row) => row.userId)
+    .map((row) => ({
+      user_id: row.userId,
+      type: row.type,
+      title: row.title,
+      body: row.body,
+      story_id: row.storyId || null,
+      author_id: row.authorId || null,
+      created_at: nowIso(),
+    }));
+  if (notifications.length === 0) return;
+  await supabaseInsert('user_notifications', notifications).catch((error) => {
+    console.warn('[notifications:insert-failed]', error);
+  });
+  await sendPushNotification(
+    notifications.map((row: any) => row.user_id),
+    { title: rows[0].title, body: rows[0].body, url: rows[0].url || '/' }
+  );
+}
+
+async function notifyAuthorFollowers(authorId: string, args: { type: 'author_new_story' | 'author_story_updated'; title: string; body: string; storyId?: string | null }) {
+  if (!authorId) return;
+  const followers = await supabaseRequest<any[]>('author_follows', {
+    query: { author_id: `eq.${authorId}`, select: 'follower_id', limit: 500 },
+  }).catch(() => []);
+  const rows = followers
+    .map((row) => String(row.follower_id || ''))
+    .filter((followerId) => followerId && followerId !== authorId)
+    .map((followerId) => ({
+      userId: followerId,
+      type: args.type,
+      title: args.title,
+      body: args.body,
+      storyId: args.storyId || null,
+      authorId,
+      url: args.storyId ? `/?story=${encodeURIComponent(args.storyId)}` : '/',
+    }));
+  await notifyUsers(rows);
 }
 
 async function requireUser(req: VercelRequest, res: VercelResponse) {
@@ -346,6 +465,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     logGenerationInfo(logContext, 'start', { action });
     const user = await optionalUser(req);
 
+    if (action === 'getPushConfig') {
+      const config = getPushConfig();
+      return res.status(200).json({ publicKey: config.publicKey, enabled: config.enabled });
+    }
+
     if (action === 'listPublicStories') {
       const publicSortOrder = ({
         likes: 'like_count.desc',
@@ -354,13 +478,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         words: 'average_chapter_words.desc',
         updated: 'updated_at.desc',
       } as Record<string, string>)[String(body.sort || 'updated')] || 'updated_at.desc';
-      const rows = await supabaseRequest<any[]>('stories', {
-        query: {
+      const rows = await fetchStoryCardRows({
           visibility: 'eq.public',
-          select: STORY_CARD_SELECT,
           order: `${publicSortOrder},updated_at.desc`,
           limit: body.pageSize || 20,
-        },
       });
       return res.status(200).json(await enrichStoryActionState(rows.map(storyListItem), user?.uid));
     }
@@ -368,8 +489,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (action === 'listMyStories') {
       const authUser = await requireUser(req, res);
       if (!authUser) return;
-      const rows = await supabaseRequest<any[]>('stories', { query: { author_id: `eq.${authUser.uid}`, select: STORY_CARD_SELECT, order: 'updated_at.desc', limit: body.pageSize || 50 } });
+      const rows = await fetchStoryCardRows({ author_id: `eq.${authUser.uid}`, order: 'updated_at.desc', limit: body.pageSize || 50 });
       return res.status(200).json(await enrichStoryActionState(rows.map(storyListItem), authUser.uid));
+    }
+
+    if (action === 'listAuthorStories') {
+      const authorId = String(body.authorId || '');
+      if (!authorId) return res.status(400).json({ error: 'Missing authorId' });
+      const rows = await fetchStoryCardRows({
+          author_id: `eq.${authorId}`,
+          visibility: 'in.(public,unlisted)',
+          order: 'updated_at.desc',
+          limit: body.pageSize || 50,
+      });
+      return res.status(200).json(await enrichStoryActionState(rows.map(storyListItem), user?.uid));
     }
 
     if (action === 'listMySharedStories') {
@@ -379,7 +512,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const favoriteRows = await supabaseRequest<any[]>('story_favorites', { query: { user_id: `eq.${authUser.uid}`, select: 'story_id,created_at', order: 'created_at.desc', limit: body.pageSize || 50 } });
       const favoriteIds = favoriteRows.map((row) => String(row.story_id || '')).filter(Boolean);
       const favoriteStories = favoriteIds.length
-        ? await supabaseRequest<any[]>('stories', { query: { id: `in.(${favoriteIds.join(',')})`, select: STORY_CARD_SELECT } })
+        ? await fetchStoryCardRows({ id: `in.(${favoriteIds.join(',')})` })
         : [];
       const deduped = new Map<string, any>();
       favoriteStories.map(storyListItem).forEach((story) => {
@@ -400,7 +533,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const key = `snapshot:${record.sourceStoryId || record.id}:${record.contentHash || record.id}:${record.snapshotKind || ''}`;
         if (!deduped.has(key)) deduped.set(key, record);
       });
-      return res.status(200).json(Array.from(deduped.values()));
+      return res.status(200).json(await enrichStoryActionState(Array.from(deduped.values()), authUser.uid));
     }
 
     if (action === 'getStoryMeta') {
@@ -502,6 +635,51 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ ok: true });
     }
 
+    if (action === 'getAuthorFollowState') {
+      const authorId = String(body.authorId || '');
+      if (!authorId) return res.status(400).json({ error: 'Missing authorId' });
+      const rows = await supabaseRequest<any[]>('author_follows', {
+        query: { follower_id: `eq.${authUser.uid}`, author_id: `eq.${authorId}`, select: 'author_id', limit: 1 },
+      }).catch(() => []);
+      return res.status(200).json({ following: rows.length > 0 });
+    }
+
+    if (action === 'followAuthor') {
+      const authorId = String(body.authorId || '');
+      if (!authorId) return res.status(400).json({ error: 'Missing authorId' });
+      if (authorId === authUser.uid) return res.status(200).json({ following: false, self: true });
+      await supabaseUpsert('author_follows', [{
+        follower_id: authUser.uid,
+        author_id: authorId,
+        author_name: body.authorName || guestName(authorId),
+        created_at: nowIso(),
+      }], 'follower_id,author_id');
+      return res.status(200).json({ following: true });
+    }
+
+    if (action === 'unfollowAuthor') {
+      const authorId = String(body.authorId || '');
+      if (!authorId) return res.status(400).json({ error: 'Missing authorId' });
+      await supabaseRequest('author_follows', {
+        method: 'DELETE',
+        query: { follower_id: `eq.${authUser.uid}`, author_id: `eq.${authorId}` },
+      });
+      return res.status(200).json({ following: false });
+    }
+
+    if (action === 'savePushSubscription') {
+      const subscription = body.subscription || {};
+      const endpoint = String(subscription.endpoint || '');
+      if (!endpoint) return res.status(400).json({ error: 'Missing push endpoint' });
+      await supabaseUpsert('push_subscriptions', [{
+        user_id: authUser.uid,
+        endpoint,
+        subscription,
+        updated_at: nowIso(),
+      }], 'user_id,endpoint');
+      return res.status(200).json({ ok: true });
+    }
+
     if (action === 'reserveCoverUsage') {
       return res.status(200).json(await supabaseRpc('reserve_cover_usage', { p_user_id: authUser.uid, p_date_key: body.dateKey, p_limit: 5 }));
     }
@@ -516,16 +694,100 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json(await supabaseRpc('increment_story_metric', { p_story_id: body.storyId, p_field: body.field }));
     }
 
+    if (action === 'incrementShareMetric') {
+      const storyId = String(body.storyId || '');
+      if (!storyId) return res.status(400).json({ error: 'Missing storyId' });
+      const [story] = await supabaseRequest<any[]>('stories', {
+        query: { id: `eq.${storyId}`, select: 'id,title,author_id,author_name,share_count', limit: 1 },
+      }).catch((error) => {
+        if (!/share_count/i.test(String(error?.message || error))) throw error;
+        return supabaseRequest<any[]>('stories', { query: { id: `eq.${storyId}`, select: 'id,title,author_id,author_name', limit: 1 } });
+      });
+      if (!story) return res.status(404).json({ error: 'Story not found' });
+      const nextShareCount = Math.max(0, asInt(story.share_count) + 1);
+      await supabaseRequest('stories', {
+        method: 'PATCH',
+        query: { id: `eq.${storyId}` },
+        body: { share_count: nextShareCount, updated_at: nowIso() },
+      }).catch((error) => {
+        if (!/share_count/i.test(String(error?.message || error))) throw error;
+        console.warn('[story-store] share_count column unavailable, share metric skipped.');
+      });
+      if (story.author_id && story.author_id !== authUser.uid) {
+        await notifyUsers([{
+          userId: story.author_id,
+          type: 'story_shared',
+          title: '作品被分享',
+          body: `《${story.title || '未命名作品'}》刚刚被分享了。`,
+          storyId,
+          authorId: story.author_id,
+          url: `/?story=${encodeURIComponent(storyId)}`,
+        }]);
+      }
+      return res.status(200).json({ shareCount: nextShareCount });
+    }
+
     if (action === 'likeStory') {
-      return res.status(200).json(await supabaseRpc('like_story_once', { p_story_id: body.storyId, p_user_id: authUser.uid }));
+      const [story] = await supabaseRequest<any[]>('stories', {
+        query: { id: `eq.${body.storyId}`, select: 'id,title,author_id', limit: 1 },
+      }).catch(() => []);
+      const result = await supabaseRpc('like_story_once', { p_story_id: body.storyId, p_user_id: authUser.uid });
+      if (story?.author_id && story.author_id !== authUser.uid && !(result as any)?.alreadyExists && !(result as any)?.already_exists) {
+        await notifyUsers([{
+          userId: story.author_id,
+          type: 'story_liked',
+          title: '新的点赞',
+          body: `《${story.title || '未命名作品'}》收到了一个新的点赞。`,
+          storyId: body.storyId,
+          authorId: story.author_id,
+          url: `/?story=${encodeURIComponent(body.storyId)}`,
+        }]);
+      }
+      return res.status(200).json(result);
     }
 
     if (action === 'unlikeStory') {
-      return res.status(200).json(await supabaseRpc('unlike_story_once', { p_story_id: body.storyId, p_user_id: authUser.uid }));
+      try {
+        return res.status(200).json(await supabaseRpc('unlike_story_once', { p_story_id: body.storyId, p_user_id: authUser.uid }));
+      } catch (error) {
+        console.warn('[story-store:unlikeStory:fallback]', error);
+        const existing = await supabaseRequest<any[]>('story_likes', {
+          query: { story_id: `eq.${body.storyId}`, user_id: `eq.${authUser.uid}`, select: 'story_id', limit: 1 },
+        });
+        if (!existing?.length) return res.status(200).json({ removed: false });
+        await supabaseRequest('story_likes', {
+          method: 'DELETE',
+          query: { story_id: `eq.${body.storyId}`, user_id: `eq.${authUser.uid}` },
+        });
+        const [storyRow] = await supabaseRequest<any[]>('stories', {
+          query: { id: `eq.${body.storyId}`, select: 'like_count', limit: 1 },
+        });
+        await supabaseRequest('stories', {
+          method: 'PATCH',
+          query: { id: `eq.${body.storyId}` },
+          body: { like_count: Math.max(0, asInt(storyRow?.like_count) - 1), updated_at: nowIso() },
+        });
+        return res.status(200).json({ removed: true, fallback: true });
+      }
     }
 
     if (action === 'favoriteStory') {
-      return res.status(200).json(await supabaseRpc('favorite_story_once', { p_story_id: body.storyId, p_user_id: authUser.uid }));
+      const [story] = await supabaseRequest<any[]>('stories', {
+        query: { id: `eq.${body.storyId}`, select: 'id,title,author_id', limit: 1 },
+      }).catch(() => []);
+      const result = await supabaseRpc('favorite_story_once', { p_story_id: body.storyId, p_user_id: authUser.uid });
+      if (story?.author_id && story.author_id !== authUser.uid && !(result as any)?.alreadyExists && !(result as any)?.already_exists) {
+        await notifyUsers([{
+          userId: story.author_id,
+          type: 'story_favorited',
+          title: '新的收藏',
+          body: `《${story.title || '未命名作品'}》被加入收藏了。`,
+          storyId: body.storyId,
+          authorId: story.author_id,
+          url: `/?story=${encodeURIComponent(body.storyId)}`,
+        }]);
+      }
+      return res.status(200).json(result);
     }
 
     if (action === 'unfavoriteStory') {
@@ -714,6 +976,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (action === 'saveStoryMeta') {
       await requireStoryOwner(body.storyId, authUser.uid);
       await supabaseRequest('stories', { method: 'PATCH', query: { id: `eq.${body.storyId}` }, body: storyRowFromMeta({ ...body.patch, authorId: authUser.uid }, body.storyId) });
+      if (body.patch?.visibility === 'public' || body.patch?.visibility === 'unlisted') {
+        await notifyAuthorFollowers(authUser.uid, {
+          type: 'author_story_updated',
+          title: '追踪作者更新了作品',
+          body: `《${body.patch?.title || '未命名作品'}》刚刚更新了。`,
+          storyId: body.storyId,
+        });
+      }
       return res.status(200).json({ ok: true });
     }
 
@@ -753,6 +1023,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await supabaseRequest('stories', { method: 'PATCH', query: { id: `eq.${body.storyId}` }, body: { ...storyRowFromMeta({ ...args.metaPatch, authorId: authUser.uid }, body.storyId), updated_at: nowIso() } });
       await supabaseUpsert('story_chapters', asArray(args.chapters).map((chapter) => ({ story_id: body.storyId, chapter_num: chapter.chapter_num, title: chapter.title || '', summary: chapter.summary || '', present_characters: asArray(chapter.present_characters), text: chapter.text || '' })), 'story_id,chapter_num');
       await supabaseUpsert('story_endings', asArray(args.endings).map((ending) => ({ story_id: body.storyId, id: ending.id, chapter_num: 7, title: ending.title || '', text: ending.text || '' })), 'story_id,id');
+      if (args.metaPatch?.visibility === 'public' || args.metaPatch?.visibility === 'unlisted') {
+        await notifyAuthorFollowers(authUser.uid, {
+          type: 'author_story_updated',
+          title: '追踪作者更新了作品',
+          body: `《${args.metaPatch?.title || '未命名作品'}》刚刚更新了。`,
+          storyId: body.storyId,
+        });
+      }
       return res.status(200).json({ ok: true });
     }
 
