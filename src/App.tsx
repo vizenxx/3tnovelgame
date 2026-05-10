@@ -871,6 +871,27 @@ function branchTierLabel(tier: string) {
   return '小';
 }
 
+function stableBranchSignature(branch: any) {
+  if (!branch) return '';
+  const normalized = {
+    id: String(branch.id || ''),
+    name: String(branch.name || ''),
+    side: branch.side === 'right' ? 'right' : 'left',
+    tier: normalizeBranchTier(branch.tier || 'small'),
+    is_hidden: Boolean(branch.is_hidden || branch.hidden || branch.inject?.hidden),
+    hint: String(branch.hint || ''),
+    desc: String(branch.desc || ''),
+    sceneText: String(branch.sceneText || ''),
+    trigger: branch.trigger || null,
+    triggerGroups: branch.triggerGroups || null,
+    condition_char: String(branch.condition_char || ''),
+    condition_action: branch.condition_action === 'curse' ? 'curse' : 'bless',
+    condition_chapter: Number(branch.condition_chapter || 2),
+    endingId: String(branch.endingId || branch.inject?.endingId || branch.inject?.targetEndingId || ''),
+  };
+  return JSON.stringify(normalized);
+}
+
 function parseConditionLine(line: string): ParsedImportCondition | null {
   const text = line.trim();
   if (!text) return null;
@@ -1672,6 +1693,34 @@ export default function App() {
     return Number(singleChapter || firstSingleGroup || branch?.condition_chapter || 2);
   };
 
+  const normalizeUnlockedBranchesForBlueprint = (branches: any[] = [], sourceBlueprint: Blueprint | null = blueprint) => {
+    const currentBranches = new Map<string, any>((sourceBlueprint?.branches || []).map((branch: any) => [String(branch.id || ''), branch]));
+    return (branches || [])
+      .map((branch: any) => {
+        const current = currentBranches.get(String(branch?.id || ''));
+        return current ? { ...current, _historySignature: stableBranchSignature(current) } : null;
+      })
+      .filter(Boolean) as Branch[];
+  };
+
+  const normalizeHistoricalUnlockedBranchesForBlueprint = (branches: any[] = [], sourceBlueprint: Blueprint | null = blueprint) => {
+    const currentBranches = new Map<string, any>((sourceBlueprint?.branches || []).map((branch: any) => [String(branch.id || ''), branch]));
+    const seen = new Set<string>();
+    return (branches || [])
+      .map((branch: any) => {
+        const id = String(branch?.id || '');
+        if (!id || seen.has(id)) return null;
+        const current = currentBranches.get(id);
+        if (!current) return null;
+        const currentSignature = stableBranchSignature(current);
+        const savedSignature = String(branch?._historySignature || stableBranchSignature(branch));
+        if (savedSignature && savedSignature !== currentSignature) return null;
+        seen.add(id);
+        return { ...current, _historySignature: currentSignature };
+      })
+      .filter(Boolean) as Branch[];
+  };
+
   const getChapterAvailableCharacters = (chapter: Chapter, sourceBlueprint: Blueprint | null = blueprint) => {
     if (!sourceBlueprint) return [] as Character[];
     const availableCharacters: Character[] = [];
@@ -2098,6 +2147,10 @@ export default function App() {
 
   const applyLocalRunSnapshot = async (snapshot: any) => {
     if (!snapshot?.blueprint) return false;
+    const historicalBranches = normalizeHistoricalUnlockedBranchesForBlueprint(
+      snapshot.historicallyUnlockedBranches || snapshot.unlockedBranches || [],
+      snapshot.blueprint
+    );
     navigateTo(snapshot.gameState === 'SUMMARY' ? 'PLAYING' : snapshot.gameState || 'PLAYING', { reset: true });
     setSelectedThemes(snapshot.selectedThemes || []);
     setBlueprint(snapshot.blueprint);
@@ -2105,8 +2158,8 @@ export default function App() {
     setChangeHighlights(snapshot.changeHighlights || {});
     setInterventionsLeft(snapshot.interventionsLeft ?? 3);
     setEndingValue(snapshot.endingValue || 0);
-    setUnlockedBranches(snapshot.unlockedBranches || []);
-    setHistoricallyUnlockedBranches(snapshot.historicallyUnlockedBranches || []);
+    setUnlockedBranches(normalizeUnlockedBranchesForBlueprint(snapshot.unlockedBranches || [], snapshot.blueprint));
+    setHistoricallyUnlockedBranches(historicalBranches);
     setIntervenedChapters(snapshot.intervenedChapters || []);
     setNaturalChapters(snapshot.naturalChapters || []);
     setInitialNaturalChapters(snapshot.initialNaturalChapters || []);
@@ -3124,6 +3177,7 @@ export default function App() {
     }
     const storyId = activeStoryId;
     try {
+      const preservedHistoricalBranches = historicallyUnlockedBranches;
       setGlobalLoadingMessage('正在重新加载故事...');
       setShowLeaveGameModal(false);
       await deleteLocalCache(activeRunCacheKey());
@@ -3137,7 +3191,7 @@ export default function App() {
         await resetGame();
         return;
       }
-      applyStoryCartridgeForPlay(storyId, cartridge); // no progressData = fresh start
+      applyStoryCartridgeForPlay(storyId, cartridge, { historicallyUnlockedBranches: preservedHistoricalBranches }); // fresh run, account history preserved
       window.scrollTo({ top: 0, behavior: 'smooth' });
       showError('命运已重置，从第一章重新开始。');
     } catch (e) {
@@ -3207,6 +3261,10 @@ export default function App() {
   const applyStoryCartridgeForPlay = (storyId: string, cartridge: any, progressData?: any) => {
     const nextBlueprint = buildBlueprintFromCartridge(cartridge);
     const baseChapters = progressData?.currentChapters || nextBlueprint.chapters;
+    const historicalBranches = normalizeHistoricalUnlockedBranchesForBlueprint(
+      progressData?.historicallyUnlockedBranches || progressData?.unlockedBranches || [],
+      nextBlueprint
+    );
     const initialStatuses: Record<string, { status: string; isDead: boolean }> = {};
     (nextBlueprint.characters || []).forEach((character: any) => {
       initialStatuses[character.id] = { status: '存活', isDead: false };
@@ -3220,8 +3278,8 @@ export default function App() {
     setChangeHighlights(progressData?.changeHighlights || {});
     setInterventionsLeft(progressData?.interventionsLeft ?? 3);
     setEndingValue(progressData?.endingValue || 0);
-    setUnlockedBranches(progressData?.unlockedBranches || []);
-    setHistoricallyUnlockedBranches(progressData?.historicallyUnlockedBranches || progressData?.unlockedBranches || []);
+    setUnlockedBranches(normalizeUnlockedBranchesForBlueprint(progressData?.unlockedBranches || [], nextBlueprint));
+    setHistoricallyUnlockedBranches(historicalBranches);
     setIntervenedChapters(progressData?.intervenedChapters || []);
     setNaturalChapters(progressData?.naturalChapters || nextBlueprint.chapters);
     setInitialNaturalChapters(progressData?.initialNaturalChapters || nextBlueprint.chapters);
@@ -3271,7 +3329,7 @@ export default function App() {
         return;
       }
       
-      await startNewStoryPlay(storyId, cartridge);
+      await startNewStoryPlay(storyId, cartridge, progressData);
     } catch (e) {
       console.error(e);
       showError("无法开启故事");
@@ -3283,7 +3341,7 @@ export default function App() {
     }
   };
 
-  const startNewStoryPlay = async (storyId: string, loadedCartridge?: any) => {
+  const startNewStoryPlay = async (storyId: string, loadedCartridge?: any, preservedProgressData?: any) => {
     if (!user || !db) return;
     try {
       const cartridge = loadedCartridge || await getCachedStoryCartridge(storyId) || await getStoryCartridge(db as any, storyId);
@@ -3291,7 +3349,9 @@ export default function App() {
         throw new Error('story-not-found-or-denied');
       }
       await cacheStoryCartridge(storyId, cartridge);
-      applyStoryCartridgeForPlay(storyId, cartridge);
+      applyStoryCartridgeForPlay(storyId, cartridge, preservedProgressData ? {
+        historicallyUnlockedBranches: preservedProgressData.historicallyUnlockedBranches || preservedProgressData.unlockedBranches || [],
+      } : undefined);
     } catch (e) {
       console.error(e);
       showError("初始化故事失败");
@@ -4019,7 +4079,7 @@ export default function App() {
         setBranchUnlockNotice(result.unlockedBranch);
         if (result.unlockedBranch.id) historicalBranchById.set(result.unlockedBranch.id, result.unlockedBranch);
       }
-      const nextHistoricalBranches = Array.from(historicalBranchById.values());
+      const nextHistoricalBranches = normalizeHistoricalUnlockedBranchesForBlueprint(Array.from(historicalBranchById.values()), blueprint);
       setHistoricallyUnlockedBranches(nextHistoricalBranches);
       if (result?.uiFeedback) {
         setUiFeedback(result.uiFeedback);
@@ -4759,8 +4819,11 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => {
+                  const pendingProgress = pendingProgressToLoad;
                   setPendingProgressToLoad(null);
-                  startNewStoryPlay(pendingProgressToLoad.id);
+                  if (pendingProgress) {
+                    startNewStoryPlay(pendingProgress.id, pendingProgress.data?.cartridge, pendingProgress.data);
+                  }
                 }}
                 className="w-full rounded-2xl bg-zinc-900 py-4 text-sm font-bold text-zinc-400"
               >
@@ -4998,7 +5061,7 @@ export default function App() {
       { label: '点赞', value: getStoryLikeCount(story), icon: Heart, active: isLiked, activeClass: 'text-pink-300 bg-pink-500/10 border-pink-500/25' },
       { label: '干涉', value: getStoryInterventionCount(story), icon: Sparkles },
       { label: '收藏', value: getStoryFavoriteCount(story), icon: Bookmark, active: isFavorited, activeClass: 'text-amber-300 bg-amber-500/10 border-amber-500/25' },
-      { label: '均章', value: `${getStoryAverageChapterWords(story) || '未知'} 字`, icon: BookOpen },
+      { label: '字/章', value: getStoryAverageChapterWords(story) || '未知', icon: BookOpen },
     ];
     return (
       <motion.div
@@ -8005,7 +8068,7 @@ export default function App() {
               initial={{ opacity: 0, y: 10, scale: 0.96 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 8, scale: 0.97 }}
-              className="fixed bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+4.5rem)] left-4 z-[1801] flex max-h-[min(52dvh,24rem)] w-48 flex-col gap-1 overflow-y-auto rounded-2xl border border-zinc-800 bg-zinc-950/92 p-2 shadow-2xl shadow-black/40 backdrop-blur-xl sm:bottom-[max(0.75rem,env(safe-area-inset-bottom))] sm:left-6"
+              className="fixed bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+8.5rem)] left-4 z-[1801] flex max-h-[min(44dvh,20rem)] w-48 flex-col gap-1 overflow-y-auto rounded-2xl border border-zinc-800 bg-zinc-950/92 p-2 shadow-2xl shadow-black/40 backdrop-blur-xl sm:bottom-[max(0.75rem,env(safe-area-inset-bottom))] sm:left-6"
             >
               <div className="px-2 pb-1 pt-1 text-center text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">快速浏览</div>
               {chapters.map((chapter) => {
@@ -8023,7 +8086,7 @@ export default function App() {
                     <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-black ${ready ? 'bg-indigo-500/15 text-indigo-300' : 'bg-zinc-800 text-zinc-500'}`}>
                       {chapter.chapter_num}
                     </span>
-                    <span className="min-w-0 flex-1 truncate">{chapter.title || `第${chapter.chapter_num}章`}</span>
+                    <span className="min-w-0 flex-1 truncate">第{chapter.chapter_num}章</span>
                     {!ready && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-zinc-600" />}
                   </button>
                 );
@@ -8037,7 +8100,7 @@ export default function App() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.92 }}
             onClick={() => setPlayingTocOpen((prev) => !prev)}
-            className="fixed bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+1.25rem)] left-4 z-[1802] flex h-12 w-12 items-center justify-center rounded-2xl border border-zinc-700 bg-zinc-950/90 text-zinc-200 shadow-2xl backdrop-blur-xl transition-colors hover:border-indigo-400 hover:text-white sm:bottom-[max(0.75rem,env(safe-area-inset-bottom))] sm:left-6"
+            className="fixed bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+4.75rem)] left-4 z-[1802] flex h-12 w-12 items-center justify-center rounded-2xl border border-zinc-700 bg-zinc-950/90 text-zinc-200 shadow-2xl backdrop-blur-xl transition-colors hover:border-indigo-400 hover:text-white sm:bottom-[max(0.75rem,env(safe-area-inset-bottom))] sm:left-6"
             aria-label={playingTocOpen ? '关闭快速浏览' : '打开快速浏览'}
           >
             {playingTocOpen ? <X className="h-5 w-5" /> : <BookOpen className="h-5 w-5" />}
