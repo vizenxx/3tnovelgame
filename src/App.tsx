@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp, Download, Sun, Moon, Search, GitBranch, Bell, BarChart3 } from 'lucide-react';
 import { auth, db, firebaseInitError } from './firebase';
-import { createEmptyStory, createSharedStoryRecord, createStorySnapshot, adaptBlueprintToStory, createStoryBranch, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, favoriteStory, unfavoriteStory, followAuthor, getAppSettings, getAuthorFollowState, getPushConfig, getSharedStoryRecord, getStoryCartridge, getStoryMeta, getUserProgress, incrementShareMetric, incrementStoryMetric, likeStory, unlikeStory, listAuthorStories, listMySharedStories, listMyStories, listPublicStories, refundCoverGenerationUsage, reportStory, reserveCoverGenerationUsage, saveAppSettings, savePushSubscription, saveStoryMainlineBundle, saveStoryMeta, saveUserProgress, unfollowAuthor, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch } from './storyStore';
+import { createEmptyStory, createSharedStoryRecord, createStorySnapshot, adaptBlueprintToStory, createStoryBranch, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, favoriteStory, unfavoriteStory, followAuthor, getAppSettings, getAuthorFollowState, getPushConfig, getSharedStoryRecord, getStoryCartridge, getStoryMeta, getUserProgress, incrementShareMetric, incrementStoryMetric, likeStory, unlikeStory, listAuthorStories, listMySharedStories, listMyStories, listNotifications, listPublicStories, markNotificationsRead, refundCoverGenerationUsage, reportStory, reserveCoverGenerationUsage, saveAppSettings, savePushSubscription, saveStoryMainlineBundle, saveStoryMeta, saveUserProgress, unfollowAuthor, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch } from './storyStore';
 import { branchEffectiveWeight, isBranchUnlockedByHistory, normalizeEndingBias } from './storyCartridge';
 import { deleteLocalCache, getLocalCache, setLocalCache } from './localCache';
 import { useAppNavigation } from './navigation/useAppNavigation';
@@ -49,7 +49,7 @@ type GameState = 'STORY_SELECT' | 'AUTHORING' | 'THEME_SELECTION' | 'GENERATING_
 type NarrativePerson = 'first' | 'second' | 'third';
 type EndingMode = 'single' | 'dual';
 type AppTheme = 'dark' | 'light';
-type StoryLibrarySort = 'updated' | 'likes' | 'interventions' | 'favorites' | 'words';
+type StoryLibrarySort = 'updated' | 'likes' | 'interventions' | 'favorites' | 'shares' | 'words';
 type AuthoringListSort = 'updated' | 'created' | 'likes' | 'favorites' | 'shares' | 'interventions';
 
 const safeModalBackdropClass = "fixed inset-0 flex items-center justify-center overflow-y-auto overscroll-contain px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]";
@@ -1222,6 +1222,19 @@ export default function App() {
   const [authorProfileFollowing, setAuthorProfileFollowing] = useState(false);
   const [authorProfileBusy, setAuthorProfileBusy] = useState(false);
   const [pushSubscribeBusy, setPushSubscribeBusy] = useState(false);
+  const [notificationCenterOpen, setNotificationCenterOpen] = useState(false);
+  const [notificationItems, setNotificationItems] = useState<Array<{
+    id: string;
+    type: string;
+    title: string;
+    body: string;
+    storyId?: string | null;
+    authorId?: string | null;
+    createdAt: string;
+    readAt?: string | null;
+    local?: boolean;
+  }>>([]);
+  const [notificationLoading, setNotificationLoading] = useState(false);
   const authorMetricSnapshotRef = useRef<Map<string, { like: number; favorite: number; share: number; intervention: number }>>(new Map());
   const authorPulseInitializedRef = useRef(false);
   const storySelectScrollYRef = useRef(0);
@@ -1736,6 +1749,26 @@ export default function App() {
     }
     await sharePayload({ title: shareTitle, text: shareText, url: buildOriginalStoryUrl(storyId) });
     await recordStoryShare(storyId);
+  };
+
+  const shareStoryCardWithFeedback = async (story: any) => {
+    try {
+      setIsSharing(true);
+      setGlobalLoadingMessage('正在准备分享作品...');
+      setGlobalLoadingDetail('正在生成作品链接，并尝试调起系统分享。');
+      await shareOriginalStoryByCard(story);
+    } catch (error: any) {
+      console.error(error);
+      if (error?.name === 'AbortError') {
+        showError('已取消分享。');
+        return;
+      }
+      showError(error?.message || '分享失败。');
+    } finally {
+      setIsSharing(false);
+      setGlobalLoadingMessage(null);
+      setGlobalLoadingDetail(null);
+    }
   };
 
   const handleShareSavedAuthoringStory = async () => {
@@ -2498,6 +2531,18 @@ export default function App() {
     });
     authorMetricSnapshotRef.current = nextSnapshot;
   }, [myStories, user?.uid]);
+
+  useEffect(() => {
+    if (!user?.uid || !db) {
+      setNotificationItems([]);
+      return;
+    }
+    void refreshNotificationCenter();
+    const timer = window.setInterval(() => {
+      void refreshNotificationCenter();
+    }, 60000);
+    return () => window.clearInterval(timer);
+  }, [user?.uid, db]);
 
   useEffect(() => {
     if (gameState !== 'AUTHORING' || authoringCartridge || !user || !db) return;
@@ -3335,12 +3380,65 @@ export default function App() {
     setTimeout(() => setErrorMsg(null), 5000);
   };
 
+  const refreshNotificationCenter = async () => {
+    if (!db || !user) {
+      setNotificationItems([]);
+      return;
+    }
+    try {
+      setNotificationLoading(true);
+      const rows = await listNotifications(db as any, 60);
+      setNotificationItems((prev) => {
+        const localRows = prev.filter((item) => item.local);
+        const merged = new Map<string, typeof notificationItems[number]>();
+        [...localRows, ...(rows || [])].forEach((item: any) => {
+          if (!item?.id) return;
+          merged.set(item.id, item);
+        });
+        return Array.from(merged.values()).sort((a, b) => getStoryUpdatedMs({ updatedAt: b.createdAt }) - getStoryUpdatedMs({ updatedAt: a.createdAt }));
+      });
+    } catch (error) {
+      console.warn('notifications sync failed:', error);
+    } finally {
+      setNotificationLoading(false);
+    }
+  };
+
+  const openNotificationCenter = async () => {
+    if (!user) {
+      setIsAccountCenterOpen(true);
+      return;
+    }
+    setNotificationCenterOpen(true);
+    await refreshNotificationCenter();
+    try {
+      if (db) await markNotificationsRead(db as any);
+      const readAt = new Date().toISOString();
+      setNotificationItems((prev) => prev.map((item) => ({ ...item, readAt: item.readAt || readAt })));
+    } catch (error) {
+      console.warn('mark notifications read failed:', error);
+    }
+  };
+
   const pushAuthorPulseNotification = (notification: Omit<typeof authorPulseNotifications[number], 'id'>) => {
     const id = `author-pulse-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     setAuthorPulseNotifications((prev) => [
       { ...notification, id },
       ...prev.filter((item) => item.storyId !== notification.storyId || item.tone !== notification.tone).slice(0, 5),
     ].slice(0, 6));
+    setNotificationItems((prev) => [
+      {
+        id,
+        local: true,
+        type: `author_${notification.tone}`,
+        title: notification.title,
+        body: notification.detail,
+        storyId: notification.storyId,
+        createdAt: new Date().toISOString(),
+        readAt: null,
+      },
+      ...prev.filter((item) => item.id !== id),
+    ].slice(0, 60));
   };
 
   const dismissAuthorPulseNotification = (id: string) => {
@@ -5623,6 +5721,7 @@ export default function App() {
       storyId?: string;
       onLike?: () => void;
       onFavorite?: () => void;
+      onShare?: () => void;
     }
   ) => {
     const stats = getStoryStats(story);
@@ -5631,7 +5730,7 @@ export default function App() {
         <div className="story-card-stat-list">
           {stats.map((stat) => {
             const Icon = stat.icon;
-            const onClick = stat.key === 'like' ? actions?.onLike : stat.key === 'favorite' ? actions?.onFavorite : undefined;
+            const onClick = stat.key === 'like' ? actions?.onLike : stat.key === 'favorite' ? actions?.onFavorite : stat.key === 'share' ? actions?.onShare : undefined;
             return (
               <button
                 key={stat.key}
@@ -5658,8 +5757,8 @@ export default function App() {
       <div className="story-detail-stat-grid sm:grid-cols-1">
         {stats.map((stat) => {
           const Icon = stat.icon;
-          const isAction = stat.key === 'like' || stat.key === 'favorite';
-          const onClick = stat.key === 'like' ? actions?.onLike : stat.key === 'favorite' ? actions?.onFavorite : undefined;
+          const isAction = stat.key === 'like' || stat.key === 'favorite' || stat.key === 'share';
+          const onClick = stat.key === 'like' ? actions?.onLike : stat.key === 'favorite' ? actions?.onFavorite : stat.key === 'share' ? actions?.onShare : undefined;
           const content = (
             <>
               <div className={`story-detail-stat-label transition-colors ${stat.active && stat.tone === 'like' ? 'text-pink-300' : stat.active && stat.tone === 'favorite' ? 'text-amber-300' : ''}`}>
@@ -5670,7 +5769,7 @@ export default function App() {
             </>
           );
 
-          if (isAction) {
+          if (isAction && onClick) {
             return (
               <button
                 key={stat.key}
@@ -5744,6 +5843,7 @@ export default function App() {
               storyId,
               onLike: () => handleStoryInteraction('like', storyId, story),
               onFavorite: () => handleStoryInteraction('favorite', storyId, story),
+              onShare: () => void shareStoryCardWithFeedback(story),
             })}
           </div>
           <div className="flex min-w-0 flex-1 flex-col">
@@ -5807,6 +5907,33 @@ export default function App() {
         setGlobalLoadingDetail(null);
       }
     };
+    const handleAdminDeleteFromDetail = () => {
+      if (!isAdminUser || !detailStoryId) return;
+      setStoryDetailStory(null);
+      setConfirmationModal({
+        isOpen: true,
+        title: '删除作品',
+        message: `确认删除《${stripBookTitle(title)}》吗？管理员删除会移除这部正式作品，建议只在违规或明显错误时使用。`,
+        onConfirm: () => {
+          void (async () => {
+            try {
+              setGlobalLoadingMessage('正在删除作品...');
+              await deleteStoryCartridge(db as any, detailStoryId);
+              setPublicStories((prev) => prev.filter((story: any) => story.id !== detailStoryId));
+              setMyStories((prev) => prev.filter((story: any) => story.id !== detailStoryId));
+              setMySharedStories((prev) => prev.filter((story: any) => story.sourceStoryId !== detailStoryId && story.id !== detailStoryId));
+              setStoryDetailStory(null);
+              showError('作品已删除。');
+            } catch (error: any) {
+              console.error(error);
+              showError(error?.message || '删除作品失败。');
+            } finally {
+              setGlobalLoadingMessage(null);
+            }
+          })();
+        },
+      });
+    };
 
     return (
       <AnimatePresence>
@@ -5846,6 +5973,7 @@ export default function App() {
                   storyId: detailStoryId,
                   onLike: () => handleStoryInteraction('like', detailStoryId, storyDetailStory),
                   onFavorite: () => handleStoryInteraction('favorite', detailStoryId, storyDetailStory),
+                  onShare: handleShareFromDetail,
                 })}
               </div>
 
@@ -5869,6 +5997,12 @@ export default function App() {
                     <Sparkles className="h-4 w-4" />
                     干涉命运
                   </button>
+                  {isAdminUser && detailStoryId && (
+                    <button type="button" onClick={handleAdminDeleteFromDetail} className={semanticButtonClass('danger', { fullWidth: true })}>
+                      <Trash2 className="h-4 w-4" />
+                      管理员删除作品
+                    </button>
+                  )}
                   <div className="grid grid-cols-2 gap-3">
                     <button type="button" onClick={handleShareFromDetail} disabled={isSharing} className={semanticButtonClass('secondary', { fullWidth: true })}>
                       {isSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
@@ -5902,6 +6036,7 @@ export default function App() {
         if (storyLibrarySort === 'likes') return getStoryLikeCount(b) - getStoryLikeCount(a);
         if (storyLibrarySort === 'interventions') return getStoryInterventionCount(b) - getStoryInterventionCount(a);
         if (storyLibrarySort === 'favorites') return getStoryFavoriteCount(b) - getStoryFavoriteCount(a);
+        if (storyLibrarySort === 'shares') return getStoryShareCount(b) - getStoryShareCount(a);
         if (storyLibrarySort === 'words') return getStoryAverageChapterWords(b) - getStoryAverageChapterWords(a);
         return getStoryUpdatedMs(b) - getStoryUpdatedMs(a);
       });
@@ -6059,6 +6194,7 @@ export default function App() {
               <option value="interventions">干涉最多</option>
               <option value="likes">点赞最多</option>
               <option value="favorites">收藏最多</option>
+              <option value="shares">分享最多</option>
               <option value="words">平均字数</option>
             </select>
             <button
@@ -7098,6 +7234,24 @@ export default function App() {
     </AnimatePresence>
   );
 
+  const notificationUnreadCount = notificationItems.filter((item) => !item.readAt).length;
+
+  const notificationBellButton = (size: 'sm' | 'md' = 'sm') => (
+    <button
+      type="button"
+      onClick={() => void openNotificationCenter()}
+      aria-label="打开通知"
+      className={`relative inline-flex ${size === 'md' ? 'h-12 w-12' : 'h-11 w-11'} items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950/85 text-zinc-200 transition-colors hover:border-indigo-400/60 hover:text-white backdrop-blur-md`}
+    >
+      <Bell className="h-5 w-5" />
+      {notificationUnreadCount > 0 && (
+        <span className="absolute -right-1 -top-1 min-w-5 rounded-full border border-zinc-950 bg-rose-500 px-1.5 py-0.5 text-[10px] font-black leading-none text-white shadow-lg">
+          {notificationUnreadCount > 9 ? '9+' : notificationUnreadCount}
+        </span>
+      )}
+    </button>
+  );
+
   const actionMenuButton = (
     <div className="play-top-bar flex items-center justify-between gap-3">
       {gameState === 'PLAYING' && (
@@ -7129,6 +7283,7 @@ export default function App() {
         >
           <UserIcon className="h-5 w-5" />
         </button>
+        {notificationBellButton('md')}
         <button
           type="button"
           onClick={() => setIsActionMenuOpen(true)}
@@ -7150,6 +7305,7 @@ export default function App() {
       >
         <Archive className="h-5 w-5" />
       </button>
+      {notificationBellButton('sm')}
       <button
         type="button"
         onClick={() => setIsAccountCenterOpen(true)}
@@ -7812,6 +7968,84 @@ export default function App() {
     </AnimatePresence>
   );
 
+  const renderNotificationCenter = () => (
+    <AnimatePresence>
+      {notificationCenterOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className={`${safeModalBackdropClass} z-[5500] bg-black/65 backdrop-blur-md`}
+          onClick={() => setNotificationCenterOpen(false)}
+        >
+          <motion.div
+            initial={{ y: 20, opacity: 0, scale: 0.96 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: 14, opacity: 0, scale: 0.98 }}
+            className="w-full max-w-lg rounded-[2rem] border border-zinc-800 bg-zinc-950 p-5 shadow-2xl sm:p-6"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <div className="text-xs font-black uppercase tracking-[0.2em] text-indigo-300">通知</div>
+                <h3 className="mt-2 text-2xl font-black text-white">命运动态</h3>
+                <p className="mt-1 text-xs font-semibold text-zinc-500">点赞、收藏、分享、追踪作者更新和创作提醒都会集中在这里。</p>
+              </div>
+              <button type="button" onClick={() => setNotificationCenterOpen(false)} className={semanticIconButtonClass('ghost')} aria-label="关闭通知">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="mb-3 flex justify-end">
+              <button type="button" onClick={() => void refreshNotificationCenter()} className={semanticButtonClass('ghost', { compact: true })} disabled={notificationLoading}>
+                {notificationLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
+                刷新通知
+              </button>
+            </div>
+            {notificationLoading && notificationItems.length === 0 ? (
+              <div className="flex items-center justify-center gap-2 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-8 text-sm font-black text-zinc-400">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                正在读取通知...
+              </div>
+            ) : notificationItems.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/30 p-8 text-center text-sm font-semibold text-zinc-500">
+                暂时没有新的通知。
+              </div>
+            ) : (
+              <div className="grid max-h-[56vh] gap-3 overflow-y-auto pr-1">
+                {notificationItems.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setNotificationCenterOpen(false);
+                      if (item.storyId) void startStoryPlay(item.storyId);
+                    }}
+                    className={`rounded-2xl border p-4 text-left transition-colors hover:border-indigo-400/50 hover:bg-indigo-500/10 ${
+                      item.readAt ? 'border-zinc-800 bg-zinc-900/30' : 'border-indigo-400/30 bg-indigo-500/10'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5 rounded-full border border-white/10 bg-white/10 p-2">
+                        <Bell className="h-4 w-4 text-indigo-200" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-black text-zinc-100">{item.title || '新的通知'}</div>
+                        <div className="mt-1 text-xs font-semibold leading-relaxed text-zinc-400">{item.body || '有新的命运动态。'}</div>
+                        <div className="mt-2 text-[10px] font-black uppercase tracking-[0.16em] text-zinc-600">
+                          {new Date(item.createdAt || Date.now()).toLocaleString()}
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
   const renderAuthoringView = () => (
     <div className="authoring-studio mx-auto max-w-5xl px-6 pb-12 pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] lg:px-8">
       {!authoringCartridge ? (
@@ -7841,7 +8075,6 @@ export default function App() {
               </div>
               <div className="text-xs font-black text-zinc-500">{myStories.length} 部作品</div>
             </div>
-            {renderAuthorPulsePanel()}
             <div className="mb-5 grid gap-3 lg:grid-cols-[1fr_auto_auto_auto]">
               <label className="relative block">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
@@ -9077,6 +9310,7 @@ export default function App() {
           {renderScrollToTopButton()}
           {accountEntryButton}
           {renderAuthorProfileModal()}
+          {renderNotificationCenter()}
           {accountCenterModal}
         </>
       ) : !user ? (
@@ -9113,6 +9347,7 @@ export default function App() {
           {storyInfoPanel}
           {renderStoryDetailModal()}
           {renderAuthorProfileModal()}
+          {renderNotificationCenter()}
           {accountCenterModal}
           {renderConfirmationModal()}
           {renderAuthoringSaveSuccessModal()}

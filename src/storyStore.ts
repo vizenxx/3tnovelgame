@@ -126,7 +126,18 @@ export type SharedStoryRecord = {
   visibility: 'private' | 'unlisted';
 };
 
-export type StoryListSort = 'updated' | 'likes' | 'interventions' | 'favorites' | 'words';
+export type StoryListSort = 'updated' | 'likes' | 'interventions' | 'favorites' | 'shares' | 'words';
+
+export type UserNotificationItem = {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  storyId?: string | null;
+  authorId?: string | null;
+  createdAt: string;
+  readAt?: string | null;
+};
 
 export async function listPublicStories(db: Firestore, pageSize = 20, sort: StoryListSort = 'updated') {
   if (useSupabaseStories()) {
@@ -136,6 +147,8 @@ export async function listPublicStories(db: Firestore, pageSize = 20, sort: Stor
     ? 'likeCount'
     : sort === 'favorites'
     ? 'favoriteCount'
+    : sort === 'shares'
+    ? 'shareCount'
     : sort === 'words'
     ? 'averageChapterWords'
     : sort === 'interventions'
@@ -240,6 +253,20 @@ export async function incrementShareMetric(db: Firestore, storyId: string) {
   }
   await updateDoc(doc(db, 'stories', storyId), { shareCount: increment(1) } as any);
   return { shareCount: 0 };
+}
+
+export async function listNotifications(db: Firestore, pageSize = 50) {
+  if (useSupabaseStories()) {
+    return storyApi<UserNotificationItem[]>('listNotifications', { pageSize }, { auth: true, timeoutMs: 8000, stage: '通知同步' });
+  }
+  return [];
+}
+
+export async function markNotificationsRead(db: Firestore) {
+  if (useSupabaseStories()) {
+    return storyApi('markNotificationsRead', {}, { auth: true, timeoutMs: 8000, stage: '通知已读同步' });
+  }
+  return { ok: true };
 }
 
 export async function likeStory(db: Firestore, storyId: string, userId: string) {

@@ -475,6 +475,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         likes: 'like_count.desc',
         interventions: 'intervention_count.desc',
         favorites: 'favorite_count.desc',
+        shares: 'share_count.desc',
         words: 'average_chapter_words.desc',
         updated: 'updated_at.desc',
       } as Record<string, string>)[String(body.sort || 'updated')] || 'updated_at.desc';
@@ -635,6 +636,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ ok: true });
     }
 
+    if (action === 'listNotifications') {
+      const rows = await supabaseRequest<any[]>('user_notifications', {
+        query: {
+          user_id: `eq.${authUser.uid}`,
+          select: 'id,type,title,body,story_id,author_id,created_at,read_at',
+          order: 'created_at.desc',
+          limit: body.pageSize || 50,
+        },
+      }).catch((error) => {
+        if (/user_notifications/i.test(String(error?.message || error))) return [];
+        throw error;
+      });
+      return res.status(200).json(rows.map((row) => ({
+        id: row.id,
+        type: row.type,
+        title: row.title,
+        body: row.body,
+        storyId: row.story_id,
+        authorId: row.author_id,
+        createdAt: row.created_at,
+        readAt: row.read_at,
+      })));
+    }
+
+    if (action === 'markNotificationsRead') {
+      await supabaseRequest('user_notifications', {
+        method: 'PATCH',
+        query: { user_id: `eq.${authUser.uid}`, read_at: 'is.null' },
+        body: { read_at: nowIso() },
+      }).catch((error) => {
+        if (/user_notifications/i.test(String(error?.message || error))) return null;
+        throw error;
+      });
+      return res.status(200).json({ ok: true });
+    }
+
     if (action === 'getAuthorFollowState') {
       const authorId = String(body.authorId || '');
       if (!authorId) return res.status(400).json({ error: 'Missing authorId' });
@@ -708,7 +745,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await supabaseRequest('stories', {
         method: 'PATCH',
         query: { id: `eq.${storyId}` },
-        body: { share_count: nextShareCount, updated_at: nowIso() },
+        body: { share_count: nextShareCount },
       }).catch((error) => {
         if (!/share_count/i.test(String(error?.message || error))) throw error;
         console.warn('[story-store] share_count column unavailable, share metric skipped.');
@@ -765,7 +802,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await supabaseRequest('stories', {
           method: 'PATCH',
           query: { id: `eq.${body.storyId}` },
-          body: { like_count: Math.max(0, asInt(storyRow?.like_count) - 1), updated_at: nowIso() },
+          body: { like_count: Math.max(0, asInt(storyRow?.like_count) - 1) },
         });
         return res.status(200).json({ removed: true, fallback: true });
       }
@@ -1035,7 +1072,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (action === 'deleteStoryCartridge') {
-      await requireStoryOwner(body.storyId, authUser.uid);
+      if (!ADMIN_USER_IDS.has(authUser.uid)) {
+        await requireStoryOwner(body.storyId, authUser.uid);
+      }
       await supabaseRequest('stories', { method: 'DELETE', query: { id: `eq.${body.storyId}` } });
       return res.status(200).json({ ok: true });
     }

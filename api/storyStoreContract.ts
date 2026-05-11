@@ -21,6 +21,8 @@ export const STORY_STORE_ACTIONS = [
   'unfollowAuthor',
   'getAuthorFollowState',
   'listAuthorStories',
+  'listNotifications',
+  'markNotificationsRead',
   'savePushSubscription',
   'getPushConfig',
   'reportStory',
