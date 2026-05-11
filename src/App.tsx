@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp, Download, Sun, Moon, Search, GitBranch, Bell, BarChart3 } from 'lucide-react';
 import { auth, db, firebaseInitError } from './firebase';
-import { createEmptyStory, createSharedStoryRecord, createStorySnapshot, adaptBlueprintToStory, createStoryBranch, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, favoriteStory, unfavoriteStory, followAuthor, getAppSettings, getAuthorFollowState, getPushConfig, getSharedStoryRecord, getStoryCartridge, getStoryMeta, getUserProgress, incrementShareMetric, incrementStoryMetric, likeStory, unlikeStory, listAuthorStories, listMySharedStories, listMyStories, listNotifications, listPublicStories, markNotificationsRead, refundCoverGenerationUsage, reportStory, reserveCoverGenerationUsage, saveAppSettings, savePushSubscription, saveStoryMainlineBundle, saveStoryMeta, saveUserProgress, unfollowAuthor, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch } from './storyStore';
+import { createEmptyStory, createSharedStoryRecord, createStorySnapshot, adaptBlueprintToStory, createStoryBranch, deleteNotification, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, favoriteStory, unfavoriteStory, followAuthor, getAppSettings, getAuthorFollowState, getPushConfig, getSharedStoryRecord, getStoryCartridge, getStoryMeta, getUserProgress, incrementShareMetric, incrementStoryMetric, likeStory, unlikeStory, listAuthorStories, listFollowedAuthors, listMySharedStories, listMyStories, listNotifications, listPublicStories, markNotificationsRead, refundCoverGenerationUsage, reportStory, reserveCoverGenerationUsage, saveAppSettings, savePushSubscription, saveStoryMainlineBundle, saveStoryMeta, saveUserProgress, unfollowAuthor, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch } from './storyStore';
 import { branchEffectiveWeight, isBranchUnlockedByHistory, normalizeEndingBias } from './storyCartridge';
 import { deleteLocalCache, getLocalCache, setLocalCache } from './localCache';
 import { useAppNavigation } from './navigation/useAppNavigation';
@@ -268,7 +268,6 @@ const writeClipboardText = async (value: string) => {
   if (!navigator.clipboard?.writeText) return false;
   try {
     await navigator.clipboard.writeText(value);
-    return true;
   } catch {
     return false;
   }
@@ -1195,7 +1194,9 @@ export default function App() {
   const [archiveSearch, setArchiveSearch] = useState('');
   const [archiveUpdatingIds, setArchiveUpdatingIds] = useState<Record<string, boolean>>({});
   const [archiveChoiceStoryId, setArchiveChoiceStoryId] = useState<string | null>(null);
-  const [archiveTab, setArchiveTab] = useState<'favorite' | 'saved'>('favorite');
+  const [archiveTab, setArchiveTab] = useState<'favorite' | 'saved' | 'authors'>('favorite');
+  const [followedAuthors, setFollowedAuthors] = useState<Array<{ authorId: string; authorName: string; followedAt: string }>>([]);
+  const [followedAuthorsLoading, setFollowedAuthorsLoading] = useState(false);
   const [showScrollTopButton, setShowScrollTopButton] = useState(false);
   const [playingTocOpen, setPlayingTocOpen] = useState(false);
   const [readonlyReturnTarget, setReadonlyReturnTarget] = useState<GameState>('STORY_SELECT');
@@ -1235,6 +1236,9 @@ export default function App() {
     local?: boolean;
   }>>([]);
   const [notificationLoading, setNotificationLoading] = useState(false);
+  const [shareComposer, setShareComposer] = useState<ShareData | null>(null);
+  const [shareComposerText, setShareComposerText] = useState('');
+  const shareComposerResolveRef = useRef<((success: boolean) => void) | null>(null);
   const authorMetricSnapshotRef = useRef<Map<string, { like: number; favorite: number; share: number; intervention: number }>>(new Map());
   const authorPulseInitializedRef = useRef(false);
   const storySelectScrollYRef = useRef(0);
@@ -1725,9 +1729,11 @@ export default function App() {
     return { shareId, sharedRecord };
   };
 
-  const sharePayload = async (payload: ShareData) => {
-    await deliverPreparedShare(payload);
-  };
+  const sharePayload = async (payload: ShareData) => new Promise<boolean>((resolve) => {
+    shareComposerResolveRef.current = resolve;
+    setShareComposer(payload);
+    setShareComposerText(String(payload.text || ''));
+  });
 
   const shareOriginalStoryByCard = async (story: any) => {
     const storyId = story?.id || story?.storyId || story?.sourceStoryId;
@@ -1747,8 +1753,9 @@ export default function App() {
     } else {
       shareText = buildStoryShareText(shareTitle, []);
     }
-    await sharePayload({ title: shareTitle, text: shareText, url: buildOriginalStoryUrl(storyId) });
-    await recordStoryShare(storyId);
+    if (await sharePayload({ title: shareTitle, text: shareText, url: buildOriginalStoryUrl(storyId) })) {
+      await recordStoryShare(storyId);
+    }
   };
 
   const shareStoryCardWithFeedback = async (story: any) => {
@@ -1792,8 +1799,9 @@ export default function App() {
       }
       const shareTitle = formatBookTitle(getStoryTitle(meta));
       const shareText = buildStoryShareText(shareTitle, authoringSaveSuccessStory.chapters || []);
-      await sharePayload({ title: shareTitle, text: shareText, url: buildOriginalStoryUrl(storyId) });
-      await recordStoryShare(storyId);
+      if (await sharePayload({ title: shareTitle, text: shareText, url: buildOriginalStoryUrl(storyId) })) {
+        await recordStoryShare(storyId);
+      }
     } catch (error: any) {
       console.error(error);
       if (error?.name === 'AbortError') {
@@ -2330,7 +2338,6 @@ export default function App() {
       await cacheStoryCartridge(snapshot.storyId, snapshot.cartridge);
     }
     setSessionId(user?.uid || null);
-    return true;
   };
 
   const refreshStories = async (options: { force?: boolean; includeArchive?: boolean; publicSort?: StoryLibrarySort } = {}) => {
@@ -2456,6 +2463,23 @@ export default function App() {
       if (archiveRefreshInFlightRef.current === refreshTask) {
         archiveRefreshInFlightRef.current = null;
       }
+    }
+  };
+
+  const refreshFollowedAuthors = async () => {
+    if (!user || !db) {
+      setFollowedAuthors([]);
+      return;
+    }
+    try {
+      setFollowedAuthorsLoading(true);
+      const rows = await listFollowedAuthors(db as any, 100);
+      setFollowedAuthors(rows || []);
+    } catch (error) {
+      console.warn('followed authors sync failed:', error);
+      showError('追踪作者列表同步失败，请稍后再试。');
+    } finally {
+      setFollowedAuthorsLoading(false);
     }
   };
 
@@ -2736,8 +2760,9 @@ export default function App() {
       const shareUrl = archiveId ? buildSharedStoryUrl(archiveId) : buildOriginalStoryUrl(sourceStoryId);
       const shareTitle = formatBookTitle(story.meta?.title || '未命名故事');
       const shareText = buildStoryShareText(shareTitle, story.chapters);
-      await sharePayload({ title: shareTitle, text: shareText, url: shareUrl });
-      await recordStoryShare(sourceStoryId);
+      if (await sharePayload({ title: shareTitle, text: shareText, url: shareUrl })) {
+        await recordStoryShare(sourceStoryId);
+      }
     } catch (error: any) {
       console.error(error);
       if (error?.name === 'AbortError') {
@@ -2788,6 +2813,7 @@ export default function App() {
     markStoryListSegment('archive', 'loading');
     navigateTo('ARCHIVE');
     void refreshArchiveStories({ force: true });
+    void refreshFollowedAuthors();
   };
 
   const leaveArchiveView = () => {
@@ -2971,37 +2997,39 @@ export default function App() {
   const copySharePayload = async (payload: ShareData) => {
     const copied = await writeClipboardText(buildShareClipboardText(String(payload.text || ''), String(payload.url || '')));
     showError(copied ? '已复制分享内容到剪贴板。' : '分享内容已准备好，请手动复制浏览器地址。');
+    return copied;
   };
 
   const openSystemShare = async (payload: ShareData) => {
     if (!navigator.share) {
-      await copySharePayload(payload);
-      return;
+      return copySharePayload(payload);
     }
     await navigator.share(payload);
     showError('已打开系统分享。');
+    return true;
   };
 
-  const deliverPreparedShare = async (payload: ShareData) => {
+  const deliverPreparedShare = async (payload: ShareData): Promise<boolean> => {
     if (!navigator.share) {
       const copied = await writeClipboardText(buildShareClipboardText(String(payload.text || ''), String(payload.url || '')));
       showError(copied ? '已复制分享内容到剪贴板。' : '分享链接已准备好，请手动复制浏览器地址。');
-      return;
+      return Boolean(copied);
     }
     try {
-      await openSystemShare(payload);
+      const shared = await openSystemShare(payload);
       if (isIosDevice()) {
         void writeClipboardText(buildShareClipboardText(String(payload.text || ''), String(payload.url || '')));
       }
+      return shared;
     } catch (error: any) {
       if (error?.name === 'AbortError') {
         showError('已取消分享。');
-        return;
+        return false;
       }
       const copied = await writeClipboardText(buildShareClipboardText(String(payload.text || ''), String(payload.url || '')));
       if (copied) {
         showError('系统分享未能打开，但分享内容已复制，可直接粘贴发送。');
-        return;
+        return true;
       }
       throw error;
     }
@@ -3020,8 +3048,9 @@ export default function App() {
       const shareUrl = story.archiveKind === 'favorite' ? buildOriginalStoryUrl(storyId) : buildSharedStoryUrl(storyId);
       const shareTitle = formatBookTitle(story.title || '未命名故事');
       const shareText = buildStoryShareText(shareTitle, story.chapters || []);
-      await sharePayload({ title: shareTitle, text: shareText, url: shareUrl });
-      await recordStoryShare(story.archiveKind === 'favorite' ? storyId : story.sourceStoryId);
+      if (await sharePayload({ title: shareTitle, text: shareText, url: shareUrl })) {
+        await recordStoryShare(story.archiveKind === 'favorite' ? storyId : story.sourceStoryId);
+      }
     } catch (error: any) {
       console.error(error);
       if (error?.name === 'AbortError') {
@@ -3417,6 +3446,40 @@ export default function App() {
       setNotificationItems((prev) => prev.map((item) => ({ ...item, readAt: item.readAt || readAt })));
     } catch (error) {
       console.warn('mark notifications read failed:', error);
+    }
+  };
+
+  const deleteNotificationItem = async (notificationId: string) => {
+    setNotificationItems((prev) => prev.filter((item) => item.id !== notificationId));
+    try {
+      if (!notificationId.startsWith('author-pulse-') && db) {
+        await deleteNotification(db as any, notificationId);
+      }
+    } catch (error) {
+      console.warn('delete notification failed:', error);
+      void refreshNotificationCenter();
+      showError('通知删除失败，已重新同步。');
+    }
+  };
+
+  const closeShareComposer = (success = false) => {
+    const resolve = shareComposerResolveRef.current;
+    shareComposerResolveRef.current = null;
+    setShareComposer(null);
+    setShareComposerText('');
+    resolve?.(success);
+  };
+
+  const confirmShareComposer = async () => {
+    if (!shareComposer) return;
+    try {
+      const payload = { ...shareComposer, text: shareComposerText } as ShareData;
+      const shared = await deliverPreparedShare(payload);
+      closeShareComposer(shared);
+    } catch (error: any) {
+      console.error(error);
+      showError(error?.message || '分享失败。');
+      closeShareComposer(false);
     }
   };
 
@@ -4819,8 +4882,9 @@ export default function App() {
       if (activeStoryId && currentRunMatchesOriginal()) {
         shareStage = 'deliverOriginalShare';
         setGlobalLoadingDetail('正在调用设备的分享功能。');
-        await sharePayload({ title: shareTitle, text: shareText, url: buildOriginalStoryUrl(activeStoryId) });
-        await recordStoryShare(activeStoryId);
+        if (await sharePayload({ title: shareTitle, text: shareText, url: buildOriginalStoryUrl(activeStoryId) })) {
+          await recordStoryShare(activeStoryId);
+        }
         return;
       }
       shareStage = 'createStorySnapshot';
@@ -4830,8 +4894,9 @@ export default function App() {
       setSharedStoryId(shareId);
       shareStage = 'deliverPreparedShare';
       setGlobalLoadingDetail('分享记录已准备好，正在调用设备的分享功能。');
-      await sharePayload({ title: shareTitle, text: shareText, url: buildSharedStoryUrl(shareId) });
-      await recordStoryShare(activeStoryId || sharedRecord?.sourceStoryId);
+      if (await sharePayload({ title: shareTitle, text: shareText, url: buildSharedStoryUrl(shareId) })) {
+        await recordStoryShare(activeStoryId || sharedRecord?.sourceStoryId);
+      }
       cacheSharedSnapshotAfterCreate(shareId, sharedRecord);
       if ((globalThis as any).__legacyShareRecord__) {
       shareStage = 'resolveProvenance';
@@ -5683,6 +5748,19 @@ export default function App() {
               {String(storyConclusion || '').split('\n').filter(Boolean).map((paragraph, index) => (
                 <p key={index}>{paragraph}</p>
               ))}
+              <button
+                type="button"
+                onClick={() => {
+                  setArchiveTab('authors');
+                  setArchiveChoiceStoryId(null);
+                  void refreshFollowedAuthors();
+                }}
+                className={`rounded-xl px-4 py-2 text-sm font-black transition-all duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 ${
+                  archiveTab === 'authors' ? 'bg-indigo-600 text-white shadow-lg' : 'text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200'
+                }`}
+              >
+                追踪作者 <span className="ml-1 text-[10px] opacity-70">{followedAuthors.length}</span>
+              </button>
             </div>
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
               <button type="button" onClick={() => setShowSummaryModal(false)} className={semanticButtonClass('secondary', { fullWidth: true })}>
@@ -6283,7 +6361,25 @@ export default function App() {
       if (archiveFilter !== 'all' && story.visibility !== archiveFilter) return false;
       return matchesKeyword(story);
     });
+    const visibleFollowedAuthors = followedAuthors.filter((author) => {
+      if (!keyword) return true;
+      return `${author.authorName}\n${author.authorId}`.toLowerCase().includes(keyword);
+    });
     const isArchiveSyncing = archiveSegment.status === 'loading' || archiveSegment.status === 'syncing';
+
+    const handleUnfollowFromArchive = async (authorId: string) => {
+      if (!db || !user) return;
+      try {
+        setFollowedAuthors((prev) => prev.filter((author) => author.authorId !== authorId));
+        await unfollowAuthor(db as any, authorId);
+        if (authorProfileTarget?.authorId === authorId) setAuthorProfileFollowing(false);
+        showError('已取消追踪作者。');
+      } catch (error: any) {
+        console.error(error);
+        showError(error?.message || '取消追踪失败。');
+        void refreshFollowedAuthors();
+      }
+    };
 
     const renderFavoriteCard = (story: any) => {
       const isChoosingThis = archiveChoiceStoryId === story.id;
@@ -6435,6 +6531,39 @@ export default function App() {
       </div>
     );
 
+    const renderFollowedAuthorCard = (author: { authorId: string; authorName: string; followedAt: string }) => (
+      <div key={author.authorId} className="app-card flex flex-col rounded-[1.5rem] p-5">
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-xs font-black uppercase tracking-[0.18em] text-indigo-300">追踪作者</div>
+            <div className="mt-1 truncate text-lg font-black text-white">{author.authorName || `游客+${shortUserId(author.authorId)}`}</div>
+            <div className="mt-1 text-[11px] font-bold text-zinc-500">追踪于 {new Date(author.followedAt || Date.now()).toLocaleDateString()}</div>
+          </div>
+          <div className="rounded-full border border-indigo-400/20 bg-indigo-500/10 p-2 text-indigo-200">
+            <Bell className="h-4 w-4" />
+          </div>
+        </div>
+        <div className="mt-auto grid gap-2">
+          <button
+            type="button"
+            onClick={() => openAuthorProfile(author.authorId, author.authorName)}
+            className={semanticButtonClass('secondary', { fullWidth: true, compact: true })}
+          >
+            <BookOpen className="h-4 w-4" />
+            查看作者作品
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleUnfollowFromArchive(author.authorId)}
+            className={semanticButtonClass('ghost', { fullWidth: true, compact: true })}
+          >
+            <X className="h-4 w-4" />
+            取消追踪
+          </button>
+        </div>
+      </div>
+    );
+
     return (
       <div className="relative mx-auto max-w-6xl px-6 pb-12 pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] lg:px-8">
         <AnimatePresence>
@@ -6498,11 +6627,11 @@ export default function App() {
                 />
                 <button
                   type="button"
-                  onClick={() => refreshArchiveStories({ force: true })}
-                  disabled={isArchiveSyncing}
+                  onClick={() => archiveTab === 'authors' ? refreshFollowedAuthors() : refreshArchiveStories({ force: true })}
+                  disabled={archiveTab === 'authors' ? followedAuthorsLoading : isArchiveSyncing}
                   className={semanticButtonClass('ghost', { compact: true })}
                 >
-                  <RefreshCcw className={`h-4 w-4 ${isArchiveSyncing ? 'animate-spin' : ''}`} />
+                  <RefreshCcw className={`h-4 w-4 ${(archiveTab === 'authors' ? followedAuthorsLoading : isArchiveSyncing) ? 'animate-spin' : ''}`} />
                   刷新馆藏
                 </button>
               </div>
@@ -6541,6 +6670,20 @@ export default function App() {
               title="正在同步命运收藏馆"
               detail="正在读取收藏原作和保存记录。弱网时会先尝试恢复本机缓存。"
             />
+          ) : archiveTab === 'authors' ? (
+            followedAuthorsLoading && visibleFollowedAuthors.length === 0 ? (
+              <InlineSyncState title="正在同步追踪作者" detail="正在读取你追踪的作者列表。" />
+            ) : visibleFollowedAuthors.length === 0 ? (
+              <InlineSyncState
+                tone="empty"
+                title={keyword ? '没有符合搜索词的追踪作者' : '还没有追踪任何作者'}
+                detail={keyword ? '换个关键词再试，或清空搜索条件。' : '点击作者名字打开作者档案后，可以追踪作者并在这里集中查看。'}
+              />
+            ) : (
+              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {visibleFollowedAuthors.map(renderFollowedAuthorCard)}
+              </div>
+            )
           ) : archiveTab === 'favorite' ? (
             favoriteStories.length === 0 ? (
               <InlineSyncState
@@ -8013,18 +8156,20 @@ export default function App() {
             ) : (
               <div className="grid max-h-[56vh] gap-3 overflow-y-auto pr-1">
                 {notificationItems.map((item) => (
-                  <button
+                  <div
                     key={item.id}
-                    type="button"
-                    onClick={() => {
-                      setNotificationCenterOpen(false);
-                      if (item.storyId) void startStoryPlay(item.storyId);
-                    }}
-                    className={`rounded-2xl border p-4 text-left transition-colors hover:border-indigo-400/50 hover:bg-indigo-500/10 ${
+                    className={`flex items-start gap-2 rounded-2xl border p-3 transition-colors hover:border-indigo-400/50 hover:bg-indigo-500/10 ${
                       item.readAt ? 'border-zinc-800 bg-zinc-900/30' : 'border-indigo-400/30 bg-indigo-500/10'
                     }`}
                   >
-                    <div className="flex items-start gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNotificationCenterOpen(false);
+                        if (item.storyId) void startStoryPlay(item.storyId);
+                      }}
+                      className="flex min-w-0 flex-1 items-start gap-3 text-left"
+                    >
                       <div className="mt-0.5 rounded-full border border-white/10 bg-white/10 p-2">
                         <Bell className="h-4 w-4 text-indigo-200" />
                       </div>
@@ -8035,11 +8180,70 @@ export default function App() {
                           {new Date(item.createdAt || Date.now()).toLocaleString()}
                         </div>
                       </div>
-                    </div>
-                  </button>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void deleteNotificationItem(item.id)}
+                      className="shrink-0 rounded-full p-2 text-zinc-500 transition-colors hover:bg-rose-500/10 hover:text-rose-200 active:scale-95"
+                      aria-label="删除通知"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 ))}
               </div>
             )}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
+  const renderShareComposer = () => (
+    <AnimatePresence>
+      {shareComposer && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className={`${safeModalBackdropClass} z-[5600] bg-black/70 backdrop-blur-md`}
+          onClick={() => closeShareComposer(false)}
+        >
+          <motion.div
+            initial={{ y: 20, opacity: 0, scale: 0.96 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: 14, opacity: 0, scale: 0.98 }}
+            className="w-full max-w-lg rounded-[2rem] border border-zinc-800 bg-zinc-950 p-5 shadow-2xl sm:p-6"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <div className="text-xs font-black uppercase tracking-[0.2em] text-indigo-300">分享前确认</div>
+                <h3 className="mt-2 text-2xl font-black text-white">{String(shareComposer.title || '分享故事')}</h3>
+                <p className="mt-1 text-xs font-semibold text-zinc-500">可以先调整要发出去的文字；确认分享后才会调用设备分享功能，并在成功后计入分享数。</p>
+              </div>
+              <button type="button" onClick={() => closeShareComposer(false)} className={semanticIconButtonClass('ghost')} aria-label="关闭分享编辑">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <label className="mb-3 block text-xs font-black uppercase tracking-[0.16em] text-zinc-500">分享文字</label>
+            <textarea
+              value={shareComposerText}
+              onChange={(event) => setShareComposerText(event.target.value)}
+              className="min-h-44 w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 text-sm font-semibold leading-relaxed text-zinc-100 outline-none transition-colors focus:border-indigo-400/70"
+            />
+            <div className="mt-3 rounded-2xl border border-zinc-800 bg-zinc-900/35 p-3 text-xs font-semibold leading-relaxed text-zinc-400 break-all">
+              {String(shareComposer.url || '')}
+            </div>
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <button type="button" onClick={() => closeShareComposer(false)} className={semanticButtonClass('ghost', { fullWidth: true })}>
+                取消
+              </button>
+              <button type="button" onClick={() => void confirmShareComposer()} className={semanticButtonClass('primary', { fullWidth: true })}>
+                <ExternalLink className="h-4 w-4" />
+                确认分享
+              </button>
+            </div>
           </motion.div>
         </motion.div>
       )}
@@ -9311,6 +9515,7 @@ export default function App() {
           {accountEntryButton}
           {renderAuthorProfileModal()}
           {renderNotificationCenter()}
+          {renderShareComposer()}
           {accountCenterModal}
         </>
       ) : !user ? (
@@ -9348,6 +9553,7 @@ export default function App() {
           {renderStoryDetailModal()}
           {renderAuthorProfileModal()}
           {renderNotificationCenter()}
+          {renderShareComposer()}
           {accountCenterModal}
           {renderConfirmationModal()}
           {renderAuthoringSaveSuccessModal()}

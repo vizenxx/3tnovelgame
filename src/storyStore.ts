@@ -139,6 +139,12 @@ export type UserNotificationItem = {
   readAt?: string | null;
 };
 
+export type FollowedAuthorItem = {
+  authorId: string;
+  authorName: string;
+  followedAt: string;
+};
+
 export async function listPublicStories(db: Firestore, pageSize = 20, sort: StoryListSort = 'updated') {
   if (useSupabaseStories()) {
     return storyApi<StoryListItem[]>('listPublicStories', { pageSize, sort }, { timeoutMs: 9000, stage: '公开作品列表同步' });
@@ -269,6 +275,13 @@ export async function markNotificationsRead(db: Firestore) {
   return { ok: true };
 }
 
+export async function deleteNotification(db: Firestore, notificationId: string) {
+  if (useSupabaseStories()) {
+    return storyApi('deleteNotification', { notificationId }, { auth: true, timeoutMs: 8000, stage: '通知删除同步' });
+  }
+  return { ok: true };
+}
+
 export async function likeStory(db: Firestore, storyId: string, userId: string) {
   if (useSupabaseStories()) {
     return storyApi<{ alreadyExists: boolean }>('likeStory', { storyId }, { auth: true });
@@ -368,6 +381,13 @@ export async function getAuthorFollowState(db: Firestore, authorId: string) {
     return storyApi<{ following: boolean }>('getAuthorFollowState', { authorId }, { auth: true });
   }
   return { following: false };
+}
+
+export async function listFollowedAuthors(db: Firestore, pageSize = 100) {
+  if (useSupabaseStories()) {
+    return storyApi<FollowedAuthorItem[]>('listFollowedAuthors', { pageSize }, { auth: true, timeoutMs: 8000, stage: '追踪作者同步' });
+  }
+  return [];
 }
 
 export async function getPushConfig() {

@@ -660,11 +660,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })));
     }
 
+    if (action === 'listFollowedAuthors') {
+      const rows = await supabaseRequest<any[]>('author_follows', {
+        query: {
+          follower_id: `eq.${authUser.uid}`,
+          select: 'author_id,author_name,created_at',
+          order: 'created_at.desc',
+          limit: body.pageSize || 100,
+        },
+      }).catch((error) => {
+        if (/author_follows/i.test(String(error?.message || error))) return [];
+        throw error;
+      });
+      return res.status(200).json(rows.map((row) => ({
+        authorId: row.author_id,
+        authorName: row.author_name || guestName(row.author_id),
+        followedAt: row.created_at,
+      })));
+    }
+
     if (action === 'markNotificationsRead') {
       await supabaseRequest('user_notifications', {
         method: 'PATCH',
         query: { user_id: `eq.${authUser.uid}`, read_at: 'is.null' },
         body: { read_at: nowIso() },
+      }).catch((error) => {
+        if (/user_notifications/i.test(String(error?.message || error))) return null;
+        throw error;
+      });
+      return res.status(200).json({ ok: true });
+    }
+
+    if (action === 'deleteNotification') {
+      const notificationId = String(body.notificationId || '');
+      if (!notificationId) return res.status(400).json({ error: 'Missing notificationId' });
+      await supabaseRequest('user_notifications', {
+        method: 'DELETE',
+        query: { id: `eq.${notificationId}`, user_id: `eq.${authUser.uid}` },
       }).catch((error) => {
         if (/user_notifications/i.test(String(error?.message || error))) return null;
         throw error;
