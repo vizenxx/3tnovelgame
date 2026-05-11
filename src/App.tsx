@@ -1529,7 +1529,6 @@ export default function App() {
   const isGlobalBlockingLoading = Boolean(
     globalLoadingMessage ||
     authoringSaving ||
-    isSharing ||
     isGeneratingCover
   );
   const globalBlockingLoadingMessage = globalLoadingMessage ||
@@ -6602,16 +6601,17 @@ export default function App() {
               {([
                 { id: 'favorite', label: '收藏原作' },
                 { id: 'saved', label: '保存记录' },
+                { id: 'authors', label: '追踪作者' },
               ] as const).map((tab) => (
                 <button
                   key={tab.id}
                   type="button"
-                  onClick={() => { setArchiveTab(tab.id); setArchiveChoiceStoryId(null); }}
+                  onClick={() => { setArchiveTab(tab.id as 'favorite' | 'saved' | 'authors'); setArchiveChoiceStoryId(null); }}
                   className={`rounded-xl px-4 py-2 text-sm font-black transition-all duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 ${
                     archiveTab === tab.id ? 'bg-indigo-600 text-white shadow-lg' : 'text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200'
                   }`}
                 >
-                  {tab.label} <span className="ml-1 text-[10px] opacity-70">{archiveStories.filter((s: any) => tab.id === 'favorite' ? s.archiveKind === 'favorite' : s.archiveKind !== 'favorite').length}</span>
+                  {tab.label} <span className="ml-1 text-[10px] opacity-70">{tab.id === 'authors' ? followedAuthors.length : archiveStories.filter((s: any) => tab.id === 'favorite' ? s.archiveKind === 'favorite' : s.archiveKind !== 'favorite').length}</span>
                 </button>
               ))}
             </div>
