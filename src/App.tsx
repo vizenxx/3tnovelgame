@@ -1729,6 +1729,8 @@ export default function App() {
   };
 
   const sharePayload = async (payload: ShareData) => new Promise<boolean>((resolve) => {
+    setGlobalLoadingMessage(null);
+    setGlobalLoadingDetail(null);
     shareComposerResolveRef.current = resolve;
     setShareComposer(payload);
     setShareComposerText(String(payload.text || ''));
