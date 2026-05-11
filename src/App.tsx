@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp, Download, Sun, Moon, Search, GitBranch, Bell, BarChart3 } from 'lucide-react';
 import { auth, db, firebaseInitError } from './firebase';
-import { createEmptyStory, createSharedStoryRecord, createStorySnapshot, adaptBlueprintToStory, createStoryBranch, deleteNotification, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, favoriteStory, unfavoriteStory, followAuthor, getAppSettings, getAuthorFollowState, getPushConfig, getSharedStoryRecord, getStoryCartridge, getStoryMeta, getUserProgress, incrementShareMetric, incrementStoryMetric, likeStory, unlikeStory, listAuthorStories, listFollowedAuthors, listMySharedStories, listMyStories, listNotifications, listPublicStories, markNotificationsRead, refundCoverGenerationUsage, reportStory, reserveCoverGenerationUsage, saveAppSettings, savePushSubscription, saveStoryMainlineBundle, saveStoryMeta, saveUserProgress, unfollowAuthor, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch } from './storyStore';
+import { createEmptyStory, createSharedStoryRecord, createStorySnapshot, adaptBlueprintToStory, createStoryBranch, deleteAllNotifications, deleteNotification, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, favoriteStory, unfavoriteStory, followAuthor, getAppSettings, getAuthorFollowState, getPushConfig, getSharedStoryRecord, getStoryCartridge, getStoryMeta, getUserProgress, incrementShareMetric, incrementStoryMetric, likeStory, unlikeStory, listAuthorStories, listFollowedAuthors, listMySharedStories, listMyStories, listNotifications, listPublicStories, markNotificationsRead, refundCoverGenerationUsage, reportStory, reserveCoverGenerationUsage, saveAppSettings, savePushSubscription, saveStoryMainlineBundle, saveStoryMeta, saveUserProgress, unfollowAuthor, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch } from './storyStore';
 import { branchEffectiveWeight, isBranchUnlockedByHistory, normalizeEndingBias } from './storyCartridge';
 import { deleteLocalCache, getLocalCache, setLocalCache } from './localCache';
 import { useAppNavigation } from './navigation/useAppNavigation';
@@ -235,8 +235,56 @@ const DEFAULT_FEATURE_SETTINGS: AppFeatureSettings = {
 };
 const GUEST_ACCOUNT_RETENTION_DAYS = 180;
 const STORY_LIST_CACHE_TTL_MS = 10 * 60 * 1000;
+const ONBOARDING_STORAGE_KEY = '3t-onboarding-v1-dismissed';
+const PUSH_PROMPT_DISMISSED_KEY = '3t-push-prompt-dismissed-v1';
 const GUEST_RETENTION_NOTICE =
   '游客账号如果连续 180 天没有登录或打开 app 保持活跃，可能会被系统自动清理。注册成正式账号后，当前作品和记录会继续保留。';
+
+const QUICK_STORY_TEMPLATES: Array<{
+  id: string;
+  label: string;
+  badge: string;
+  hint: string;
+  tags: string[];
+  outline: string;
+  person: NarrativePerson;
+  endingMode: EndingMode;
+  endingBias: { leftBaseWeight: number; rightBaseWeight: number };
+}> = [
+  {
+    id: 'city-mystery',
+    label: '都市悬疑',
+    badge: '适合快节奏',
+    hint: '现代城市、秘密组织、选择代价清楚。',
+    tags: ['悬疑', '现代', '命运'],
+    outline: '一名普通人在深夜收到一封来自未来的讯息，讯息准确预告了第二天会发生的意外。为了阻止事故，他开始追查讯息来源，却发现每一次拯救都会让另一个人的命运偏离原轨。',
+    person: 'third',
+    endingMode: 'dual',
+    endingBias: { leftBaseWeight: 40, rightBaseWeight: 40 },
+  },
+  {
+    id: 'ancient-fate',
+    label: '古风权谋',
+    badge: '适合多线支线',
+    hint: '人物关系强，适合支线牵动结局域。',
+    tags: ['古风', '权谋', '羁绊'],
+    outline: '边境小城的年轻谋士被卷入王朝继承风波。三方势力都以天下安危为名拉拢他，而他发现真正能改变局势的，不是兵权，而是几位被历史忽略的小人物。',
+    person: 'third',
+    endingMode: 'dual',
+    endingBias: { leftBaseWeight: 50, rightBaseWeight: 30 },
+  },
+  {
+    id: 'single-emotion',
+    label: '单线情感',
+    badge: '适合单一结局',
+    hint: '结局固定，重点在干涉后如何圆回主线。',
+    tags: ['治愈', '日常', '遗憾'],
+    outline: '一位总是错过重要告别的人，意外获得三次干涉过去片段的机会。无论他如何改变细节，最终都必须学会面对同一个答案。',
+    person: 'first',
+    endingMode: 'single',
+    endingBias: { leftBaseWeight: 40, rightBaseWeight: 40 },
+  },
+];
 
 const getLocalDeviceId = () => {
   if (typeof window === 'undefined') return 'server';
@@ -454,6 +502,15 @@ const PwaUpdateModal = ({
               >
                 {isApplying ? '升级中...' : '立即升级'}
               </button>
+              {/*
+                <CheckCircle2 className="h-4 w-4" />
+                全部已读
+              </button>
+              <button type="button" onClick={() => void clearAllNotifications()} className={semanticButtonClass('danger', { compact: true })} disabled={notificationLoading || notificationItems.length === 0}>
+                <Trash2 className="h-4 w-4" />
+                清空
+              </button>
+              */}
             </div>
           )}
         </motion.div>
@@ -1102,12 +1159,27 @@ export default function App() {
   const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
   const [globalLoadingMessage, setGlobalLoadingMessage] = useState<string | null>(null);
   const [globalLoadingDetail, setGlobalLoadingDetail] = useState<string | null>(null);
+  const [showOnboardingGuide, setShowOnboardingGuide] = useState(false);
   const [themeInputText, setThemeInputText] = useState('');
   useEffect(() => {
     if (selectedThemes.length > 0 && !themeInputText) {
       setThemeInputText(selectedThemes.join('，'));
     }
   }, [selectedThemes, themeInputText]);
+  useEffect(() => {
+    if (!isSessionHydrated || !user || typeof window === 'undefined') return;
+    if (!window.localStorage.getItem(ONBOARDING_STORAGE_KEY)) {
+      setShowOnboardingGuide(true);
+    }
+  }, [isSessionHydrated, user?.uid]);
+  useEffect(() => {
+    if (!isSessionHydrated || !user || typeof window === 'undefined') return;
+    if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    if (Notification.permission !== 'default') return;
+    if (window.localStorage.getItem(PUSH_PROMPT_DISMISSED_KEY)) return;
+    const timer = window.setTimeout(() => setShowPushPermissionPrompt(true), 1200);
+    return () => window.clearTimeout(timer);
+  }, [isSessionHydrated, user?.uid]);
   const [customOutline, setCustomOutline] = useState<string>('');
   const [blueprint, setBlueprint] = useState<Blueprint | null>(null);
   const [chapters, setChapters] = useState<Chapter[]>([]);
@@ -1223,6 +1295,7 @@ export default function App() {
   const [authorProfileFollowing, setAuthorProfileFollowing] = useState(false);
   const [authorProfileBusy, setAuthorProfileBusy] = useState(false);
   const [pushSubscribeBusy, setPushSubscribeBusy] = useState(false);
+  const [showPushPermissionPrompt, setShowPushPermissionPrompt] = useState(false);
   const [notificationCenterOpen, setNotificationCenterOpen] = useState(false);
   const [notificationItems, setNotificationItems] = useState<Array<{
     id: string;
@@ -3410,6 +3483,41 @@ export default function App() {
     setTimeout(() => setErrorMsg(null), 5000);
   };
 
+  const dismissOnboardingGuide = () => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(ONBOARDING_STORAGE_KEY, '1');
+    }
+    setShowOnboardingGuide(false);
+  };
+
+  const startQuickGenerationFromOnboarding = () => {
+    dismissOnboardingGuide();
+    navigateTo('THEME_SELECTION');
+  };
+
+  const dismissPushPermissionPrompt = () => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(PUSH_PROMPT_DISMISSED_KEY, '1');
+    }
+    setShowPushPermissionPrompt(false);
+  };
+
+  const enablePushNotificationsFromPrompt = async () => {
+    await enablePushNotifications();
+    dismissPushPermissionPrompt();
+  };
+
+  const applyQuickStoryTemplate = (template: typeof QUICK_STORY_TEMPLATES[number]) => {
+    const nextTags = template.tags.slice(0, 4);
+    setSelectedThemes(nextTags);
+    setThemeInputText(nextTags.join('，'));
+    setCustomOutline(template.outline);
+    setNarrativePerson(template.person);
+    setQuickEndingMode(template.endingMode);
+    setQuickEndingBias(normalizeEndingBias(template.endingBias));
+    showError(`已套用「${template.label}」模板，可继续微调。`);
+  };
+
   const refreshNotificationCenter = async () => {
     if (!db || !user) {
       setNotificationItems([]);
@@ -3441,12 +3549,32 @@ export default function App() {
     }
     setNotificationCenterOpen(true);
     await refreshNotificationCenter();
+  };
+
+  const markAllNotificationsRead = async () => {
     try {
       if (db) await markNotificationsRead(db as any);
       const readAt = new Date().toISOString();
       setNotificationItems((prev) => prev.map((item) => ({ ...item, readAt: item.readAt || readAt })));
     } catch (error) {
       console.warn('mark notifications read failed:', error);
+      showError('通知已读同步失败，请稍后再试。');
+    }
+  };
+
+  const clearAllNotifications = async () => {
+    const previousItems = notificationItems;
+    const previousPulse = authorPulseNotifications;
+    setNotificationItems([]);
+    setAuthorPulseNotifications([]);
+    try {
+      if (db) await deleteAllNotifications(db as any);
+      showError('通知已清空。');
+    } catch (error) {
+      console.warn('clear notifications failed:', error);
+      setNotificationItems(previousItems);
+      setAuthorPulseNotifications(previousPulse);
+      showError('通知清空失败，请稍后再试。');
     }
   };
 
@@ -3624,6 +3752,15 @@ export default function App() {
       window.removeEventListener('unhandledrejection', handleFatalError as EventListener);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isRecoveringInvalidGameState) return;
+    const timer = window.setTimeout(() => {
+      returnToStoryLibraryFallback();
+      showError('页面资料没有完整载入，已带你回到作品库。');
+    }, 2500);
+    return () => window.clearTimeout(timer);
+  }, [isRecoveringInvalidGameState]);
 
   const resetGame = async () => {
     if (!user || !db) return;
@@ -6544,11 +6681,11 @@ export default function App() {
             <Bell className="h-4 w-4" />
           </div>
         </div>
-        <div className="mt-auto grid gap-2">
+        <div className="mt-auto grid grid-cols-2 gap-2">
           <button
             type="button"
             onClick={() => openAuthorProfile(author.authorId, author.authorName)}
-            className={semanticButtonClass('secondary', { fullWidth: true, compact: true })}
+            className={`${semanticButtonClass('secondary', { compact: true })} min-w-0 justify-center px-2 text-xs`}
           >
             <BookOpen className="h-4 w-4" />
             查看作者作品
@@ -6556,7 +6693,7 @@ export default function App() {
           <button
             type="button"
             onClick={() => void handleUnfollowFromArchive(author.authorId)}
-            className={semanticButtonClass('ghost', { fullWidth: true, compact: true })}
+            className={`${semanticButtonClass('ghost', { compact: true })} min-w-0 justify-center px-2 text-xs`}
           >
             <X className="h-4 w-4" />
             取消追踪
@@ -6715,6 +6852,108 @@ export default function App() {
       </div>
     );
   };
+
+  const renderOnboardingGuide = () => (
+    <AnimatePresence>
+      {showOnboardingGuide && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className={`${safeModalBackdropClass} z-[3600] bg-black/70 backdrop-blur-md`}
+          onClick={dismissOnboardingGuide}
+        >
+          <motion.div
+            initial={{ opacity: 0, y: 18, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 18, scale: 0.98 }}
+            className="w-full max-w-2xl rounded-[2rem] border border-indigo-300/20 bg-zinc-950 p-6 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <div className="inline-flex items-center gap-2 rounded-full border border-indigo-400/20 bg-indigo-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-indigo-200">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  初次进入
+                </div>
+                <h2 className="mt-4 text-2xl font-black text-white">欢迎来到命运故事台</h2>
+                <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+                  这里不是普通阅读器：你可以读故事、干涉章节、保存命运线，也可以自己生成或改编作品。
+                </p>
+              </div>
+              <button type="button" onClick={dismissOnboardingGuide} className={semanticIconButtonClass('ghost')} aria-label="关闭引导">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {[
+                { title: '选一篇作品', desc: '从作品库点「干涉命运」进入游玩。' },
+                { title: '干涉章节', desc: '每局最多三次，系统会重写相关命运线。' },
+                { title: '保存与分享', desc: '满意的命运可保存到收藏馆或分享给别人。' },
+              ].map((item) => (
+                <div key={item.title} className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+                  <div className="text-sm font-black text-zinc-100">{item.title}</div>
+                  <div className="mt-2 text-xs leading-relaxed text-zinc-500">{item.desc}</div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              <button type="button" onClick={dismissOnboardingGuide} className={semanticButtonClass('primary', { fullWidth: true })}>
+                去作品库看看
+              </button>
+              <button type="button" onClick={startQuickGenerationFromOnboarding} className={semanticButtonClass('secondary', { fullWidth: true })}>
+                <Wand2 className="h-4 w-4" />
+                快速生成故事
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
+  const renderPushPermissionPrompt = () => (
+    <AnimatePresence>
+      {showPushPermissionPrompt && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className={`${safeModalBackdropClass} z-[3550] bg-black/65 backdrop-blur-md`}
+          onClick={dismissPushPermissionPrompt}
+        >
+          <motion.div
+            initial={{ opacity: 0, y: 18, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 18, scale: 0.98 }}
+            className="w-full max-w-lg rounded-[2rem] border border-zinc-800 bg-zinc-950 p-6 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-5 flex items-start gap-4">
+              <div className="rounded-2xl border border-indigo-400/20 bg-indigo-500/10 p-3 text-indigo-200">
+                <Bell className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-xl font-black text-white">接收作品动态提醒？</h2>
+                <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+                  开启后，作者更新、作品被点赞收藏、追踪作者发布新作时，可以在手机收到提醒。你也可以之后到个人中心的设置里开启。
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <button type="button" onClick={dismissPushPermissionPrompt} className={semanticButtonClass('ghost', { fullWidth: true })}>
+                稍后再说
+              </button>
+              <button type="button" onClick={() => void enablePushNotificationsFromPrompt()} disabled={pushSubscribeBusy} className={semanticButtonClass('primary', { fullWidth: true })}>
+                {pushSubscribeBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
+                开启手机通知
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
   const renderThemeSelectionView = () => (
     <div className="mx-auto flex min-h-[100dvh] max-w-5xl flex-col justify-center px-6 pb-20 pt-[max(7rem,calc(env(safe-area-inset-top)+6rem))] text-center lg:px-8">
       <div className="mb-8 flex items-center justify-between">
@@ -6730,6 +6969,32 @@ export default function App() {
         <p className="text-sm leading-relaxed text-zinc-500 sm:text-base">
           选择 1 到 4 个主题，或直接输入你的故事大纲。系统会先生成完整蓝图，再预先写好前 3 章供你开始干涉。
         </p>
+      </div>
+
+      <div className="mx-auto mt-8 grid w-full max-w-4xl gap-3 px-4 text-left md:grid-cols-3">
+        {QUICK_STORY_TEMPLATES.map((template) => (
+          <button
+            key={template.id}
+            type="button"
+            onClick={() => applyQuickStoryTemplate(template)}
+            className="group rounded-[1.5rem] border border-zinc-800 bg-zinc-900/40 p-4 text-left transition-all hover:-translate-y-1 hover:border-indigo-400/50 hover:bg-indigo-500/10 active:scale-[0.98]"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-base font-black text-zinc-100 group-hover:text-white">{template.label}</span>
+              <span className="rounded-full border border-indigo-400/20 bg-indigo-500/10 px-2 py-1 text-[10px] font-black text-indigo-200">
+                {template.badge}
+              </span>
+            </div>
+            <p className="mt-3 text-xs leading-relaxed text-zinc-500 group-hover:text-zinc-300">{template.hint}</p>
+            <div className="mt-4 flex flex-wrap gap-1.5">
+              {template.tags.map((tag) => (
+                <span key={tag} className="rounded-full bg-zinc-950 px-2 py-1 text-[10px] font-bold text-zinc-400">
+                  {tag}
+                </span>
+              ))}
+            </div>
+          </button>
+        ))}
       </div>
 
       <div className="mx-auto mt-6 w-full max-w-2xl px-4 text-left">
@@ -6900,6 +7165,13 @@ export default function App() {
     </div>
   );
 
+  const accountAssetStats = [
+    { label: '收藏原作', value: mySharedStories.filter((story: any) => story.archiveKind === 'favorite').length },
+    { label: '保存故事', value: mySharedStories.filter((story: any) => story.archiveKind !== 'favorite').length },
+    { label: '追踪作者', value: followedAuthors.length },
+    { label: '我的作品', value: myStories.length },
+  ];
+
   const accountCenterModal = (
     <AnimatePresence>
       {isAccountCenterOpen && (
@@ -6932,6 +7204,26 @@ export default function App() {
                 <ChevronLeft className="h-5 w-5" />
               </button>
             </div>
+
+            <section className="mb-6 rounded-[1.5rem] border border-indigo-300/15 bg-indigo-500/10 p-5">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-lg font-black text-white">我的资产</div>
+                  <div className="mt-1 text-xs leading-relaxed text-zinc-500">
+                    收藏、保存、追踪和创作集中看，避免用户不知道自己的内容放在哪里。
+                  </div>
+                </div>
+                <BarChart3 className="h-5 w-5 text-indigo-200" />
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {accountAssetStats.map((item) => (
+                  <div key={item.label} className="rounded-2xl border border-zinc-800/80 bg-zinc-950/50 p-4">
+                    <div className="text-2xl font-black text-white">{item.value}</div>
+                    <div className="mt-1 text-xs font-bold text-zinc-500">{item.label}</div>
+                  </div>
+                ))}
+              </div>
+            </section>
 
             <div className="grid gap-6 lg:grid-cols-2">
               <section className="rounded-[1.5rem] border border-zinc-800 bg-zinc-900/30 p-5">
@@ -6969,6 +7261,21 @@ export default function App() {
                         </button>
                       ))}
                     </div>
+                  </div>
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-black text-zinc-100">手机通知</div>
+                        <div className="mt-1 text-xs leading-relaxed text-zinc-500">
+                          接收作者更新、作品互动和系统提醒。若你曾在系统弹窗中拒绝，需要到浏览器或手机设置里重新允许。
+                        </div>
+                      </div>
+                      <Bell className="h-5 w-5 text-indigo-300" />
+                    </div>
+                    <button type="button" onClick={enablePushNotifications} disabled={pushSubscribeBusy} className={semanticButtonClass('secondary', { fullWidth: true })}>
+                      {pushSubscribeBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
+                      开启手机通知
+                    </button>
                   </div>
                   <input
                     value={profileDisplayName}
@@ -8070,10 +8377,6 @@ export default function App() {
                   {authorProfileFollowing ? '已追踪' : '追踪作者'}
                 </button>
               )}
-              <button type="button" onClick={enablePushNotifications} disabled={pushSubscribeBusy} className={semanticButtonClass('ghost', { compact: true })}>
-                {pushSubscribeBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
-                开启手机通知
-              </button>
             </div>
             {authorProfileLoading ? (
               <div className="flex items-center justify-center gap-2 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-8 text-sm font-black text-zinc-400">
@@ -8140,10 +8443,18 @@ export default function App() {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="mb-3 flex justify-end">
+            <div className="mb-3 grid grid-cols-3 gap-2">
               <button type="button" onClick={() => void refreshNotificationCenter()} className={semanticButtonClass('ghost', { compact: true })} disabled={notificationLoading}>
                 {notificationLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
                 刷新通知
+              </button>
+              <button type="button" onClick={() => void markAllNotificationsRead()} className={semanticButtonClass('secondary', { compact: true })} disabled={notificationLoading || notificationItems.every((item) => item.readAt)}>
+                <CheckCircle2 className="h-4 w-4" />
+                全部已读
+              </button>
+              <button type="button" onClick={() => void clearAllNotifications()} className={semanticButtonClass('danger', { compact: true })} disabled={notificationLoading || notificationItems.length === 0}>
+                <Trash2 className="h-4 w-4" />
+                清空
               </button>
             </div>
             {notificationLoading && notificationItems.length === 0 ? (
@@ -9557,6 +9868,8 @@ export default function App() {
           {renderNotificationCenter()}
           {renderShareComposer()}
           {accountCenterModal}
+          {renderOnboardingGuide()}
+          {renderPushPermissionPrompt()}
           {renderConfirmationModal()}
           {renderAuthoringSaveSuccessModal()}
           {renderResumePromptModal()}

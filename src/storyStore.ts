@@ -282,6 +282,13 @@ export async function deleteNotification(db: Firestore, notificationId: string) 
   return { ok: true };
 }
 
+export async function deleteAllNotifications(db: Firestore) {
+  if (useSupabaseStories()) {
+    return storyApi('deleteAllNotifications', {}, { auth: true, timeoutMs: 8000, stage: '通知清空同步' });
+  }
+  return { ok: true };
+}
+
 export async function likeStory(db: Firestore, storyId: string, userId: string) {
   if (useSupabaseStories()) {
     return storyApi<{ alreadyExists: boolean }>('likeStory', { storyId }, { auth: true });

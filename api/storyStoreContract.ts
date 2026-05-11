@@ -25,6 +25,7 @@ export const STORY_STORE_ACTIONS = [
   'listNotifications',
   'markNotificationsRead',
   'deleteNotification',
+  'deleteAllNotifications',
   'savePushSubscription',
   'getPushConfig',
   'reportStory',

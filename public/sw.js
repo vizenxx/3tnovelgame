@@ -61,8 +61,10 @@ self.addEventListener('fetch', (event) => {
   const requestUrl = new URL(event.request.url);
 
   if (requestUrl.origin !== self.location.origin) return;
+  if (requestUrl.pathname.startsWith('/api/')) return;
   if (requestUrl.pathname.startsWith('/@vite/') || requestUrl.pathname.startsWith('/src/')) return;
   if (requestUrl.pathname.startsWith('/__/auth/')) return;
+  if (requestUrl.pathname === '/manifest.webmanifest') return;
 
   if (event.request.mode === 'navigate') {
     event.respondWith(

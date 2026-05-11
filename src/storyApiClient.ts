@@ -72,6 +72,7 @@ export async function storyApi<T = any>(
       headers,
       body: JSON.stringify({ action, ...payload }),
       signal: controller.signal,
+      cache: 'no-store',
     });
     const data = await response.json().catch(() => null);
     if (!response.ok) {

@@ -255,7 +255,14 @@ function storyRowFromMeta(meta: any, id?: string) {
 async function optionalUser(req: VercelRequest) {
   const token = getBearerToken(req);
   if (!token) return null;
-  return verifyFirebaseToken(token);
+  try {
+    return await verifyFirebaseToken(token);
+  } catch (error: any) {
+    // Public reads should not fail just because an installed PWA is holding an
+    // expired/stale Firebase token. Auth-required actions still call requireUser.
+    console.warn('[story-store:optional-auth-failed]', { message: error?.message || String(error) });
+    return null;
+  }
 }
 
 function getPushConfig() {
@@ -697,6 +704,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await supabaseRequest('user_notifications', {
         method: 'DELETE',
         query: { id: `eq.${notificationId}`, user_id: `eq.${authUser.uid}` },
+      }).catch((error) => {
+        if (/user_notifications/i.test(String(error?.message || error))) return null;
+        throw error;
+      });
+      return res.status(200).json({ ok: true });
+    }
+
+    if (action === 'deleteAllNotifications') {
+      await supabaseRequest('user_notifications', {
+        method: 'DELETE',
+        query: { user_id: `eq.${authUser.uid}` },
       }).catch((error) => {
         if (/user_notifications/i.test(String(error?.message || error))) return null;
         throw error;
