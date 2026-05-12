@@ -55,6 +55,131 @@ const countReadyChapters = (chapters?: Array<{ text?: string }>) => (
   (chapters || []).filter((chapter) => (chapter?.text || '').trim().length > 0).length
 );
 
+const asArray = <T = any>(value: unknown): T[] => Array.isArray(value) ? value as T[] : [];
+
+const normalizeStoryListItem = (item: any): StoryListItem => ({
+  ...(item || {}),
+  id: String(item?.id || item?.storyId || ''),
+  title: String(item?.title || '未命名作品'),
+  main_axis: String(item?.main_axis || ''),
+  tags: asArray<string>(item?.tags),
+  visibility: item?.visibility || 'private',
+  authorId: String(item?.authorId || item?.author_id || ''),
+  authorName: item?.authorName || item?.author_name || '',
+  originalAuthorId: item?.originalAuthorId ?? null,
+  originalAuthorName: item?.originalAuthorName || '',
+  intervenerId: item?.intervenerId ?? null,
+  intervenerName: item?.intervenerName || '',
+  coverUrl: item?.coverUrl || '',
+  endingRates: item?.endingRates || { left: 40, right: 40 },
+  endingBias: normalizeEndingBias(item?.endingBias || item?.endingRates || { left: 40, right: 40 }),
+  endingNames: item?.endingNames || {},
+  updatedAt: item?.updatedAt || '',
+  createdAt: item?.createdAt || '',
+  version: Number(item?.version || 1),
+});
+
+const normalizeChapter = (chapter: any): StoryChapterDoc => ({
+  chapter_num: Number(chapter?.chapter_num || chapter?.chapterNum || 0),
+  title: String(chapter?.title || ''),
+  summary: String(chapter?.summary || ''),
+  present_characters: asArray<string>(chapter?.present_characters || chapter?.presentCharacters),
+  text: String(chapter?.text || ''),
+});
+
+const normalizeEnding = (ending: any): StoryEndingDoc => ({
+  ...(ending || {}),
+  id: String(ending?.id || 'default'),
+  chapter_num: 7,
+  title: ending?.title || '',
+  text: String(ending?.text || ''),
+  keyNodes: asArray<string>(ending?.keyNodes),
+});
+
+const normalizeBranch = (branch: any): StoryBranchDoc => ({
+  ...(branch || {}),
+  id: String(branch?.id || ''),
+  side: branch?.side === 'right' ? 'right' : 'left',
+  tier: branch?.tier || 'small',
+  name: String(branch?.name || ''),
+  hint: String(branch?.hint || ''),
+  desc: String(branch?.desc || ''),
+  triggerGroups: asArray(branch?.triggerGroups),
+  inject: {
+    ...(branch?.inject || {}),
+    mustHappen: asArray<string>(branch?.inject?.mustHappen),
+    mustReveal: asArray<string>(branch?.inject?.mustReveal),
+    mustChange: asArray<string>(branch?.inject?.mustChange),
+  },
+});
+
+const normalizeStoryMeta = (meta: any): StoryMeta => ({
+  ...(normalizeStoryListItem(meta) as any),
+  characters: asArray<StoryCharacter>(meta?.characters).map((character: any, index) => ({
+    id: String(character?.id || `c${index + 1}`),
+    name: String(character?.name || `角色${index + 1}`),
+    desc: String(character?.desc || ''),
+  })),
+  defaults: meta?.defaults || { targetWordCount: 800, paragraphs: { min: 6, max: 10 } },
+});
+
+const normalizeStoryCartridge = (cartridge: any) => cartridge ? ({
+  storyId: String(cartridge.storyId || cartridge.id || ''),
+  meta: normalizeStoryMeta(cartridge.meta || cartridge),
+  chapters: asArray(cartridge.chapters).map(normalizeChapter).filter((chapter) => chapter.chapter_num > 0),
+  endings: asArray(cartridge.endings).map(normalizeEnding),
+  branches: asArray(cartridge.branches).map(normalizeBranch),
+}) : null;
+
+const normalizeProgressPayload = (payload: any) => payload ? ({
+  ...payload,
+  selectedThemes: asArray<string>(payload.selectedThemes),
+  chapters: asArray(payload.chapters).map(normalizeChapter),
+  currentChapters: asArray(payload.currentChapters).map(normalizeChapter),
+  naturalChapters: asArray(payload.naturalChapters).map(normalizeChapter),
+  initialNaturalChapters: asArray(payload.initialNaturalChapters).map(normalizeChapter),
+  unlockedBranches: asArray(payload.unlockedBranches),
+  historicallyUnlockedBranches: asArray(payload.historicallyUnlockedBranches),
+  intervenedChapters: asArray<number>(payload.intervenedChapters),
+  interventionHistory: asArray(payload.interventionHistory),
+  blueprint: payload.blueprint ? {
+    ...payload.blueprint,
+    tags: asArray<string>(payload.blueprint.tags),
+    characters: asArray<StoryCharacter>(payload.blueprint.characters),
+    chapters: asArray(payload.blueprint.chapters).map(normalizeChapter),
+    branches: asArray(payload.blueprint.branches).map(normalizeBranch),
+    endings: asArray(payload.blueprint.endings).map(normalizeEnding),
+  } : payload.blueprint,
+}) : null;
+
+const normalizeSharedStoryRecord = (record: any): SharedStoryRecord => ({
+  ...(record || {}),
+  id: String(record?.id || record?.storyId || ''),
+  archiveKind: record?.archiveKind || 'snapshot',
+  snapshotKind: record?.snapshotKind || 'intervened',
+  contentHash: record?.contentHash || '',
+  title: String(record?.title || record?.meta?.title || '未命名故事'),
+  main_axis: String(record?.main_axis || record?.meta?.main_axis || ''),
+  tags: asArray<string>(record?.tags || record?.meta?.tags),
+  characters: asArray<StoryCharacter>(record?.characters || record?.meta?.characters),
+  chapters: asArray(record?.chapters).map(normalizeChapter),
+  authorId: String(record?.authorId || record?.meta?.authorId || ''),
+  authorName: record?.authorName || record?.meta?.authorName || '',
+  originalAuthorId: record?.originalAuthorId ?? record?.meta?.originalAuthorId ?? null,
+  originalAuthorName: record?.originalAuthorName || record?.meta?.originalAuthorName || '',
+  intervenerId: record?.intervenerId ?? record?.meta?.intervenerId ?? null,
+  intervenerName: record?.intervenerName || record?.meta?.intervenerName || '',
+  coverUrl: record?.coverUrl || record?.meta?.coverUrl || '',
+  sourceStoryId: record?.sourceStoryId ?? record?.meta?.sourceStoryId ?? null,
+  averageChapterWords: Number(record?.averageChapterWords || record?.meta?.averageChapterWords || 0),
+  chapterCount: Number(record?.chapterCount || record?.meta?.chapterCount || 0),
+  cardExcerpt: record?.cardExcerpt || record?.meta?.cardExcerpt || '',
+  allowAdaptation: Boolean(record?.allowAdaptation ?? record?.meta?.allowAdaptation),
+  createdAt: record?.createdAt || '',
+  updatedAt: record?.updatedAt || '',
+  visibility: record?.visibility || record?.meta?.visibility || 'unlisted',
+});
+
 const canReadStoryRecord = (meta: StoryMeta, currentUserId?: string) => (
   meta.visibility === 'public' ||
   meta.visibility === 'unlisted' ||
@@ -147,7 +272,8 @@ export type FollowedAuthorItem = {
 
 export async function listPublicStories(db: Firestore, pageSize = 20, sort: StoryListSort = 'updated') {
   if (useSupabaseStories()) {
-    return storyApi<StoryListItem[]>('listPublicStories', { pageSize, sort }, { timeoutMs: 9000, stage: '公开作品列表同步' });
+    const rows = await storyApi<StoryListItem[]>('listPublicStories', { pageSize, sort }, { timeoutMs: 9000, stage: '公开作品列表同步' });
+    return asArray(rows).map(normalizeStoryListItem);
   }
   const orderField = sort === 'likes'
     ? 'likeCount'
@@ -172,7 +298,8 @@ export async function listPublicStories(db: Firestore, pageSize = 20, sort: Stor
 
 export async function getUserProgress(db: Firestore, userId: string, storyId: string) {
   if (useSupabaseStories()) {
-    return storyApi<any | null>('getUserProgress', { storyId }, { auth: true, timeoutMs: 8000, stage: '故事进度同步' });
+    const payload = await storyApi<any | null>('getUserProgress', { storyId }, { auth: true, timeoutMs: 8000, stage: '故事进度同步' });
+    return normalizeProgressPayload(payload);
   }
   const progressSnap = await getDoc(doc(db, 'users', userId, 'progress', storyId));
   return progressSnap.exists() ? progressSnap.data() : null;
@@ -407,7 +534,8 @@ export async function savePushSubscription(subscription: PushSubscriptionJSON) {
 
 export async function listMyStories(db: Firestore, authorId: string, pageSize = 50) {
   if (useSupabaseStories()) {
-    return storyApi<StoryListItem[]>('listMyStories', { pageSize }, { auth: true, timeoutMs: 9000, stage: '我的作品同步' });
+    const rows = await storyApi<StoryListItem[]>('listMyStories', { pageSize }, { auth: true, timeoutMs: 9000, stage: '我的作品同步' });
+    return asArray(rows).map(normalizeStoryListItem);
   }
   const q = query(
     collection(db, 'stories'),
@@ -421,7 +549,8 @@ export async function listMyStories(db: Firestore, authorId: string, pageSize = 
 
 export async function listAuthorStories(db: Firestore, authorId: string, pageSize = 50) {
   if (useSupabaseStories()) {
-    return storyApi<StoryListItem[]>('listAuthorStories', { authorId, pageSize }, { auth: true, timeoutMs: 9000, stage: '作者作品同步' });
+    const rows = await storyApi<StoryListItem[]>('listAuthorStories', { authorId, pageSize }, { auth: true, timeoutMs: 9000, stage: '作者作品同步' });
+    return asArray(rows).map(normalizeStoryListItem);
   }
   const q = query(
     collection(db, 'stories'),
@@ -436,7 +565,8 @@ export async function listAuthorStories(db: Firestore, authorId: string, pageSiz
 
 export async function listMySharedStories(db: Firestore, authorId: string, pageSize = 50) {
   if (useSupabaseStories()) {
-    return storyApi<SharedStoryRecord[]>('listMySharedStories', { pageSize }, { auth: true, timeoutMs: 9000, stage: '馆藏同步' });
+    const rows = await storyApi<SharedStoryRecord[]>('listMySharedStories', { pageSize }, { auth: true, timeoutMs: 9000, stage: '馆藏同步' });
+    return asArray(rows).map(normalizeSharedStoryRecord);
   }
   const q = query(
     collection(db, 'sharedStories'),
@@ -548,7 +678,8 @@ export async function createEmptyStory(db: Firestore, args: { authorId: string; 
 
 export async function getStoryMeta(db: Firestore, storyId: string) {
   if (useSupabaseStories()) {
-    return storyApi<(StoryListItem & StoryMeta) | null>('getStoryMeta', { storyId });
+    const meta = await storyApi<(StoryListItem & StoryMeta) | null>('getStoryMeta', { storyId });
+    return meta ? normalizeStoryMeta(meta) : null;
   }
   const snap = await getDoc(doc(db, 'stories', storyId));
   if (!snap.exists()) return null;
@@ -557,7 +688,8 @@ export async function getStoryMeta(db: Firestore, storyId: string) {
 
 export async function getStoryCartridge(db: Firestore, storyId: string) {
   if (useSupabaseStories()) {
-    return storyApi('getStoryCartridge', { storyId }, { timeoutMs: 12000, stage: '完整故事读取' });
+    const cartridge = await storyApi('getStoryCartridge', { storyId }, { timeoutMs: 12000, stage: '完整故事读取' });
+    return normalizeStoryCartridge(cartridge);
   }
   const metaSnap = await getDoc(doc(db, 'stories', storyId));
   if (!metaSnap.exists()) return null;
@@ -577,7 +709,12 @@ export async function getStoryCartridge(db: Firestore, storyId: string) {
 
 export async function getSharedStoryRecord(db: Firestore, storyId: string, currentUserId?: string) {
   if (useSupabaseStories()) {
-    return storyApi('getSharedStoryRecord', { storyId }, { timeoutMs: 12000, stage: '只读故事记录读取' });
+    const record = await storyApi<any | null>('getSharedStoryRecord', { storyId }, { timeoutMs: 12000, stage: '只读故事记录读取' });
+    return record ? {
+      ...record,
+      meta: normalizeStoryMeta(record.meta || {}),
+      chapters: asArray(record.chapters).map(normalizeChapter),
+    } : null;
   }
   const sharedSnap = await getDoc(doc(db, 'sharedStories', storyId));
   if (sharedSnap.exists()) {

@@ -322,10 +322,12 @@ const writeClipboardText = async (value: string) => {
 };
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const asSafeArray = <T = any,>(value: unknown): T[] => Array.isArray(value) ? value as T[] : [];
 
 const renderCharacterHighlights = (text: string, keyPrefix: string, characters: Character[] = []) => {
-  if (characters.length > 0) {
-    const names = characters.map(c => c.name).filter(Boolean);
+  const safeCharacters = asSafeArray<Character>(characters);
+  if (safeCharacters.length > 0) {
+    const names = safeCharacters.map(c => c.name).filter(Boolean);
     if (names.length > 0) {
       names.sort((a, b) => b.length - a.length);
       const regex = new RegExp(`(${names.map(escapeRegExp).join('|')})`, 'g');
@@ -2342,13 +2344,18 @@ export default function App() {
   });
 
   const applyStoryListCache = (data: any) => {
-    setPublicStories(Array.isArray(data?.pub) ? data.pub : []);
-    setMyStories(Array.isArray(data?.mine) ? data.mine : []);
-    setMySharedStories(Array.isArray(data?.shared) ? data.shared : []);
+    setPublicStories(asSafeArray(data?.pub));
+    setMyStories(asSafeArray(data?.mine));
+    setMySharedStories(asSafeArray(data?.shared));
   };
 
   const cacheStoryLists = async (pub: any[], mine: any[], shared: any[], publicSort: StoryLibrarySort = storyLibrarySort) => {
-    await setLocalCache(storyListCacheKey(), { pub, mine, shared, publicSort });
+    await setLocalCache(storyListCacheKey(), {
+      pub: asSafeArray(pub),
+      mine: asSafeArray(mine),
+      shared: asSafeArray(shared),
+      publicSort,
+    });
   };
 
   const getStoryListCache = async () => getLocalCache<{ pub: any[]; mine: any[]; shared: any[]; publicSort?: StoryLibrarySort }>(storyListCacheKey());
@@ -2407,26 +2414,33 @@ export default function App() {
   const applyLocalRunSnapshot = async (snapshot: any) => {
     if (!snapshot?.blueprint) return false;
     const historicalBranches = normalizeHistoricalUnlockedBranchesForBlueprint(
-      snapshot.historicallyUnlockedBranches || snapshot.unlockedBranches || [],
+      asSafeArray(snapshot.historicallyUnlockedBranches || snapshot.unlockedBranches),
       snapshot.blueprint
     );
     navigateTo(snapshot.gameState === 'SUMMARY' ? 'PLAYING' : snapshot.gameState || 'PLAYING', { reset: true });
-    setSelectedThemes(snapshot.selectedThemes || []);
-    setBlueprint(snapshot.blueprint);
-    setChapters(snapshot.currentChapters || []);
+    setSelectedThemes(asSafeArray(snapshot.selectedThemes));
+    setBlueprint({
+      ...snapshot.blueprint,
+      tags: asSafeArray(snapshot.blueprint?.tags),
+      characters: asSafeArray(snapshot.blueprint?.characters),
+      chapters: asSafeArray(snapshot.blueprint?.chapters),
+      branches: asSafeArray(snapshot.blueprint?.branches),
+      endings: asSafeArray(snapshot.blueprint?.endings),
+    });
+    setChapters(asSafeArray(snapshot.currentChapters));
     setChangeHighlights(snapshot.changeHighlights || {});
     setInterventionsLeft(snapshot.interventionsLeft ?? 3);
     setEndingValue(snapshot.endingValue || 0);
-    setUnlockedBranches(normalizeUnlockedBranchesForBlueprint(snapshot.unlockedBranches || [], snapshot.blueprint));
+    setUnlockedBranches(normalizeUnlockedBranchesForBlueprint(asSafeArray(snapshot.unlockedBranches), snapshot.blueprint));
     setHistoricallyUnlockedBranches(historicalBranches);
-    setIntervenedChapters(snapshot.intervenedChapters || []);
-    setNaturalChapters(snapshot.naturalChapters || []);
-    setInitialNaturalChapters(snapshot.initialNaturalChapters || []);
+    setIntervenedChapters(asSafeArray(snapshot.intervenedChapters));
+    setNaturalChapters(asSafeArray(snapshot.naturalChapters));
+    setInitialNaturalChapters(asSafeArray(snapshot.initialNaturalChapters));
     setCharacterStatuses(snapshot.characterStatuses || {});
     setStoryConclusion(snapshot.storyConclusion || null);
     setActiveStoryId(snapshot.storyId || null);
     setActiveStoryMeta(snapshot.activeStoryMeta || null);
-    setInterventionHistory(snapshot.interventionHistory || []);
+    setInterventionHistory(asSafeArray(snapshot.interventionHistory));
     setCanonicalWorldState(snapshot.canonicalWorldState || null);
     setDeltaWorldStateByChapter(snapshot.deltaWorldStateByChapter || {});
     if (snapshot.uiFeedback) setUiFeedback(snapshot.uiFeedback);
@@ -2470,33 +2484,33 @@ export default function App() {
         ),
       ]);
       const pub = publicResult.status === 'fulfilled'
-        ? publicResult.value
-        : (cached?.value?.pub || publicStories);
+        ? asSafeArray(publicResult.value)
+        : asSafeArray(cached?.value?.pub || publicStories);
       const mine = mineResult.status === 'fulfilled'
-        ? mineResult.value
-        : (cached?.value?.mine || myStories);
+        ? asSafeArray(mineResult.value)
+        : asSafeArray(cached?.value?.mine || myStories);
       if (publicResult.status === 'rejected') markStoryListSegment('public', 'error', String(publicResult.reason?.message || publicResult.reason || '公开作品同步失败'));
       else markStoryListSegment('public', 'idle');
       if (mineResult.status === 'rejected') markStoryListSegment('mine', 'error', String(mineResult.reason?.message || mineResult.reason || '我的作品同步失败'));
       else markStoryListSegment('mine', 'idle');
 
-      let shared = cached?.value?.shared || mySharedStories;
+      let shared = asSafeArray(cached?.value?.shared || mySharedStories);
       if (options.includeArchive) {
         markStoryListSegment('archive', 'syncing');
         try {
-          shared = await withTimeout(
+          shared = asSafeArray(await withTimeout(
             retryOnlineOnce(() => listMySharedStories(db as any, user.uid, ARCHIVE_STORY_LIST_LIMIT), 'archive story list'),
             12000,
             '连接收藏馆超时，稍后进入收藏馆时会继续同步。'
-          );
+          ));
           markStoryListSegment('archive', 'idle');
         } catch (archiveError: any) {
           markStoryListSegment('archive', 'error', String(archiveError?.message || archiveError || '收藏馆同步失败'));
         }
       }
-      setPublicStories(pub);
-      setMyStories(mine);
-      setMySharedStories(shared);
+      setPublicStories(asSafeArray(pub));
+      setMyStories(asSafeArray(mine));
+      setMySharedStories(asSafeArray(shared));
       await cacheStoryLists(pub, mine, shared, requestedPublicSort);
       const publicFailed = publicResult.status === 'rejected';
       const mineFailed = mineResult.status === 'rejected';
@@ -2547,25 +2561,25 @@ export default function App() {
     try {
       const cached = await getStoryListCache();
       if (cached?.value?.shared) {
-        setMySharedStories(cached.value.shared);
+        setMySharedStories(asSafeArray(cached.value.shared));
         if (!options.force && Date.now() - cached.updatedAt < STORY_LIST_CACHE_TTL_MS) {
           markStoryListSegment('archive', 'stale');
           return;
         }
       }
       markStoryListSegment('archive', 'syncing');
-      const shared = await withTimeout(
+      const shared = asSafeArray(await withTimeout(
         retryOnlineOnce(() => listMySharedStories(db as any, user.uid, ARCHIVE_STORY_LIST_LIMIT), 'archive story list'),
         14000,
         '连接收藏馆超时，已先显示本机缓存。'
-      );
+      ));
       setMySharedStories(shared);
       await cacheStoryLists(publicStories, myStories, shared);
       markStoryListSegment('archive', 'idle');
     } catch (error: any) {
       console.error(error);
       const cached = await getStoryListCache();
-      if (cached?.value?.shared) setMySharedStories(cached.value.shared);
+      if (cached?.value?.shared) setMySharedStories(asSafeArray(cached.value.shared));
       const message = getFriendlyServerError(error, '收藏馆同步失败，已先显示本机缓存。');
       markStoryListSegment('archive', 'error', message);
       showError(message);
