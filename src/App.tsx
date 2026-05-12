@@ -6337,7 +6337,7 @@ export default function App() {
             命运馆
           </div>
           <h2 className="story-library-title text-4xl font-black leading-[0.95] sm:text-5xl lg:text-6xl">
-            选择想要<br className="hidden sm:block" />
+            选择想要<br />
             <span className="story-library-title-accent">干涉的命运</span>
           </h2>
           <p className="mt-5 max-w-2xl text-base font-medium leading-relaxed text-zinc-400 sm:text-lg">
