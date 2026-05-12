@@ -158,7 +158,7 @@ const THEMES = [
 const NARRATIVE_PERSON_OPTIONS: Array<{ value: NarrativePerson; label: string; hint: string }> = [
   { value: 'third', label: '第三人称', hint: '以他/她/他们叙述，适合群像与史诗感。' },
   { value: 'first', label: '第一人称', hint: '以我/我们叙述，更贴近主角内心。' },
-  { value: 'second', label: '第二人称', hint: '以你叙述，适合沉浸式命运体验。' },
+  { value: 'second', label: '第二人称', hint: '以第二人称叙述，适合沉浸式命运体验。' },
 ];
 
 const DISPLAY_TAG_LIMIT = 3;
@@ -782,7 +782,7 @@ const buildStoryShareText = (title?: string, chapters?: Array<{ text?: string }>
     .find((text) => text.length > 40);
   return excerpt
     ? `《${safeTitle}》\n${excerpt.slice(0, 120)}${excerpt.length > 120 ? '...' : ''}\n\n有人改写了命运，而这一页，留下了它偏离原轨的瞬间。`
-    : `《${safeTitle}》\n故事已经开场，命运还没有落笔。来看看它会把你带向哪里。`;
+    : `《${safeTitle}》\n故事已经开场，命运还没有落笔。来看看它会通往哪里。`;
 };
 
 const buildShareClipboardText = (shareText: string, shareUrl: string) => `${shareText}\n\n${shareUrl}`;
@@ -1661,6 +1661,19 @@ export default function App() {
     return Promise.race([promise, timeoutPromise]);
   };
 
+  const retryOnlineOnce = async <T,>(fn: () => Promise<T>, label: string): Promise<T> => {
+    try {
+      return await fn();
+    } catch (error) {
+      if (typeof navigator !== 'undefined' && navigator.onLine !== false) {
+        console.warn(`${label} failed once; retrying`, error);
+        await new Promise(resolve => setTimeout(resolve, 700));
+        return fn();
+      }
+      throw error;
+    }
+  };
+
   const withRetry = async <T,>(fn: () => Promise<T>, retries = 5, delay = 3000): Promise<T> => {
     try {
       return await fn();
@@ -1732,16 +1745,20 @@ export default function App() {
     };
   };
 
-  const currentRunContentHash = () => hashStoryChapters(chapters);
-
   const currentRunMatchesOriginal = () => (
     Boolean(activeStoryId) &&
     initialNaturalChapters.length > 0 &&
     areStoryChaptersEquivalent(chapters, initialNaturalChapters)
   );
 
-  const cacheSharedSnapshotAfterCreate = (shareId: string, sharedRecord: any) => {
-    void cacheSharedStory(shareId, { meta: { ...sharedRecord, sharedStoryId: shareId }, chapters: chapters as any })
+  const getCleanCurrentRunChapters = () => chapters.map((chapter) => ({
+    ...chapter,
+    text: stripGeneratedMarkup(chapter.text),
+    summary: stripGeneratedMarkup((chapter as any).summary || ''),
+  }));
+
+  const cacheSharedSnapshotAfterCreate = (shareId: string, sharedRecord: any, cleanChapters = getCleanCurrentRunChapters()) => {
+    void cacheSharedStory(shareId, { meta: { ...sharedRecord, sharedStoryId: shareId }, chapters: cleanChapters as any })
       .catch((error) => console.warn('share cacheSharedStory failed:', error));
     void cacheStoryLists(publicStories, myStories, [sharedRecord, ...mySharedStories.filter((story: any) => story.id !== shareId)])
       .catch((error) => console.warn('share cacheStoryLists failed:', error));
@@ -1750,7 +1767,8 @@ export default function App() {
   const createCurrentStorySnapshot = async (visibility: 'private' | 'unlisted', snapshotKind: 'intervened' | 'saved_run') => {
     if (!user || !blueprint) throw new Error('请先进入故事后再继续。');
     const provenance = await resolveActiveStoryProvenance();
-    const contentHash = currentRunContentHash();
+    const cleanChapters = getCleanCurrentRunChapters();
+    const contentHash = hashStoryChapters(cleanChapters);
     const shareId = await createStorySnapshot(db as any, {
       authorId: user.uid,
       authorName: getUserAuthorName(user),
@@ -1758,8 +1776,8 @@ export default function App() {
       main_axis: blueprint.main_axis || '',
       tags: selectedThemes,
       characters: blueprint.characters || [],
-      chapters: chapters as any,
-      averageChapterWords: getAverageChapterWords(chapters),
+      chapters: cleanChapters as any,
+      averageChapterWords: getAverageChapterWords(cleanChapters),
       coverUrl: activeStoryMeta?.coverUrl || '',
       sourceStoryId: activeStoryId || null,
       originalAuthorId: provenance.originalAuthorId,
@@ -1780,7 +1798,7 @@ export default function App() {
       main_axis: blueprint.main_axis || '',
       tags: selectedThemes,
       characters: blueprint.characters || [],
-      chapters,
+      chapters: cleanChapters,
       authorId: user.uid,
       authorName: getUserAuthorName(user),
       originalAuthorId: provenance.originalAuthorId,
@@ -1789,16 +1807,16 @@ export default function App() {
       intervenerName: getUserAuthorName(user),
       coverUrl: activeStoryMeta?.coverUrl || '',
       sourceStoryId: activeStoryId,
-      averageChapterWords: getAverageChapterWords(chapters),
-      chapterCount: getReadyChapterCount(chapters),
-      cardExcerpt: getStoryCardExcerpt(blueprint.main_axis || '', chapters),
+      averageChapterWords: getAverageChapterWords(cleanChapters),
+      chapterCount: getReadyChapterCount(cleanChapters),
+      cardExcerpt: getStoryCardExcerpt(blueprint.main_axis || '', cleanChapters),
       allowAdaptation: getActiveStoryAllowAdaptation(),
       visibility,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
     setMySharedStories((prev) => [sharedRecord, ...prev.filter((story: any) => story.id !== shareId)]);
-    return { shareId, sharedRecord };
+    return { shareId, sharedRecord, cleanChapters };
   };
 
   const sharePayload = async (payload: ShareData) => new Promise<boolean>((resolve) => {
@@ -1823,7 +1841,7 @@ export default function App() {
     } else if (cardExcerpt) {
       shareText = `《${stripBookTitle(shareTitle)}》\n${String(cardExcerpt).slice(0, 120)}${cardExcerpt.length > 120 ? '...' : ''}\n\n有人改写了命运，而这一页，留下了它偏离原轨的瞬间。`;
     } else if (mainAxis) {
-      shareText = `《${stripBookTitle(shareTitle)}》\n${String(mainAxis).slice(0, 120)}${mainAxis.length > 120 ? '...' : ''}\n\n故事已经开场，命运还没有落笔。来看看它会把你带向哪里。`;
+      shareText = `《${stripBookTitle(shareTitle)}》\n${String(mainAxis).slice(0, 120)}${mainAxis.length > 120 ? '...' : ''}\n\n故事已经开场，命运还没有落笔。来看看它会通往哪里。`;
     } else {
       shareText = buildStoryShareText(shareTitle, []);
     }
@@ -2205,8 +2223,12 @@ export default function App() {
     if (!user || !blueprint) return;
     try {
       setAuthoringSaving(true);
-      setGlobalLoadingMessage('正在保存至馆藏...');
-      const sourceChapters = naturalChapters.length > 0 ? naturalChapters : chapters;
+      setGlobalLoadingMessage('正在收藏命运...');
+      const sourceChapters = (naturalChapters.length > 0 ? naturalChapters : chapters).map((chapter) => ({
+        ...chapter,
+        text: stripGeneratedMarkup(chapter.text),
+        summary: stripGeneratedMarkup((chapter as any).summary || ''),
+      }));
       const provenance = await resolveActiveStoryProvenance();
       await createSharedStoryRecord(db as any, {
         authorId: user.uid,
@@ -2230,7 +2252,7 @@ export default function App() {
       setShowLeaveGameModal(false);
     } catch (e) {
       console.error(e);
-      showError("保存作品失败");
+      showError("收藏命运失败");
     } finally {
       setGlobalLoadingMessage(null);
       setAuthoringSaving(false);
@@ -2436,8 +2458,16 @@ export default function App() {
       markStoryListSegment('public', 'syncing');
       markStoryListSegment('mine', 'syncing');
       const [publicResult, mineResult] = await Promise.allSettled([
-        withTimeout(listPublicStories(db as any, PUBLIC_STORY_LIST_LIMIT, requestedPublicSort), 8500, '公开作品同步超时。'),
-        withTimeout(listMyStories(db as any, user.uid, MY_STORY_LIST_LIMIT), 8500, '我的作品同步超时。'),
+        withTimeout(
+          retryOnlineOnce(() => listPublicStories(db as any, PUBLIC_STORY_LIST_LIMIT, requestedPublicSort), 'public story list'),
+          10000,
+          '公开作品同步超时。'
+        ),
+        withTimeout(
+          retryOnlineOnce(() => listMyStories(db as any, user.uid, MY_STORY_LIST_LIMIT), 'my story list'),
+          10000,
+          '我的作品同步超时。'
+        ),
       ]);
       const pub = publicResult.status === 'fulfilled'
         ? publicResult.value
@@ -2454,7 +2484,11 @@ export default function App() {
       if (options.includeArchive) {
         markStoryListSegment('archive', 'syncing');
         try {
-          shared = await withTimeout(listMySharedStories(db as any, user.uid, ARCHIVE_STORY_LIST_LIMIT), 12000, '连接收藏馆超时，稍后进入收藏馆时会继续同步。');
+          shared = await withTimeout(
+            retryOnlineOnce(() => listMySharedStories(db as any, user.uid, ARCHIVE_STORY_LIST_LIMIT), 'archive story list'),
+            12000,
+            '连接收藏馆超时，稍后进入收藏馆时会继续同步。'
+          );
           markStoryListSegment('archive', 'idle');
         } catch (archiveError: any) {
           markStoryListSegment('archive', 'error', String(archiveError?.message || archiveError || '收藏馆同步失败'));
@@ -2464,6 +2498,8 @@ export default function App() {
       setMyStories(mine);
       setMySharedStories(shared);
       await cacheStoryLists(pub, mine, shared, requestedPublicSort);
+      const publicFailed = publicResult.status === 'rejected';
+      const mineFailed = mineResult.status === 'rejected';
       const segmentErrors = [publicResult, mineResult].filter((result) => result.status === 'rejected');
       if (segmentErrors.length === 2 && !cached?.value) {
         const message = '作品库同步失败，请稍后重试。';
@@ -2471,8 +2507,15 @@ export default function App() {
         showError(message);
         return false;
       }
-      setStoryListLoadError(segmentErrors.length ? '部分作品列表同步失败，已保留可用内容。' : null);
-      if (segmentErrors.length) showError('部分作品列表同步失败，已保留可用内容。');
+      const partialMessage = publicFailed && !mineFailed
+        ? '公开作品同步失败，我的作品仍可浏览。'
+        : mineFailed && !publicFailed
+          ? '我的作品同步失败，公开作品仍可浏览。'
+          : segmentErrors.length
+            ? '部分作品列表同步失败，已保留可用内容。'
+            : null;
+      setStoryListLoadError(partialMessage);
+      if (partialMessage) showError(partialMessage);
       return segmentErrors.length < 2;
     } catch (error: any) {
       console.error(error);
@@ -2512,7 +2555,7 @@ export default function App() {
       }
       markStoryListSegment('archive', 'syncing');
       const shared = await withTimeout(
-        listMySharedStories(db as any, user.uid, ARCHIVE_STORY_LIST_LIMIT),
+        retryOnlineOnce(() => listMySharedStories(db as any, user.uid, ARCHIVE_STORY_LIST_LIMIT), 'archive story list'),
         14000,
         '连接收藏馆超时，已先显示本机缓存。'
       );
@@ -2665,7 +2708,7 @@ export default function App() {
     try {
       setIsLoadingStories(true);
       setGlobalLoadingMessage('正在打开故事记录...');
-      setGlobalLoadingDetail('正在读取保存的命运线；如果本机已有缓存，会先进入阅读页再校验云端记录。');
+      setGlobalLoadingDetail('正在读取收藏命运线；如果本机已有缓存，会先进入阅读页再校验云端记录。');
       const cached = await getCachedSharedStory(storyId);
       if (cached?.value) {
         setReadonlyStoryData({ meta: cached.value.meta, chapters: cached.value.chapters as any });
@@ -2675,7 +2718,7 @@ export default function App() {
       }
       const record = await getSharedStoryRecord(db as any, storyId, user?.uid);
       if (!record) {
-        showError('未找到这份故事记录，或你没有访问权限。');
+        showError('未找到这份故事记录，或当前账号没有访问权限。');
         return;
       }
       await cacheSharedStory(storyId, { meta: record.meta, chapters: record.chapters as any });
@@ -2755,7 +2798,7 @@ export default function App() {
       await refreshStories({ force: true });
       await selectAuthoringStory(storyId);
       navigateTo('AUTHORING');
-      showError('已完成一键改编，已带你进入作者编辑界面。');
+      showError('已完成一键改编，正在进入作者编辑界面。');
       setReadonlyStoryData(null);
       setReadonlyCanGoBack(false);
       window.history.replaceState({}, '', window.location.pathname);
@@ -2798,7 +2841,7 @@ export default function App() {
     setConfirmationModal({
       isOpen: true,
       title: '删除馆藏记录？',
-      message: `这只会删除你馆藏里的《${stripBookTitle(story.title || '未命名故事')}》记录，不会删除原作者的作品，也不会影响其他人已拥有的分享链接记录。此操作无法撤销。`,
+      message: `这只会删除当前账号馆藏里的《${stripBookTitle(story.title || '未命名故事')}》记录，不会删除原作者的作品，也不会影响其他人已拥有的分享链接记录。此操作无法撤销。`,
       onConfirm: async () => {
         try {
           setArchiveUpdatingIds((prev) => ({ ...prev, [story.id]: true }));
@@ -2858,7 +2901,7 @@ export default function App() {
     setConfirmationModal({
       isOpen: true,
       title: '删除馆藏记录？',
-      message: `这会删除你馆藏里的《${stripBookTitle(story.meta?.title || '未命名故事')}》记录。原作者作品不会被删除，但这条记录的分享链接将无法继续访问。此操作无法撤销。`,
+      message: `这会删除当前账号馆藏里的《${stripBookTitle(story.meta?.title || '未命名故事')}》记录。原作者作品不会被删除，但这条记录的分享链接将无法继续访问。此操作无法撤销。`,
       onConfirm: async () => {
         try {
           setArchiveUpdatingIds((prev) => ({ ...prev, [archiveId]: true }));
@@ -3048,7 +3091,7 @@ export default function App() {
 
   const handleInstallApp = async () => {
     if (isStandaloneMode) {
-      showError('你已经在 App 模式中使用。');
+      showError('当前已经在 App 模式中使用。');
       return;
     }
     if (isIosDevice()) {
@@ -3347,22 +3390,21 @@ export default function App() {
   const handleSaveWorkAndReturn = async () => {
     if (!user || !blueprint) return;
     try {
-      setGlobalLoadingMessage('正在保存至馆藏...');
-      setGlobalLoadingDetail('正在确认当前故事是否与原作相同；只有变化后的命运线才会保存为独立记录。');
+      setGlobalLoadingMessage('正在收藏命运...');
+      setGlobalLoadingDetail('正在确认当前故事是否与原作相同；只有变化后的命运线才会作为收藏命运记录。');
       if (activeStoryId && currentRunMatchesOriginal()) {
         await favoriteStory(db as any, activeStoryId, user.uid);
-        showError('原作已加入馆藏，不会重复保存一份相同文本。');
+        showError('原作已加入馆藏，不会重复收藏一份相同文本。');
       } else {
-        const { shareId, sharedRecord } = await createCurrentStorySnapshot('unlisted', 'saved_run');
-        cacheSharedSnapshotAfterCreate(shareId, sharedRecord);
-        showError('当前故事已保存至个人馆藏（非公开链接）。');
+        const { shareId, sharedRecord, cleanChapters } = await createCurrentStorySnapshot('unlisted', 'saved_run');
+        cacheSharedSnapshotAfterCreate(shareId, sharedRecord, cleanChapters);
+        showError('这段命运已加入收藏命运（非公开链接）。');
       }
       await resetGame();
       return;
-      showError("作品已保存至个人馆藏（非公开链接）");
     } catch (e) {
       console.error(e);
-      showError("保存作品失败");
+      showError("收藏命运失败");
       setShowLeaveGameModal(false);
     } finally {
       setGlobalLoadingMessage(null);
@@ -3421,7 +3463,7 @@ export default function App() {
       await refreshStories({ force: true });
       await selectAuthoringStory(storyId);
       navigateTo('AUTHORING');
-      showError('已完成一键改编，已带你进入作者编辑界面。');
+      showError('已完成一键改编，正在进入作者编辑界面。');
     } catch (error) {
       console.error(error);
       showError('一键改编失败，请稍后再试。');
@@ -3705,7 +3747,7 @@ export default function App() {
       }
       const permission = await Notification.requestPermission();
       if (permission !== 'granted') {
-        showError('你还没有允许通知权限。');
+        showError('通知权限尚未允许。');
         return;
       }
       const registration = await navigator.serviceWorker.ready;
@@ -3743,7 +3785,7 @@ export default function App() {
     const handleFatalError = (event: ErrorEvent | PromiseRejectionEvent) => {
       console.error('Global app error fallback:', event);
       returnToStoryLibraryFallback();
-      showError('发生错误，已带你回到作品库。');
+      showError('发生错误，已回到作品库。');
     };
     window.addEventListener('error', handleFatalError as EventListener);
     window.addEventListener('unhandledrejection', handleFatalError as EventListener);
@@ -3757,7 +3799,7 @@ export default function App() {
     if (!isRecoveringInvalidGameState) return;
     const timer = window.setTimeout(() => {
       returnToStoryLibraryFallback();
-      showError('页面资料没有完整载入，已带你回到作品库。');
+      showError('页面资料没有完整载入，已回到作品库。');
     }, 2500);
     return () => window.clearTimeout(timer);
   }, [isRecoveringInvalidGameState]);
@@ -4444,6 +4486,18 @@ export default function App() {
     }
   };
 
+  const handleAuthoringCoverPaste = async (event: React.ClipboardEvent<HTMLElement>) => {
+    const files = Array.from(event.clipboardData?.files || []) as File[];
+    const clipboardItems = Array.from(event.clipboardData?.items || []) as DataTransferItem[];
+    const itemFiles = clipboardItems
+      .map((item) => item.kind === 'file' ? item.getAsFile() : null)
+      .filter(Boolean) as File[];
+    const imageFile = [...files, ...itemFiles].find((file) => file.type.startsWith('image/'));
+    if (!imageFile) return;
+    event.preventDefault();
+    await handleAuthoringCoverUpload(imageFile);
+  };
+
   const handleGenerateAuthoringCover = async () => {
     if (!authoringCartridge) return;
     if (!canUseCoverGeneration) {
@@ -4599,7 +4653,7 @@ export default function App() {
       setConfirmationModal({
         isOpen: true,
         title: '确认回溯干涉？',
-        message: `你正在从第 ${chapterNum} 章重新干涉命运，这会重写第 ${chapterNum} 章到第 7 章。此前在第 ${affectedChapters.join('、')} 章造成的剧情变化，以及由这些较晚章节单次触发的当前支线，可能会被取消；但“曾解锁”记录和用于累计触发支线的干涉计数会保留，已消耗的干涉次数不会返还。`,
+        message: `当前将从第 ${chapterNum} 章重新干涉命运，这会重写第 ${chapterNum} 章到第 7 章。此前在第 ${affectedChapters.join('、')} 章造成的剧情变化，以及由这些较晚章节单次触发的当前支线，可能会被取消；但“曾解锁”记录和用于累计触发支线的干涉计数会保留，已消耗的干涉次数不会返还。`,
         onConfirm: () => { void handleIntervene(chapterNum, charId, action, true); },
       });
       return;
@@ -5016,7 +5070,8 @@ export default function App() {
       setGlobalLoadingMessage('正在准备分享...');
       setGlobalLoadingDetail('正在判断分享原作还是当前命运线，并尽快调用系统分享。');
       const shareTitle = formatBookTitle(blueprint?.title || "未命名故事");
-      const shareText = buildStoryShareText(shareTitle, chapters);
+      const cleanChapters = getCleanCurrentRunChapters();
+      const shareText = buildStoryShareText(shareTitle, cleanChapters);
       if (activeStoryId && currentRunMatchesOriginal()) {
         shareStage = 'deliverOriginalShare';
         setGlobalLoadingDetail('正在调用设备的分享功能。');
@@ -5026,20 +5081,25 @@ export default function App() {
         return;
       }
       shareStage = 'createStorySnapshot';
-      setGlobalLoadingDetail('当前故事已发生变化，正在保存非公开链接快照。');
-      const { shareId, sharedRecord } = await createCurrentStorySnapshot('unlisted', 'intervened');
+      setGlobalLoadingDetail('当前故事已发生变化，正在加入收藏命运并准备非公开链接。');
+      const { shareId, sharedRecord, cleanChapters: snapshotChapters } = await createCurrentStorySnapshot('unlisted', 'intervened');
       createdShareId = shareId;
       setSharedStoryId(shareId);
       shareStage = 'deliverPreparedShare';
       setGlobalLoadingDetail('分享记录已准备好，正在调用设备的分享功能。');
-      if (await sharePayload({ title: shareTitle, text: shareText, url: buildSharedStoryUrl(shareId) })) {
+      const didShare = await sharePayload({ title: shareTitle, text: shareText, url: buildSharedStoryUrl(shareId) });
+      if (didShare) {
         await recordStoryShare(activeStoryId || sharedRecord?.sourceStoryId);
+        showError('分享链接已准备好，这段命运也已加入收藏命运。');
+      } else {
+        showError('已取消分享；这段命运已加入收藏命运，可稍后从收藏馆分享。');
       }
-      cacheSharedSnapshotAfterCreate(shareId, sharedRecord);
+      cacheSharedSnapshotAfterCreate(shareId, sharedRecord, snapshotChapters);
       if ((globalThis as any).__legacyShareRecord__) {
       shareStage = 'resolveProvenance';
       const provenance = await resolveActiveStoryProvenance();
       shareStage = 'createSharedStoryRecord';
+      const legacyCleanChapters = getCleanCurrentRunChapters();
       const shareId = await createSharedStoryRecord(db as any, {
         authorId: user.uid,
         authorName: getUserAuthorName(user),
@@ -5047,8 +5107,8 @@ export default function App() {
         main_axis: blueprint?.main_axis || "",
         tags: selectedThemes,
         characters: blueprint?.characters || [],
-        chapters: chapters as any,
-        averageChapterWords: getAverageChapterWords(chapters),
+        chapters: legacyCleanChapters as any,
+        averageChapterWords: getAverageChapterWords(legacyCleanChapters),
         coverUrl: activeStoryMeta?.coverUrl || '',
         sourceStoryId: activeStoryId,
         originalAuthorId: provenance.originalAuthorId,
@@ -5065,7 +5125,7 @@ export default function App() {
         main_axis: blueprint?.main_axis || "",
         tags: selectedThemes,
         characters: blueprint?.characters || [],
-        chapters,
+        chapters: legacyCleanChapters,
         authorId: user.uid,
         authorName: getUserAuthorName(user),
         originalAuthorId: provenance.originalAuthorId,
@@ -5074,9 +5134,9 @@ export default function App() {
         intervenerName: getUserAuthorName(user),
         coverUrl: activeStoryMeta?.coverUrl || '',
         sourceStoryId: activeStoryId,
-        averageChapterWords: getAverageChapterWords(chapters),
-        chapterCount: getReadyChapterCount(chapters),
-        cardExcerpt: getStoryCardExcerpt(blueprint?.main_axis || '', chapters),
+        averageChapterWords: getAverageChapterWords(legacyCleanChapters),
+        chapterCount: getReadyChapterCount(legacyCleanChapters),
+        cardExcerpt: getStoryCardExcerpt(blueprint?.main_axis || '', legacyCleanChapters),
         allowAdaptation: getActiveStoryAllowAdaptation(),
         visibility: 'unlisted',
         createdAt: new Date().toISOString(),
@@ -5084,7 +5144,7 @@ export default function App() {
       };
       setMySharedStories((prev) => [sharedRecord, ...prev.filter((story: any) => story.id !== shareId)]);
       shareStage = 'cacheSharedStory';
-      await cacheSharedStory(shareId, { meta: { ...sharedRecord, sharedStoryId: shareId }, chapters: chapters as any })
+      await cacheSharedStory(shareId, { meta: { ...sharedRecord, sharedStoryId: shareId }, chapters: legacyCleanChapters as any })
         .catch((error) => console.warn('share cacheSharedStory failed:', error));
       shareStage = 'cacheStoryLists';
       await cacheStoryLists(publicStories, myStories, [sharedRecord, ...mySharedStories.filter((story: any) => story.id !== shareId)])
@@ -5092,7 +5152,7 @@ export default function App() {
       setSharedStoryId(shareId);
       const shareUrl = buildSharedStoryUrl(shareId);
       const shareTitle = formatBookTitle(blueprint?.title || "未命名故事");
-      const shareText = buildStoryShareText(shareTitle, chapters);
+      const shareText = buildStoryShareText(shareTitle, legacyCleanChapters);
       shareStage = 'deliverPreparedShare';
       await deliverPreparedShare({ title: shareTitle, text: shareText, url: shareUrl });
       }
@@ -5106,7 +5166,7 @@ export default function App() {
         error,
       });
       if ((e as any)?.name === 'AbortError') {
-        showError('已取消分享。');
+        showError(createdShareId ? '已取消分享；这段命运已加入收藏命运，可稍后从收藏馆分享。' : '已取消分享。');
         return;
       }
       const hasShareId = Boolean(createdShareId);
@@ -5275,7 +5335,7 @@ export default function App() {
       return;
     } catch (error) {
       if ((error as any)?.message === 'already-liked') {
-        showError('你已经点过赞了。');
+        showError('该作品已经点过赞。');
         return;
       }
       console.error(error);
@@ -5355,7 +5415,7 @@ export default function App() {
 
       if (authoringImportReplaceBranches && parsed.branches.length > 0) {
         // Handle branch import logic...
-        showError("支线导入逻辑暂未完全实现，已更新主线内容");
+        showError("已导入主线内容；支线内容请在「角色和支线」中继续确认。");
       }
 
       setAuthoringCartridge(nextCartridge);
@@ -5545,7 +5605,7 @@ export default function App() {
               <div className="text-xs font-black uppercase tracking-[0.22em] text-emerald-300">作品已保存</div>
               <h3 className="mt-2 break-words text-2xl font-black text-white">{title}</h3>
               <p className="mt-3 text-sm leading-relaxed text-zinc-400">
-                更改已经写入作品档案。你可以马上分享作品，或回到首页继续查看作品库。
+                更改已经写入作品档案。可以马上分享作品，或回到首页继续查看作品库。
               </p>
               {isPrivate && (
                 <p className="mt-3 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs font-bold leading-relaxed text-amber-100/80">
@@ -5666,7 +5726,7 @@ export default function App() {
             </div>
             <h3 className="mb-3 text-2xl font-black text-white">确定要离开吗？</h3>
             <p className="mb-8 text-zinc-400 leading-relaxed">
-              您当前的干涉尚未保存。离开游玩页后，未保存的作品进度将会丢失。
+              当前干涉尚未保存。离开游玩页后，未保存的游玩进度将会丢失。
             </p>
             <div className="flex flex-col gap-3">
               {interventionsLeft > 0 && (
@@ -5692,7 +5752,7 @@ export default function App() {
                 onClick={handleSaveWorkAndReturn}
                 className="w-full rounded-2xl bg-emerald-600 py-4 text-sm font-black text-white shadow-lg shadow-emerald-600/20"
               >
-                保存作品并返回
+                收藏命运并返回
               </button>
               <button
                 type="button"
@@ -6277,11 +6337,11 @@ export default function App() {
             命运馆
           </div>
           <h2 className="story-library-title text-4xl font-black leading-[0.95] sm:text-5xl lg:text-6xl">
-            选择一条<br className="hidden sm:block" />
-            <span className="story-library-title-accent">可以被干涉的命运</span>
+            选择想要<br className="hidden sm:block" />
+            <span className="story-library-title-accent">干涉的命运</span>
           </h2>
           <p className="mt-5 max-w-2xl text-base font-medium leading-relaxed text-zinc-400 sm:text-lg">
-            从作品库进入故事，阅读、干涉、收藏，或把自己的世界继续写成新的命运记录。
+            从作品库进入故事，阅读、干涉、收藏，或继续写成新的命运记录。
           </p>
         </div>
         <div className="flex flex-wrap gap-3 lg:justify-end">
@@ -6716,7 +6776,7 @@ export default function App() {
         <div className="mb-10 flex items-start justify-between gap-4">
           <div>
             <h2 className="text-3xl font-black text-white sm:text-4xl">命运收藏馆</h2>
-            <p className="mt-2 text-sm text-zinc-500">管理你收藏的原作与保存的干涉记录。</p>
+            <p className="mt-2 text-sm text-zinc-500">管理收藏的原作与收藏命运。</p>
           </div>
           <BackNavButton label={archiveReturnTarget === 'PLAYING' ? '返回游玩页' : '返回作品库'} onClick={leaveArchiveView} />
         </div>
@@ -6725,13 +6785,13 @@ export default function App() {
           {isArchiveSyncing && archiveStories.length > 0 && (
             <div className="mb-5 flex items-center gap-3 rounded-2xl border border-indigo-500/20 bg-indigo-500/10 px-4 py-3 text-xs font-bold text-indigo-100/85">
               <Loader2 className="h-4 w-4 shrink-0 animate-spin text-indigo-300" />
-              <span>正在后台同步收藏馆，当前列表会保持可用。</span>
+              <span>正在同步收藏馆，当前列表会保持可用。</span>
             </div>
           )}
           {archiveSegment.status === 'error' && archiveStories.length > 0 && (
             <div className="mb-5 rounded-3xl border border-amber-500/25 bg-amber-500/10 p-4 text-sm leading-relaxed text-amber-100/85">
               <div className="font-black text-amber-100">收藏馆同步暂时不顺利</div>
-              <p className="mt-1 text-xs text-amber-100/70">{archiveSegment.error || '已保留当前可用内容，你可以稍后刷新重试。'}</p>
+              <p className="mt-1 text-xs text-amber-100/70">{archiveSegment.error || '已保留当前可用内容，可以稍后刷新重试。'}</p>
             </div>
           )}
           {/* Tab 切换栏 */}
@@ -6739,7 +6799,7 @@ export default function App() {
             <div className="flex rounded-2xl border border-zinc-800 bg-zinc-950/70 p-1 shrink-0">
               {([
                 { id: 'favorite', label: '收藏原作' },
-                { id: 'saved', label: '保存记录' },
+                { id: 'saved', label: '收藏命运' },
                 { id: 'authors', label: '追踪作者' },
               ] as const).map((tab) => (
                 <button
@@ -6800,18 +6860,18 @@ export default function App() {
             <InlineSyncState
               tone="error"
               title="收藏馆暂时无法同步"
-              detail={archiveSegment.error || '没有可用的本机缓存。你可以重新读取，或先返回作品库继续浏览。'}
+              detail={archiveSegment.error || '没有可用的本机缓存。可以重新读取，或先返回作品库继续浏览。'}
               actionLabel="重新读取收藏馆"
               onAction={() => refreshArchiveStories({ force: true })}
             />
           ) : isArchiveSyncing && archiveStories.length === 0 ? (
             <InlineSyncState
               title="正在同步命运收藏馆"
-              detail="正在读取收藏原作和保存记录。弱网时会先尝试恢复本机缓存。"
+              detail="正在读取收藏原作和收藏命运。弱网时会先尝试恢复本机缓存。"
             />
           ) : archiveTab === 'authors' ? (
             followedAuthorsLoading && visibleFollowedAuthors.length === 0 ? (
-              <InlineSyncState title="正在同步追踪作者" detail="正在读取你追踪的作者列表。" />
+              <InlineSyncState title="正在同步追踪作者" detail="正在读取已追踪作者列表。" />
             ) : visibleFollowedAuthors.length === 0 ? (
               <InlineSyncState
                 tone="empty"
@@ -6839,8 +6899,8 @@ export default function App() {
             savedStories.length === 0 ? (
               <InlineSyncState
                 tone="empty"
-                title={keyword || archiveFilter !== 'all' ? '没有符合条件的保存记录' : '还没有保存任何干涉记录'}
-                detail={keyword || archiveFilter !== 'all' ? '可以调整搜索或可见性筛选条件。' : '在游玩页点击「保存当前故事」后，当前命运线会出现在这里。'}
+                title={keyword || archiveFilter !== 'all' ? '没有符合条件的收藏命运' : '还没有收藏任何命运线'}
+                detail={keyword || archiveFilter !== 'all' ? '可以调整搜索或可见性筛选条件。' : '在游玩页点击「收藏命运」后，当前命运线会出现在这里。'}
               />
             ) : (
               <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -6878,7 +6938,7 @@ export default function App() {
                 </div>
                 <h2 className="mt-4 text-2xl font-black text-white">欢迎来到命运故事台</h2>
                 <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-                  这里不是普通阅读器：你可以读故事、干涉章节、保存命运线，也可以自己生成或改编作品。
+                  这里不是普通阅读器：可阅读故事、干涉章节、收藏命运线，也可生成或改编作品。
                 </p>
               </div>
               <button type="button" onClick={dismissOnboardingGuide} className={semanticIconButtonClass('ghost')} aria-label="关闭引导">
@@ -6889,7 +6949,7 @@ export default function App() {
               {[
                 { title: '选一篇作品', desc: '从作品库点「干涉命运」进入游玩。' },
                 { title: '干涉章节', desc: '每局最多三次，系统会重写相关命运线。' },
-                { title: '保存与分享', desc: '满意的命运可保存到收藏馆或分享给别人。' },
+                { title: '收藏与分享', desc: '满意的命运可收藏到馆藏，或分享给其他读者。' },
               ].map((item) => (
                 <div key={item.title} className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
                   <div className="text-sm font-black text-zinc-100">{item.title}</div>
@@ -6936,7 +6996,7 @@ export default function App() {
               <div>
                 <h2 className="text-xl font-black text-white">接收作品动态提醒？</h2>
                 <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-                  开启后，作者更新、作品被点赞收藏、追踪作者发布新作时，可以在手机收到提醒。你也可以之后到个人中心的设置里开启。
+                  开启后，作者更新、作品被点赞收藏、追踪作者发布新作时，可以在手机收到提醒。也可以之后到个人中心的设置里开启。
                 </p>
               </div>
             </div>
@@ -6967,7 +7027,7 @@ export default function App() {
         </div>
         <h1 className="text-4xl font-black text-white sm:text-5xl">快速生成故事</h1>
         <p className="text-sm leading-relaxed text-zinc-500 sm:text-base">
-          选择 1 到 4 个主题，或直接输入你的故事大纲。系统会先生成完整蓝图，再预先写好前 3 章供你开始干涉。
+          选择 1 到 4 个主题，或直接输入故事大纲。系统会先生成完整蓝图，再预先写好前 3 章供玩家开始干涉。
         </p>
       </div>
 
@@ -7167,7 +7227,7 @@ export default function App() {
 
   const accountAssetStats = [
     { label: '收藏原作', value: mySharedStories.filter((story: any) => story.archiveKind === 'favorite').length },
-    { label: '保存故事', value: mySharedStories.filter((story: any) => story.archiveKind !== 'favorite').length },
+    { label: '收藏命运', value: mySharedStories.filter((story: any) => story.archiveKind !== 'favorite').length },
     { label: '追踪作者', value: followedAuthors.length },
     { label: '我的作品', value: myStories.length },
   ];
@@ -7210,7 +7270,7 @@ export default function App() {
                 <div>
                   <div className="text-lg font-black text-white">我的资产</div>
                   <div className="mt-1 text-xs leading-relaxed text-zinc-500">
-                    收藏、保存、追踪和创作集中看，避免用户不知道自己的内容放在哪里。
+                    收藏、命运线、追踪和创作集中查看，方便快速找到相关内容。
                   </div>
                 </div>
                 <BarChart3 className="h-5 w-5 text-indigo-200" />
@@ -7267,7 +7327,7 @@ export default function App() {
                       <div>
                         <div className="text-sm font-black text-zinc-100">手机通知</div>
                         <div className="mt-1 text-xs leading-relaxed text-zinc-500">
-                          接收作者更新、作品互动和系统提醒。若你曾在系统弹窗中拒绝，需要到浏览器或手机设置里重新允许。
+                          接收作者更新、作品互动和系统提醒。若曾在系统弹窗中拒绝，需要到浏览器或手机设置里重新允许。
                         </div>
                       </div>
                       <Bell className="h-5 w-5 text-indigo-300" />
@@ -7334,7 +7394,7 @@ export default function App() {
                 </div>
                 <div className="space-y-3 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
                   <div className="text-sm text-zinc-400">
-                    已保存/已分享的故事记录现在集中在独立页面管理。
+                    收藏命运和分享记录现在集中在独立页面管理。
                   </div>
                   <button
                     type="button"
@@ -7425,7 +7485,7 @@ export default function App() {
               <div>
                 <div className="text-xs font-black uppercase tracking-[0.22em] text-zinc-500">馆藏管理</div>
                 <div className="mt-1 text-sm font-bold text-zinc-300">
-                  当前状态：{story.meta?.visibility === 'unlisted' ? '非公开链接，可通过链接访问' : '私人，仅你可见'}
+                  当前状态：{story.meta?.visibility === 'unlisted' ? '非公开链接，可通过链接访问' : '私人，仅当前账号可见'}
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -7494,7 +7554,7 @@ export default function App() {
         <div className="app-card mt-12 rounded-[2rem] p-6 text-center">
           <h3 className="text-2xl font-black text-white">想亲手改变这条命运线吗？</h3>
           <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-zinc-400">
-            这页是只读故事记录。注册或登录后，你可以从原版故事开始干涉命运，也可以一键改编成自己的版本。
+            这页是只读故事记录。注册或登录后，可从原版故事开始干涉命运；若作者开放权限，也可一键改编成个人作品。
           </p>
           <div className="mt-6 grid gap-3 sm:grid-cols-3">
             <button
@@ -8024,7 +8084,7 @@ export default function App() {
               {isSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />} 分享
             </button>
             <button type="button" onClick={handleSaveWorkAndReturn} className={semanticButtonClass('secondary', { compact: true })}>
-              <Archive className="h-4 w-4" /> 保存当前故事
+              <Archive className="h-4 w-4" /> 收藏命运
             </button>
             {!activeStoryId && (
               <button type="button" onClick={handleRegenerateQuickStory} className={semanticButtonClass('ghost', { compact: true })}>
@@ -8947,7 +9007,7 @@ export default function App() {
 
                   <div className="border-t border-zinc-800 pt-6">
                     <h3 className="text-xl font-black text-white">作品设置</h3>
-                    <p className="mt-1 text-xs leading-relaxed text-zinc-500">正式作品可选择私人、非公开链接或公开；保存区记录不会出现在这里。</p>
+                    <p className="mt-1 text-xs leading-relaxed text-zinc-500">正式作品可选择私人、非公开链接或公开；收藏命运记录不会出现在这里。</p>
                   </div>
                   <div className="grid gap-4 md:grid-cols-2">
                     <label className="space-y-2 text-sm text-zinc-400">
@@ -8984,7 +9044,7 @@ export default function App() {
                       </div>
                     </label>
                   </div>
-                  <section className="app-card-quiet rounded-2xl p-4">
+                  <section className="app-card-quiet rounded-2xl p-4" tabIndex={0} onPaste={handleAuthoringCoverPaste}>
                     <div className="mb-4 flex flex-col gap-4 sm:flex-row">
                       <div className="h-32 w-32 shrink-0 overflow-hidden rounded-2xl border border-zinc-800 bg-gradient-to-br from-zinc-800 via-zinc-950 to-indigo-950">
                         {authoringCartridge.meta?.coverUrl ? (
@@ -8998,7 +9058,7 @@ export default function App() {
                       <div className="min-w-0 flex-1 space-y-3">
                         <div>
                           <h4 className="text-lg font-black text-white">作品封面</h4>
-                          <p className="mt-1 text-xs leading-relaxed text-zinc-500">用于作品卡和分享预览，建议 1:1。</p>
+                          <p className="mt-1 text-xs leading-relaxed text-zinc-500">用于作品卡和分享预览，建议 1:1。可上传图片，或直接粘贴剪贴板图片。</p>
                         </div>
                         <div className="flex flex-wrap gap-2">
                           <label className={`${semanticButtonClass('secondary', { compact: true })} cursor-pointer`}>
@@ -9028,7 +9088,7 @@ export default function App() {
                         <input
                           value={authoringCoverPrompt}
                           onChange={(event) => setAuthoringCoverPrompt(event.target.value)}
-                          placeholder="描述你想要的封面画面..."
+                          placeholder="描述封面画面..."
                           className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
                         />
                         <button type="button" onClick={handleGenerateAuthoringCover} disabled={isGeneratingCover} className={semanticButtonClass('primary', { compact: true })}>
@@ -9081,7 +9141,7 @@ export default function App() {
                     </div>
                     <div className="app-card-quiet mt-4 rounded-2xl p-4">
                       <div className="text-sm font-black text-zinc-100">故事倾向</div>
-                      <p className="mt-1 text-xs leading-relaxed text-zinc-500">设置作品本身比较容易走向哪一种收束。读者只会感受到故事倾向，不会看到这些后台设定。</p>
+                      <p className="mt-1 text-xs leading-relaxed text-zinc-500">设置作品本身比较容易走向哪一种收束。读者只会感受到故事倾向，不会看到具体数值。</p>
                       <div className="mt-3 grid gap-3 sm:grid-cols-2">
                         {([
                           { key: 'leftBaseWeight', label: '左向结局域' },
@@ -9158,7 +9218,7 @@ export default function App() {
                     />
                     <span>
                       <span className="block font-black text-zinc-100">开放一键改编权限</span>
-                      <span className="mt-1 block text-xs leading-relaxed text-zinc-500">开启后，其他已登录用户可以把这篇作品改编成自己的私人作品。</span>
+                      <span className="mt-1 block text-xs leading-relaxed text-zinc-500">开启后，其他已登录用户可以把这篇作品改编成个人草稿继续创作。</span>
                     </span>
                   </label>
                   
@@ -9270,7 +9330,7 @@ export default function App() {
                       ))}
                     </div>
                     <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-4 text-xs leading-relaxed text-indigo-100/75">
-                      你可以先编辑“默认 / 左向默认 / 右向默认”三个结局原型。每一类收束都可承载更多具体结局，并可由支线绑定来决定最终收束；已设置的支线倾向会继续沿用。
+                      可先编辑“默认 / 左向默认 / 右向默认”三个结局原型。每一类收束都可承载更多具体结局，并可由支线绑定来决定最终收束；已设置的支线倾向会继续沿用。
                     </div>
                     {authoringCartridge.meta?.endingMode === 'single' && (
                       (() => {
@@ -9647,7 +9707,7 @@ export default function App() {
                       分享故事
                     </button>
                     <button onClick={() => { setIsActionMenuOpen(false); handleSaveWorkAndReturn(); }} className={semanticMenuButtonClass('ghost')}>
-                      <Archive className="h-5 w-5" /> 保存当前故事
+                      <Archive className="h-5 w-5" /> 收藏命运
                     </button>
                   </section>
                   <section className="grid gap-2">
