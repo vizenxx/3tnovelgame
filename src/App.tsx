@@ -4375,6 +4375,7 @@ export default function App() {
 
   const handleGenerateBlueprint = async (overrideInput?: QuickGenerationInput, overrideSignature?: string) => {
     if (!user || !db) return;
+    let generationStage = appLanguage === 'en-US' ? 'preparing generation' : '准备生成';
     const activeGenerationInput = overrideInput || getActiveQuickGenerationInput();
     const missingQuizStep = !overrideInput && quickGenerationMode === 'quiz' ? getIncompleteQuickQuizStep() : null;
     if (missingQuizStep) {
@@ -4425,12 +4426,13 @@ export default function App() {
         ? cachedDraft.value.blueprint
         : null;
       if (!data) {
-      const response = await apiFetch('/api/generate-blueprint', {
-        method: 'POST',
-        body: JSON.stringify({ ...activeGenerationInput, language: appLanguage }),
-      }, 90000);
-      if (!response.ok) throw new Error(await readErrorMessage(response));
-      data = await response.json();
+        generationStage = appLanguage === 'en-US' ? 'generating the story blueprint' : '生成故事蓝图';
+        const response = await apiFetch('/api/generate-blueprint', {
+          method: 'POST',
+          body: JSON.stringify({ ...activeGenerationInput, language: appLanguage }),
+        }, 90000);
+        if (!response.ok) throw new Error(await readErrorMessage(response));
+        data = await response.json();
       }
       data.narrative_person = activeGenerationInput.narrativePerson;
       data.endingMode = data.endingMode === 'single' ? 'single' : activeGenerationInput.endingMode;
@@ -4444,6 +4446,7 @@ export default function App() {
         if (isChapterTextReady((data.chapters || []).find((chapter: any) => chapter.chapter_num === chapterNum))) {
           continue;
         }
+        generationStage = appLanguage === 'en-US' ? `generating chapter ${chapterNum}` : `生成第 ${chapterNum} 章`;
         setGenerationStatus(`正在具象化世界细节 (${chapterNum}/3)...`);
         setGenerationProgress(72 + chapterNum * 7);
         const chapterResponse = await withRetry(() => apiFetch('/api/generate-next-chapter', {
@@ -4513,7 +4516,12 @@ export default function App() {
       navigateTo('PLAYING', { replace: true });
     } catch (error) {
       console.error(error);
-      showError(error instanceof Error && error.message ? error.message : '生成失败，请检查网络或稍后重试。');
+      const detail = error instanceof Error && error.message
+        ? error.message
+        : (appLanguage === 'en-US' ? 'Please check the network or try again later.' : '请检查网络或稍后重试。');
+      showError(appLanguage === 'en-US'
+        ? `Generation failed while ${generationStage}: ${detail}`
+        : `${generationStage}时失败：${detail}`);
       goBack('THEME_SELECTION');
     } finally {
       clearInterval(progressInterval);

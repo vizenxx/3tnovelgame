@@ -82,7 +82,7 @@ function normalizeBlueprint(raw: any, requestedEndingMode: 'single' | 'dual' = '
     throw new Error('AI_RESPONSE_INVALID: blueprint response is not an object.');
   }
 
-  const characters = Array.isArray(raw.characters)
+  let characters = Array.isArray(raw.characters)
     ? raw.characters.slice(0, 5).map((character: any, index: number) => ({
         id: String(character?.id || `c${index + 1}`).trim() || `c${index + 1}`,
         name: String(character?.name || `角色${index + 1}`).trim(),
@@ -90,7 +90,7 @@ function normalizeBlueprint(raw: any, requestedEndingMode: 'single' | 'dual' = '
       })).filter((character: any) => character.name)
     : [];
 
-  const chapters = Array.isArray(raw.chapters)
+  let chapters = Array.isArray(raw.chapters)
     ? raw.chapters.slice(0, 7).map((chapter: any, index: number) => ({
         chapter_num: Math.min(7, Math.max(1, Number(chapter?.chapter_num) || index + 1)),
         title: String(chapter?.title || `第${index + 1}章`).trim(),
@@ -108,6 +108,42 @@ function normalizeBlueprint(raw: any, requestedEndingMode: 'single' | 'dual' = '
         text: String(ending?.text || '命运在终章留下尚未命名的回声。').trim(),
       }))
     : [];
+  if (endings.length === 0) {
+    endings = [
+      { type: 'normal', text: '命运在终章收束，众人带着改变后的理解继续前行。' },
+      { type: 'good', text: '关键选择使命运走向更明亮的方向，但代价仍被记住。' },
+      { type: 'bad', text: '被忽略的裂痕扩大，故事在沉重的余波中落幕。' },
+    ];
+  }
+  if (chapters.length === 0) {
+    chapters = Array.from({ length: 7 }, (_, index) => ({
+      chapter_num: index + 1,
+      title: `第${index + 1}章`,
+      summary: index === 0 ? '主角被卷入命运异常，故事的核心矛盾开始显形。' : '命运的分歧逐步扩大，人物关系与隐藏真相继续推进。',
+      present_characters: characters.map((character: any) => character.id).slice(0, 3),
+    }));
+  }
+  if (chapters.length < 7) {
+    const existingNums = new Set(chapters.map((chapter: any) => Number(chapter.chapter_num)));
+    for (let chapterNum = 1; chapterNum <= 7; chapterNum += 1) {
+      if (!existingNums.has(chapterNum)) {
+        chapters.push({
+          chapter_num: chapterNum,
+          title: `第${chapterNum}章`,
+          summary: '命运仍在延展，新的选择与代价等待被揭开。',
+          present_characters: characters.map((character: any) => character.id).slice(0, 3),
+        });
+      }
+    }
+    chapters = chapters.sort((a: any, b: any) => Number(a.chapter_num) - Number(b.chapter_num)).slice(0, 7);
+  }
+  if (characters.length === 0) {
+    characters = [
+      { id: 'c1', name: '命运旅人', desc: '被卷入命运分岔的核心人物' },
+      { id: 'c2', name: '旧日见证者', desc: '掌握部分真相却有所隐瞒的人' },
+      { id: 'c3', name: '裂隙同行者', desc: '在关键选择中牵动主线走向的人' },
+    ];
+  }
   if (endingMode === 'single' && endings.length > 0) {
     const base = endings.find((ending: any) => ending.type === 'normal')?.text || endings[0]?.text || '命运在终章自然收束为同一个终局。';
     endings = [
@@ -117,7 +153,7 @@ function normalizeBlueprint(raw: any, requestedEndingMode: 'single' | 'dual' = '
     ];
   }
 
-  const branches = Array.isArray(raw.branches)
+  let branches = Array.isArray(raw.branches)
     ? raw.branches.slice(0, 10).map((branch: any, index: number) => ({
         id: String(branch?.id || `b_${index + 1}`).trim(),
         name: String(branch?.name || characters[index % Math.max(1, characters.length)]?.name || `角色${index + 1}`).trim(),
@@ -131,18 +167,39 @@ function normalizeBlueprint(raw: any, requestedEndingMode: 'single' | 'dual' = '
         hint: String(branch?.hint || '命运有细微回声').trim(),
       }))
     : [];
-
-  if (!String(raw.title || '').trim() || !String(raw.main_axis || '').trim()) {
-    throw new Error('AI_RESPONSE_INVALID: blueprint missed title or main_axis.');
-  }
-  if (characters.length === 0 || chapters.length === 0 || endings.length === 0 || branches.length === 0) {
-    throw new Error('AI_RESPONSE_INVALID: blueprint missed required arrays.');
+  if (branches.length === 0) {
+    branches = characters.slice(0, 3).flatMap((character: any, index: number) => ([
+      {
+        id: `b_${index + 1}_left`,
+        name: character.name,
+        score: 1,
+        side: 'left',
+        condition_char: character.id,
+        condition_action: 'bless',
+        condition_chapter: Math.min(6, Math.max(2, index + 2)),
+        desc: `${character.name}因一次庇佑而看见新的可能，后续选择出现温和偏转。`,
+        is_hidden: false,
+        hint: '温和的回响',
+      },
+      {
+        id: `b_${index + 1}_right`,
+        name: character.name,
+        score: 1,
+        side: 'right',
+        condition_char: character.id,
+        condition_action: 'curse',
+        condition_chapter: Math.min(6, Math.max(2, index + 2)),
+        desc: `${character.name}因一次磨难而被迫面对代价，命运暗处浮现裂痕。`,
+        is_hidden: index === 0,
+        hint: '暗处的裂痕',
+      },
+    ])).slice(0, 6);
   }
 
   return {
     ...raw,
-    title: String(raw.title).trim(),
-    main_axis: String(raw.main_axis).trim(),
+    title: String(raw.title || '未命名命运').trim(),
+    main_axis: String(raw.main_axis || raw.outline || '一个关于选择、代价与命运分歧的互动故事。').trim(),
     endingMode,
     left_mainline_default: Math.min(100, Math.max(0, Number(raw.left_mainline_default) || 40)),
     right_mainline_default: Math.min(100, Math.max(0, Number(raw.right_mainline_default) || 40)),
