@@ -2555,15 +2555,24 @@ export default function App() {
   };
   const buildQuickGenerationInputFromQuiz = (
     answers: QuickQuizAnswers = quickQuizAnswers,
-    characterSeed: QuickCharacterSeed = quickCharacterSeed
+    characterSeedInput?: QuickCharacterSeed
   ): QuickGenerationInput => {
+    const seed = characterSeedInput || quickCharacterSeed;
     const selectedOptions = QUICK_QUIZ_STEPS.flatMap((step) =>
       asSafeArray(answers[step.id])
         .map((optionId) => ({ step, option: getQuickQuizOption(step.id, optionId) }))
         .filter((item): item is { step: QuickQuizStep; option: QuickQuizOption } => Boolean(item.option))
     );
-    const keyTags = normalizeTagList(selectedOptions.map(({ option }) => option.tag || quickText(option.label))).slice(0, 4);
-    const outlinePieces = selectedOptions.map(({ option }) => quickText(option.outline));
+    const fallbackTags = QUICK_QUIZ_STEPS.flatMap((step) => asSafeArray(answers[step.id]).map((id) => String(id))).filter(Boolean);
+    const keyTags = normalizeTagList(
+      selectedOptions.map(({ option }) => option.tag || quickText(option.label)).filter(Boolean).length > 0
+        ? selectedOptions.map(({ option }) => option.tag || quickText(option.label))
+        : fallbackTags
+    ).slice(0, 4);
+    const outlinePieces = selectedOptions
+      .map(({ option }) => quickText(option.outline))
+      .filter(Boolean);
+    const safeOutlinePieces = outlinePieces.length > 0 ? outlinePieces : fallbackTags;
     const relationshipHints = asSafeArray(answers.relationships)
       .map((id) => getQuickQuizOption('relationships', id)?.narrativeHint)
       .filter(Boolean);
@@ -2579,8 +2588,8 @@ export default function App() {
         ? (appLanguage === 'en-US' ? 'Use a dual-lead structure where the two protagonists mirror and challenge each other.' : '请采用双主角结构，让两位主角互相映照与拉扯。')
         : '';
     const customOutlineFromQuiz = appLanguage === 'en-US'
-      ? `Generate an interactive seven-chapter story for immediate play. Preferences: ${outlinePieces.join('; ')}. ${narrativeHint} ${buildQuickCharacterSeedOutline(characterSeed)} Keep the story coherent, playable, and suitable for fate interference.`
-      : `请生成一篇适合马上游玩的七章互动故事。玩家偏好：${outlinePieces.join('；')}。${narrativeHint}${buildQuickCharacterSeedOutline(characterSeed)}请确保故事逻辑完整、适合命运干涉，并保留清晰的人物牵引。`;
+      ? `Generate an interactive seven-chapter story for immediate play. Preferences: ${safeOutlinePieces.join('; ')}. ${narrativeHint} ${buildQuickCharacterSeedOutline(seed)} Keep the story coherent, playable, and suitable for fate interference.`
+      : `请生成一篇适合马上游玩的七章互动故事。玩家偏好：${safeOutlinePieces.join('；')}。${narrativeHint}${buildQuickCharacterSeedOutline(seed)}请确保故事逻辑完整、适合命运干涉，并保留清晰的人物牵引。`;
     return {
       selectedThemes: keyTags,
       customOutline: customOutlineFromQuiz,
