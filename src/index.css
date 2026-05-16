@@ -444,6 +444,37 @@ html[data-theme="light"] {
   color: #fda4af;
 }
 
+.app-semantic-button {
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+.app-semantic-button svg {
+  flex: 0 0 auto;
+}
+
+html:lang(zh) .app-semantic-button {
+  white-space: nowrap;
+  word-break: keep-all;
+}
+
+html:lang(en) .app-semantic-button {
+  white-space: normal;
+  max-inline-size: 100%;
+}
+
+@media (max-width: 420px) {
+  .app-semantic-button-regular {
+    padding: 0.7rem 0.85rem;
+    font-size: 0.82rem;
+  }
+
+  .app-semantic-button-compact {
+    padding: 0.5rem 0.65rem;
+    font-size: 0.72rem;
+  }
+}
+
 .reading-page {
   background:
     linear-gradient(90deg, transparent, var(--app-brand-line), transparent),

@@ -6387,18 +6387,6 @@ export default function App() {
           </p>
         </div>
         <div className="flex flex-wrap gap-3 lg:justify-end">
-          <div className="inline-flex rounded-full border border-zinc-800 bg-zinc-950/60 p-1 text-xs font-black">
-            {(['zh-CN', 'en-US'] as AppLanguage[]).map((option) => (
-              <button
-                key={option}
-                type="button"
-                onClick={() => setAppLanguage(option)}
-                className={`rounded-full px-3 py-2 transition-colors ${appLanguage === option ? 'bg-indigo-500 text-white' : 'text-zinc-500 hover:text-zinc-200'}`}
-              >
-                {option === 'zh-CN' ? t('language.zh') : t('language.en')}
-              </button>
-            ))}
-          </div>
           {!isStandaloneMode && (
             <button
               type="button"
@@ -7346,6 +7334,37 @@ export default function App() {
                   账号设置
                 </div>
                 <div className="space-y-3">
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-black text-zinc-100">{t('language.switch')}</div>
+                        <div className="mt-1 text-xs leading-relaxed text-zinc-500">
+                          {appLanguage === 'en-US'
+                            ? 'This setting is saved on this device until it is changed here again.'
+                            : '语言设置会保存在当前设备，之后默认沿用，直到回到这里再次改变。'}
+                        </div>
+                      </div>
+                      <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1 text-xs font-black text-zinc-300">
+                        {appLanguage === 'zh-CN' ? t('language.zh') : t('language.en')}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(['zh-CN', 'en-US'] as AppLanguage[]).map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() => setAppLanguage(option)}
+                          className={`rounded-xl border px-3 py-2 text-sm font-black transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
+                            appLanguage === option
+                              ? 'border-indigo-400 bg-indigo-500/15 text-indigo-100'
+                              : 'border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
+                          }`}
+                        >
+                          {option === 'zh-CN' ? t('language.zh') : t('language.en')}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
                     <div className="mb-3 flex items-center justify-between gap-3">
                       <div>
@@ -9817,8 +9836,6 @@ export default function App() {
       onInstallApp={handleInstallApp}
       onSafariGuideOpen={() => setShowSafariGuide(true)}
       onSafariGuideClose={() => setShowSafariGuide(false)}
-      language={appLanguage}
-      onLanguageChange={setAppLanguage}
       t={t}
     />
   );

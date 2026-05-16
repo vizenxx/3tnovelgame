@@ -5,7 +5,7 @@ export type TranslateFn = (key: string, params?: Record<string, string | number>
 export const LANGUAGE_STORAGE_KEY = '3t-app-language';
 
 export const normalizeLanguage = (value?: string | null): AppLanguage => (
-  String(value || '').toLowerCase().startsWith('en') ? 'en-US' : 'zh-CN'
+  String(value || '').toLowerCase().startsWith('zh') ? 'zh-CN' : 'en-US'
 );
 
 export const getInitialLanguage = (): AppLanguage => {

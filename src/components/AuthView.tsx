@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { Download, Loader2, LogIn, Mail, User as UserIcon, Wand2, X } from 'lucide-react';
 import { semanticButtonClass, semanticIconButtonClass } from './semanticClasses';
-import type { AppLanguage, TranslateFn } from '../i18n';
+import type { TranslateFn } from '../i18n';
 
 export type AuthViewProps = {
   isIos: boolean;
@@ -19,8 +19,6 @@ export type AuthViewProps = {
   onInstallApp: () => void;
   onSafariGuideOpen: () => void;
   onSafariGuideClose: () => void;
-  language: AppLanguage;
-  onLanguageChange: (language: AppLanguage) => void;
   t: TranslateFn;
 };
 
@@ -42,26 +40,10 @@ export const AuthView = ({
   onInstallApp,
   onSafariGuideOpen,
   onSafariGuideClose,
-  language,
-  onLanguageChange,
   t,
 }: AuthViewProps) => (
   <div className="flex min-h-screen items-center justify-center bg-zinc-950 px-6 py-12 text-zinc-100">
     <div className="w-full max-w-md space-y-8">
-      <div className="flex justify-end">
-        <div className="inline-flex rounded-full border border-zinc-800 bg-zinc-900/70 p-1 text-xs font-black">
-          {(['zh-CN', 'en-US'] as AppLanguage[]).map((option) => (
-            <button
-              key={option}
-              type="button"
-              onClick={() => onLanguageChange(option)}
-              className={`rounded-full px-3 py-1.5 transition-colors ${language === option ? 'bg-indigo-500 text-white' : 'text-zinc-500 hover:text-zinc-200'}`}
-            >
-              {option === 'zh-CN' ? t('language.zh') : t('language.en')}
-            </button>
-          ))}
-        </div>
-      </div>
       <div className="space-y-4 text-center">
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-900 text-indigo-300">
           <Wand2 className="h-8 w-8" />

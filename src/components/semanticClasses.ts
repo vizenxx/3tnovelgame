@@ -2,7 +2,7 @@ export const semanticButtonClass = (
   variant: 'primary' | 'secondary' | 'danger' | 'ghost',
   options?: { fullWidth?: boolean; compact?: boolean }
 ) => {
-  const base = `inline-flex items-center justify-center gap-2 rounded-xl transition-all duration-150 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 disabled:pointer-events-none disabled:opacity-50 ${
+  const base = `app-semantic-button ${options?.compact ? 'app-semantic-button-compact' : 'app-semantic-button-regular'} inline-flex min-w-0 items-center justify-center gap-2 rounded-xl text-center leading-tight transition-all duration-150 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 disabled:pointer-events-none disabled:opacity-50 [&>svg]:shrink-0 ${
     options?.compact ? 'px-3 py-2 text-xs font-bold' : 'px-4 py-3 text-sm font-bold'
   } ${options?.fullWidth ? 'w-full' : ''}`;
   const variants = {
