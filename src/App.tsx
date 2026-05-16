@@ -4382,8 +4382,14 @@ export default function App() {
     if (!user || !db) return;
     let generationStage = appLanguage === 'en-US' ? 'preparing generation' : '准备生成';
     let activeGenerationInput: QuickGenerationInput | null = null;
+    const hasOverrideInput = Boolean(
+      overrideInput &&
+      typeof overrideInput === 'object' &&
+      Array.isArray((overrideInput as any).selectedThemes) &&
+      'customOutline' in (overrideInput as any)
+    );
     try {
-      activeGenerationInput = overrideInput || getActiveQuickGenerationInput();
+      activeGenerationInput = hasOverrideInput ? overrideInput as QuickGenerationInput : getActiveQuickGenerationInput();
       const safeSelectedThemes = asSafeArray<string>(activeGenerationInput.selectedThemes);
       const safeOutline = String(activeGenerationInput.customOutline || '');
       activeGenerationInput = {
@@ -4391,7 +4397,7 @@ export default function App() {
         selectedThemes: safeSelectedThemes,
         customOutline: safeOutline,
       };
-      const missingQuizStep = !overrideInput && quickGenerationMode === 'quiz' ? getIncompleteQuickQuizStep() : null;
+      const missingQuizStep = !hasOverrideInput && quickGenerationMode === 'quiz' ? getIncompleteQuickQuizStep() : null;
       if (missingQuizStep) {
         setQuickQuizStepIndex(Math.max(0, QUICK_QUIZ_STEPS.findIndex((step) => step.id === missingQuizStep.id)));
         showError(appLanguage === 'en-US' ? `Please complete: ${quickText(missingQuizStep.title)}` : `请先完成：${quickText(missingQuizStep.title)}`);
@@ -4405,7 +4411,7 @@ export default function App() {
         showError(appLanguage === 'en-US' ? 'Choose up to 4 story tags.' : '最多选择 4 个主题。');
         return;
       }
-      if (quickGenerationMode === 'quiz' || overrideInput) {
+      if (quickGenerationMode === 'quiz' || hasOverrideInput) {
         setSelectedThemes(safeSelectedThemes);
         setCustomOutline(safeOutline);
         setTargetWordCount(activeGenerationInput.targetWordCount);
@@ -4413,11 +4419,11 @@ export default function App() {
         setQuickEndingMode(activeGenerationInput.endingMode);
         setQuickEndingBias(activeGenerationInput.endingBias);
       }
-      if (!overrideInput && quickGenerationMode === 'advanced' && selectedThemes.length < 1 && !customOutline.trim()) {
+      if (!hasOverrideInput && quickGenerationMode === 'advanced' && selectedThemes.length < 1 && !customOutline.trim()) {
         showError('请至少选择一个主题或输入故事大纲。');
         return;
       }
-      if (!overrideInput && quickGenerationMode === 'advanced' && selectedThemes.length > 4) {
+      if (!hasOverrideInput && quickGenerationMode === 'advanced' && selectedThemes.length > 4) {
         showError('最多选择 4 个主题。');
         return;
       }
@@ -4442,7 +4448,7 @@ export default function App() {
     ]);
 
     try {
-      const draftSignature = overrideSignature || quickGenerationSignature();
+      const draftSignature = hasOverrideInput && overrideSignature ? overrideSignature : quickGenerationSignature();
       const cachedDraft = await getLocalCache<any>(quickGenerationDraftCacheKey());
       let data = cachedDraft?.value?.signature === draftSignature && cachedDraft.value?.blueprint
         ? cachedDraft.value.blueprint
