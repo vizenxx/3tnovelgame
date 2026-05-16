@@ -2515,7 +2515,8 @@ export default function App() {
   const sharedStoryCacheKey = (storyId: string) => `shared-story:${cacheScope()}:${storyId}`;
   const activeRunCacheKey = () => `active-run:${cacheScope()}`;
   const quickGenerationDraftCacheKey = () => `quick-generation-draft:${cacheScope()}`;
-  const quickText = (value: Record<AppLanguage, string>) => value[appLanguage] || value['zh-CN'];
+  const quickText = (value?: Partial<Record<AppLanguage, string>> | null) =>
+    String(value?.[appLanguage] || value?.['zh-CN'] || value?.['en-US'] || '');
   const getQuickQuizOption = (stepId: QuickQuizStepId, optionId: string) =>
     QUICK_QUIZ_STEPS.find((step) => step.id === stepId)?.options.find((option) => option.id === optionId);
   const toggleQuickQuizAnswer = (step: QuickQuizStep, optionId: string) => {
@@ -4082,8 +4083,12 @@ export default function App() {
   useEffect(() => {
     const handleFatalError = (event: ErrorEvent | PromiseRejectionEvent) => {
       console.error('Global app error fallback:', event);
+      const rawMessage = 'reason' in event
+        ? ((event.reason as any)?.message || String(event.reason || ''))
+        : ((event.error as any)?.message || event.message || '');
+      const detail = String(rawMessage || '').trim().slice(0, 140);
       returnToStoryLibraryFallback();
-      showError('发生错误，已回到作品库。');
+      showError(detail ? `发生错误：${detail}。已回到作品库。` : '发生错误，已回到作品库。');
     };
     window.addEventListener('error', handleFatalError as EventListener);
     window.addEventListener('unhandledrejection', handleFatalError as EventListener);
@@ -4376,37 +4381,54 @@ export default function App() {
   const handleGenerateBlueprint = async (overrideInput?: QuickGenerationInput, overrideSignature?: string) => {
     if (!user || !db) return;
     let generationStage = appLanguage === 'en-US' ? 'preparing generation' : '准备生成';
-    const activeGenerationInput = overrideInput || getActiveQuickGenerationInput();
-    const missingQuizStep = !overrideInput && quickGenerationMode === 'quiz' ? getIncompleteQuickQuizStep() : null;
-    if (missingQuizStep) {
-      setQuickQuizStepIndex(Math.max(0, QUICK_QUIZ_STEPS.findIndex((step) => step.id === missingQuizStep.id)));
-      showError(appLanguage === 'en-US' ? `Please complete: ${quickText(missingQuizStep.title)}` : `请先完成：${quickText(missingQuizStep.title)}`);
+    let activeGenerationInput: QuickGenerationInput | null = null;
+    try {
+      activeGenerationInput = overrideInput || getActiveQuickGenerationInput();
+      const safeSelectedThemes = asSafeArray<string>(activeGenerationInput.selectedThemes);
+      const safeOutline = String(activeGenerationInput.customOutline || '');
+      activeGenerationInput = {
+        ...activeGenerationInput,
+        selectedThemes: safeSelectedThemes,
+        customOutline: safeOutline,
+      };
+      const missingQuizStep = !overrideInput && quickGenerationMode === 'quiz' ? getIncompleteQuickQuizStep() : null;
+      if (missingQuizStep) {
+        setQuickQuizStepIndex(Math.max(0, QUICK_QUIZ_STEPS.findIndex((step) => step.id === missingQuizStep.id)));
+        showError(appLanguage === 'en-US' ? `Please complete: ${quickText(missingQuizStep.title)}` : `请先完成：${quickText(missingQuizStep.title)}`);
+        return;
+      }
+      if (safeSelectedThemes.length < 1 && !safeOutline.trim()) {
+        showError(appLanguage === 'en-US' ? 'Please choose at least one preference or enter a story outline.' : '请至少选择一个偏好或输入故事大纲。');
+        return;
+      }
+      if (safeSelectedThemes.length > 4) {
+        showError(appLanguage === 'en-US' ? 'Choose up to 4 story tags.' : '最多选择 4 个主题。');
+        return;
+      }
+      if (quickGenerationMode === 'quiz' || overrideInput) {
+        setSelectedThemes(safeSelectedThemes);
+        setCustomOutline(safeOutline);
+        setTargetWordCount(activeGenerationInput.targetWordCount);
+        setNarrativePerson(activeGenerationInput.narrativePerson);
+        setQuickEndingMode(activeGenerationInput.endingMode);
+        setQuickEndingBias(activeGenerationInput.endingBias);
+      }
+      if (!overrideInput && quickGenerationMode === 'advanced' && selectedThemes.length < 1 && !customOutline.trim()) {
+        showError('请至少选择一个主题或输入故事大纲。');
+        return;
+      }
+      if (!overrideInput && quickGenerationMode === 'advanced' && selectedThemes.length > 4) {
+        showError('最多选择 4 个主题。');
+        return;
+      }
+    } catch (error) {
+      console.error('quick generation input failed:', error);
+      showError(appLanguage === 'en-US'
+        ? 'The story preferences were not loaded correctly. Please reselect the quiz options and try again.'
+        : '故事偏好没有完整载入，请重新选择问卷选项后再生成。');
       return;
     }
-    if (activeGenerationInput.selectedThemes.length < 1 && !activeGenerationInput.customOutline.trim()) {
-      showError(appLanguage === 'en-US' ? 'Please choose at least one preference or enter a story outline.' : '请至少选择一个偏好或输入故事大纲。');
-      return;
-    }
-    if (activeGenerationInput.selectedThemes.length > 4) {
-      showError(appLanguage === 'en-US' ? 'Choose up to 4 story tags.' : '最多选择 4 个主题。');
-      return;
-    }
-    if (quickGenerationMode === 'quiz' || overrideInput) {
-      setSelectedThemes(activeGenerationInput.selectedThemes);
-      setCustomOutline(activeGenerationInput.customOutline);
-      setTargetWordCount(activeGenerationInput.targetWordCount);
-      setNarrativePerson(activeGenerationInput.narrativePerson);
-      setQuickEndingMode(activeGenerationInput.endingMode);
-      setQuickEndingBias(activeGenerationInput.endingBias);
-    }
-    if (!overrideInput && quickGenerationMode === 'advanced' && selectedThemes.length < 1 && !customOutline.trim()) {
-      showError('请至少选择一个主题或输入故事大纲。');
-      return;
-    }
-    if (!overrideInput && quickGenerationMode === 'advanced' && selectedThemes.length > 4) {
-      showError('最多选择 4 个主题。');
-      return;
-    }
+    if (!activeGenerationInput) return;
 
     navigateTo('GENERATING_BLUEPRINT');
     const progressInterval = startProgressSimulation(45000, [
