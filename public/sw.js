@@ -3,6 +3,19 @@ const CACHE_NAME = `fate-engine-${cacheVersion}`;
 const APP_SHELL = ['/', '/manifest.webmanifest', '/pwa-icon-192.png', '/pwa-icon-512.png', '/pwa-maskable-512.png'];
 const STATIC_CACHE_PATTERNS = [/\.(?:js|css|png|svg|ico|webmanifest)$/];
 
+const notificationFallback = (language) => {
+  if (String(language || '').toLowerCase().startsWith('en')) {
+    return {
+      title: 'A fate line has a new echo',
+      body: 'There is new story activity. Come back and take a look.',
+    };
+  }
+  return {
+    title: '命运有了新的回响',
+    body: '有新的作品动态，回来看看吧。',
+  };
+};
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)).then(() => self.skipWaiting())
@@ -28,11 +41,12 @@ self.addEventListener('push', (event) => {
   try {
     payload = event.data ? event.data.json() : {};
   } catch (error) {
-    payload = { title: '命运有了新的回响', body: event.data?.text() || '' };
+    payload = { body: event.data?.text() || '' };
   }
-  const title = payload.title || '命运有了新的回响';
+  const fallback = notificationFallback(payload.language);
+  const title = payload.title || fallback.title;
   const options = {
-    body: payload.body || '有新的作品动态，回来看看吧。',
+    body: payload.body || fallback.body,
     icon: '/pwa-icon-192.png',
     badge: '/pwa-icon-192.png',
     data: { url: payload.url || '/' },

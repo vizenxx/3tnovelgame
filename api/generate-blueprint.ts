@@ -4,6 +4,7 @@ import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './
 import { generateGeminiJsonWithFallback, parseGeminiJson } from './_gemini.js';
 import { getRequestLogContext, logGenerationError, logGenerationInfo } from './_log.js';
 import { buildQuickStoryBlueprintPrompt } from '../Prompt/quickStoryBlueprint.js';
+import { generationLanguageInstruction, normalizeGenerationLanguage } from './_language.js';
 
 const blueprintSchema = {
   type: Type.OBJECT,
@@ -185,6 +186,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!user) return;
 
     const { selectedThemes, customOutline, targetWordCount, narrativePerson } = req.body || {};
+    const language = normalizeGenerationLanguage(req.body?.language);
     const endingMode = req.body?.endingMode === 'single' ? 'single' : 'dual';
     logGenerationInfo(logContext, 'request', {
       uid: user.uid,
@@ -193,6 +195,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       targetWordCount,
       narrativePerson,
       endingMode,
+      language,
     });
 
     if (!Array.isArray(selectedThemes) && !customOutline) {
@@ -201,13 +204,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const safeTargetWordCount = Math.min(1200, Math.max(600, Number(targetWordCount) || 600));
 
-    const prompt = buildQuickStoryBlueprintPrompt({
+    const prompt = `${generationLanguageInstruction(language)}\n\n${buildQuickStoryBlueprintPrompt({
       selectedThemes,
       customOutline,
       targetWordCount: safeTargetWordCount,
       narrativePerson,
       endingMode,
-    });
+    })}`;
 
     const data = await generateBlueprintWithFallback(prompt, logContext, endingMode);
     logGenerationInfo(logContext, 'success', { title: data.title });

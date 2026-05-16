@@ -5,6 +5,7 @@ import { generateGeminiJsonWithFallback, parseGeminiJson } from './_gemini.js';
 import { getRequestLogContext, logGenerationError, logGenerationInfo } from './_log.js';
 import { buildInterventionRewritePrompt, buildInterventionWorldStatePrompt } from '../Prompt/interventionRewrite.js';
 import { branchEffectiveWeight, calculateEndingMechanics, normalizeEndingBias } from './_endingMechanics.js';
+import { generationLanguageInstruction, normalizeGenerationLanguage } from './_language.js';
 
 export const maxDuration = 60;
 
@@ -278,6 +279,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       interventionHistory,
       worldState,
     } = req.body || {};
+    const language = normalizeGenerationLanguage(req.body?.language);
     logGenerationInfo(logContext, 'request', {
       uid: user.uid,
       chapterNum,
@@ -288,6 +290,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       chapterCount: Array.isArray(chapters) ? chapters.length : 0,
       historyCount: Array.isArray(interventionHistory) ? interventionHistory.length : 0,
       hasWorldState: Boolean(worldState),
+      language,
     });
 
     const safeChapterNum = Math.min(6, Math.max(2, asNumber(chapterNum, 2)));
@@ -355,7 +358,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       prevChapterText,
     });
 
-    const prompt = buildInterventionRewritePrompt({
+    const prompt = `${generationLanguageInstruction(language)}\n\n${buildInterventionRewritePrompt({
       blueprint,
       safeChapterNum,
       actionLabel: action === 'bless' ? '正向' : '逆向',
@@ -369,7 +372,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       endingProto,
       endingMechanics,
       targetWordCount: safeTargetWordCount,
-    });
+    })}`;
 
     const aiData = await generateWithGeminiFallback(prompt, logContext, safeChapterNum);
     if (!Array.isArray(aiData?.chapters)) {

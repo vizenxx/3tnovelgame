@@ -1,5 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { AlertCircle, RefreshCcw, Home } from 'lucide-react';
+import { createTranslator, getInitialLanguage } from '../i18n';
+import { dictionaries } from '../i18n/dictionaries';
 
 type AppErrorBoundaryProps = {
   children: ReactNode;
@@ -21,7 +23,7 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
   static getDerivedStateFromError(error: unknown): AppErrorBoundaryState {
     return {
       hasError: true,
-      message: error instanceof Error ? error.message : '未知错误',
+      message: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 
@@ -40,6 +42,7 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
 
   render() {
     if (!this.state.hasError) return this.props.children;
+    const t = createTranslator(getInitialLanguage(), dictionaries);
 
     return (
       <div className="flex min-h-[100dvh] items-center justify-center bg-zinc-950 px-5 py-10 text-zinc-100">
@@ -47,9 +50,9 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-amber-500/25 bg-amber-500/10 text-amber-300">
             <AlertCircle className="h-7 w-7" />
           </div>
-          <h1 className="mt-5 text-2xl font-black text-white">页面状态已保护</h1>
+          <h1 className="mt-5 text-2xl font-black text-white">{t('errorBoundary.title')}</h1>
           <p className="mt-3 text-sm leading-relaxed text-zinc-400">
-            刚才有一段资料没有正常载入，系统已拦截空白画面。你可以回到首页重新同步作品，或直接重新载入 App。
+            {t('errorBoundary.body')}
           </p>
           {this.state.message && (
             <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-3 text-left text-xs leading-relaxed text-zinc-500">
@@ -63,7 +66,7 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-indigo-500 active:scale-[0.98]"
             >
               <Home className="h-4 w-4" />
-              回到首页
+              {t('errorBoundary.home')}
             </button>
             <button
               type="button"
@@ -71,7 +74,7 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
               className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm font-bold text-zinc-200 transition-colors hover:border-zinc-500 hover:bg-zinc-900 active:scale-[0.98]"
             >
               <RefreshCcw className="h-4 w-4" />
-              重新载入
+              {t('errorBoundary.reload')}
             </button>
           </div>
         </div>

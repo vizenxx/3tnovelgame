@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { Download, Loader2, LogIn, Mail, User as UserIcon, Wand2, X } from 'lucide-react';
 import { semanticButtonClass, semanticIconButtonClass } from './semanticClasses';
+import type { AppLanguage, TranslateFn } from '../i18n';
 
 export type AuthViewProps = {
   isIos: boolean;
@@ -18,6 +19,9 @@ export type AuthViewProps = {
   onInstallApp: () => void;
   onSafariGuideOpen: () => void;
   onSafariGuideClose: () => void;
+  language: AppLanguage;
+  onLanguageChange: (language: AppLanguage) => void;
+  t: TranslateFn;
 };
 
 const safeModalBackdropClass = "fixed inset-0 flex items-center justify-center overflow-y-auto overscroll-contain px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]";
@@ -38,17 +42,34 @@ export const AuthView = ({
   onInstallApp,
   onSafariGuideOpen,
   onSafariGuideClose,
+  language,
+  onLanguageChange,
+  t,
 }: AuthViewProps) => (
   <div className="flex min-h-screen items-center justify-center bg-zinc-950 px-6 py-12 text-zinc-100">
     <div className="w-full max-w-md space-y-8">
+      <div className="flex justify-end">
+        <div className="inline-flex rounded-full border border-zinc-800 bg-zinc-900/70 p-1 text-xs font-black">
+          {(['zh-CN', 'en-US'] as AppLanguage[]).map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => onLanguageChange(option)}
+              className={`rounded-full px-3 py-1.5 transition-colors ${language === option ? 'bg-indigo-500 text-white' : 'text-zinc-500 hover:text-zinc-200'}`}
+            >
+              {option === 'zh-CN' ? t('language.zh') : t('language.en')}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="space-y-4 text-center">
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-900 text-indigo-300">
           <Wand2 className="h-8 w-8" />
         </div>
         <div>
-          <h1 className="text-4xl font-black text-white">命运干涉</h1>
+          <h1 className="text-4xl font-black text-white">{t('app.name')}</h1>
           <p className="mt-3 text-sm leading-relaxed text-zinc-500">
-            使用邮箱和密码创建账户，之后在手机、PWA、桌面浏览器都能用同一方式进入。
+            {t('auth.subtitle')}
           </p>
         </div>
         {!isStandaloneMode && (
@@ -58,7 +79,7 @@ export const AuthView = ({
             className={`${semanticButtonClass('secondary', { compact: true })} mx-auto`}
           >
             <Download className="h-4 w-4" />
-            下载 App 到桌面
+            {t('auth.install')}
           </button>
         )}
       </div>
@@ -68,14 +89,14 @@ export const AuthView = ({
           type="email"
           value={authEmail}
           onChange={(event) => onAuthEmailChange(event.target.value)}
-          placeholder="邮箱"
+          placeholder={t('auth.email')}
           className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none transition-colors focus:border-indigo-500"
         />
         <input
           type="password"
           value={authPassword}
           onChange={(event) => onAuthPasswordChange(event.target.value)}
-          placeholder="密码（至少 6 位）"
+          placeholder={t('auth.password')}
           className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none transition-colors focus:border-indigo-500"
         />
         <button
@@ -85,14 +106,14 @@ export const AuthView = ({
           className={semanticButtonClass('primary', { fullWidth: true })}
         >
           {isLoggingIn ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
-          邮箱登录 / 创建账户
+          {t('auth.emailLogin')}
         </button>
         <button
           type="button"
           onClick={onPasswordReset}
           className="w-full text-center text-xs font-bold text-zinc-500 transition-colors hover:text-zinc-300"
         >
-          忘记密码
+          {t('auth.forgot')}
         </button>
       </div>
 
@@ -100,7 +121,7 @@ export const AuthView = ({
         <div className="space-y-4">
           <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-600">
             <div className="h-px flex-1 bg-zinc-800" />
-            快捷入口
+            {t('auth.quick')}
             <div className="h-px flex-1 bg-zinc-800" />
           </div>
           <button
@@ -110,14 +131,14 @@ export const AuthView = ({
             className={semanticButtonClass('secondary', { fullWidth: true })}
           >
             {isLoggingIn ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
-            Google 快捷登录 / 绑定
+            {t('auth.google')}
           </button>
         </div>
       ) : (
         <div className="space-y-3">
           <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-600">
             <div className="h-px flex-1 bg-zinc-800" />
-            Google 绑定
+            {t('auth.googleBinding')}
             <div className="h-px flex-1 bg-zinc-800" />
           </div>
           <button
@@ -127,7 +148,7 @@ export const AuthView = ({
             className={semanticButtonClass('secondary', { fullWidth: true })}
           >
             <LogIn className="h-4 w-4" />
-            在 Safari 绑定 Google 账户
+            {t('auth.safariGoogle')}
           </button>
         </div>
       )}
@@ -139,7 +160,7 @@ export const AuthView = ({
         className={semanticButtonClass('ghost', { fullWidth: true })}
       >
         <UserIcon className="h-4 w-4" />
-        先以游客身份游玩
+        {t('auth.guest')}
       </button>
 
       <AnimatePresence>
@@ -159,14 +180,14 @@ export const AuthView = ({
               onClick={(event) => event.stopPropagation()}
             >
               <div className="mb-5 flex items-center justify-between">
-                <h2 className="text-lg font-black text-white">iOS Google 绑定</h2>
+                <h2 className="text-lg font-black text-white">{t('auth.iosTitle')}</h2>
                 <button type="button" onClick={onSafariGuideClose} className={semanticIconButtonClass('ghost')}>
                   <X className="h-4 w-4" />
                 </button>
               </div>
               <div className="space-y-3 text-sm leading-relaxed text-zinc-400">
-                <p>请在 Safari 打开当前网页，使用 Google 登录完成账户绑定。</p>
-                <p>绑定后回到 PWA，就可以用同一邮箱密码登录并同步故事记录。</p>
+                <p>{t('auth.iosStep1')}</p>
+                <p>{t('auth.iosStep2')}</p>
               </div>
               <button
                 type="button"
@@ -174,7 +195,7 @@ export const AuthView = ({
                 className={`${semanticButtonClass('primary', { fullWidth: true })} mt-6`}
               >
                 <LogIn className="h-4 w-4" />
-                继续 Google 登录
+                {t('auth.continueGoogle')}
               </button>
             </motion.div>
           </motion.div>

@@ -1,8 +1,25 @@
-const DEFAULT_TITLE = '命运干涉｜可分享、可改写的互动故事引擎';
-const DEFAULT_DESCRIPTION = '阅读别人分享的故事记录，或把时间线带回命运干涉，亲自改写新的结局。';
+import { normalizeGenerationLanguage, type GenerationLanguage } from './_language.js';
+
+const DEFAULT_META = {
+  'zh-CN': {
+    title: '命运干涉｜可分享、可改写的互动故事引擎',
+    description: '阅读别人分享的故事记录，或把时间线带回命运干涉，亲自改写新的结局。',
+    suffix: '命运干涉',
+    tagPrefix: '一段关于',
+    tagSuffix: '的命运记录。',
+  },
+  'en-US': {
+    title: 'Fate Interference | Shareable interactive story engine',
+    description: 'Read a shared fate line, or bring the timeline back into Fate Interference and reshape the ending.',
+    suffix: 'Fate Interference',
+    tagPrefix: 'A fate record about ',
+    tagSuffix: '.',
+  },
+} satisfies Record<GenerationLanguage, Record<string, string>>;
 
 const getEnv = (name: string) => process.env[name] || '';
 const getSupabaseKey = () => getEnv('SUPABASE_SECRET_KEY') || getEnv('SUPABASE_SERVICE_ROLE_KEY');
+const metaFor = (language?: string | null) => DEFAULT_META[normalizeGenerationLanguage(language)];
 
 export function escapeHtml(value: string) {
   return String(value || '')
@@ -18,6 +35,10 @@ export function getShareId(input: unknown) {
   return String(value || '').trim().replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 120);
 }
 
+function stripBookTitle(value: string) {
+  return String(value || '').replace(/[《》]/g, '').trim();
+}
+
 function firstJsonChapterExcerpt(chapters: any[]) {
   for (const chapter of Array.isArray(chapters) ? chapters : []) {
     const text = String(chapter?.text || '').replace(/\s+/g, ' ').trim();
@@ -28,6 +49,19 @@ function firstJsonChapterExcerpt(chapters: any[]) {
   return '';
 }
 
+function tagDescription(tags: string[], language: GenerationLanguage) {
+  const meta = DEFAULT_META[language];
+  if (!tags.length) return meta.description;
+  const separator = language === 'en-US' ? ', ' : '、';
+  return `${meta.tagPrefix}${tags.slice(0, 3).join(separator)}${meta.tagSuffix}`;
+}
+
+function formatShareTitle(rawTitle: string, language: GenerationLanguage) {
+  const meta = DEFAULT_META[language];
+  const title = stripBookTitle(rawTitle) || meta.title;
+  return `《${title}》｜${meta.suffix}`;
+}
+
 export type SharedStoryMeta = {
   id: string;
   title: string;
@@ -36,7 +70,10 @@ export type SharedStoryMeta = {
   visibility: string;
 };
 
-export async function fetchSharedStoryMeta(shareId: string): Promise<SharedStoryMeta | null> {
+export async function fetchSharedStoryMeta(
+  shareId: string,
+  language: GenerationLanguage = 'zh-CN'
+): Promise<SharedStoryMeta | null> {
   const supabaseUrl = getEnv('SUPABASE_URL') || getEnv('VITE_SUPABASE_URL');
   const supabaseKey = getSupabaseKey();
   if (!supabaseUrl || !supabaseKey || !shareId) return null;
@@ -54,22 +91,23 @@ export async function fetchSharedStoryMeta(shareId: string): Promise<SharedStory
   const row = rows?.[0];
   if (row?.visibility !== 'unlisted') return null;
 
-  const rawTitle = String(row.title || DEFAULT_TITLE);
-  const title = rawTitle.replace(/[《》]/g, '').trim() || DEFAULT_TITLE;
   const tags = Array.isArray(row.tags) ? row.tags.filter(Boolean) : [];
   const excerpt = firstJsonChapterExcerpt(row.chapters);
-  const description = excerpt || String(row.main_axis || '') || (tags.length ? `一段关于${tags.slice(0, 3).join('、')}的命运记录。` : DEFAULT_DESCRIPTION);
+  const description = excerpt || String(row.main_axis || '') || tagDescription(tags, language);
 
   return {
     id: shareId,
-    title: `《${title}》｜命运干涉`,
+    title: formatShareTitle(row.title, language),
     description,
     coverUrl: String(row.cover_url || ''),
     visibility: row.visibility,
   };
 }
 
-export async function fetchOriginalStoryMeta(storyId: string): Promise<SharedStoryMeta | null> {
+export async function fetchOriginalStoryMeta(
+  storyId: string,
+  language: GenerationLanguage = 'zh-CN'
+): Promise<SharedStoryMeta | null> {
   const supabaseUrl = getEnv('SUPABASE_URL') || getEnv('VITE_SUPABASE_URL');
   const supabaseKey = getSupabaseKey();
   if (!supabaseUrl || !supabaseKey || !storyId) return null;
@@ -87,25 +125,24 @@ export async function fetchOriginalStoryMeta(storyId: string): Promise<SharedSto
   const row = rows?.[0];
   if (!row) return null;
 
-  const rawTitle = String(row.title || DEFAULT_TITLE);
-  const title = rawTitle.replace(/[ã€Šã€‹]/g, '').trim() || DEFAULT_TITLE;
   const tags = Array.isArray(row.tags) ? row.tags.filter(Boolean) : [];
-  const description = String(row.card_excerpt || row.main_axis || '') || (tags.length ? `一段关于${tags.slice(0, 3).join('、')}的命运记录。` : DEFAULT_DESCRIPTION);
+  const description = String(row.card_excerpt || row.main_axis || '') || tagDescription(tags, language);
 
   return {
     id: storyId,
-    title: `《${title}》｜命运干涉`,
+    title: formatShareTitle(row.title, language),
     description,
     coverUrl: String(row.cover_url || ''),
     visibility: row.visibility,
   };
 }
 
-export function defaultShareMeta(shareId: string): SharedStoryMeta {
+export function defaultShareMeta(shareId: string, language: GenerationLanguage = 'zh-CN'): SharedStoryMeta {
+  const meta = metaFor(language);
   return {
     id: shareId,
-    title: DEFAULT_TITLE,
-    description: DEFAULT_DESCRIPTION,
+    title: meta.title,
+    description: meta.description,
     coverUrl: '',
     visibility: 'unlisted',
   };

@@ -32,18 +32,18 @@ const SimulatedProgressBar = () => {
   );
 };
 
-export const StartupShell = ({ message }: { message: string }) => (
+export const StartupShell = ({ message, title = '命运干涉', subtitle = '正在连接时空枢纽，请稍候片刻。' }: { message: string; title?: string; subtitle?: string }) => (
   <div className="app-boot-screen">
     <div className="app-boot-cover-main">
       <div className="app-boot-mark" aria-hidden="true">
         <img src="/pwa-icon.svg" alt="" />
       </div>
       <div className="app-boot-label">3T Novelgame</div>
-      <div className="app-boot-title">命运干涉</div>
+      <div className="app-boot-title">{title}</div>
     </div>
     <div className="app-boot-progress-wrap">
       <SimulatedProgressBar />
-      <div className="app-boot-subtitle">{message || '正在连接时空枢纽，请稍候片刻。'}</div>
+      <div className="app-boot-subtitle">{message || subtitle}</div>
     </div>
   </div>
 );

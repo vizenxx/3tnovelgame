@@ -4,6 +4,7 @@ import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './
 import { generateGeminiJsonWithFallback, parseGeminiJson } from './_gemini.js';
 import { getRequestLogContext, logGenerationError, logGenerationInfo } from './_log.js';
 import { buildChapterContinuationPrompt, buildChapterWorldStatePrompt } from '../Prompt/chapterContinuation.js';
+import { generationLanguageInstruction, normalizeGenerationLanguage } from './_language.js';
 
 export const maxDuration = 60;
 
@@ -135,6 +136,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!user) return;
 
     const { blueprint, currentChapters, chapters: chaptersBody, targetChapterNum, targetWordCount, worldState, narrativePerson } = req.body || {};
+    const language = normalizeGenerationLanguage(req.body?.language);
     const safeTargetChapterNum = Math.min(7, Math.max(1, Number(targetChapterNum) || 1));
     const safeTargetWordCount = Math.min(1200, Math.max(400, Number(targetWordCount) || 400));
     const allChapters: any[] = Array.isArray(chaptersBody) && chaptersBody.length
@@ -147,6 +149,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       chapterCount: allChapters.length,
       hasWorldState: Boolean(worldState),
       narrativePerson: narrativePerson || blueprint?.narrative_person || 'third',
+      language,
     });
 
     if (!blueprint || typeof blueprint.main_axis !== 'string' || !Array.isArray(blueprint.characters)) {
@@ -175,7 +178,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       historyChapters,
       targetChapterNum: safeTargetChapterNum,
     });
-    const prompt = buildChapterContinuationPrompt({
+    const prompt = `${generationLanguageInstruction(language)}\n\n${buildChapterContinuationPrompt({
       blueprint,
       narrativePerson,
       worldStatePrompt,
@@ -185,7 +188,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       endingProto,
       targetChapterNum: safeTargetChapterNum,
       targetWordCount: safeTargetWordCount,
-    });
+    })}`;
 
     const data = await generateChapterWithFallback(prompt, safeTargetChapterNum, logContext);
 

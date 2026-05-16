@@ -4,6 +4,7 @@ import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './
 import { generateGeminiJsonWithFallback, parseGeminiJson } from './_gemini.js';
 import { getRequestLogContext, logGenerationError, logGenerationInfo } from './_log.js';
 import { buildCanonicalWorldStatePrompt, buildDeltaWorldStatePrompt } from '../Prompt/storyStateDigest.js';
+import { generationLanguageInstruction, normalizeGenerationLanguage } from './_language.js';
 
 const canonicalSchema = {
   type: Type.OBJECT,
@@ -125,6 +126,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       endingValue,
       interventionAction,
     } = req.body || {};
+    const language = normalizeGenerationLanguage(req.body?.language);
     if (mode === 'canonical') {
       if (!Array.isArray(chapters) || !blueprint) {
         return res.status(400).json({ error: 'canonical 模式参数不合法。' });
@@ -150,14 +152,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const styleAnchorFallback = String((chapters || []).find((chapter: any) => chapter.chapter_num === 1)?.text || '').substring(0, 150);
 
-      const prompt = buildCanonicalWorldStatePrompt({
+      const prompt = `${generationLanguageInstruction(language)}\n\n${buildCanonicalWorldStatePrompt({
         blueprint,
         fullText: [
           `初版章节内容：\n${chaptersText}`,
           `初版结局原型：\n${endingsText || '（未提供）'}`,
           `支线事件：\n${branchesText || '（未提供）'}`,
         ].join('\n\n'),
-      });
+      })}`;
 
       const { data: result } = await generateGeminiJsonWithFallback({
         contents: prompt,
@@ -184,14 +186,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ error: 'delta 模式缺少 canonicalWorldState 或 rewrittenChapter。' });
       }
 
-      const prompt = buildDeltaWorldStatePrompt({
+      const prompt = `${generationLanguageInstruction(language)}\n\n${buildDeltaWorldStatePrompt({
         canonicalWorldState,
         rewrittenChapter: {
           ...rewrittenChapter,
           text: String(rewrittenChapter.text || '').substring(0, 800),
         },
         interventionAction,
-      });
+      })}`;
 
       const { data } = await generateGeminiJsonWithFallback({
         contents: prompt,

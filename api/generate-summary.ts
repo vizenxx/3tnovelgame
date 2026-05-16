@@ -4,6 +4,7 @@ import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './
 import { generateGeminiJsonWithFallback, parseGeminiJson } from './_gemini.js';
 import { getRequestLogContext, logGenerationError, logGenerationInfo } from './_log.js';
 import { buildFinalSummaryPrompt } from '../Prompt/finalSummary.js';
+import { generationLanguageInstruction, normalizeGenerationLanguage } from './_language.js';
 
 export const maxDuration = 60;
 
@@ -26,17 +27,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!user) return;
 
     const { blueprint, chapters, endingValue } = req.body || {};
+    const language = normalizeGenerationLanguage(req.body?.language);
     logGenerationInfo(logContext, 'request', {
       uid: user.uid,
       chapterCount: Array.isArray(chapters) ? chapters.length : 0,
       endingValue: Number(endingValue) || 0,
+      language,
     });
     if (!blueprint || typeof blueprint.main_axis !== 'string' || !Array.isArray(chapters)) {
       return res.status(400).json({ error: '总结请求参数不合法。' });
     }
 
     const safeChapters = chapters.slice(0, 7);
-    const prompt = buildFinalSummaryPrompt({ blueprint, safeChapters, endingValue });
+    const prompt = `${generationLanguageInstruction(language)}\n\n${buildFinalSummaryPrompt({ blueprint, safeChapters, endingValue })}`;
 
     const { data } = await generateGeminiJsonWithFallback({
       contents: prompt,
@@ -57,7 +60,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (message.includes('GEMINI_QUOTA_EXHAUSTED')) {
       return res.status(429).json({ error: 'AI 额度暂时用尽，多个 API key 都已触发限制，请更换 key 或稍后再试。', code: 'GEMINI_QUOTA_EXHAUSTED' });
     }
+    const language = normalizeGenerationLanguage(req.body?.language);
     const endingValue = Number(req.body?.endingValue) || 0;
+    if (language === 'en-US') {
+      const text = endingValue > 5
+        ? 'A thin light of order slips through the fracture, revealing a new path for fate.'
+        : endingValue < -5
+          ? 'Chaos whispers in the afterglow, and fate drifts away from its old orbit.'
+          : 'The storm falls silent, leaving fate to echo in balance.';
+      logGenerationInfo(logContext, 'success', { fallback: true, language });
+      return res.status(200).json({ text, fallback: true });
+    }
     const text = endingValue > 5
       ? '秩序的微光穿过裂隙，照见命运新的归途。'
       : endingValue < -5

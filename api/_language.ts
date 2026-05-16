@@ -1,0 +1,22 @@
+export type GenerationLanguage = 'zh-CN' | 'en-US';
+
+export function normalizeGenerationLanguage(value?: unknown): GenerationLanguage {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+  return String(rawValue || '').toLowerCase().startsWith('en') ? 'en-US' : 'zh-CN';
+}
+
+export function generationLanguageInstruction(language: GenerationLanguage) {
+  if (language === 'en-US') {
+    return [
+      'OUTPUT LANGUAGE HARD RULE:',
+      'Write all user-facing generated content in natural English.',
+      'This includes titles, chapter summaries, prose, character descriptions, branch names, status updates, and final summaries.',
+      'Keep JSON keys exactly as requested; only translate the values.',
+    ].join('\n');
+  }
+  return [
+    '输出语言硬约束：',
+    '所有面向读者的生成内容都必须使用自然、流畅的简体中文。',
+    'JSON 字段名保持原要求不变，只调整字段值的语言。',
+  ].join('\n');
+}

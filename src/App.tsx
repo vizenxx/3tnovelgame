@@ -15,6 +15,8 @@ import { AuthView } from './components/AuthView';
 import { semanticButtonClass, semanticIconButtonClass, semanticMenuButtonClass } from './components/semanticClasses';
 import { areStoryChaptersEquivalent, hashStoryChapters } from './storyContentHash';
 import { getFriendlyServerError } from './friendlyErrors';
+import { createTranslator, getInitialLanguage, LANGUAGE_STORAGE_KEY, type AppLanguage } from './i18n';
+import { dictionaries } from './i18n/dictionaries';
 import { 
   signInWithRedirect,
   signInWithPopup,
@@ -214,17 +216,26 @@ const endingDomainTitle = (domain: 'middle' | 'left' | 'right') => {
 const createEndingIdForDomain = (domain: 'middle' | 'left' | 'right') =>
   `${domain}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 
+const getCurrentLanguageQuery = () => {
+  try {
+    const language = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
+    return `lang=${encodeURIComponent(language === 'en-US' ? 'en-US' : 'zh-CN')}`;
+  } catch (error) {
+    return 'lang=zh-CN';
+  }
+};
+
 const buildSharedStoryUrl = (storyId: string) =>
-  `${window.location.origin}/api/share?share=${encodeURIComponent(storyId)}`;
+  `${window.location.origin}/api/share?share=${encodeURIComponent(storyId)}&${getCurrentLanguageQuery()}`;
 
 const buildOriginalStoryUrl = (storyId: string) =>
-  `${window.location.origin}/api/share?story=${encodeURIComponent(storyId)}`;
+  `${window.location.origin}/api/share?story=${encodeURIComponent(storyId)}&${getCurrentLanguageQuery()}`;
 
 const buildAppSharedStoryUrl = (storyId: string) =>
-  `${window.location.origin}${window.location.pathname}?share=${encodeURIComponent(storyId)}`;
+  `${window.location.origin}${window.location.pathname}?share=${encodeURIComponent(storyId)}&${getCurrentLanguageQuery()}`;
 
 const buildAppOriginalStoryUrl = (storyId: string) =>
-  `${window.location.origin}${window.location.pathname}?story=${encodeURIComponent(storyId)}`;
+  `${window.location.origin}${window.location.pathname}?story=${encodeURIComponent(storyId)}&${getCurrentLanguageQuery()}`;
 
 const ADMIN_USER_IDS = new Set(['LWgIE31RtCTZBiMNF7S9viNE7Aw2']);
 type AppFeatureSettings = {
@@ -1142,6 +1153,19 @@ function parseImportedAuthoringText(raw: string) {
 }
 
 export default function App() {
+  const [appLanguage, setAppLanguageState] = useState<AppLanguage>(() => getInitialLanguage());
+  const t = createTranslator(appLanguage, dictionaries);
+  const setAppLanguage = (language: AppLanguage) => {
+    setAppLanguageState(language);
+    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
+    document.documentElement.lang = language;
+  };
+
+  useEffect(() => {
+    document.documentElement.lang = appLanguage;
+    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, appLanguage);
+  }, [appLanguage]);
+
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isSessionHydrated, setIsSessionHydrated] = useState(false);
@@ -4108,7 +4132,7 @@ export default function App() {
       if (!data) {
       const response = await apiFetch('/api/generate-blueprint', {
         method: 'POST',
-        body: JSON.stringify({ selectedThemes, customOutline, targetWordCount, narrativePerson, endingMode: quickEndingMode, endingBias: quickEndingBias }),
+        body: JSON.stringify({ selectedThemes, customOutline, targetWordCount, narrativePerson, endingMode: quickEndingMode, endingBias: quickEndingBias, language: appLanguage }),
       }, 90000);
       if (!response.ok) throw new Error(await readErrorMessage(response));
       data = await response.json();
@@ -4134,6 +4158,7 @@ export default function App() {
             targetChapterNum: chapterNum,
             targetWordCount,
             narrativePerson,
+            language: appLanguage,
           }),
         }, 90000), 3, 2500);
         if (!chapterResponse.ok) throw new Error(await readErrorMessage(chapterResponse));
@@ -4231,6 +4256,7 @@ export default function App() {
             targetChapterNum: missingChapter.chapter_num,
             targetWordCount,
             narrativePerson: blueprint.narrative_person || narrativePerson,
+            language: appLanguage,
           }),
         }, 90000), 3, 2500);
         if (!chapterResponse.ok) throw new Error(await readErrorMessage(chapterResponse));
@@ -4705,6 +4731,7 @@ export default function App() {
           targetWordCount,
           interventionHistory: [...interventionHistory, { chapterNum, charId, action }],
           worldState: buildWorldStateForPrompt(chapterNum, endingValue),
+          language: appLanguage,
         })
       });
 
@@ -5035,6 +5062,7 @@ export default function App() {
           blueprint,
           endingValue,
           chapters,
+          language: appLanguage,
         })
       });
 
@@ -5104,9 +5132,9 @@ export default function App() {
       const didShare = await sharePayload({ title: shareTitle, text: shareText, url: buildSharedStoryUrl(shareId) });
       if (didShare) {
         await recordStoryShare(activeStoryId || sharedRecord?.sourceStoryId);
-        showError('分享链接已准备好，这段命运也已加入收藏命运。');
+        showError(t('share.snapshotReady'));
       } else {
-        showError('已取消分享；这段命运已加入收藏命运，可稍后从收藏馆分享。');
+        showError(t('share.snapshotCanceled'));
       }
       cacheSharedSnapshotAfterCreate(shareId, sharedRecord, snapshotChapters);
       if ((globalThis as any).__legacyShareRecord__) {
@@ -5180,7 +5208,7 @@ export default function App() {
         error,
       });
       if ((e as any)?.name === 'AbortError') {
-        showError(createdShareId ? '已取消分享；这段命运已加入收藏命运，可稍后从收藏馆分享。' : '已取消分享。');
+        showError(createdShareId ? t('share.snapshotCanceled') : t('share.canceled'));
         return;
       }
       const hasShareId = Boolean(createdShareId);
@@ -6157,11 +6185,11 @@ export default function App() {
             <div className="mt-auto grid gap-2 sm:grid-cols-2">
               <button type="button" onClick={() => setStoryDetailStory(story)} className={`${semanticButtonClass('secondary', { fullWidth: true, compact: true })} text-sm`}>
                 <BookOpen className="h-4 w-4" />
-                查看详情
+                {t('library.details')}
               </button>
               <button type="button" onClick={() => startStoryPlay(story.id)} className={`${semanticButtonClass('primary', { fullWidth: true, compact: true })} text-sm`}>
                 <Sparkles className="h-4 w-4" />
-                干涉命运
+                {t('library.intervene')}
               </button>
             </div>
           </div>
@@ -6285,7 +6313,7 @@ export default function App() {
                 <div className="mt-5 grid gap-3">
                   <button type="button" onClick={handlePlayFromDetail} className={semanticButtonClass('primary', { fullWidth: true })}>
                     <Sparkles className="h-4 w-4" />
-                    干涉命运
+                    {t('library.intervene')}
                   </button>
                   {isAdminUser && detailStoryId && (
                     <button type="button" onClick={handleAdminDeleteFromDetail} className={semanticButtonClass('danger', { fullWidth: true })}>
@@ -6348,17 +6376,29 @@ export default function App() {
         <div className="max-w-3xl">
           <div className="story-library-eyebrow mb-4">
             <Sparkles className="h-3.5 w-3.5" />
-            命运馆
+            {t('library.eyebrow')}
           </div>
           <h2 className="story-library-title text-4xl font-black leading-[0.95] sm:text-5xl lg:text-6xl">
-            选择想要<br />
-            <span className="story-library-title-accent">干涉的命运</span>
+            {t('library.titleA')}<br />
+            <span className="story-library-title-accent">{t('library.titleB')}</span>
           </h2>
           <p className="mt-5 max-w-2xl text-base font-medium leading-relaxed text-zinc-400 sm:text-lg">
-            从作品库进入故事，阅读、干涉、收藏，或继续写成新的命运记录。
+            {t('library.subtitle')}
           </p>
         </div>
         <div className="flex flex-wrap gap-3 lg:justify-end">
+          <div className="inline-flex rounded-full border border-zinc-800 bg-zinc-950/60 p-1 text-xs font-black">
+            {(['zh-CN', 'en-US'] as AppLanguage[]).map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setAppLanguage(option)}
+                className={`rounded-full px-3 py-2 transition-colors ${appLanguage === option ? 'bg-indigo-500 text-white' : 'text-zinc-500 hover:text-zinc-200'}`}
+              >
+                {option === 'zh-CN' ? t('language.zh') : t('language.en')}
+              </button>
+            ))}
+          </div>
           {!isStandaloneMode && (
             <button
               type="button"
@@ -6366,7 +6406,7 @@ export default function App() {
               className={semanticButtonClass('ghost', { compact: true })}
             >
               <Download className="h-4 w-4" />
-              下载 App
+              {t('auth.install')}
             </button>
           )}
           <button
@@ -6374,14 +6414,14 @@ export default function App() {
             className={semanticButtonClass('primary', { compact: true })}
           >
             <Wand2 className="h-4 w-4" />
-            快速生成故事
+            {t('library.create')}
           </button>
           <button
             onClick={() => enterAuthoring()}
             className={semanticButtonClass('secondary', { compact: true })}
           >
             <Sparkles className="h-4 w-4" />
-            作者后台
+            {t('library.authoring')}
           </button>
         </div>
         </div>
@@ -6441,8 +6481,8 @@ export default function App() {
         <div className="story-library-toolbar flex flex-col gap-4 p-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="story-library-tabbar">
             {[
-              { id: 'public', label: '作品列表', count: publicStories.length },
-              { id: 'mine', label: '我的作品', count: myStories.length },
+              { id: 'public', label: t('library.publicWorks'), count: publicStories.length },
+              { id: 'mine', label: t('library.myWorks'), count: myStories.length },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -6789,8 +6829,8 @@ export default function App() {
         </AnimatePresence>
         <div className="mb-10 flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-3xl font-black text-white sm:text-4xl">命运收藏馆</h2>
-            <p className="mt-2 text-sm text-zinc-500">管理收藏的原作与收藏命运。</p>
+            <h2 className="text-3xl font-black text-white sm:text-4xl">{t('archive.title')}</h2>
+            <p className="mt-2 text-sm text-zinc-500">{t('archive.subtitle')}</p>
           </div>
           <BackNavButton label={archiveReturnTarget === 'PLAYING' ? '返回游玩页' : '返回作品库'} onClick={leaveArchiveView} />
         </div>
@@ -6812,8 +6852,8 @@ export default function App() {
           <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex rounded-2xl border border-zinc-800 bg-zinc-950/70 p-1 shrink-0">
               {([
-                { id: 'favorite', label: '收藏原作' },
-                { id: 'saved', label: '收藏命运' },
+                { id: 'favorite', label: t('archive.favoriteTab') },
+                { id: 'saved', label: t('archive.savedTab') },
                 { id: 'authors', label: '追踪作者' },
               ] as const).map((tab) => (
                 <button
@@ -7874,7 +7914,7 @@ export default function App() {
             }`}
           >
             {isGeneratingConclusion ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            {storyConclusion || interventionsLeft <= 0 ? '查看最终命运' : '命运确定'}
+            {storyConclusion || interventionsLeft <= 0 ? t('play.finalFate') : t('play.confirmFate')}
           </button>
         </div>
       </div>,
@@ -7977,7 +8017,7 @@ export default function App() {
                         className={`${semanticButtonClass(isAlreadyIntervened ? 'secondary' : 'primary', { compact: true })} rounded-full px-5`}
                       >
                         <Sparkles className="h-4 w-4" />
-                        {isAlreadyIntervened ? '再次干涉' : '干涉命运'}
+                        {isAlreadyIntervened ? (appLanguage === 'en-US' ? 'Interfere again' : '再次干涉') : t('library.intervene')}
                       </button>
                     </div>
 
@@ -8069,7 +8109,7 @@ export default function App() {
             className="group relative inline-flex items-center gap-3 rounded-2xl bg-white px-10 py-5 text-lg font-black text-black shadow-2xl transition-all hover:scale-105"
           >
             <Sparkles className="h-6 w-6 text-indigo-500 group-hover:animate-pulse" />
-            查看最终命运
+            {t('play.finalFate')}
           </button>
         </div>
       )}
@@ -8098,7 +8138,7 @@ export default function App() {
               {isSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />} 分享
             </button>
             <button type="button" onClick={handleSaveWorkAndReturn} className={semanticButtonClass('secondary', { compact: true })}>
-              <Archive className="h-4 w-4" /> 收藏命运
+              <Archive className="h-4 w-4" /> {t('play.archiveFate')}
             </button>
             {!activeStoryId && (
               <button type="button" onClick={handleRegenerateQuickStory} className={semanticButtonClass('ghost', { compact: true })}>
@@ -8606,7 +8646,7 @@ export default function App() {
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <div className="text-xs font-black uppercase tracking-[0.2em] text-indigo-300">分享前确认</div>
-                <h3 className="mt-2 text-2xl font-black text-white">{String(shareComposer.title || '分享故事')}</h3>
+                <h3 className="mt-2 text-2xl font-black text-white">{String(shareComposer.title || t('play.share'))}</h3>
                 <p className="mt-1 text-xs font-semibold text-zinc-500">可以先调整要发出去的文字；确认分享后才会调用设备分享功能，并在成功后计入分享数。</p>
               </div>
               <button type="button" onClick={() => closeShareComposer(false)} className={semanticIconButtonClass('ghost')} aria-label="关闭分享编辑">
@@ -9718,10 +9758,10 @@ export default function App() {
                       className={semanticMenuButtonClass('secondary')}
                     >
                       {isSharing ? <Loader2 className="h-5 w-5 animate-spin" /> : <Copy className="h-5 w-5" />}
-                      分享故事
+                      {t('play.share')}
                     </button>
                     <button onClick={() => { setIsActionMenuOpen(false); handleSaveWorkAndReturn(); }} className={semanticMenuButtonClass('ghost')}>
-                      <Archive className="h-5 w-5" /> 收藏命运
+                      <Archive className="h-5 w-5" /> {t('play.archiveFate')}
                     </button>
                   </section>
                   <section className="grid gap-2">
@@ -9777,6 +9817,9 @@ export default function App() {
       onInstallApp={handleInstallApp}
       onSafariGuideOpen={() => setShowSafariGuide(true)}
       onSafariGuideClose={() => setShowSafariGuide(false)}
+      language={appLanguage}
+      onLanguageChange={setAppLanguage}
+      t={t}
     />
   );
   const renderScrollToTopButton = () => (
@@ -9894,7 +9937,7 @@ export default function App() {
       {installGuideModal}
       
       {!isSessionHydrated ? (
-        <StartupShell message={startupMessage} />
+        <StartupShell message={startupMessage} title={t('app.name')} subtitle={t('startup.default')} />
       ) : gameState === 'READONLY_STORY' && readonlyStoryData ? (
         <>
           {renderReadonlyStoryView()}
@@ -9908,7 +9951,7 @@ export default function App() {
       ) : !user ? (
         renderAuthView()
       ) : isRecoveringInvalidGameState ? (
-        <StartupShell message="正在恢复页面状态..." />
+        <StartupShell message={appLanguage === 'en-US' ? 'Restoring page state...' : '正在恢复页面状态...'} title={t('app.name')} subtitle={t('startup.default')} />
       ) : (
         <>
           {gameState === 'STORY_SELECT' && renderStorySelectView()}

@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { normalizeGenerationLanguage } from './_language.js';
 import { fetchOriginalStoryMeta, fetchSharedStoryMeta, getShareId } from './_shareMeta.js';
 
 const LOGO_PATH = '/pwa-icon-512.png';
@@ -6,9 +7,10 @@ const LOGO_PATH = '/pwa-icon-512.png';
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const shareId = getShareId(req.query.share || req.query.id);
   const storyId = getShareId(req.query.story);
+  const language = normalizeGenerationLanguage(req.query.lang);
   const meta = shareId
-    ? await fetchSharedStoryMeta(shareId).catch(() => null)
-    : await fetchOriginalStoryMeta(storyId).catch(() => null);
+    ? await fetchSharedStoryMeta(shareId, language).catch(() => null)
+    : await fetchOriginalStoryMeta(storyId, language).catch(() => null);
   const coverUrl = meta?.coverUrl || '';
 
   res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=600');
