@@ -53,6 +53,40 @@ type EndingMode = 'single' | 'dual';
 type AppTheme = 'dark' | 'light';
 type StoryLibrarySort = 'updated' | 'likes' | 'interventions' | 'favorites' | 'shares' | 'words';
 type AuthoringListSort = 'updated' | 'created' | 'likes' | 'favorites' | 'shares' | 'interventions';
+type QuickGenerationMode = 'quiz' | 'advanced';
+type QuickQuizStepId = 'worlds' | 'moods' | 'conflict' | 'relationships' | 'interference' | 'length';
+type QuickQuizOption = {
+  id: string;
+  label: Record<AppLanguage, string>;
+  tag?: string;
+  outline: Record<AppLanguage, string>;
+  narrativeHint?: 'ensemble' | 'dual';
+  endingMode?: EndingMode;
+  targetWordCount?: number;
+};
+type QuickQuizStep = {
+  id: QuickQuizStepId;
+  title: Record<AppLanguage, string>;
+  subtitle: Record<AppLanguage, string>;
+  maxSelections: number;
+  options: QuickQuizOption[];
+};
+type QuickQuizAnswers = Record<QuickQuizStepId, string[]>;
+type QuickCharacterSeed = {
+  enabled: boolean;
+  name: string;
+  role: string;
+  position: 'protagonist' | 'important' | 'mystery';
+  note: string;
+};
+type QuickGenerationInput = {
+  selectedThemes: string[];
+  customOutline: string;
+  targetWordCount: number;
+  narrativePerson: NarrativePerson;
+  endingMode: EndingMode;
+  endingBias: { leftBaseWeight: number; rightBaseWeight: number };
+};
 
 const safeModalBackdropClass = "fixed inset-0 flex items-center justify-center overflow-y-auto overscroll-contain px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]";
 const PUBLIC_STORY_LIST_LIMIT = 100;
@@ -296,6 +330,125 @@ const QUICK_STORY_TEMPLATES: Array<{
     endingBias: { leftBaseWeight: 40, rightBaseWeight: 40 },
   },
 ];
+
+const QUICK_QUIZ_STEPS: QuickQuizStep[] = [
+  {
+    id: 'worlds',
+    title: { 'zh-CN': '想进入怎样的世界？', 'en-US': 'What kind of world?' },
+    subtitle: { 'zh-CN': '最多选择 2 个，系统会把它们融合成故事舞台。', 'en-US': 'Pick up to 2. They will become the story stage.' },
+    maxSelections: 2,
+    options: [
+      { id: 'city', label: { 'zh-CN': '都市', 'en-US': 'Urban' }, tag: '都市', outline: { 'zh-CN': '现代都市', 'en-US': 'a modern city' } },
+      { id: 'ancient', label: { 'zh-CN': '古风', 'en-US': 'Ancient' }, tag: '古风', outline: { 'zh-CN': '古风时代', 'en-US': 'an ancient-inspired world' } },
+      { id: 'fantasy', label: { 'zh-CN': '奇幻', 'en-US': 'Fantasy' }, tag: '奇幻', outline: { 'zh-CN': '奇幻世界', 'en-US': 'a fantasy world' } },
+      { id: 'scifi', label: { 'zh-CN': '科幻', 'en-US': 'Sci-fi' }, tag: '科幻', outline: { 'zh-CN': '科幻未来', 'en-US': 'a science-fiction future' } },
+      { id: 'apocalypse', label: { 'zh-CN': '末日', 'en-US': 'Apocalypse' }, tag: '末日', outline: { 'zh-CN': '末日废土', 'en-US': 'an apocalyptic wasteland' } },
+      { id: 'campus', label: { 'zh-CN': '校园', 'en-US': 'Campus' }, tag: '校园', outline: { 'zh-CN': '校园生活', 'en-US': 'a campus setting' } },
+      { id: 'cthulhu', label: { 'zh-CN': '克苏鲁', 'en-US': 'Cosmic horror' }, tag: '克苏鲁', outline: { 'zh-CN': '克苏鲁式未知恐惧', 'en-US': 'cosmic horror and forbidden unknowns' } },
+      { id: 'wuxia', label: { 'zh-CN': '武侠', 'en-US': 'Wuxia' }, tag: '武侠', outline: { 'zh-CN': '江湖武侠', 'en-US': 'a wuxia martial world' } },
+      { id: 'xianxia', label: { 'zh-CN': '修仙', 'en-US': 'Cultivation' }, tag: '修仙', outline: { 'zh-CN': '修仙宗门', 'en-US': 'a cultivation world' } },
+      { id: 'cyberpunk', label: { 'zh-CN': '赛博朋克', 'en-US': 'Cyberpunk' }, tag: '赛博朋克', outline: { 'zh-CN': '赛博朋克城市', 'en-US': 'a cyberpunk city' } },
+      { id: 'myth', label: { 'zh-CN': '神话', 'en-US': 'Myth' }, tag: '神话', outline: { 'zh-CN': '神话与人间交错', 'en-US': 'myth crossing into the human world' } },
+      { id: 'mystery', label: { 'zh-CN': '悬疑', 'en-US': 'Mystery' }, tag: '悬疑', outline: { 'zh-CN': '悬疑迷局', 'en-US': 'a mystery full of hidden clues' } },
+    ],
+  },
+  {
+    id: 'moods',
+    title: { 'zh-CN': '希望故事是什么味道？', 'en-US': 'What mood should it have?' },
+    subtitle: { 'zh-CN': '最多选择 2 个，让故事更贴近想玩的气质。', 'en-US': 'Pick up to 2 to shape the reading flavor.' },
+    maxSelections: 2,
+    options: [
+      { id: 'hotblood', label: { 'zh-CN': '热血', 'en-US': 'Heroic' }, tag: '热血', outline: { 'zh-CN': '热血而有冲劲', 'en-US': 'heroic and energetic' } },
+      { id: 'eerie', label: { 'zh-CN': '诡秘', 'en-US': 'Eerie' }, tag: '诡秘', outline: { 'zh-CN': '诡秘而充满不安', 'en-US': 'eerie and unsettling' } },
+      { id: 'healing', label: { 'zh-CN': '治愈', 'en-US': 'Healing' }, tag: '治愈', outline: { 'zh-CN': '治愈但保留遗憾', 'en-US': 'healing with lingering regret' } },
+      { id: 'gloomy', label: { 'zh-CN': '阴郁', 'en-US': 'Somber' }, tag: '阴郁', outline: { 'zh-CN': '阴郁压抑', 'en-US': 'somber and heavy' } },
+      { id: 'romantic', label: { 'zh-CN': '浪漫', 'en-US': 'Romantic' }, tag: '浪漫', outline: { 'zh-CN': '浪漫而带有命运感', 'en-US': 'romantic with a sense of fate' } },
+      { id: 'cruel', label: { 'zh-CN': '残酷', 'en-US': 'Cruel' }, tag: '残酷', outline: { 'zh-CN': '残酷且代价清晰', 'en-US': 'cruel with clear consequences' } },
+      { id: 'epic', label: { 'zh-CN': '史诗', 'en-US': 'Epic' }, tag: '史诗', outline: { 'zh-CN': '史诗格局', 'en-US': 'epic in scale' } },
+      { id: 'absurd', label: { 'zh-CN': '荒诞', 'en-US': 'Absurd' }, tag: '荒诞', outline: { 'zh-CN': '荒诞又暗藏逻辑', 'en-US': 'absurd but internally logical' } },
+      { id: 'lonely', label: { 'zh-CN': '孤独', 'en-US': 'Lonely' }, tag: '孤独', outline: { 'zh-CN': '孤独而克制', 'en-US': 'lonely and restrained' } },
+      { id: 'fated', label: { 'zh-CN': '宿命感', 'en-US': 'Fateful' }, tag: '宿命感', outline: { 'zh-CN': '带有强烈宿命感', 'en-US': 'strongly shaped by fate' } },
+    ],
+  },
+  {
+    id: 'conflict',
+    title: { 'zh-CN': '主线最想围绕什么？', 'en-US': 'What drives the plot?' },
+    subtitle: { 'zh-CN': '选择一个核心冲突，故事会围绕它推进。', 'en-US': 'Pick one core conflict for the story to follow.' },
+    maxSelections: 1,
+    options: [
+      { id: 'truth', label: { 'zh-CN': '调查真相', 'en-US': 'Uncover truth' }, tag: '调查', outline: { 'zh-CN': '主线围绕调查真相推进', 'en-US': 'the plot revolves around uncovering the truth' } },
+      { id: 'save', label: { 'zh-CN': '拯救某人', 'en-US': 'Save someone' }, tag: '拯救', outline: { 'zh-CN': '主线围绕拯救重要之人推进', 'en-US': 'the plot centers on saving someone important' } },
+      { id: 'revenge', label: { 'zh-CN': '复仇', 'en-US': 'Revenge' }, tag: '复仇', outline: { 'zh-CN': '主线围绕复仇与代价推进', 'en-US': 'the plot follows revenge and its cost' } },
+      { id: 'escape', label: { 'zh-CN': '逃亡', 'en-US': 'Escape' }, tag: '逃亡', outline: { 'zh-CN': '主线围绕逃亡与追捕推进', 'en-US': 'the plot follows escape and pursuit' } },
+      { id: 'power', label: { 'zh-CN': '权力斗争', 'en-US': 'Power struggle' }, tag: '权谋', outline: { 'zh-CN': '主线围绕权力斗争推进', 'en-US': 'the plot revolves around a power struggle' } },
+      { id: 'identity', label: { 'zh-CN': '身份秘密', 'en-US': 'Hidden identity' }, tag: '身份秘密', outline: { 'zh-CN': '主线围绕身份秘密推进', 'en-US': 'the plot turns on a hidden identity' } },
+      { id: 'survival', label: { 'zh-CN': '灾难求生', 'en-US': 'Survival' }, tag: '求生', outline: { 'zh-CN': '主线围绕灾难求生推进', 'en-US': 'the plot centers on surviving disaster' } },
+      { id: 'betrayal', label: { 'zh-CN': '背叛', 'en-US': 'Betrayal' }, tag: '背叛', outline: { 'zh-CN': '主线围绕背叛与信任崩塌推进', 'en-US': 'the plot follows betrayal and broken trust' } },
+      { id: 'growth', label: { 'zh-CN': '成长', 'en-US': 'Growth' }, tag: '成长', outline: { 'zh-CN': '主线围绕成长与选择推进', 'en-US': 'the plot follows growth through difficult choices' } },
+      { id: 'atonement', label: { 'zh-CN': '赎罪', 'en-US': 'Atonement' }, tag: '赎罪', outline: { 'zh-CN': '主线围绕赎罪与弥补推进', 'en-US': 'the plot follows atonement and repair' } },
+    ],
+  },
+  {
+    id: 'relationships',
+    title: { 'zh-CN': '想看怎样的人物关系？', 'en-US': 'Which relationships interest you?' },
+    subtitle: { 'zh-CN': '最多选择 2 个，系统会把它们变成角色张力。', 'en-US': 'Pick up to 2. They become character tension.' },
+    maxSelections: 2,
+    options: [
+      { id: 'rivals', label: { 'zh-CN': '宿敌', 'en-US': 'Rivals' }, outline: { 'zh-CN': '人物关系包含宿敌式拉扯', 'en-US': 'include rival-like tension' } },
+      { id: 'mentor', label: { 'zh-CN': '师徒', 'en-US': 'Mentor/student' }, outline: { 'zh-CN': '人物关系包含师徒羁绊', 'en-US': 'include a mentor-student bond' } },
+      { id: 'childhood', label: { 'zh-CN': '青梅竹马', 'en-US': 'Childhood bond' }, outline: { 'zh-CN': '人物关系包含旧日羁绊', 'en-US': 'include a childhood or old bond' } },
+      { id: 'frenemy', label: { 'zh-CN': '敌友难分', 'en-US': 'Enemy or ally' }, outline: { 'zh-CN': '人物关系带有敌友难分的暧昧立场', 'en-US': 'include relationships that blur enemy and ally' } },
+      { id: 'dual', label: { 'zh-CN': '双主角', 'en-US': 'Dual leads' }, outline: { 'zh-CN': '故事适合双主角互相映照', 'en-US': 'use two leads who mirror each other' }, narrativeHint: 'dual' },
+      { id: 'ensemble', label: { 'zh-CN': '群像', 'en-US': 'Ensemble' }, outline: { 'zh-CN': '故事适合群像人物互相牵动', 'en-US': 'use an ensemble cast whose choices affect each other' }, narrativeHint: 'ensemble' },
+      { id: 'disguise', label: { 'zh-CN': '伪装身份', 'en-US': 'Disguise' }, outline: { 'zh-CN': '人物关系包含伪装身份与误判', 'en-US': 'include disguises and mistaken assumptions' } },
+      { id: 'destined', label: { 'zh-CN': '命定之人', 'en-US': 'Fated bond' }, outline: { 'zh-CN': '人物关系包含命定般的牵引', 'en-US': 'include a fated bond' } },
+      { id: 'amnesia', label: { 'zh-CN': '失忆者', 'en-US': 'Amnesiac' }, outline: { 'zh-CN': '人物关系受到失忆或遗忘影响', 'en-US': 'let memory loss affect relationships' } },
+      { id: 'traitor', label: { 'zh-CN': '背叛者', 'en-US': 'Traitor' }, outline: { 'zh-CN': '人物关系中隐藏背叛者', 'en-US': 'hide a betrayer among the characters' } },
+    ],
+  },
+  {
+    id: 'interference',
+    title: { 'zh-CN': '希望干涉带来什么感觉？', 'en-US': 'How should interference feel?' },
+    subtitle: { 'zh-CN': '选择一种游戏感，决定故事偏转的力度。', 'en-US': 'Pick the kind of story shift you want.' },
+    maxSelections: 1,
+    options: [
+      { id: 'gentle', label: { 'zh-CN': '温和改写', 'en-US': 'Gentle rewrite' }, outline: { 'zh-CN': '干涉更偏向温和改写，重视同一结局下的过程变化', 'en-US': 'interference should gently reshape the path more than the endpoint' }, endingMode: 'single' },
+      { id: 'branching', label: { 'zh-CN': '明显分歧', 'en-US': 'Clear branches' }, outline: { 'zh-CN': '干涉会制造明显分歧', 'en-US': 'interference should create clear branches' }, endingMode: 'dual' },
+      { id: 'butterfly', label: { 'zh-CN': '蝴蝶效应', 'en-US': 'Butterfly effect' }, outline: { 'zh-CN': '小选择会逐步引发蝴蝶效应', 'en-US': 'small choices should gradually create butterfly effects' }, endingMode: 'dual' },
+      { id: 'darkcost', label: { 'zh-CN': '黑暗代价', 'en-US': 'Dark cost' }, outline: { 'zh-CN': '每次改变都要有清晰代价', 'en-US': 'every change should carry a visible cost' }, endingMode: 'dual' },
+      { id: 'defy', label: { 'zh-CN': '逆天改命', 'en-US': 'Defy fate' }, outline: { 'zh-CN': '干涉应有逆天改命的强烈张力', 'en-US': 'interference should feel like defying fate' }, endingMode: 'dual' },
+      { id: 'hiddenTruth', label: { 'zh-CN': '隐藏真相', 'en-US': 'Hidden truth' }, outline: { 'zh-CN': '干涉会逐步揭开隐藏真相', 'en-US': 'interference should uncover hidden truths' }, endingMode: 'dual' },
+    ],
+  },
+  {
+    id: 'length',
+    title: { 'zh-CN': '想读多长？', 'en-US': 'How long should it read?' },
+    subtitle: { 'zh-CN': '决定每章大约字数，不影响 7 章结构。', 'en-US': 'Sets the approximate chapter length, still 7 chapters.' },
+    maxSelections: 1,
+    options: [
+      { id: 'short', label: { 'zh-CN': '轻快', 'en-US': 'Light' }, outline: { 'zh-CN': '篇幅轻快，节奏紧凑', 'en-US': 'keep it light and brisk' }, targetWordCount: 600 },
+      { id: 'standard', label: { 'zh-CN': '标准', 'en-US': 'Standard' }, outline: { 'zh-CN': '篇幅标准，兼顾情节和细节', 'en-US': 'use a balanced standard length' }, targetWordCount: 800 },
+      { id: 'rich', label: { 'zh-CN': '丰富', 'en-US': 'Rich' }, outline: { 'zh-CN': '篇幅更丰富，增加氛围和人物细节', 'en-US': 'make it richer with more atmosphere and character detail' }, targetWordCount: 1000 },
+    ],
+  },
+];
+
+const createDefaultQuickQuizAnswers = (): QuickQuizAnswers => ({
+  worlds: [],
+  moods: [],
+  conflict: [],
+  relationships: [],
+  interference: [],
+  length: ['standard'],
+});
+
+const createDefaultQuickCharacterSeed = (): QuickCharacterSeed => ({
+  enabled: false,
+  name: '',
+  role: '',
+  position: 'protagonist',
+  note: '',
+});
 
 const getLocalDeviceId = () => {
   if (typeof window === 'undefined') return 'server';
@@ -1207,6 +1360,10 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, [isSessionHydrated, user?.uid]);
   const [customOutline, setCustomOutline] = useState<string>('');
+  const [quickGenerationMode, setQuickGenerationMode] = useState<QuickGenerationMode>('quiz');
+  const [quickQuizStepIndex, setQuickQuizStepIndex] = useState(0);
+  const [quickQuizAnswers, setQuickQuizAnswers] = useState<QuickQuizAnswers>(() => createDefaultQuickQuizAnswers());
+  const [quickCharacterSeed, setQuickCharacterSeed] = useState<QuickCharacterSeed>(() => createDefaultQuickCharacterSeed());
   const [blueprint, setBlueprint] = useState<Blueprint | null>(null);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [changeHighlights, setChangeHighlights] = useState<Record<number, string[]>>({});
@@ -2358,13 +2515,116 @@ export default function App() {
   const sharedStoryCacheKey = (storyId: string) => `shared-story:${cacheScope()}:${storyId}`;
   const activeRunCacheKey = () => `active-run:${cacheScope()}`;
   const quickGenerationDraftCacheKey = () => `quick-generation-draft:${cacheScope()}`;
-  const quickGenerationSignature = () => JSON.stringify({
-    selectedThemes,
-    customOutline: customOutline.trim(),
-    targetWordCount,
-    narrativePerson,
-    quickEndingMode,
-    quickEndingBias,
+  const quickText = (value: Record<AppLanguage, string>) => value[appLanguage] || value['zh-CN'];
+  const getQuickQuizOption = (stepId: QuickQuizStepId, optionId: string) =>
+    QUICK_QUIZ_STEPS.find((step) => step.id === stepId)?.options.find((option) => option.id === optionId);
+  const toggleQuickQuizAnswer = (step: QuickQuizStep, optionId: string) => {
+    setQuickQuizAnswers((prev) => {
+      const current = asSafeArray(prev[step.id]);
+      const exists = current.includes(optionId);
+      const next = exists
+        ? current.filter((id) => id !== optionId)
+        : step.maxSelections === 1
+          ? [optionId]
+          : [...current, optionId].slice(0, step.maxSelections);
+      return { ...prev, [step.id]: next };
+    });
+  };
+  const buildQuickCharacterSeedOutline = (seed: QuickCharacterSeed = quickCharacterSeed) => {
+    if (!seed.enabled) return '';
+    const name = seed.name.trim();
+    const role = seed.role.trim();
+    const note = seed.note.trim();
+    if (!name && !role && !note) return '';
+    const positionText = appLanguage === 'en-US'
+      ? ({
+          protagonist: 'as the protagonist or central viewpoint character',
+          important: 'as an important character who strongly affects the plot',
+          mystery: 'as a mysterious character whose truth is gradually revealed',
+        } satisfies Record<QuickCharacterSeed['position'], string>)[seed.position]
+      : ({
+          protagonist: '作为主角或核心视角人物',
+          important: '作为会强烈影响主线的重要角色',
+          mystery: '作为真相逐步揭开的神秘人物',
+        } satisfies Record<QuickCharacterSeed['position'], string>)[seed.position];
+    if (appLanguage === 'en-US') {
+      return `User character seed: include ${name || 'this character'} ${positionText}${role ? `; identity/relationship: ${role}` : ''}${note ? `; character note: ${note}` : ''}. Keep the character naturally integrated with the selected tags instead of making the story feel like a biography.`;
+    }
+    return `用户人物设定：请将${name || '该人物'}${positionText}${role ? `；身份/关系：${role}` : ''}${note ? `；人设补充：${note}` : ''}。请让人物自然融入已选择的标签与故事类型，不要写成单纯人物传记。`;
+  };
+  const buildQuickGenerationInputFromQuiz = (
+    answers: QuickQuizAnswers = quickQuizAnswers,
+    characterSeed: QuickCharacterSeed = quickCharacterSeed
+  ): QuickGenerationInput => {
+    const selectedOptions = QUICK_QUIZ_STEPS.flatMap((step) =>
+      asSafeArray(answers[step.id])
+        .map((optionId) => ({ step, option: getQuickQuizOption(step.id, optionId) }))
+        .filter((item): item is { step: QuickQuizStep; option: QuickQuizOption } => Boolean(item.option))
+    );
+    const keyTags = normalizeTagList(selectedOptions.map(({ option }) => option.tag || quickText(option.label))).slice(0, 4);
+    const outlinePieces = selectedOptions.map(({ option }) => quickText(option.outline));
+    const relationshipHints = asSafeArray(answers.relationships)
+      .map((id) => getQuickQuizOption('relationships', id)?.narrativeHint)
+      .filter(Boolean);
+    const interferenceOption = asSafeArray(answers.interference)
+      .map((id) => getQuickQuizOption('interference', id))
+      .find(Boolean);
+    const lengthOption = asSafeArray(answers.length)
+      .map((id) => getQuickQuizOption('length', id))
+      .find(Boolean);
+    const narrativeHint = relationshipHints.includes('ensemble')
+      ? (appLanguage === 'en-US' ? 'Use an ensemble perspective with several important characters affecting one another.' : '请采用群像叙事，让多个重要角色互相牵动。')
+      : relationshipHints.includes('dual')
+        ? (appLanguage === 'en-US' ? 'Use a dual-lead structure where the two protagonists mirror and challenge each other.' : '请采用双主角结构，让两位主角互相映照与拉扯。')
+        : '';
+    const customOutlineFromQuiz = appLanguage === 'en-US'
+      ? `Generate an interactive seven-chapter story for immediate play. Preferences: ${outlinePieces.join('; ')}. ${narrativeHint} ${buildQuickCharacterSeedOutline(characterSeed)} Keep the story coherent, playable, and suitable for fate interference.`
+      : `请生成一篇适合马上游玩的七章互动故事。玩家偏好：${outlinePieces.join('；')}。${narrativeHint}${buildQuickCharacterSeedOutline(characterSeed)}请确保故事逻辑完整、适合命运干涉，并保留清晰的人物牵引。`;
+    return {
+      selectedThemes: keyTags,
+      customOutline: customOutlineFromQuiz,
+      targetWordCount: Number(lengthOption?.targetWordCount || 800),
+      narrativePerson: 'third',
+      endingMode: interferenceOption?.endingMode || 'dual',
+      endingBias: { leftBaseWeight: 40, rightBaseWeight: 40 },
+    };
+  };
+  const getActiveQuickGenerationInput = (): QuickGenerationInput => (
+    quickGenerationMode === 'quiz'
+      ? buildQuickGenerationInputFromQuiz()
+      : {
+          selectedThemes,
+          customOutline,
+          targetWordCount,
+          narrativePerson,
+          endingMode: quickEndingMode,
+          endingBias: quickEndingBias,
+        }
+  );
+  const getIncompleteQuickQuizStep = () => QUICK_QUIZ_STEPS.find((step) => asSafeArray(quickQuizAnswers[step.id]).length < 1);
+  const createRandomQuickQuizAnswers = (): QuickQuizAnswers => {
+    const shuffle = <T,>(items: T[]) => [...items].sort(() => Math.random() - 0.5);
+    return QUICK_QUIZ_STEPS.reduce((answers, step) => {
+      const count = step.maxSelections > 1 ? 1 + Math.floor(Math.random() * step.maxSelections) : 1;
+      answers[step.id] = shuffle(step.options).slice(0, count).map((option) => option.id);
+      return answers;
+    }, createDefaultQuickQuizAnswers());
+  };
+  const quickGenerationSignature = (override?: {
+    mode?: QuickGenerationMode;
+    answers?: QuickQuizAnswers;
+    characterSeed?: QuickCharacterSeed;
+    input?: QuickGenerationInput;
+  }) => JSON.stringify({
+    quickGenerationMode: override?.mode || quickGenerationMode,
+    quickQuizAnswers: override?.answers || quickQuizAnswers,
+    quickCharacterSeed: override?.characterSeed || quickCharacterSeed,
+    selectedThemes: override?.input?.selectedThemes || selectedThemes,
+    customOutline: (override?.input?.customOutline || customOutline).trim(),
+    targetWordCount: override?.input?.targetWordCount || targetWordCount,
+    narrativePerson: override?.input?.narrativePerson || narrativePerson,
+    quickEndingMode: override?.input?.endingMode || quickEndingMode,
+    quickEndingBias: override?.input?.endingBias || quickEndingBias,
   });
 
   const applyStoryListCache = (data: any) => {
@@ -4101,13 +4361,48 @@ export default function App() {
     }
   };
 
-  const handleGenerateBlueprint = async () => {
+  const handleRandomQuickGeneration = () => {
+    const randomAnswers = createRandomQuickQuizAnswers();
+    const randomInput = buildQuickGenerationInputFromQuiz(randomAnswers, quickCharacterSeed);
+    setQuickGenerationMode('quiz');
+    setQuickQuizAnswers(randomAnswers);
+    setQuickQuizStepIndex(0);
+    void handleGenerateBlueprint(
+      randomInput,
+      quickGenerationSignature({ mode: 'quiz', answers: randomAnswers, characterSeed: quickCharacterSeed, input: randomInput })
+    );
+  };
+
+  const handleGenerateBlueprint = async (overrideInput?: QuickGenerationInput, overrideSignature?: string) => {
     if (!user || !db) return;
-    if (selectedThemes.length < 1 && !customOutline.trim()) {
+    const activeGenerationInput = overrideInput || getActiveQuickGenerationInput();
+    const missingQuizStep = !overrideInput && quickGenerationMode === 'quiz' ? getIncompleteQuickQuizStep() : null;
+    if (missingQuizStep) {
+      setQuickQuizStepIndex(Math.max(0, QUICK_QUIZ_STEPS.findIndex((step) => step.id === missingQuizStep.id)));
+      showError(appLanguage === 'en-US' ? `Please complete: ${quickText(missingQuizStep.title)}` : `请先完成：${quickText(missingQuizStep.title)}`);
+      return;
+    }
+    if (activeGenerationInput.selectedThemes.length < 1 && !activeGenerationInput.customOutline.trim()) {
+      showError(appLanguage === 'en-US' ? 'Please choose at least one preference or enter a story outline.' : '请至少选择一个偏好或输入故事大纲。');
+      return;
+    }
+    if (activeGenerationInput.selectedThemes.length > 4) {
+      showError(appLanguage === 'en-US' ? 'Choose up to 4 story tags.' : '最多选择 4 个主题。');
+      return;
+    }
+    if (quickGenerationMode === 'quiz' || overrideInput) {
+      setSelectedThemes(activeGenerationInput.selectedThemes);
+      setCustomOutline(activeGenerationInput.customOutline);
+      setTargetWordCount(activeGenerationInput.targetWordCount);
+      setNarrativePerson(activeGenerationInput.narrativePerson);
+      setQuickEndingMode(activeGenerationInput.endingMode);
+      setQuickEndingBias(activeGenerationInput.endingBias);
+    }
+    if (!overrideInput && quickGenerationMode === 'advanced' && selectedThemes.length < 1 && !customOutline.trim()) {
       showError('请至少选择一个主题或输入故事大纲。');
       return;
     }
-    if (selectedThemes.length > 4) {
+    if (!overrideInput && quickGenerationMode === 'advanced' && selectedThemes.length > 4) {
       showError('最多选择 4 个主题。');
       return;
     }
@@ -4124,7 +4419,7 @@ export default function App() {
     ]);
 
     try {
-      const draftSignature = quickGenerationSignature();
+      const draftSignature = overrideSignature || quickGenerationSignature();
       const cachedDraft = await getLocalCache<any>(quickGenerationDraftCacheKey());
       let data = cachedDraft?.value?.signature === draftSignature && cachedDraft.value?.blueprint
         ? cachedDraft.value.blueprint
@@ -4132,14 +4427,15 @@ export default function App() {
       if (!data) {
       const response = await apiFetch('/api/generate-blueprint', {
         method: 'POST',
-        body: JSON.stringify({ selectedThemes, customOutline, targetWordCount, narrativePerson, endingMode: quickEndingMode, endingBias: quickEndingBias, language: appLanguage }),
+        body: JSON.stringify({ ...activeGenerationInput, language: appLanguage }),
       }, 90000);
       if (!response.ok) throw new Error(await readErrorMessage(response));
       data = await response.json();
       }
-      data.narrative_person = narrativePerson;
-      data.endingMode = data.endingMode === 'single' ? 'single' : quickEndingMode;
-      data.endingBias = normalizeEndingBias(data.endingBias || quickEndingBias || { left: data.left_mainline_default, right: data.right_mainline_default });
+      data.narrative_person = activeGenerationInput.narrativePerson;
+      data.endingMode = data.endingMode === 'single' ? 'single' : activeGenerationInput.endingMode;
+      data.endingBias = normalizeEndingBias(data.endingBias || activeGenerationInput.endingBias || { left: data.left_mainline_default, right: data.right_mainline_default });
+      data.tags = normalizeTagList(data.tags || activeGenerationInput.selectedThemes);
       data.chapters = ensureSevenChapterShells(data.chapters || []);
       await setLocalCache(quickGenerationDraftCacheKey(), { signature: draftSignature, blueprint: data });
 
@@ -4156,8 +4452,8 @@ export default function App() {
             blueprint: data,
             currentChapters: data.chapters,
             targetChapterNum: chapterNum,
-            targetWordCount,
-            narrativePerson,
+            targetWordCount: activeGenerationInput.targetWordCount,
+            narrativePerson: activeGenerationInput.narrativePerson,
             language: appLanguage,
           }),
         }, 90000), 3, 2500);
@@ -4207,6 +4503,12 @@ export default function App() {
       setInterventionHistory([]);
       setActiveStoryId(null);
       setActiveStoryMeta(null);
+      setSelectedThemes(activeGenerationInput.selectedThemes);
+      setCustomOutline(activeGenerationInput.customOutline);
+      setTargetWordCount(activeGenerationInput.targetWordCount);
+      setNarrativePerson(activeGenerationInput.narrativePerson);
+      setQuickEndingMode(activeGenerationInput.endingMode);
+      setQuickEndingBias(activeGenerationInput.endingBias);
       await deleteLocalCache(quickGenerationDraftCacheKey());
       navigateTo('PLAYING', { replace: true });
     } catch (error) {
@@ -7073,6 +7375,190 @@ export default function App() {
         </p>
       </div>
 
+      <div className="mx-auto mt-8 flex w-full max-w-xl rounded-full border border-zinc-800 bg-zinc-950/70 p-1 text-xs font-black">
+        {([
+          { id: 'quiz' as const, label: appLanguage === 'en-US' ? 'Play by quiz' : '想玩故事' },
+          { id: 'advanced' as const, label: appLanguage === 'en-US' ? 'Advanced creation' : '高级创作设置' },
+        ]).map((mode) => (
+          <button
+            key={mode.id}
+            type="button"
+            onClick={() => setQuickGenerationMode(mode.id)}
+            className={`flex-1 rounded-full px-3 py-2 transition-colors ${quickGenerationMode === mode.id ? 'bg-indigo-500 text-white' : 'text-zinc-500 hover:text-zinc-200'}`}
+          >
+            {mode.label}
+          </button>
+        ))}
+      </div>
+
+      {quickGenerationMode === 'quiz' ? (() => {
+        const step = QUICK_QUIZ_STEPS[Math.min(quickQuizStepIndex, QUICK_QUIZ_STEPS.length - 1)];
+        const selected = asSafeArray<string>(quickQuizAnswers[step.id]);
+        const isLastStep = quickQuizStepIndex >= QUICK_QUIZ_STEPS.length - 1;
+        return (
+          <div className="mx-auto mt-8 w-full max-w-4xl rounded-[2rem] border border-zinc-800 bg-zinc-900/30 p-5 text-left shadow-2xl shadow-black/10 sm:p-6">
+            <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="text-sm font-black text-amber-100">
+                  {appLanguage === 'en-US' ? 'Want a surprise?' : '想来点惊喜？'}
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-amber-100/70">
+                  {appLanguage === 'en-US'
+                    ? 'Randomly draw every preference layer and start generating immediately.'
+                    : '从每一层偏好中随机抽取设定，并直接开始生成故事。'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleRandomQuickGeneration}
+                className={semanticButtonClass('secondary', { compact: true })}
+              >
+                <Sparkles className="h-4 w-4" />
+                {appLanguage === 'en-US' ? 'Fully random' : '全随机生成'}
+              </button>
+            </div>
+            <div className="mb-5 rounded-2xl border border-zinc-800 bg-zinc-950/55 p-4">
+              <button
+                type="button"
+                onClick={() => setQuickCharacterSeed((prev) => ({ ...prev, enabled: !prev.enabled }))}
+                className="flex w-full items-center justify-between gap-3 text-left"
+              >
+                <div>
+                  <div className="text-sm font-black text-zinc-100">
+                    {appLanguage === 'en-US' ? 'Use a character idea?' : '有想放进故事的人物吗？'}
+                  </div>
+                  <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+                    {appLanguage === 'en-US'
+                      ? 'Optional. Add a person, relationship, or character seed for the story to build around.'
+                      : '可选。可以填一个人物、关系或人设需求，让故事围绕它自然展开。'}
+                  </p>
+                </div>
+                <span className={`rounded-full px-3 py-1 text-xs font-black ${quickCharacterSeed.enabled ? 'bg-indigo-500 text-white' : 'bg-zinc-800 text-zinc-400'}`}>
+                  {quickCharacterSeed.enabled ? (appLanguage === 'en-US' ? 'On' : '已开启') : (appLanguage === 'en-US' ? 'Skip' : '跳过')}
+                </span>
+              </button>
+              {quickCharacterSeed.enabled && (
+                <div className="mt-4 grid gap-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <input
+                      value={quickCharacterSeed.name}
+                      onChange={(event) => setQuickCharacterSeed((prev) => ({ ...prev, name: event.target.value }))}
+                      placeholder={appLanguage === 'en-US' ? 'Character name, e.g. my sister' : '人物名称，例如：妹妹'}
+                      className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-200 outline-none transition-colors focus:border-indigo-500"
+                    />
+                    <input
+                      value={quickCharacterSeed.role}
+                      onChange={(event) => setQuickCharacterSeed((prev) => ({ ...prev, role: event.target.value }))}
+                      placeholder={appLanguage === 'en-US' ? 'Identity or relationship' : '身份或关系，例如：主角的妹妹'}
+                      className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-200 outline-none transition-colors focus:border-indigo-500"
+                    />
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {([
+                      { value: 'protagonist' as const, label: appLanguage === 'en-US' ? 'Protagonist' : '作为主角' },
+                      { value: 'important' as const, label: appLanguage === 'en-US' ? 'Key character' : '重要角色' },
+                      { value: 'mystery' as const, label: appLanguage === 'en-US' ? 'Mystery role' : '神秘人物' },
+                    ]).map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setQuickCharacterSeed((prev) => ({ ...prev, position: option.value }))}
+                        className={`rounded-xl border px-3 py-2 text-xs font-black transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
+                          quickCharacterSeed.position === option.value
+                            ? 'border-indigo-400 bg-indigo-500/15 text-indigo-100'
+                            : 'border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                  <textarea
+                    value={quickCharacterSeed.note}
+                    onChange={(event) => setQuickCharacterSeed((prev) => ({ ...prev, note: event.target.value }))}
+                    placeholder={appLanguage === 'en-US' ? 'Optional note: personality, secret, wish, conflict...' : '可选补充：性格、秘密、愿望、矛盾点……'}
+                    className="min-h-24 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-200 outline-none transition-colors focus:border-indigo-500"
+                  />
+                </div>
+              )}
+            </div>
+            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-[0.24em] text-indigo-300">
+                  {appLanguage === 'en-US' ? `Step ${quickQuizStepIndex + 1}/${QUICK_QUIZ_STEPS.length}` : `第 ${quickQuizStepIndex + 1}/${QUICK_QUIZ_STEPS.length} 步`}
+                </div>
+                <h2 className="mt-2 text-2xl font-black text-white">{quickText(step.title)}</h2>
+                <p className="mt-2 text-sm leading-relaxed text-zinc-500">{quickText(step.subtitle)}</p>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-zinc-800 sm:w-40">
+                <div
+                  className="h-full rounded-full bg-indigo-400 transition-all"
+                  style={{ width: `${((quickQuizStepIndex + 1) / QUICK_QUIZ_STEPS.length) * 100}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {step.options.map((option) => {
+                const active = selected.includes(option.id);
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => toggleQuickQuizAnswer(step, option.id)}
+                    className={`min-h-16 rounded-2xl border px-4 py-3 text-left transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
+                      active
+                        ? 'border-indigo-400 bg-indigo-500/15 text-indigo-100 shadow-lg shadow-indigo-950/30'
+                        : 'border-zinc-800 bg-zinc-950/60 text-zinc-300 hover:border-zinc-600 hover:bg-zinc-900'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-black">{quickText(option.label)}</span>
+                      {active && <Check className="h-4 w-4 shrink-0 text-indigo-200" />}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <button
+                type="button"
+                onClick={() => setQuickQuizStepIndex((prev) => Math.max(0, prev - 1))}
+                disabled={quickQuizStepIndex === 0}
+                className={semanticButtonClass('ghost', { compact: true })}
+              >
+                <ChevronLeft className="h-4 w-4" />
+                {appLanguage === 'en-US' ? 'Previous' : '上一步'}
+              </button>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                {!isLastStep ? (
+                  <button
+                    type="button"
+                    onClick={() => setQuickQuizStepIndex((prev) => Math.min(QUICK_QUIZ_STEPS.length - 1, prev + 1))}
+                    disabled={selected.length < 1}
+                    className={semanticButtonClass('primary', { compact: true })}
+                  >
+                    {appLanguage === 'en-US' ? 'Next' : '下一步'}
+                    <ChevronLeft className="h-4 w-4 rotate-180" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleGenerateBlueprint}
+                    disabled={selected.length < 1}
+                    className={semanticButtonClass('primary', { compact: true })}
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    {appLanguage === 'en-US' ? 'Generate my story' : '生成想玩的故事'}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })() : (
+      <>
       <div className="mx-auto mt-8 grid w-full max-w-4xl gap-3 px-4 text-left md:grid-cols-3">
         {QUICK_STORY_TEMPLATES.map((template) => (
           <button
@@ -7264,6 +7750,8 @@ export default function App() {
           生成世界蓝图
         </button>
       </div>
+      </>
+      )}
     </div>
   );
 
