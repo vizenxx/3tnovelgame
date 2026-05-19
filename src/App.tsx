@@ -685,7 +685,15 @@ const PwaUpdateModal = ({
   );
 };
 
-const LoadingOverlay = ({ progress, status, subtext, variant = 'default' }: { progress: number, status: string, subtext?: string, variant?: 'default' | 'bless' | 'curse' | 'ending' }) => (
+const LoadingOverlay = ({ progress, status, subtext, variant = 'default', language = 'zh-CN' }: { progress: number, status: string, subtext?: string, variant?: 'default' | 'bless' | 'curse' | 'ending', language?: AppLanguage }) => {
+  const isEnglishOverlay = language === 'en-US';
+  const footerLabel = variant === 'default'
+    ? (isEnglishOverlay ? 'Weaving causality' : '正在编织因果')
+    : variant === 'ending'
+    ? (isEnglishOverlay ? 'Ending in motion' : '终局演绎中')
+    : (isEnglishOverlay ? 'Reshaping the chain' : '因果链条重塑中');
+
+  return (
   <div className={`fixed inset-0 z-[6000] backdrop-blur-xl flex flex-col items-center justify-center px-8 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(2rem,env(safe-area-inset-top))] text-center transition-colors duration-700 ${
     variant === 'bless' ? 'bg-emerald-950/90' : 
     variant === 'curse' ? 'bg-rose-950/90' : 
@@ -732,11 +740,12 @@ const LoadingOverlay = ({ progress, status, subtext, variant = 'default' }: { pr
     </div>
     
     <div className="flex justify-between w-full max-w-md text-[10px] font-mono text-zinc-500 uppercase tracking-[0.3em]">
-      <span>{variant === 'default' ? '正在编织因果' : variant === 'ending' ? '终局演绎中' : '因果链条重塑中'}</span>
+      <span>{footerLabel}</span>
       <span>{Math.round(progress)}%</span>
     </div>
   </div>
-);
+  );
+};
 
 const BlockingSyncOverlay = ({
   title,
@@ -940,6 +949,20 @@ const getStoryTitle = (story: any) => story?.meta?.title || story?.title || '未
 const getStoryMainAxis = (story: any) => story?.meta?.main_axis || story?.main_axis || '';
 const getStoryTags = (story: any) => story?.meta?.tags || story?.tags || [];
 const getStoryCoverUrl = (story: any) => story?.meta?.coverUrl || story?.coverUrl || '';
+const inferStoryLanguage = (story: any): AppLanguage => {
+  const explicit = story?.meta?.language || story?.language || story?.storyLanguage;
+  if (explicit === 'en-US' || explicit === 'zh-CN') return explicit;
+  const sample = [
+    getStoryTitle(story),
+    getStoryMainAxis(story),
+    getStoryTags(story).join(' '),
+    story?.cardExcerpt || story?.meta?.cardExcerpt || '',
+  ].join(' ');
+  const cjkCount = (sample.match(/[\u4e00-\u9fff]/g) || []).length;
+  const latinCount = (sample.match(/[A-Za-z]/g) || []).length;
+  return cjkCount > latinCount * 0.35 ? 'zh-CN' : 'en-US';
+};
+const storyMatchesLanguage = (story: any, language: AppLanguage) => inferStoryLanguage(story) === language;
 
 const buildStoryShareText = (title?: string, chapters?: Array<{ text?: string }>) => {
   const safeTitle = stripBookTitle(title || '未命名故事');
@@ -1308,6 +1331,7 @@ function parseImportedAuthoringText(raw: string) {
 export default function App() {
   const [appLanguage, setAppLanguageState] = useState<AppLanguage>(() => getInitialLanguage());
   const t = createTranslator(appLanguage, dictionaries);
+  const isEnglish = appLanguage === 'en-US';
   const setAppLanguage = (language: AppLanguage) => {
     setAppLanguageState(language);
     window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
@@ -1322,7 +1346,9 @@ export default function App() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isSessionHydrated, setIsSessionHydrated] = useState(false);
-  const [startupMessage, setStartupMessage] = useState('正在连接时空枢纽...');
+  const [startupMessage, setStartupMessage] = useState(() => (
+    getInitialLanguage() === 'en-US' ? 'Linking the fate archive...' : '正在连接时空枢纽...'
+  ));
   const [sessionId, setSessionId] = useState<string | null>(null);
   const {
     viewState: gameState,
@@ -1789,20 +1815,20 @@ export default function App() {
   );
   const globalBlockingLoadingMessage = globalLoadingMessage ||
     (authoringSaving
-      ? '正在保存...'
+      ? (isEnglish ? 'Saving...' : '正在保存...')
       : isSharing
-      ? '正在生成分享链接...'
+      ? (isEnglish ? 'Preparing share link...' : '正在生成分享链接...')
       : isGeneratingCover
-      ? '正在绘制封面...'
-      : '正在处理...');
+      ? (isEnglish ? 'Creating cover...' : '正在绘制封面...')
+      : (isEnglish ? 'Processing...' : '正在处理...'));
   const globalBlockingLoadingDetail = globalLoadingDetail ||
     (authoringSaving
-      ? '正在同步作品内容，请不要关闭页面。'
+      ? (isEnglish ? 'Syncing story content. Please keep this page open.' : '正在同步作品内容，请不要关闭页面。')
       : isSharing
-      ? '正在准备分享内容，并尝试调用系统分享。'
+      ? (isEnglish ? 'Preparing share content and opening the system share sheet.' : '正在准备分享内容，并尝试调用系统分享。')
       : isGeneratingCover
-      ? '正在生成封面图像，完成后会自动回到编辑状态。'
-      : '正在处理当前操作，请稍候。');
+      ? (isEnglish ? 'Generating the cover image. The editor will resume when it is ready.' : '正在生成封面图像，完成后会自动回到编辑状态。')
+      : (isEnglish ? 'Handling the current action. Please wait.' : '正在处理当前操作，请稍候。'));
   const isRecoveringInvalidGameState = isSessionHydrated && Boolean(user) && (
     (gameState === 'READONLY_STORY' && !readonlyStoryData) ||
     ((gameState === 'PLAYING' || gameState === 'SUMMARY') && !blueprint)
@@ -2036,8 +2062,8 @@ export default function App() {
   const shareStoryCardWithFeedback = async (story: any) => {
     try {
       setIsSharing(true);
-      setGlobalLoadingMessage('正在准备分享作品...');
-      setGlobalLoadingDetail('正在生成作品链接，并尝试调起系统分享。');
+      setGlobalLoadingMessage(isEnglish ? 'Preparing story share...' : '正在准备分享作品...');
+      setGlobalLoadingDetail(isEnglish ? 'Creating the story link and opening the system share sheet.' : '正在生成作品链接，并尝试调起系统分享。');
       await shareOriginalStoryByCard(story);
     } catch (error: any) {
       console.error(error);
@@ -2058,8 +2084,8 @@ export default function App() {
     if (!storyId || !authoringSaveSuccessStory) return;
     try {
       setIsSharing(true);
-      setGlobalLoadingMessage('正在准备分享作品...');
-      setGlobalLoadingDetail('正在生成作品链接，并尝试调用系统分享。');
+      setGlobalLoadingMessage(isEnglish ? 'Preparing story share...' : '正在准备分享作品...');
+      setGlobalLoadingDetail(isEnglish ? 'Creating the story link and opening the system share sheet.' : '正在生成作品链接，并尝试调用系统分享。');
       let meta = {
         ...(authoringSaveSuccessStory.meta || {}),
         id: storyId,
@@ -2295,12 +2321,19 @@ export default function App() {
   };
 
   const startStoryLaunchProgress = () => {
-    const messages = [
-      '正在打开命运档案...',
-      '正在读取章节与支线...',
-      '正在检查已保存进度...',
-      '即将进入故事...',
-    ];
+    const messages = isEnglish
+      ? [
+          'Opening the fate archive...',
+          'Reading chapters and branches...',
+          'Checking saved progress...',
+          'Entering the story...',
+        ]
+      : [
+          '正在打开命运档案...',
+          '正在读取章节与支线...',
+          '正在检查已保存进度...',
+          '即将进入故事...',
+        ];
     const startTime = Date.now();
     setStoryLaunchOverlay({ progress: 6, status: messages[0] });
     return window.setInterval(() => {
@@ -2385,7 +2418,7 @@ export default function App() {
     if (!user || !activeStoryId || !db || !blueprint) return;
     try {
       setAuthoringSaving(true);
-      setGlobalLoadingMessage('正在保存进度...');
+      setGlobalLoadingMessage(isEnglish ? 'Saving progress...' : '正在保存进度...');
       await saveUserProgress(db as any, user.uid, activeStoryId, {
         ...buildCurrentRunSnapshot(),
         userId: user.uid,
@@ -2406,7 +2439,7 @@ export default function App() {
     if (!user || !blueprint) return;
     try {
       setAuthoringSaving(true);
-      setGlobalLoadingMessage('正在收藏命运...');
+      setGlobalLoadingMessage(isEnglish ? 'Saving fate line...' : '正在收藏命运...');
       const sourceChapters = (naturalChapters.length > 0 ? naturalChapters : chapters).map((chapter) => ({
         ...chapter,
         text: stripGeneratedMarkup(chapter.text),
@@ -3015,8 +3048,8 @@ export default function App() {
     if (!db) return;
     try {
       setIsLoadingStories(true);
-      setGlobalLoadingMessage('正在打开故事记录...');
-      setGlobalLoadingDetail('正在读取收藏命运线；如果本机已有缓存，会先进入阅读页再校验云端记录。');
+      setGlobalLoadingMessage(isEnglish ? 'Opening story record...' : '正在打开故事记录...');
+      setGlobalLoadingDetail(isEnglish ? 'Reading the saved fate line. If local cache exists, the reader opens first while cloud data is checked.' : '正在读取收藏命运线；如果本机已有缓存，会先进入阅读页再校验云端记录。');
       const cached = await getCachedSharedStory(storyId);
       if (cached?.value) {
         setReadonlyStoryData({ meta: cached.value.meta, chapters: cached.value.chapters as any });
@@ -3177,8 +3210,8 @@ export default function App() {
     if (!story || !user || (!archiveId && !sourceStoryId)) return;
     try {
       setIsSharing(true);
-      setGlobalLoadingMessage('正在准备分享...');
-      setGlobalLoadingDetail('正在确认馆藏记录的可见范围，并准备非公开链接。');
+      setGlobalLoadingMessage(isEnglish ? 'Preparing share...' : '正在准备分享...');
+      setGlobalLoadingDetail(isEnglish ? 'Checking archive visibility and preparing an unlisted link.' : '正在确认馆藏记录的可见范围，并准备非公开链接。');
       if (archiveId && story.meta?.visibility !== 'unlisted') {
         await handleArchiveVisibilityChange({ id: archiveId }, 'unlisted');
       }
@@ -3371,7 +3404,9 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
       setIsAuthReady(true);
-      setStartupMessage(u ? '正在同步命运记录...' : '正在准备入口...');
+      setStartupMessage(u
+        ? (isEnglish ? 'Syncing fate records...' : '正在同步命运记录...')
+        : (isEnglish ? 'Preparing entrance...' : '正在准备入口...'));
       setIsSessionHydrated(!u);
     });
     return () => unsubscribe();
@@ -3464,8 +3499,8 @@ export default function App() {
     if (!story) return;
     try {
       setIsSharing(true);
-      setGlobalLoadingMessage('正在准备分享...');
-      setGlobalLoadingDetail('正在确认馆藏记录的可见范围，并准备分享内容。');
+      setGlobalLoadingMessage(isEnglish ? 'Preparing share...' : '正在准备分享...');
+      setGlobalLoadingDetail(isEnglish ? 'Checking archive visibility and preparing share content.' : '正在确认馆藏记录的可见范围，并准备分享内容。');
       if (story.archiveKind !== 'favorite' && story.visibility !== 'unlisted') {
         await handleArchiveVisibilityChange(story, 'unlisted');
       }
@@ -3566,7 +3601,7 @@ export default function App() {
     }
 
     setIsSessionHydrated(false);
-    setStartupMessage('正在同步命运记录...');
+    setStartupMessage(isEnglish ? 'Syncing fate records...' : '正在同步命运记录...');
 
     let cancelled = false;
     const loadSessionOnce = async () => {
@@ -3577,7 +3612,7 @@ export default function App() {
       } else {
         setSessionId(user.uid);
         resetToHome();
-        setStartupMessage('正在读取作品档案...');
+        setStartupMessage(isEnglish ? 'Reading story archive...' : '正在读取作品档案...');
         const loadedStories = await refreshStories().catch((error) => {
           console.warn('Initial story library load skipped:', error);
           return false;
@@ -3662,8 +3697,8 @@ export default function App() {
   const handleSaveProgressAndReturn = async () => {
     if (!user || !activeStoryId || !blueprint) return;
     try {
-      setGlobalLoadingMessage('正在保存进度...');
-      setGlobalLoadingDetail('正在把当前游玩进度写入云端，方便之后从同一作品继续。');
+      setGlobalLoadingMessage(isEnglish ? 'Saving progress...' : '正在保存进度...');
+      setGlobalLoadingDetail(isEnglish ? 'Writing the current play progress to the cloud so this work can continue later.' : '正在把当前游玩进度写入云端，方便之后从同一作品继续。');
       await saveUserProgress(db as any, user.uid, activeStoryId, {
         userId: user.uid,
         storyId: activeStoryId,
@@ -3698,8 +3733,8 @@ export default function App() {
   const handleSaveWorkAndReturn = async () => {
     if (!user || !blueprint) return;
     try {
-      setGlobalLoadingMessage('正在收藏命运...');
-      setGlobalLoadingDetail('正在确认当前故事是否与原作相同；只有变化后的命运线才会作为收藏命运记录。');
+      setGlobalLoadingMessage(isEnglish ? 'Saving fate line...' : '正在收藏命运...');
+      setGlobalLoadingDetail(isEnglish ? 'Checking whether the current story differs from the original. Only changed fate lines are saved as records.' : '正在确认当前故事是否与原作相同；只有变化后的命运线才会作为收藏命运记录。');
       if (activeStoryId && currentRunMatchesOriginal()) {
         await favoriteStory(db as any, activeStoryId, user.uid);
         showError('原作已加入馆藏，不会重复收藏一份相同文本。');
@@ -4165,7 +4200,7 @@ export default function App() {
     const storyId = activeStoryId;
     try {
       const preservedHistoricalBranches = historicallyUnlockedBranches;
-      setGlobalLoadingMessage('正在重新加载故事...');
+      setGlobalLoadingMessage(isEnglish ? 'Reloading story...' : '正在重新加载故事...');
       setShowLeaveGameModal(false);
       await deleteLocalCache(activeRunCacheKey());
       // Re-load the cartridge and apply with no progress data (fresh start)
@@ -4174,16 +4209,16 @@ export default function App() {
         cartridge = await getStoryCartridge(db as any, storyId);
       }
       if (!cartridge) {
-        showError('重新加载故事失败，已返回作品库。');
+        showError(isEnglish ? 'Story reload failed. Returned to the library.' : '重新加载故事失败，已返回作品库。');
         await resetGame();
         return;
       }
       applyStoryCartridgeForPlay(storyId, cartridge, { historicallyUnlockedBranches: preservedHistoricalBranches }); // fresh run, account history preserved
       window.scrollTo({ top: 0, behavior: 'smooth' });
-      showError('命运已重置，从第一章重新开始。');
+      showError(isEnglish ? 'Fate reset. Starting again from chapter 1.' : '命运已重置，从第一章重新开始。');
     } catch (e) {
       console.error(e);
-      showError('重新干涉失败');
+      showError(isEnglish ? 'Restart failed.' : '重新干涉失败');
     } finally {
       setGlobalLoadingMessage(null);
     }
@@ -4290,13 +4325,13 @@ export default function App() {
       const expectedStory = [...publicStories, ...myStories].find((story: any) => story.id === storyId);
       let cartridge = await getCachedStoryCartridge(storyId, expectedStory);
       if (cartridge) {
-        setStoryLaunchOverlay({ progress: 34, status: '已读取本机故事档案...' });
+        setStoryLaunchOverlay({ progress: 34, status: isEnglish ? 'Local story archive loaded...' : '已读取本机故事档案...' });
       }
       if (!cartridge) {
         try {
-          setStoryLaunchOverlay({ progress: 28, status: '正在连接云端故事档案...' });
+          setStoryLaunchOverlay({ progress: 28, status: isEnglish ? 'Connecting to cloud story archive...' : '正在连接云端故事档案...' });
           cartridge = await getStoryCartridge(db as any, storyId);
-          setStoryLaunchOverlay({ progress: 58, status: '正在缓存完整故事...' });
+          setStoryLaunchOverlay({ progress: 58, status: isEnglish ? 'Caching full story...' : '正在缓存完整故事...' });
           await cacheStoryCartridge(storyId, cartridge);
         } catch (error) {
           const staleCartridge = await getCachedStoryCartridge(storyId);
@@ -4309,7 +4344,7 @@ export default function App() {
         throw new Error('story-not-found-or-denied');
       }
       
-      setStoryLaunchOverlay({ progress: 72, status: '正在检查云端进度...' });
+      setStoryLaunchOverlay({ progress: 72, status: isEnglish ? 'Checking cloud progress...' : '正在检查云端进度...' });
       let progressData: any = null;
       try {
         progressData = await getUserProgress(db as any, user.uid, storyId);
@@ -4324,19 +4359,19 @@ export default function App() {
         !progressData.storyConclusion;
 
       if (canResumeProgress) {
-        setStoryLaunchOverlay({ progress: 100, status: '发现可继承的命运线' });
+        setStoryLaunchOverlay({ progress: 100, status: isEnglish ? 'Restorable fate line found' : '发现可继承的命运线' });
         setPendingProgressToLoad({ id: storyId, data: { ...progressData, cartridge } });
         return;
       }
       
-      setStoryLaunchOverlay({ progress: 92, status: '正在进入故事...' });
+      setStoryLaunchOverlay({ progress: 92, status: isEnglish ? 'Entering story...' : '正在进入故事...' });
       await startNewStoryPlay(storyId, cartridge, progressData);
     } catch (e) {
       console.error(e);
       showError("无法开启故事");
     } finally {
       window.clearInterval(launchProgress);
-      setStoryLaunchOverlay((prev) => prev ? { progress: 100, status: '故事已就绪' } : prev);
+      setStoryLaunchOverlay((prev) => prev ? { progress: 100, status: isEnglish ? 'Story ready' : '故事已就绪' } : prev);
       window.setTimeout(() => setStoryLaunchOverlay(null), 180);
       setIsLoadingStories(false);
     }
@@ -4446,15 +4481,25 @@ export default function App() {
     if (!activeGenerationInput) return;
 
     navigateTo('GENERATING_BLUEPRINT');
-    const progressInterval = startProgressSimulation(45000, [
-      "正在构思宏大世界观...",
-      "正在编织命运的丝线...",
-      "正在塑造传奇英雄...",
-      "正在铺设史诗篇章...",
-      "正在雕琢文学细节...",
-      "正在注入灵魂与情感...",
-      "即将开启新的征程..."
-    ]);
+    const progressInterval = startProgressSimulation(45000, isEnglish
+      ? [
+          'Shaping the world...',
+          'Weaving the threads of fate...',
+          'Designing key characters...',
+          'Laying out the chapters...',
+          'Refining narrative details...',
+          'Adding emotion and momentum...',
+          'The story is almost ready...',
+        ]
+      : [
+          '正在构思宏大世界观...',
+          '正在编织命运的丝线...',
+          '正在塑造传奇英雄...',
+          '正在铺设史诗篇章...',
+          '正在雕琢文学细节...',
+          '正在注入灵魂与情感...',
+          '即将开启新的征程...',
+        ]);
 
     try {
       const draftSignature = hasOverrideInput && overrideSignature ? overrideSignature : quickGenerationSignature();
@@ -4472,6 +4517,7 @@ export default function App() {
         data = await response.json();
       }
       data.narrative_person = activeGenerationInput.narrativePerson;
+      data.language = appLanguage;
       data.endingMode = data.endingMode === 'single' ? 'single' : activeGenerationInput.endingMode;
       data.endingBias = normalizeEndingBias(data.endingBias || activeGenerationInput.endingBias || { left: data.left_mainline_default, right: data.right_mainline_default });
       data.tags = normalizeTagList(data.tags || activeGenerationInput.selectedThemes);
@@ -4484,7 +4530,7 @@ export default function App() {
           continue;
         }
         generationStage = appLanguage === 'en-US' ? `generating chapter ${chapterNum}` : `生成第 ${chapterNum} 章`;
-        setGenerationStatus(`正在具象化世界细节 (${chapterNum}/3)...`);
+        setGenerationStatus(isEnglish ? `Writing chapter ${chapterNum} (${chapterNum}/3)...` : `正在具象化世界细节 (${chapterNum}/3)...`);
         setGenerationProgress(72 + chapterNum * 7);
         const chapterResponse = await withRetry(() => apiFetch('/api/generate-next-chapter', {
           method: 'POST',
@@ -4741,8 +4787,8 @@ export default function App() {
     }
     try {
       setAuthoringSaving(true);
-      setGlobalLoadingMessage('正在保存支线...');
-      setGlobalLoadingDetail('正在同步角色、条件、隐藏设置和支线情节。');
+      setGlobalLoadingMessage(isEnglish ? 'Saving branch...' : '正在保存支线...');
+      setGlobalLoadingDetail(isEnglish ? 'Syncing characters, conditions, hidden settings, and branch story content.' : '正在同步角色、条件、隐藏设置和支线情节。');
       await upsertStoryBranch(db as any, authoringStoryId, selectedBranchId, {
         id: selectedBranchId,
         side: branchForm.side,
@@ -4782,8 +4828,8 @@ export default function App() {
     if (!authoringStoryId || !authoringCartridge || !db) return;
     try {
       setAuthoringSaving(true);
-      setGlobalLoadingMessage('正在保存作品更改...');
-      setGlobalLoadingDetail('正在同步作品设置、章节、结局与作品卡资料。');
+      setGlobalLoadingMessage(isEnglish ? 'Saving story changes...' : '正在保存作品更改...');
+      setGlobalLoadingDetail(isEnglish ? 'Syncing story settings, chapters, endings, and story card data.' : '正在同步作品设置、章节、结局与作品卡资料。');
       const normalizedCharacters = normalizeCharacters(authoringCartridge.meta?.characters || []);
       const normalizedTags = parseTagInput(authoringCustomTagsInput || (authoringCartridge.meta?.tags || []).join('，'));
       const normalizedChapters = (authoringCartridge.chapters || []).map((chapter: any) => ({
@@ -5058,12 +5104,19 @@ export default function App() {
       setActiveInterventionOverlay({ type: action, targetChapter: chapterNum, statusRaw: "因果重塑中..." });
       
       const charName = blueprint.characters.find(c => c.id === charId)?.name || "未知角色";
-      simulation = startProgressSimulation(12000, [
-        `正在观测 ${charName} 的命运线...`,
-        `正在编织 ${action === 'bless' ? '庇佑' : '磨难'} 的因果...`,
-        `正在重塑第 ${chapterNum} 章及后续情节...`,
-        `命运之轮已经转动...`
-      ]);
+      simulation = startProgressSimulation(12000, isEnglish
+        ? [
+            `Observing ${charName}'s fate line...`,
+            `Weaving the cause and effect of ${action === 'bless' ? 'grace' : 'ordeal'}...`,
+            `Reshaping chapter ${chapterNum} and its ripple effects...`,
+            'The wheel of fate is turning...',
+          ]
+        : [
+            `正在观测 ${charName} 的命运线...`,
+            `正在编织 ${action === 'bless' ? '庇佑' : '磨难'} 的因果...`,
+            `正在重塑第 ${chapterNum} 章及后续情节...`,
+            '命运之轮已经转动...',
+          ]);
 
       const response = await apiFetch('/api/intervene', {
         method: 'POST',
@@ -5397,11 +5450,17 @@ export default function App() {
       setSummaryEntrySource(source);
       setActiveInterventionOverlay({ type: 'ending', targetChapter: 7, statusRaw: '终局演绎中...' });
       
-      simulation = startProgressSimulation(8000, [
-        "正在收束因果残片...",
-        "正在推演时空最终走向...",
-        "正在铭刻命运总结..."
-      ]);
+      simulation = startProgressSimulation(8000, isEnglish
+        ? [
+            'Gathering the remaining causes...',
+            'Reading the final direction of fate...',
+            'Writing the fate summary...',
+          ]
+        : [
+            '正在收束因果残片...',
+            '正在推演时空最终走向...',
+            '正在铭刻命运总结...',
+          ]);
 
       const response = await apiFetch('/api/generate-summary', {
         method: 'POST',
@@ -5456,8 +5515,8 @@ export default function App() {
     let createdShareId = '';
     try {
       setIsSharing(true);
-      setGlobalLoadingMessage('正在准备分享...');
-      setGlobalLoadingDetail('正在判断分享原作还是当前命运线，并尽快调用系统分享。');
+      setGlobalLoadingMessage(isEnglish ? 'Preparing share...' : '正在准备分享...');
+      setGlobalLoadingDetail(isEnglish ? 'Choosing whether to share the original or current fate line, then opening the system share sheet.' : '正在判断分享原作还是当前命运线，并尽快调用系统分享。');
       const shareTitle = formatBookTitle(blueprint?.title || "未命名故事");
       const cleanChapters = getCleanCurrentRunChapters();
       const shareText = buildStoryShareText(shareTitle, cleanChapters);
@@ -6560,8 +6619,8 @@ export default function App() {
       if (!storyDetailStory) return;
       try {
         setIsSharing(true);
-        setGlobalLoadingMessage('正在准备分享作品...');
-        setGlobalLoadingDetail('正在生成作品链接，并尝试调用系统分享。');
+        setGlobalLoadingMessage(isEnglish ? 'Preparing story share...' : '正在准备分享作品...');
+        setGlobalLoadingDetail(isEnglish ? 'Creating the story link and opening the system share sheet.' : '正在生成作品链接，并尝试调用系统分享。');
         await shareOriginalStoryByCard(storyDetailStory);
       } catch (error: any) {
         console.error(error);
@@ -6582,7 +6641,7 @@ export default function App() {
         onConfirm: () => {
           void (async () => {
             try {
-              setGlobalLoadingMessage('正在删除作品...');
+              setGlobalLoadingMessage(isEnglish ? 'Deleting story...' : '正在删除作品...');
               await deleteStoryCartridge(db as any, detailStoryId);
               setPublicStories((prev) => prev.filter((story: any) => story.id !== detailStoryId));
               setMyStories((prev) => prev.filter((story: any) => story.id !== detailStoryId));
@@ -6692,6 +6751,7 @@ export default function App() {
     const keyword = storyLibrarySearch.trim().toLowerCase();
     return [...source]
       .filter((story: any) => {
+        if (!storyMatchesLanguage(story, appLanguage)) return false;
         if (storyLibraryTab === 'mine' && storyLibraryVisibilityFilter !== 'all' && story.visibility !== storyLibraryVisibilityFilter) return false;
         if (!keyword) return true;
         const haystack = `${getStoryTitle(story)}\n${getStoryAuthorName(story)}\n${getStoryMainAxis(story)}\n${getStoryTags(story).join(' ')}`.toLowerCase();
@@ -6716,6 +6776,8 @@ export default function App() {
 
   const renderStorySelectView = () => {
     const visibleStories = getVisibleStoryLibraryItems();
+    const languagePublicCount = publicStories.filter((story) => storyMatchesLanguage(story, appLanguage)).length;
+    const languageMineCount = myStories.filter((story) => storyMatchesLanguage(story, appLanguage)).length;
     return (
     <div className="story-library-page mx-auto max-w-7xl px-5 pb-12 pt-[max(3rem,calc(env(safe-area-inset-top)+3rem))] sm:px-6 lg:px-8">
       <div className="story-library-hero mb-10 overflow-hidden p-5 sm:p-7 lg:p-8">
@@ -6816,8 +6878,8 @@ export default function App() {
         <div className="story-library-toolbar flex flex-col gap-4 p-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="story-library-tabbar">
             {[
-              { id: 'public', label: t('library.publicWorks'), count: publicStories.length },
-              { id: 'mine', label: t('library.myWorks'), count: myStories.length },
+              { id: 'public', label: t('library.publicWorks'), count: languagePublicCount },
+              { id: 'mine', label: t('library.myWorks'), count: languageMineCount },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -6835,7 +6897,7 @@ export default function App() {
               type="search"
               value={storyLibrarySearch}
               onChange={(event) => setStoryLibrarySearch(event.target.value)}
-              placeholder="搜索标题、作者、标签或主轴"
+              placeholder={isEnglish ? 'Search title, author, tags, or premise' : '搜索标题、作者、标签或主轴'}
               className="story-library-control min-w-0 px-3 py-2 text-sm sm:w-72"
             />
             {storyLibraryTab === 'mine' && (
@@ -6844,10 +6906,10 @@ export default function App() {
                 onChange={(event) => setStoryLibraryVisibilityFilter(event.target.value as any)}
                 className="story-library-control px-3 py-2 text-sm"
               >
-                <option value="all">全部权限</option>
-                <option value="private">私密</option>
-                <option value="public">公开</option>
-                <option value="unlisted">非公开链接</option>
+                <option value="all">{isEnglish ? 'All visibility' : '全部权限'}</option>
+                <option value="private">{isEnglish ? 'Private' : '私密'}</option>
+                <option value="public">{isEnglish ? 'Public' : '公开'}</option>
+                <option value="unlisted">{isEnglish ? 'Unlisted link' : '非公开链接'}</option>
               </select>
             )}
             <select
@@ -6855,12 +6917,12 @@ export default function App() {
               onChange={(event) => handleStoryLibrarySortChange(event.target.value as StoryLibrarySort)}
               className="story-library-control px-3 py-2 text-sm"
             >
-              <option value="updated">最近更新</option>
-              <option value="interventions">干涉最多</option>
-              <option value="likes">点赞最多</option>
-              <option value="favorites">收藏最多</option>
-              <option value="shares">分享最多</option>
-              <option value="words">平均字数</option>
+              <option value="updated">{isEnglish ? 'Recently updated' : '最近更新'}</option>
+              <option value="interventions">{isEnglish ? 'Most intervened' : '干涉最多'}</option>
+              <option value="likes">{isEnglish ? 'Most liked' : '点赞最多'}</option>
+              <option value="favorites">{isEnglish ? 'Most favorited' : '收藏最多'}</option>
+              <option value="shares">{isEnglish ? 'Most shared' : '分享最多'}</option>
+              <option value="words">{isEnglish ? 'Avg. words' : '平均字数'}</option>
             </select>
             <button
               type="button"
@@ -6869,25 +6931,29 @@ export default function App() {
               className={semanticButtonClass('ghost', { compact: true })}
             >
               <RefreshCcw className={`h-4 w-4 ${isLoadingStories ? 'animate-spin' : ''}`} />
-              刷新
+              {isEnglish ? 'Refresh' : '刷新'}
             </button>
           </div>
         </div>
         {isLoadingStories ? (
           <InlineSyncState
-            title="正在同步作品库"
-            detail="公开作品和我的作品会分段读取，任何一段较慢时都会保留当前可用内容。"
+            title={isEnglish ? 'Syncing story library' : '正在同步作品库'}
+            detail={isEnglish ? 'Public works and owned works load separately. Slow sections keep the current usable content.' : '公开作品和我的作品会分段读取，任何一段较慢时都会保留当前可用内容。'}
           />
         ) : storyListLoadError && visibleStories.length === 0 ? (
           <InlineSyncState
             tone="error"
-            title="作品列表暂时无法同步"
+            title={isEnglish ? 'Story list could not sync' : '作品列表暂时无法同步'}
             detail={storyListLoadError}
-            actionLabel="重新读取作品库"
+            actionLabel={isEnglish ? 'Reload library' : '重新读取作品库'}
             onAction={() => refreshStories({ force: true })}
           />
         ) : visibleStories.length === 0 ? (
-          <InlineSyncState tone="empty" title="没有符合条件的作品" detail="可以调整搜索、筛选或排序条件后再试。" />
+          <InlineSyncState
+            tone="empty"
+            title={isEnglish ? 'No matching stories' : '没有符合条件的作品'}
+            detail={isEnglish ? 'Try changing the search, filters, or sorting.' : '可以调整搜索、筛选或排序条件后再试。'}
+          />
         ) : (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {visibleStories.map((story) => renderStoryCard(story, storyLibraryTab === 'public'))}
@@ -7156,8 +7222,8 @@ export default function App() {
         <AnimatePresence>
           {isArchiveSyncing && archiveStories.length === 0 && (
             <BlockingSyncOverlay
-              title="正在同步命运收藏馆"
-              detail="如果网络较慢，会先保留本机缓存，完成后自动更新列表。"
+              title={isEnglish ? 'Syncing fate archive' : '正在同步命运收藏馆'}
+              detail={isEnglish ? 'If the network is slow, local cache stays available and the list updates when sync finishes.' : '如果网络较慢，会先保留本机缓存，完成后自动更新列表。'}
               zIndexClass="z-[3200]"
             />
           )}
@@ -7167,20 +7233,20 @@ export default function App() {
             <h2 className="text-3xl font-black text-white sm:text-4xl">{t('archive.title')}</h2>
             <p className="mt-2 text-sm text-zinc-500">{t('archive.subtitle')}</p>
           </div>
-          <BackNavButton label={archiveReturnTarget === 'PLAYING' ? '返回游玩页' : '返回作品库'} onClick={leaveArchiveView} />
+          <BackNavButton label={archiveReturnTarget === 'PLAYING' ? (isEnglish ? 'Back to play' : '返回游玩页') : (isEnglish ? 'Back to library' : '返回作品库')} onClick={leaveArchiveView} />
         </div>
 
         <section className="app-card-quiet relative overflow-hidden rounded-[2rem] p-4 sm:p-5">
           {isArchiveSyncing && archiveStories.length > 0 && (
             <div className="mb-5 flex items-center gap-3 rounded-2xl border border-indigo-500/20 bg-indigo-500/10 px-4 py-3 text-xs font-bold text-indigo-100/85">
               <Loader2 className="h-4 w-4 shrink-0 animate-spin text-indigo-300" />
-              <span>正在同步收藏馆，当前列表会保持可用。</span>
+              <span>{isEnglish ? 'Syncing archive. The current list stays usable.' : '正在同步收藏馆，当前列表会保持可用。'}</span>
             </div>
           )}
           {archiveSegment.status === 'error' && archiveStories.length > 0 && (
             <div className="mb-5 rounded-3xl border border-amber-500/25 bg-amber-500/10 p-4 text-sm leading-relaxed text-amber-100/85">
-              <div className="font-black text-amber-100">收藏馆同步暂时不顺利</div>
-              <p className="mt-1 text-xs text-amber-100/70">{archiveSegment.error || '已保留当前可用内容，可以稍后刷新重试。'}</p>
+              <div className="font-black text-amber-100">{isEnglish ? 'Archive sync is not smooth right now' : '收藏馆同步暂时不顺利'}</div>
+              <p className="mt-1 text-xs text-amber-100/70">{archiveSegment.error || (isEnglish ? 'Current content is kept. Try refreshing later.' : '已保留当前可用内容，可以稍后刷新重试。')}</p>
             </div>
           )}
           {/* Tab 切换栏 */}
@@ -7189,7 +7255,7 @@ export default function App() {
               {([
                 { id: 'favorite', label: t('archive.favoriteTab') },
                 { id: 'saved', label: t('archive.savedTab') },
-                { id: 'authors', label: '追踪作者' },
+                { id: 'authors', label: isEnglish ? 'Following' : '追踪作者' },
               ] as const).map((tab) => (
                 <button
                   key={tab.id}
@@ -7210,7 +7276,7 @@ export default function App() {
                   type="search"
                   value={archiveSearch}
                   onChange={(event) => { setArchiveSearch(event.target.value); setArchiveChoiceStoryId(null); }}
-                  placeholder="搜索标题或主轴内容"
+                  placeholder={isEnglish ? 'Search title or premise' : '搜索标题或主轴内容'}
                   className="w-full rounded-xl border border-zinc-800 bg-zinc-950/80 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500"
                 />
                 <button
@@ -7220,15 +7286,15 @@ export default function App() {
                   className={semanticButtonClass('ghost', { compact: true })}
                 >
                   <RefreshCcw className={`h-4 w-4 ${(archiveTab === 'authors' ? followedAuthorsLoading : isArchiveSyncing) ? 'animate-spin' : ''}`} />
-                  刷新馆藏
+                  {isEnglish ? 'Refresh archive' : '刷新馆藏'}
                 </button>
               </div>
               {archiveTab === 'saved' && (
                 <div className="flex flex-wrap gap-1.5">
                   {([
-                    { id: 'all', label: '全部' },
-                    { id: 'unlisted', label: '非公开链接' },
-                    { id: 'private', label: '私人' },
+                    { id: 'all', label: isEnglish ? 'All' : '全部' },
+                    { id: 'unlisted', label: isEnglish ? 'Unlisted link' : '非公开链接' },
+                    { id: 'private', label: isEnglish ? 'Private' : '私人' },
                   ] as const).map((option) => (
                     <button
                       key={option.id}
@@ -7248,24 +7314,27 @@ export default function App() {
           {archiveSegment.status === 'error' && archiveStories.length === 0 ? (
             <InlineSyncState
               tone="error"
-              title="收藏馆暂时无法同步"
-              detail={archiveSegment.error || '没有可用的本机缓存。可以重新读取，或先返回作品库继续浏览。'}
-              actionLabel="重新读取收藏馆"
+              title={isEnglish ? 'Archive could not sync' : '收藏馆暂时无法同步'}
+              detail={archiveSegment.error || (isEnglish ? 'No local cache is available. Reload, or return to the library for now.' : '没有可用的本机缓存。可以重新读取，或先返回作品库继续浏览。')}
+              actionLabel={isEnglish ? 'Reload archive' : '重新读取收藏馆'}
               onAction={() => refreshArchiveStories({ force: true })}
             />
           ) : isArchiveSyncing && archiveStories.length === 0 ? (
             <InlineSyncState
-              title="正在同步命运收藏馆"
-              detail="正在读取收藏原作和收藏命运。弱网时会先尝试恢复本机缓存。"
+              title={isEnglish ? 'Syncing fate archive' : '正在同步命运收藏馆'}
+              detail={isEnglish ? 'Reading favorited originals and saved fate lines. On weak networks, local cache is restored first.' : '正在读取收藏原作和收藏命运。弱网时会先尝试恢复本机缓存。'}
             />
           ) : archiveTab === 'authors' ? (
             followedAuthorsLoading && visibleFollowedAuthors.length === 0 ? (
-              <InlineSyncState title="正在同步追踪作者" detail="正在读取已追踪作者列表。" />
+              <InlineSyncState
+                title={isEnglish ? 'Syncing followed authors' : '正在同步追踪作者'}
+                detail={isEnglish ? 'Reading the followed author list.' : '正在读取已追踪作者列表。'}
+              />
             ) : visibleFollowedAuthors.length === 0 ? (
               <InlineSyncState
                 tone="empty"
-                title={keyword ? '没有符合搜索词的追踪作者' : '还没有追踪任何作者'}
-                detail={keyword ? '换个关键词再试，或清空搜索条件。' : '点击作者名字打开作者档案后，可以追踪作者并在这里集中查看。'}
+                title={keyword ? (isEnglish ? 'No followed authors match the search' : '没有符合搜索词的追踪作者') : (isEnglish ? 'No followed authors yet' : '还没有追踪任何作者')}
+                detail={keyword ? (isEnglish ? 'Try another keyword, or clear the search.' : '换个关键词再试，或清空搜索条件。') : (isEnglish ? 'Open an author profile from an author name, then follow the author to view them here.' : '点击作者名字打开作者档案后，可以追踪作者并在这里集中查看。')}
               />
             ) : (
               <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -7276,8 +7345,8 @@ export default function App() {
             favoriteStories.length === 0 ? (
               <InlineSyncState
                 tone="empty"
-                title={keyword ? '没有符合搜索词的收藏原作' : '还没有收藏任何原作'}
-                detail={keyword ? '换个关键词再试，或清空搜索条件。' : '在游玩页点击「收藏」后，原作会出现在这里。'}
+                title={keyword ? (isEnglish ? 'No favorited originals match the search' : '没有符合搜索词的收藏原作') : (isEnglish ? 'No favorited originals yet' : '还没有收藏任何原作')}
+                detail={keyword ? (isEnglish ? 'Try another keyword, or clear the search.' : '换个关键词再试，或清空搜索条件。') : (isEnglish ? 'Tap Favorite while reading to keep the original work here.' : '在游玩页点击「收藏」后，原作会出现在这里。')}
               />
             ) : (
               <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -7288,8 +7357,8 @@ export default function App() {
             savedStories.length === 0 ? (
               <InlineSyncState
                 tone="empty"
-                title={keyword || archiveFilter !== 'all' ? '没有符合条件的收藏命运' : '还没有收藏任何命运线'}
-                detail={keyword || archiveFilter !== 'all' ? '可以调整搜索或可见性筛选条件。' : '在游玩页点击「收藏命运」后，当前命运线会出现在这里。'}
+                title={keyword || archiveFilter !== 'all' ? (isEnglish ? 'No saved fate lines match the filters' : '没有符合条件的收藏命运') : (isEnglish ? 'No saved fate lines yet' : '还没有收藏任何命运线')}
+                detail={keyword || archiveFilter !== 'all' ? (isEnglish ? 'Try changing the search or visibility filter.' : '可以调整搜索或可见性筛选条件。') : (isEnglish ? 'Tap Save Fate while reading to keep the current fate line here.' : '在游玩页点击「收藏命运」后，当前命运线会出现在这里。')}
               />
             ) : (
               <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -9047,7 +9116,7 @@ export default function App() {
             {authorProfileLoading ? (
               <div className="flex items-center justify-center gap-2 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-8 text-sm font-black text-zinc-400">
                 <Loader2 className="h-5 w-5 animate-spin" />
-                正在读取作者作品...
+                {isEnglish ? 'Loading author works...' : '正在读取作者作品...'}
               </div>
             ) : authorProfileStories.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/30 p-8 text-center text-sm font-semibold text-zinc-500">
@@ -9126,7 +9195,7 @@ export default function App() {
             {notificationLoading && notificationItems.length === 0 ? (
               <div className="flex items-center justify-center gap-2 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-8 text-sm font-black text-zinc-400">
                 <Loader2 className="h-5 w-5 animate-spin" />
-                正在读取通知...
+                {isEnglish ? 'Loading notifications...' : '正在读取通知...'}
               </div>
             ) : notificationItems.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/30 p-8 text-center text-sm font-semibold text-zinc-500">
@@ -10514,7 +10583,7 @@ export default function App() {
                 transition={{ repeat: Infinity, duration: 4, ease: "linear" }}
                 className="mb-8 h-12 w-12 rounded-2xl border-2 border-indigo-500/20 border-t-indigo-500"
               />
-              <h2 className="text-2xl font-black text-white">{generationStatus || '正在生成世界蓝图...'}</h2>
+              <h2 className="text-2xl font-black text-white">{generationStatus || (isEnglish ? 'Generating story blueprint...' : '正在生成世界蓝图...')}</h2>
               <GenerationProgressBar />
             </div>
           )}
@@ -10550,7 +10619,8 @@ export default function App() {
               <LoadingOverlay
                 progress={storyLaunchOverlay.progress}
                 status={storyLaunchOverlay.status}
-                subtext="正在准备可干涉的故事页面"
+                subtext={isEnglish ? 'Preparing an interactive story page.' : '正在准备可干涉的故事页面'}
+                language={appLanguage}
               />
             )}
             {activeInterventionOverlay && (
@@ -10558,6 +10628,7 @@ export default function App() {
                 progress={generationProgress}
                 status={generationStatus}
                 variant={activeInterventionOverlay.type}
+                language={appLanguage}
               />
             )}
           </AnimatePresence>
