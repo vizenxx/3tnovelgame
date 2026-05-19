@@ -12,6 +12,38 @@
   ],
   "rewrites": [
     {
+      "source": "/api/generate-blueprint",
+      "destination": "/api/ai?action=generate-blueprint"
+    },
+    {
+      "source": "/api/generate-next-chapter",
+      "destination": "/api/ai?action=generate-next-chapter"
+    },
+    {
+      "source": "/api/generate-summary",
+      "destination": "/api/ai?action=generate-summary"
+    },
+    {
+      "source": "/api/generate-cover",
+      "destination": "/api/ai?action=generate-cover"
+    },
+    {
+      "source": "/api/generate-series-world",
+      "destination": "/api/ai?action=generate-series-world"
+    },
+    {
+      "source": "/api/generate-continuity-node",
+      "destination": "/api/ai?action=generate-continuity-node"
+    },
+    {
+      "source": "/api/digest-chapter",
+      "destination": "/api/ai?action=digest-chapter"
+    },
+    {
+      "source": "/api/intervene",
+      "destination": "/api/ai?action=intervene"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

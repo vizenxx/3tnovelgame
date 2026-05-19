@@ -12,17 +12,25 @@ export function buildQuickStoryBlueprintPrompt(args: {
 }) {
   const isSingleEnding = args.endingMode === 'single';
   const isEnglish = args.language === 'en-US';
-  const seriesInstruction = args.seriesContext ? `
-Long-form series context / 长篇设定：
+  const seriesInstruction = args.seriesContext ? (isEnglish ? `
+Long-form series context:
 Title: ${args.seriesContext.title || 'Untitled series'}
 Pitch: ${args.seriesContext.pitch || ''}
 World Bible: ${JSON.stringify(args.seriesContext.worldBible || {}, null, 2)}
 Timeline: ${args.seriesContext.timelineNotes || ''}
 Iron Laws: ${JSON.stringify(args.seriesContext.ironLaws || [], null, 2)}
 Future Directions: ${JSON.stringify(args.seriesContext.futureDirections || [], null, 2)}
-` : '';
-  const continuityInstruction = args.continuityNode ? `
-Continuation node / 接续节点：
+` : `
+长篇设定：
+标题：${args.seriesContext.title || '未命名长篇'}
+卖点：${args.seriesContext.pitch || ''}
+世界观：${JSON.stringify(args.seriesContext.worldBible || {}, null, 2)}
+时间线：${args.seriesContext.timelineNotes || ''}
+长篇铁律：${JSON.stringify(args.seriesContext.ironLaws || [], null, 2)}
+后续方向：${JSON.stringify(args.seriesContext.futureDirections || [], null, 2)}
+`) : '';
+  const continuityInstruction = args.continuityNode ? (isEnglish ? `
+Continuation node:
 Title: ${args.continuityNode.title || 'Untitled continuity node'}
 Ending Domain: ${args.continuityNode.endingDomain || 'middle'}
 Ending ID: ${args.continuityNode.endingId || 'default'}
@@ -30,13 +38,22 @@ Bridge Summary: ${args.continuityNode.bridgeSummary || ''}
 Legacy State: ${JSON.stringify(args.continuityNode.legacyState || {}, null, 2)}
 Repair Rules: ${JSON.stringify(args.continuityNode.repairRules || [], null, 2)}
 Sequel Seed Prompt: ${args.continuityNode.sequelSeedPrompt || ''}
-` : '';
+` : `
+接续节点：
+标题：${args.continuityNode.title || '未命名接续节点'}
+结局域：${args.continuityNode.endingDomain || 'middle'}
+结局 ID：${args.continuityNode.endingId || 'default'}
+接续摘要：${args.continuityNode.bridgeSummary || ''}
+继承状态：${JSON.stringify(args.continuityNode.legacyState || {}, null, 2)}
+修复规则：${JSON.stringify(args.continuityNode.repairRules || [], null, 2)}
+续作生成要求：${args.continuityNode.sequelSeedPrompt || ''}
+`) : '';
   if (isEnglish) {
     return `You are a senior interactive fiction worldbuilder for an English-language story game.
 Known themes: ${Array.isArray(args.selectedThemes) && args.selectedThemes.length > 0 ? args.selectedThemes.join(', ') : 'none'}.
 Player story request / outline: ${args.customOutline ? args.customOutline : 'none'}.
 ${seriesInstruction}${continuityInstruction}
-Narrative person hard constraint: ${buildNarrativePersonInstruction(args.narrativePerson, 'blueprint')}
+Narrative person hard constraint: ${buildNarrativePersonInstruction(args.narrativePerson, 'blueprint', args.language)}
 Ending structure hard constraint: ${isSingleEnding
   ? 'Single ending. No matter how players later interfere, the finale must naturally converge on the same core ending. Branches and interventions may change the route, cost, understanding, and relationships, but must not create mutually exclusive finales.'
   : 'Branching endings. The current version uses default / left / right compatibility slots; treat them as expandable ending domains that can later support many specific endings.'}
@@ -74,7 +91,7 @@ Return strict JSON only. Do not include metadata. Reference chapter length: ${ar
 已知主题：${Array.isArray(args.selectedThemes) && args.selectedThemes.length > 0 ? args.selectedThemes.join(', ') : '无'}。
 用户提供的故事大纲/期望：${args.customOutline ? args.customOutline : '无'}。
 ${seriesInstruction}${continuityInstruction}
-叙事人称硬约束：${buildNarrativePersonInstruction(args.narrativePerson, 'blueprint')}
+叙事人称硬约束：${buildNarrativePersonInstruction(args.narrativePerson, 'blueprint', args.language)}
 结局结构硬约束：${isSingleEnding
   ? '单一结局。无论玩家后续如何干涉，终局都必须自然收束到同一个核心结局；支线和干涉只改变抵达终局的过程、代价、认知与关系，不得设计互斥终局。'
   : '多线结局。当前版本使用默认/左/右三结局结构；请把它理解为未来可扩展为结局1、结局2、结局3...的多线机制。'}

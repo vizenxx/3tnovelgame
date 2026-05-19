@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { normalizeGenerationLanguage } from './_language.js';
-import { defaultShareMeta, escapeHtml, fetchOriginalStoryMeta, fetchSharedStoryMeta, getShareId } from './_shareMeta.js';
+import { normalizeGenerationLanguage } from '../server/_language.js';
+import { defaultShareMeta, escapeHtml, fetchOriginalStoryMeta, fetchSharedStoryMeta, getShareId } from '../server/_shareMeta.js';
 
 const absoluteUrl = (req: VercelRequest, path: string) => {
   const proto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0];

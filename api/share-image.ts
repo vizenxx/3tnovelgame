@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { normalizeGenerationLanguage } from './_language.js';
-import { fetchOriginalStoryMeta, fetchSharedStoryMeta, getShareId } from './_shareMeta.js';
+import { normalizeGenerationLanguage } from '../server/_language.js';
+import { fetchOriginalStoryMeta, fetchSharedStoryMeta, getShareId } from '../server/_shareMeta.js';
 
 const LOGO_PATH = '/pwa-icon-512.png';
 

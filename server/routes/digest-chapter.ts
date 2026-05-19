@@ -1,10 +1,10 @@
 import { Type } from '@google/genai';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './_auth.js';
-import { generateGeminiJsonWithFallback, parseGeminiJson } from './_gemini.js';
-import { getRequestLogContext, logGenerationError, logGenerationInfo } from './_log.js';
-import { buildCanonicalWorldStatePrompt, buildDeltaWorldStatePrompt } from '../Prompt/storyStateDigest.js';
-import { generationLanguageInstruction, normalizeGenerationLanguage } from './_language.js';
+import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from '../_auth.js';
+import { generateGeminiJsonWithFallback, parseGeminiJson } from '../_gemini.js';
+import { getRequestLogContext, logGenerationError, logGenerationInfo } from '../_log.js';
+import { buildCanonicalWorldStatePrompt, buildDeltaWorldStatePrompt } from '../../Prompt/storyStateDigest.js';
+import { generationLanguageInstruction, normalizeGenerationLanguage } from '../_language.js';
 
 const canonicalSchema = {
   type: Type.OBJECT,

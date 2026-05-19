@@ -193,10 +193,33 @@ const THEMES = [
   "现代", "都市", "恐怖", "战争"
 ];
 
-const NARRATIVE_PERSON_OPTIONS: Array<{ value: NarrativePerson; label: string; hint: string }> = [
-  { value: 'third', label: '第三人称', hint: '以他/她/他们叙述，适合群像与史诗感。' },
-  { value: 'first', label: '第一人称', hint: '以我/我们叙述，更贴近主角内心。' },
-  { value: 'second', label: '第二人称', hint: '以第二人称叙述，适合沉浸式命运体验。' },
+const THEME_LABEL_EN: Record<string, string> = {
+  赛博朋克: 'Cyberpunk',
+  克苏鲁: 'Cosmic horror',
+  神话: 'Myth',
+  修仙: 'Cultivation',
+  末日: 'Apocalypse',
+  废土: 'Wasteland',
+  中世纪: 'Medieval',
+  奇幻: 'Fantasy',
+  校园: 'Campus',
+  恋爱: 'Romance',
+  悬疑: 'Mystery',
+  推理: 'Detective',
+  星际: 'Space opera',
+  科幻: 'Sci-fi',
+  武侠: 'Wuxia',
+  江湖: 'Martial world',
+  现代: 'Modern',
+  都市: 'Urban',
+  恐怖: 'Horror',
+  战争: 'War',
+};
+
+const NARRATIVE_PERSON_OPTIONS: Array<{ value: NarrativePerson; label: { 'zh-CN': string; 'en-US': string }; hint: { 'zh-CN': string; 'en-US': string } }> = [
+  { value: 'third', label: { 'zh-CN': '第三人称', 'en-US': 'Third person' }, hint: { 'zh-CN': '以他/她/他们叙述，适合群像与史诗感。', 'en-US': 'Uses he/she/they narration; good for ensemble and epic stories.' } },
+  { value: 'first', label: { 'zh-CN': '第一人称', 'en-US': 'First person' }, hint: { 'zh-CN': '以我/我们叙述，更贴近主角内心。', 'en-US': 'Uses I/we narration; closer to the protagonist’s inner voice.' } },
+  { value: 'second', label: { 'zh-CN': '第二人称', 'en-US': 'Second person' }, hint: { 'zh-CN': '以第二人称叙述，适合沉浸式命运体验。', 'en-US': 'Uses you-centered narration for an immersive fate experience.' } },
 ];
 
 const DISPLAY_TAG_LIMIT = 3;
@@ -339,6 +362,27 @@ const QUICK_STORY_TEMPLATES: Array<{
     endingBias: { leftBaseWeight: 40, rightBaseWeight: 40 },
   },
 ];
+
+const QUICK_STORY_TEMPLATE_EN: Record<string, { label: string; badge: string; hint: string; tags: string[] }> = {
+  'city-mystery': {
+    label: 'Urban Mystery',
+    badge: 'Fast-paced',
+    hint: 'Modern city, secret organizations, clear cost for each choice.',
+    tags: ['Mystery', 'Modern', 'Fate'],
+  },
+  'ancient-fate': {
+    label: 'Court Intrigue',
+    badge: 'Branch-rich',
+    hint: 'Strong character ties, ideal for branches that pull the ending domain.',
+    tags: ['Ancient', 'Intrigue', 'Bonds'],
+  },
+  'single-emotion': {
+    label: 'Single-Ending Drama',
+    badge: 'One ending',
+    hint: 'The ending is fixed; interference changes how the story returns to it.',
+    tags: ['Healing', 'Slice of life', 'Regret'],
+  },
+};
 
 const QUICK_QUIZ_STEPS: QuickQuizStep[] = [
   {
@@ -4508,7 +4552,7 @@ export default function App() {
       if (!selectedSeriesId && rows[0]?.id) setSelectedSeriesId(rows[0].id);
     } catch (error) {
       console.error(error);
-      showError('长篇设定同步失败。');
+      showError(tr('长篇设定同步失败。', 'Failed to sync series worlds.'));
     }
   };
 
@@ -4538,13 +4582,14 @@ export default function App() {
       if (mode === 'extract' && seriesSourceStoryId) {
         sourceStory = await getStoryCartridge(db as any, seriesSourceStoryId);
       }
-      const response = await apiFetch('/api/generate-series-world', {
+      const response = await apiFetch('/api/ai?action=generate-series-world', {
         method: 'POST',
         body: JSON.stringify({
           mode,
           genreTags: normalizeTagList(String(seriesForm.genreTags?.join?.('，') || '').split(/[,，]/).filter(Boolean)),
           authorSeed: `${seriesForm.pitch || ''}\n${seriesForm.timelineNotes || ''}`,
           sourceStory,
+          language: appLanguage,
         }),
       }, 90000);
       if (!response.ok) throw new Error(await readErrorMessage(response));
@@ -4556,10 +4601,10 @@ export default function App() {
       setSeriesWorldBibleText(JSON.stringify(data.worldBible || {}, null, 2));
       setSeriesIronLawsText(JSON.stringify(data.ironLaws || [], null, 2));
       setSeriesFutureDirectionsText(JSON.stringify(data.futureDirections || [], null, 2));
-      showError('长篇设定草稿已生成，可先编辑再保存。');
+      showError(tr('长篇设定草稿已生成，可先编辑再保存。', 'Series world draft generated. Edit it before saving.'));
     } catch (error) {
       console.error(error);
-      showError(`生成长篇设定失败：${error instanceof Error ? error.message : '请稍后再试'}`);
+      showError(`${tr('生成长篇设定失败', 'Failed to generate series world')}: ${error instanceof Error ? error.message : tr('请稍后再试', 'please try again later')}`);
     } finally {
       setSeriesGenerating(false);
     }
@@ -4580,10 +4625,10 @@ export default function App() {
       });
       await loadSeriesWorlds();
       setSelectedSeriesId(id);
-      showError('长篇设定已保存。');
+      showError(tr('长篇设定已保存。', 'Series world saved.'));
     } catch (error) {
       console.error(error);
-      showError('保存长篇设定失败。');
+      showError(tr('保存长篇设定失败。', 'Failed to save series world.'));
     } finally {
       setSeriesSaving(false);
     }
@@ -4591,13 +4636,13 @@ export default function App() {
 
   const handleGenerateContinuityNode = async () => {
     if (!db || !selectedSeriesWorld || !seriesSourceStoryId) {
-      showError('请先选择长篇设定和来源作品。');
+      showError(tr('请先选择长篇设定和来源作品。', 'Choose a series world and a source story first.'));
       return;
     }
     setSeriesGenerating(true);
     try {
       const sourceStory = await getStoryCartridge(db as any, seriesSourceStoryId);
-      const response = await apiFetch('/api/generate-continuity-node', {
+      const response = await apiFetch('/api/ai?action=generate-continuity-node', {
         method: 'POST',
         body: JSON.stringify({
           seriesWorld: selectedSeriesWorld,
@@ -4605,6 +4650,7 @@ export default function App() {
           endingDomain: continuityForm.endingDomain || 'middle',
           endingId: continuityForm.endingId || 'default',
           requiredBranchIds: continuityForm.requiredBranchIds || [],
+          language: appLanguage,
         }),
       }, 90000);
       if (!response.ok) throw new Error(await readErrorMessage(response));
@@ -4617,10 +4663,10 @@ export default function App() {
       });
       setContinuityLegacyText(JSON.stringify(data.legacyState || {}, null, 2));
       setContinuityRepairText(JSON.stringify(data.repairRules || [], null, 2));
-      showError('接续节点草稿已生成，可编辑后保存。');
+      showError(tr('接续节点草稿已生成，可编辑后保存。', 'Continuity node draft generated. Edit it before saving.'));
     } catch (error) {
       console.error(error);
-      showError(`生成接续节点失败：${error instanceof Error ? error.message : '请稍后再试'}`);
+      showError(`${tr('生成接续节点失败', 'Failed to generate continuity node')}: ${error instanceof Error ? error.message : tr('请稍后再试', 'please try again later')}`);
     } finally {
       setSeriesGenerating(false);
     }
@@ -4640,10 +4686,10 @@ export default function App() {
       });
       await loadContinuityNodesForSeries(selectedSeriesWorld.id);
       setSelectedContinuityNodeId(id);
-      showError('接续节点已保存。');
+      showError(tr('接续节点已保存。', 'Continuity node saved.'));
     } catch (error) {
       console.error(error);
-      showError('保存接续节点失败。');
+      showError(tr('保存接续节点失败。', 'Failed to save continuity node.'));
     } finally {
       setSeriesSaving(false);
     }
@@ -4651,17 +4697,21 @@ export default function App() {
 
   const generateStoryFromSeries = (role: 'main' | 'sequel') => {
     if (!selectedSeriesWorld) {
-      showError('请先选择或保存一个长篇设定。');
+      showError(tr('请先选择或保存一个长篇设定。', 'Choose or save a series world first.'));
       return;
     }
     const continuity = role === 'sequel' ? selectedContinuityNode : null;
     if (role === 'sequel' && !continuity) {
-      showError('请先选择或保存一个接续节点。');
+      showError(tr('请先选择或保存一个接续节点。', 'Choose or save a continuity node first.'));
       return;
     }
     const outline = role === 'sequel'
-      ? `请基于长篇《${selectedSeriesWorld.title}》和接续节点「${continuity?.title}」生成续作。${continuity?.sequelSeedPrompt || continuity?.bridgeSummary || ''}`
-      : `请基于长篇《${selectedSeriesWorld.title}》生成第一部作品。${selectedSeriesWorld.pitch || ''}`;
+      ? (isEnglish
+        ? `Generate a sequel based on the series "${selectedSeriesWorld.title}" and continuity node "${continuity?.title}". ${continuity?.sequelSeedPrompt || continuity?.bridgeSummary || ''}`
+        : `请基于长篇《${selectedSeriesWorld.title}》和接续节点「${continuity?.title}」生成续作。${continuity?.sequelSeedPrompt || continuity?.bridgeSummary || ''}`)
+      : (isEnglish
+        ? `Generate the first installment based on the series "${selectedSeriesWorld.title}". ${selectedSeriesWorld.pitch || ''}`
+        : `请基于长篇《${selectedSeriesWorld.title}》生成第一部作品。${selectedSeriesWorld.pitch || ''}`);
     const input: QuickGenerationInput = {
       selectedThemes: normalizeTagList(selectedSeriesWorld.genreTags || []).slice(0, 4),
       customOutline: outline,
@@ -4762,7 +4812,7 @@ export default function App() {
         : null;
       if (!data) {
         generationStage = appLanguage === 'en-US' ? 'generating the story blueprint' : '生成故事蓝图';
-        const response = await apiFetch('/api/generate-blueprint', {
+        const response = await apiFetch('/api/ai?action=generate-blueprint', {
           method: 'POST',
           body: JSON.stringify({ ...activeGenerationInput, language: appLanguage }),
         }, 90000);
@@ -4787,7 +4837,7 @@ export default function App() {
         generationStage = appLanguage === 'en-US' ? `generating chapter ${chapterNum}` : `生成第 ${chapterNum} 章`;
         setGenerationStatus(isEnglish ? `Writing chapter ${chapterNum} (${chapterNum}/3)...` : `正在具象化世界细节 (${chapterNum}/3)...`);
         setGenerationProgress(72 + chapterNum * 7);
-        const chapterResponse = await withRetry(() => apiFetch('/api/generate-next-chapter', {
+        const chapterResponse = await withRetry(() => apiFetch('/api/ai?action=generate-next-chapter', {
           method: 'POST',
           body: JSON.stringify({
             blueprint: data,
@@ -4896,7 +4946,7 @@ export default function App() {
 
     const generateRemainingChapter = async () => {
       try {
-        const chapterResponse = await withRetry(() => apiFetch('/api/generate-next-chapter', {
+        const chapterResponse = await withRetry(() => apiFetch('/api/ai?action=generate-next-chapter', {
           method: 'POST',
           body: JSON.stringify({
             blueprint,
@@ -5201,7 +5251,7 @@ export default function App() {
       setIsGeneratingCover(true);
       const remaining = await reserveCoverGenerationQuota();
       quotaReserved = true;
-      const response = await apiFetch('/api/generate-cover', {
+      const response = await apiFetch('/api/ai?action=generate-cover', {
         method: 'POST',
         body: JSON.stringify({
           prompt: authoringCoverPrompt,
@@ -5373,7 +5423,7 @@ export default function App() {
             '命运之轮已经转动...',
           ]);
 
-      const response = await apiFetch('/api/intervene', {
+      const response = await apiFetch('/api/ai?action=intervene', {
         method: 'POST',
         body: JSON.stringify({
           blueprint,
@@ -5717,7 +5767,7 @@ export default function App() {
             '正在铭刻命运总结...',
           ]);
 
-      const response = await apiFetch('/api/generate-summary', {
+      const response = await apiFetch('/api/ai?action=generate-summary', {
         method: 'POST',
         body: JSON.stringify({
           blueprint,
@@ -7080,7 +7130,7 @@ export default function App() {
             className={semanticButtonClass('ghost', { compact: true })}
           >
             <GitBranch className="h-4 w-4" />
-            创建长篇世界
+            {tr('创建长篇世界', 'Create Series World')}
           </button>
         </div>
         </div>
@@ -7679,11 +7729,11 @@ export default function App() {
             </div>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <button type="button" onClick={dismissOnboardingGuide} className={semanticButtonClass('primary', { fullWidth: true })}>
-                去作品库看看
+                {tr('去作品库看看', 'Browse library')}
               </button>
               <button type="button" onClick={startQuickGenerationFromOnboarding} className={semanticButtonClass('secondary', { fullWidth: true })}>
                 <Wand2 className="h-4 w-4" />
-                快速生成故事
+                {tr('快速生成故事', 'Quick generate')}
               </button>
             </div>
           </motion.div>
@@ -7740,30 +7790,30 @@ export default function App() {
     return (
       <div className="mx-auto min-h-[100dvh] max-w-6xl px-5 pb-14 pt-[max(5rem,calc(env(safe-area-inset-top)+4rem))] sm:px-6 lg:px-8">
         <div className="mb-8 flex items-center justify-between gap-3">
-          <BackNavButton label="返回首页" onClick={() => goBack('STORY_SELECT')} />
+          <BackNavButton label={tr('返回首页', 'Back home')} onClick={() => goBack('STORY_SELECT')} />
           <button type="button" onClick={() => void loadSeriesWorlds()} className={semanticButtonClass('ghost', { compact: true })}>
             <RefreshCcw className="h-4 w-4" />
-            刷新长篇
+            {tr('刷新长篇', 'Refresh series')}
           </button>
         </div>
 
         <div className="mb-8 rounded-[2rem] border border-indigo-300/15 bg-indigo-500/10 p-6">
           <div className="inline-flex items-center gap-2 rounded-full border border-indigo-300/20 bg-indigo-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-indigo-200">
             <GitBranch className="h-3.5 w-3.5" />
-            长篇系统
+            {tr('长篇系统', 'Series System')}
           </div>
-          <h1 className="mt-4 text-3xl font-black text-white sm:text-4xl">创建长篇世界</h1>
+          <h1 className="mt-4 text-3xl font-black text-white sm:text-4xl">{tr('创建长篇世界', 'Create a Series World')}</h1>
           <p className="mt-3 max-w-3xl text-sm leading-relaxed text-zinc-400">
-            先搭建可编辑的世界观、时间线和长篇铁律，再绑定作品生成第一部或续作。第一版先验证作者侧闭环，不强制玩家继承。
+            {tr('先搭建可编辑的世界观、时间线和长篇铁律，再绑定作品生成第一部或续作。第一版先验证作者侧闭环，不强制玩家继承。', 'Build an editable world bible, timeline, and continuity rules first. Then bind stories to generate the first installment or a sequel. This first version focuses on the author workflow.')}
           </p>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[0.9fr_1.4fr]">
           <section className="space-y-4">
             <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/60 p-4">
-              <div className="mb-3 text-sm font-black text-white">我的长篇设定</div>
+              <div className="mb-3 text-sm font-black text-white">{tr('我的长篇设定', 'My Series Worlds')}</div>
               <div className="space-y-2">
-                {seriesWorlds.length === 0 && <div className="rounded-2xl bg-zinc-900/60 p-4 text-sm text-zinc-500">还没有长篇设定，可以从零生成或手动保存一个。</div>}
+                {seriesWorlds.length === 0 && <div className="rounded-2xl bg-zinc-900/60 p-4 text-sm text-zinc-500">{tr('还没有长篇设定，可以从零生成或手动保存一个。', 'No series world yet. Generate one from scratch or save a manual draft.')}</div>}
                 {seriesWorlds.map((series) => (
                   <button
                     key={series.id}
@@ -7779,20 +7829,20 @@ export default function App() {
                     className={`w-full rounded-2xl border p-4 text-left transition-all hover:-translate-y-0.5 active:scale-[0.98] ${selectedSeriesId === series.id ? 'border-indigo-400 bg-indigo-500/15' : 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-600'}`}
                   >
                     <div className="text-sm font-black text-white">{series.title}</div>
-                    <div className="mt-1 line-clamp-2 text-xs leading-relaxed text-zinc-500">{series.pitch || '尚未填写卖点'}</div>
+                    <div className="mt-1 line-clamp-2 text-xs leading-relaxed text-zinc-500">{series.pitch || tr('尚未填写卖点', 'No hook yet')}</div>
                   </button>
                 ))}
               </div>
             </div>
 
             <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/60 p-4">
-              <div className="mb-3 text-sm font-black text-white">从已有作品提取</div>
+              <div className="mb-3 text-sm font-black text-white">{tr('从已有作品提取', 'Extract from an existing story')}</div>
               <select
                 value={seriesSourceStoryId}
                 onChange={(event) => setSeriesSourceStoryId(event.target.value)}
                 className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm text-zinc-200 outline-none"
               >
-                <option value="">选择来源作品</option>
+                <option value="">{tr('选择来源作品', 'Choose source story')}</option>
                 {myStories.map((story: any) => (
                   <option key={story.id} value={story.id}>{getStoryTitle(story)}</option>
                 ))}
@@ -7800,11 +7850,11 @@ export default function App() {
               <div className="mt-3 grid gap-2">
                 <button type="button" onClick={() => void handleGenerateSeriesWorld('new')} disabled={seriesGenerating} className={semanticButtonClass('secondary', { compact: true, fullWidth: true })}>
                   {seriesGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                  从零生成世界观
+                  {tr('从零生成世界观', 'Generate world from scratch')}
                 </button>
                 <button type="button" onClick={() => void handleGenerateSeriesWorld('extract')} disabled={seriesGenerating || !seriesSourceStoryId} className={semanticButtonClass('ghost', { compact: true, fullWidth: true })}>
                   <BookOpen className="h-4 w-4" />
-                  从作品提取世界观
+                  {tr('从作品提取世界观', 'Extract world from story')}
                 </button>
               </div>
             </div>
@@ -7814,20 +7864,20 @@ export default function App() {
             <div className="rounded-[2rem] border border-zinc-800 bg-zinc-950/60 p-5">
               <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <div className="text-lg font-black text-white">长篇设定草稿</div>
-                  <div className="mt-1 text-xs text-zinc-500">所有内容都可以手动编辑，保存后才能用于绑定作品。</div>
+                  <div className="text-lg font-black text-white">{tr('长篇设定草稿', 'Series World Draft')}</div>
+                  <div className="mt-1 text-xs text-zinc-500">{tr('所有内容都可以手动编辑，保存后才能用于绑定作品。', 'Everything can be edited manually. Save it before binding stories.')}</div>
                 </div>
                 <button type="button" onClick={() => void handleSaveSeriesWorld()} disabled={seriesSaving} className={semanticButtonClass('primary', { compact: true })}>
                   {seriesSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                  保存长篇设定
+                  {tr('保存长篇设定', 'Save series world')}
                 </button>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
-                <input value={seriesForm.title || ''} onChange={(event) => setSeriesForm((prev) => ({ ...prev, title: event.target.value }))} placeholder="长篇标题" className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
-                <input value={seriesGenreText} onChange={(event) => setSeriesForm((prev) => ({ ...prev, genreTags: event.target.value.split(/[,，]/).map((tag) => tag.trim()).filter(Boolean) }))} placeholder="题材标签，以逗号分隔" className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
+                <input value={seriesForm.title || ''} onChange={(event) => setSeriesForm((prev) => ({ ...prev, title: event.target.value }))} placeholder={tr('长篇标题', 'Series title')} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
+                <input value={seriesGenreText} onChange={(event) => setSeriesForm((prev) => ({ ...prev, genreTags: event.target.value.split(/[,，]/).map((tag) => tag.trim()).filter(Boolean) }))} placeholder={tr('题材标签，以逗号分隔', 'Genre tags, comma-separated')} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
               </div>
-              <textarea value={seriesForm.pitch || ''} onChange={(event) => setSeriesForm((prev) => ({ ...prev, pitch: event.target.value }))} placeholder="一句话卖点" className="mt-3 min-h-24 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
-              <textarea value={seriesForm.timelineNotes || ''} onChange={(event) => setSeriesForm((prev) => ({ ...prev, timelineNotes: event.target.value }))} placeholder="时间线基准" className="mt-3 min-h-28 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
+              <textarea value={seriesForm.pitch || ''} onChange={(event) => setSeriesForm((prev) => ({ ...prev, pitch: event.target.value }))} placeholder={tr('一句话卖点', 'One-sentence hook')} className="mt-3 min-h-24 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
+              <textarea value={seriesForm.timelineNotes || ''} onChange={(event) => setSeriesForm((prev) => ({ ...prev, timelineNotes: event.target.value }))} placeholder={tr('时间线基准', 'Timeline baseline')} className="mt-3 min-h-28 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
               <div className="mt-3 grid gap-3 lg:grid-cols-3">
                 <textarea value={seriesWorldBibleText} onChange={(event) => setSeriesWorldBibleText(event.target.value)} className="min-h-56 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-xs text-zinc-200 outline-none focus:border-indigo-500" />
                 <textarea value={seriesIronLawsText} onChange={(event) => setSeriesIronLawsText(event.target.value)} className="min-h-56 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-xs text-zinc-200 outline-none focus:border-indigo-500" />
@@ -7838,30 +7888,30 @@ export default function App() {
             <div className="rounded-[2rem] border border-zinc-800 bg-zinc-950/60 p-5">
               <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <div className="text-lg font-black text-white">接续节点</div>
-                  <div className="mt-1 text-xs text-zinc-500">从前作结局和支线生成续作入口，之后可用于生成第二部。</div>
+                  <div className="text-lg font-black text-white">{tr('接续节点', 'Continuity Node')}</div>
+                  <div className="mt-1 text-xs text-zinc-500">{tr('从前作结局和支线生成续作入口，之后可用于生成第二部。', 'Create a sequel entry point from a previous ending and branches. It can later generate the next installment.')}</div>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button type="button" onClick={() => void handleGenerateContinuityNode()} disabled={seriesGenerating || !selectedSeriesWorld || !seriesSourceStoryId} className={semanticButtonClass('secondary', { compact: true })}>
                     {seriesGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <GitBranch className="h-4 w-4" />}
-                    生成接续节点
+                    {tr('生成接续节点', 'Generate continuity node')}
                   </button>
                   <button type="button" onClick={() => void handleSaveContinuityNode()} disabled={seriesSaving || !selectedSeriesWorld} className={semanticButtonClass('primary', { compact: true })}>
-                    保存节点
+                    {tr('保存节点', 'Save node')}
                   </button>
                 </div>
               </div>
               <div className="grid gap-3 sm:grid-cols-3">
-                <input value={continuityForm.title || ''} onChange={(event) => setContinuityForm((prev) => ({ ...prev, title: event.target.value }))} placeholder="接续节点名称" className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
+                <input value={continuityForm.title || ''} onChange={(event) => setContinuityForm((prev) => ({ ...prev, title: event.target.value }))} placeholder={tr('接续节点名称', 'Continuity node name')} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
                 <select value={continuityForm.endingDomain || 'middle'} onChange={(event) => setContinuityForm((prev) => ({ ...prev, endingDomain: event.target.value as any }))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none">
-                  <option value="middle">均衡域</option>
-                  <option value="left">左域</option>
-                  <option value="right">右域</option>
+                  <option value="middle">{tr('均衡域', 'Balanced domain')}</option>
+                  <option value="left">{tr('左域', 'Left domain')}</option>
+                  <option value="right">{tr('右域', 'Right domain')}</option>
                 </select>
-                <input value={continuityForm.endingId || 'default'} onChange={(event) => setContinuityForm((prev) => ({ ...prev, endingId: event.target.value }))} placeholder="结局 ID" className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
+                <input value={continuityForm.endingId || 'default'} onChange={(event) => setContinuityForm((prev) => ({ ...prev, endingId: event.target.value }))} placeholder={tr('结局 ID', 'Ending ID')} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
               </div>
-              <textarea value={continuityForm.bridgeSummary || ''} onChange={(event) => setContinuityForm((prev) => ({ ...prev, bridgeSummary: event.target.value }))} placeholder="接续摘要" className="mt-3 min-h-28 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
-              <textarea value={continuityForm.sequelSeedPrompt || ''} onChange={(event) => setContinuityForm((prev) => ({ ...prev, sequelSeedPrompt: event.target.value }))} placeholder="续作生成要求" className="mt-3 min-h-28 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
+              <textarea value={continuityForm.bridgeSummary || ''} onChange={(event) => setContinuityForm((prev) => ({ ...prev, bridgeSummary: event.target.value }))} placeholder={tr('接续摘要', 'Bridge summary')} className="mt-3 min-h-28 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
+              <textarea value={continuityForm.sequelSeedPrompt || ''} onChange={(event) => setContinuityForm((prev) => ({ ...prev, sequelSeedPrompt: event.target.value }))} placeholder={tr('续作生成要求', 'Sequel generation brief')} className="mt-3 min-h-28 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
               <div className="mt-3 grid gap-3 lg:grid-cols-2">
                 <textarea value={continuityLegacyText} onChange={(event) => setContinuityLegacyText(event.target.value)} className="min-h-44 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-xs text-zinc-200 outline-none focus:border-indigo-500" />
                 <textarea value={continuityRepairText} onChange={(event) => setContinuityRepairText(event.target.value)} className="min-h-44 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-xs text-zinc-200 outline-none focus:border-indigo-500" />
@@ -7876,15 +7926,15 @@ export default function App() {
             </div>
 
             <div className="rounded-[2rem] border border-zinc-800 bg-zinc-950/60 p-5">
-              <div className="mb-4 text-lg font-black text-white">生成作品</div>
+              <div className="mb-4 text-lg font-black text-white">{tr('生成作品', 'Generate Story')}</div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <button type="button" onClick={() => generateStoryFromSeries('main')} disabled={!selectedSeriesWorld} className={semanticButtonClass('primary', { fullWidth: true })}>
                   <Wand2 className="h-4 w-4" />
-                  基于该长篇生成第一部
+                  {tr('基于该长篇生成第一部', 'Generate first installment')}
                 </button>
                 <button type="button" onClick={() => generateStoryFromSeries('sequel')} disabled={!selectedSeriesWorld || !selectedContinuityNode} className={semanticButtonClass('secondary', { fullWidth: true })}>
                   <GitBranch className="h-4 w-4" />
-                  基于接续节点生成续作
+                  {tr('基于接续节点生成续作', 'Generate sequel from node')}
                 </button>
               </div>
             </div>
@@ -7897,17 +7947,17 @@ export default function App() {
   const renderThemeSelectionView = () => (
     <div className="mx-auto flex min-h-[100dvh] max-w-5xl flex-col justify-center px-6 pb-20 pt-[max(7rem,calc(env(safe-area-inset-top)+6rem))] text-center lg:px-8">
       <div className="mb-8 flex items-center justify-between">
-        <BackNavButton label="返回上一页" onClick={() => goBack('STORY_SELECT')} />
+        <BackNavButton label={tr('返回上一页', 'Back')} onClick={() => goBack('STORY_SELECT')} />
         <div className="h-10 w-10" />
       </div>
       <div className="mx-auto max-w-2xl space-y-4">
         <div className="inline-flex items-center gap-2 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-4 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-indigo-300">
           <Wand2 className="h-4 w-4" />
-          命运引擎
+          {tr('命运引擎', 'Fate Engine')}
         </div>
-        <h1 className="text-4xl font-black text-white sm:text-5xl">快速生成故事</h1>
+        <h1 className="text-4xl font-black text-white sm:text-5xl">{tr('快速生成故事', 'Quick Story Generation')}</h1>
         <p className="text-sm leading-relaxed text-zinc-500 sm:text-base">
-          选择 1 到 4 个主题，或直接输入故事大纲。系统会先生成完整蓝图，再预先写好前 3 章供玩家开始干涉。
+          {tr('选择 1 到 4 个主题，或直接输入故事大纲。系统会先生成完整蓝图，再预先写好前 3 章供玩家开始干涉。', 'Choose 1 to 4 tags or enter an outline. The system creates a full blueprint, then writes the first 3 chapters so play can begin quickly.')}
         </p>
       </div>
 
@@ -8104,14 +8154,14 @@ export default function App() {
             className="group rounded-[1.5rem] border border-zinc-800 bg-zinc-900/40 p-4 text-left transition-all hover:-translate-y-1 hover:border-indigo-400/50 hover:bg-indigo-500/10 active:scale-[0.98]"
           >
             <div className="flex items-center justify-between gap-3">
-              <span className="text-base font-black text-zinc-100 group-hover:text-white">{template.label}</span>
+              <span className="text-base font-black text-zinc-100 group-hover:text-white">{isEnglish ? QUICK_STORY_TEMPLATE_EN[template.id]?.label || template.label : template.label}</span>
               <span className="rounded-full border border-indigo-400/20 bg-indigo-500/10 px-2 py-1 text-[10px] font-black text-indigo-200">
-                {template.badge}
+                {isEnglish ? QUICK_STORY_TEMPLATE_EN[template.id]?.badge || template.badge : template.badge}
               </span>
             </div>
-            <p className="mt-3 text-xs leading-relaxed text-zinc-500 group-hover:text-zinc-300">{template.hint}</p>
+            <p className="mt-3 text-xs leading-relaxed text-zinc-500 group-hover:text-zinc-300">{isEnglish ? QUICK_STORY_TEMPLATE_EN[template.id]?.hint || template.hint : template.hint}</p>
             <div className="mt-4 flex flex-wrap gap-1.5">
-              {template.tags.map((tag) => (
+              {(isEnglish ? QUICK_STORY_TEMPLATE_EN[template.id]?.tags || template.tags : template.tags).map((tag) => (
                 <span key={tag} className="rounded-full bg-zinc-950 px-2 py-1 text-[10px] font-bold text-zinc-400">
                   {tag}
                 </span>
@@ -8122,7 +8172,7 @@ export default function App() {
       </div>
 
       <div className="mx-auto mt-6 w-full max-w-2xl px-4 text-left">
-        <label className="mb-3 block text-sm font-bold text-zinc-300">主题与标签（以中文逗号分隔）</label>
+        <label className="mb-3 block text-sm font-bold text-zinc-300">{tr('主题与标签（以逗号分隔）', 'Themes and tags, comma-separated')}</label>
         <input
           value={themeInputText}
           onChange={(event) => {
@@ -8130,7 +8180,7 @@ export default function App() {
              setThemeInputText(val);
              setSelectedThemes(val.split(/[,，]/).map(s => s.trim()).filter(Boolean));
           }}
-          placeholder="在此手动输入标签或点击下方快速添加"
+          placeholder={tr('在此手动输入标签或点击下方快速添加', 'Enter tags here or tap quick tags below')}
           className="w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-sm text-zinc-200 outline-none transition-colors focus:border-indigo-500"
         />
         <div className="mt-4 flex flex-wrap gap-2">
@@ -8140,34 +8190,35 @@ export default function App() {
               type="button"
               onClick={() => {
                  const current = themeInputText.trim();
+                 const displayTag = isEnglish ? THEME_LABEL_EN[tag] || tag : tag;
                  let newText = current;
-                 if (!current) newText = tag;
-                 else if (!current.includes(tag)) newText = current + (current.endsWith('，') || current.endsWith(',') ? '' : '，') + tag;
+                 if (!current) newText = displayTag;
+                 else if (!current.includes(displayTag)) newText = current + (current.endsWith('，') || current.endsWith(',') ? '' : (isEnglish ? ', ' : '，')) + displayTag;
                  setThemeInputText(newText);
                  setSelectedThemes(newText.split(/[,，]/).map(s => s.trim()).filter(Boolean));
               }}
               className="rounded-lg bg-zinc-800/50 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-white"
             >
-              + {tag}
+              + {isEnglish ? THEME_LABEL_EN[tag] || tag : tag}
             </button>
           ))}
         </div>
       </div>
 
       <div className="mx-auto mt-10 w-full max-w-2xl rounded-[2rem] border border-zinc-800 bg-zinc-900/30 p-6 text-left">
-        <label className="mb-3 block text-sm font-bold text-zinc-300">专属故事大纲</label>
+        <label className="mb-3 block text-sm font-bold text-zinc-300">{tr('专属故事大纲', 'Custom story outline')}</label>
         <textarea
           value={customOutline}
           onChange={(event) => setCustomOutline(event.target.value)}
-          placeholder="例如：一位在现代都市经营神秘书店的青年，某夜遇见来自未来的顾客，自此被卷入一场会改写现实的命运试炼。"
+          placeholder={tr('例如：一位在现代都市经营神秘书店的青年，某夜遇见来自未来的顾客，自此被卷入一场会改写现实的命运试炼。', 'Example: A young bookseller in a modern city meets a customer from the future and is drawn into a fate trial that can rewrite reality.')}
           className="min-h-[140px] w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-sm text-zinc-200 outline-none transition-colors focus:border-indigo-500"
         />
         <div className="mt-6 space-y-3">
           <div className="space-y-3 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
             <div className="flex items-center justify-between gap-3">
-              <span className="text-sm font-bold text-zinc-400">叙事人称</span>
+              <span className="text-sm font-bold text-zinc-400">{tr('叙事人称', 'Narrative voice')}</span>
               <span className="text-xs font-black text-indigo-300">
-                {NARRATIVE_PERSON_OPTIONS.find((option) => option.value === narrativePerson)?.label}
+                {quickText(NARRATIVE_PERSON_OPTIONS.find((option) => option.value === narrativePerson)?.label)}
               </span>
             </div>
             <div className="grid gap-2 sm:grid-cols-3">
@@ -8182,8 +8233,8 @@ export default function App() {
                       : 'border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
                   }`}
                 >
-                  <div className="text-sm font-black">{option.label}</div>
-                  <div className="mt-1 text-[11px] leading-relaxed opacity-70">{option.hint}</div>
+                  <div className="text-sm font-black">{quickText(option.label)}</div>
+                  <div className="mt-1 text-[11px] leading-relaxed opacity-70">{quickText(option.hint)}</div>
                 </button>
               ))}
             </div>
@@ -8192,22 +8243,22 @@ export default function App() {
         <div className="mt-6 space-y-3">
           <div className="space-y-3 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
             <div className="flex items-center justify-between gap-3">
-              <span className="text-sm font-bold text-zinc-400">结局结构</span>
+              <span className="text-sm font-bold text-zinc-400">{tr('结局结构', 'Ending structure')}</span>
               <span className="text-xs font-black text-indigo-300">
-                {quickEndingMode === 'single' ? '单一结局' : '多线结局'}
+                {quickEndingMode === 'single' ? tr('单一结局', 'Single ending') : tr('多线结局', 'Multi-ending')}
               </span>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
               {([
                 {
                   value: 'single',
-                  label: '单一结局',
-                  hint: '所有干涉最终收束到同一个终局，重点在过程变化与圆回主线。',
+                  label: tr('单一结局', 'Single ending'),
+                  hint: tr('所有干涉最终收束到同一个终局，重点在过程变化与圆回主线。', 'All interference ultimately returns to one ending; the focus is how the path changes.'),
                 },
                 {
                   value: 'dual',
-                  label: '多线结局',
-                  hint: '使用默认、左向、右向三类收束，并为每类保留扩展更多具体结局的空间。',
+                  label: tr('多线结局', 'Multi-ending'),
+                  hint: tr('使用默认、左向、右向三类收束，并为每类保留扩展更多具体结局的空间。', 'Uses balanced, left, and right domains while leaving room for more concrete endings later.'),
                 },
               ] as const).map((option) => (
                 <button
@@ -8228,8 +8279,8 @@ export default function App() {
             {quickEndingMode === 'dual' && (
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 {([
-                  { key: 'leftBaseWeight', label: '左向结局域' },
-                  { key: 'rightBaseWeight', label: '右向结局域' },
+                  { key: 'leftBaseWeight', label: tr('左向结局域', 'Left ending domain') },
+                  { key: 'rightBaseWeight', label: tr('右向结局域', 'Right ending domain') },
                 ] as const).map((option) => {
                   const value = normalizeEndingBiasPercent(quickEndingBias[option.key]);
                   return (

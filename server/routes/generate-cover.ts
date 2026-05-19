@@ -1,9 +1,9 @@
 import { GoogleGenAI } from '@google/genai';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './_auth.js';
-import { getGeminiApiKey } from './_gemini.js';
-import { getRequestLogContext, logGenerationError, logGenerationInfo } from './_log.js';
-import { buildCoverImagePrompt } from '../Prompt/coverImage.js';
+import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from '../_auth.js';
+import { getGeminiApiKey } from '../_gemini.js';
+import { getRequestLogContext, logGenerationError, logGenerationInfo } from '../_log.js';
+import { buildCoverImagePrompt } from '../../Prompt/coverImage.js';
 
 export const maxDuration = 60;
 

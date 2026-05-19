@@ -6,10 +6,65 @@ export function buildSeriesWorldPrompt(args: {
   lengthHint?: string;
   authorSeed?: string;
   sourceStory?: any;
+  language?: 'zh-CN' | 'en-US';
 }) {
+  const isEnglish = args.language === 'en-US';
   const source = args.sourceStory
-    ? `\n已有作品资料：\n标题：${args.sourceStory?.meta?.title || args.sourceStory?.title || '未命名作品'}\n主轴：${args.sourceStory?.meta?.main_axis || args.sourceStory?.main_axis || ''}\n章节摘要：${(args.sourceStory?.chapters || []).map((chapter: any) => `第${chapter.chapter_num}章：${chapter.summary || chapter.title || ''}`).join('\n')}\n结局：${(args.sourceStory?.endings || []).map((ending: any) => `${ending.id || 'ending'}：${ending.title || ''} ${ending.text || ''}`).join('\n')}`
+    ? isEnglish
+      ? `\nExisting story material:\nTitle: ${args.sourceStory?.meta?.title || args.sourceStory?.title || 'Untitled story'}\nMain axis: ${args.sourceStory?.meta?.main_axis || args.sourceStory?.main_axis || ''}\nChapter summaries: ${(args.sourceStory?.chapters || []).map((chapter: any) => `Chapter ${chapter.chapter_num}: ${chapter.summary || chapter.title || ''}`).join('\n')}\nEndings: ${(args.sourceStory?.endings || []).map((ending: any) => `${ending.id || 'ending'}: ${ending.title || ''} ${ending.text || ''}`).join('\n')}`
+      : `\n已有作品资料：\n标题：${args.sourceStory?.meta?.title || args.sourceStory?.title || '未命名作品'}\n主轴：${args.sourceStory?.meta?.main_axis || args.sourceStory?.main_axis || ''}\n章节摘要：${(args.sourceStory?.chapters || []).map((chapter: any) => `第${chapter.chapter_num}章：${chapter.summary || chapter.title || ''}`).join('\n')}\n结局：${(args.sourceStory?.endings || []).map((ending: any) => `${ending.id || 'ending'}：${ending.title || ''} ${ending.text || ''}`).join('\n')}`
     : '';
+
+  if (isEnglish) {
+    return `You are a series-bible editor for interactive long-form fiction. Generate an editable "series world" draft for an author.
+
+Generation mode: ${args.mode === 'extract' ? 'extract a world bible from an existing story' : 'create a new world bible from scratch'}.
+Genre tags: ${Array.isArray(args.genreTags) && args.genreTags.length ? args.genreTags.join(', ') : 'unspecified'}.
+Tone: ${args.tone || 'unspecified'}.
+Core conflict: ${args.coreConflict || 'unspecified'}.
+Series length tendency: ${args.lengthHint || '2-3 installments'}.
+Author notes: ${args.authorSeed || 'none'}.
+${source}
+
+Return strict JSON only, with this shape:
+{
+  "title": "series world title",
+  "pitch": "one-sentence hook",
+  "genreTags": ["tag"],
+  "worldBible": {
+    "worldview": "worldview summary",
+    "coreRules": ["how this world works"],
+    "majorFactions": ["major factions"],
+    "keyPlaces": ["key locations"],
+    "recurringCharacterSeeds": ["reusable character archetypes"],
+    "styleGuide": "prose style and narrative tone"
+  },
+  "timelineNotes": "timeline baseline",
+  "ironLaws": [
+    {
+      "title": "iron law title",
+      "scope": "where it applies, such as before Part 2 or before a key event",
+      "strength": "absolute / may appear broken / may be temporarily broken but must be repaired",
+      "rule": "the rule",
+      "reason": "why this rule protects continuity"
+    }
+  ],
+  "futureDirections": [
+    {
+      "part": "Part 1 / Part 2 / side story",
+      "direction": "promising direction",
+      "avoid": "what should not be broken at this stage"
+    }
+  ]
+}
+
+Requirements:
+1. Write for authors, not developers.
+2. Keep iron laws to 3-6 items; do not over-constrain creation.
+3. Preserve room for player interference, while preventing Part 1 from destroying sequel continuity.
+4. All string values must be natural English.
+5. Return JSON only.`;
+  }
 
   return `你是互动长篇小说的系列设定编辑。请生成一个可供作者继续编辑的「长篇设定」草稿。
 
@@ -66,13 +121,63 @@ export function buildContinuityNodePrompt(args: {
   endingDomain?: string;
   endingId?: string;
   requiredBranchIds?: string[];
+  language?: 'zh-CN' | 'en-US';
 }) {
+  const isEnglish = args.language === 'en-US';
   const story = args.sourceStory || {};
   const meta = story.meta || story;
   const branchById = new Map((story.branches || []).map((branch: any) => [String(branch.id), branch]));
   const requiredBranches = (args.requiredBranchIds || [])
     .map((id) => branchById.get(String(id)))
     .filter(Boolean);
+
+  if (isEnglish) {
+    return `You are a sequel-continuity editor for interactive long-form fiction. Based on the series world and previous story, generate an editable "ending exit / continuity node" draft.
+
+Series world:
+Title: ${args.seriesWorld?.title || 'Untitled series'}
+Pitch: ${args.seriesWorld?.pitch || ''}
+World bible: ${JSON.stringify(args.seriesWorld?.worldBible || {}, null, 2)}
+Iron laws: ${JSON.stringify(args.seriesWorld?.ironLaws || [], null, 2)}
+
+Previous story:
+Title: ${meta.title || 'Untitled story'}
+Main axis: ${meta.main_axis || ''}
+Ending domain: ${args.endingDomain || 'middle'}
+Ending id: ${args.endingId || 'default'}
+Chapter summaries: ${(story.chapters || []).map((chapter: any) => `Chapter ${chapter.chapter_num}: ${chapter.summary || chapter.title || ''}`).join('\n')}
+Selected branches: ${requiredBranches.map((branch: any) => `${branch.id} | ${branch.name} | ${branch.desc || branch.description || ''}`).join('\n') || 'none'}
+
+Return strict JSON:
+{
+  "title": "continuity node title",
+  "endingDomain": "left/middle/right",
+  "endingId": "default/left/right or a concrete ending id",
+  "requiredBranchIds": ["required branch id"],
+  "optionalBranchIds": ["recommended branch id"],
+  "bridgeSummary": "how the previous story naturally leads into the sequel",
+  "legacyState": {
+    "worldState": "inherited world state",
+    "characterStates": ["character state"],
+    "openThreads": ["unresolved thread"]
+  },
+  "repairRules": [
+    {
+      "conflict": "possible conflict",
+      "repair": "how the inheritance chapter should smooth it over",
+      "tone": "wording that preserves the player's result"
+    }
+  ],
+  "sequelSeedPrompt": "opening creative brief for generating the sequel"
+}
+
+Requirements:
+1. Do not negate the player's previous result; translate it into a usable sequel opening.
+2. Obey the series iron laws.
+3. Keep repairRules to 2-5 items.
+4. All string values must be natural English.
+5. Return JSON only.`;
+  }
 
   return `你是互动长篇小说的续作接续编辑。请根据长篇设定和前作资料，生成一个「结局出口 / 接续节点」草稿。
 

@@ -1,10 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import webPush from 'web-push';
-import { getBearerToken, sendInternalError, sendMethodNotAllowed, verifyFirebaseToken } from './_auth.js';
-import { getRequestLogContext, logGenerationError, logGenerationInfo } from './_log.js';
-import { supabaseInsert, supabaseRequest, supabaseRpc, supabaseUpsert } from './_supabase.js';
-import { isStoryStoreAction } from './storyStoreContract.js';
-import { normalizeEndingBiasDisplay as normalizeEndingBias } from './_endingMechanics.js';
+import { getBearerToken, sendInternalError, sendMethodNotAllowed, verifyFirebaseToken } from '../server/_auth.js';
+import { getRequestLogContext, logGenerationError, logGenerationInfo } from '../server/_log.js';
+import { supabaseInsert, supabaseRequest, supabaseRpc, supabaseUpsert } from '../server/_supabase.js';
+import { isStoryStoreAction } from '../server/storyStoreContract.js';
+import { normalizeEndingBiasDisplay as normalizeEndingBias } from '../server/_endingMechanics.js';
 
 const nowIso = () => new Date().toISOString();
 const ADMIN_USER_IDS = new Set(['LWgIE31RtCTZBiMNF7S9viNE7Aw2']);

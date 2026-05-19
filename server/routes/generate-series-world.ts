@@ -1,9 +1,10 @@
 import { Type } from '@google/genai';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './_auth.js';
-import { generateGeminiJsonWithFallback, parseGeminiJson } from './_gemini.js';
-import { getRequestLogContext, logGenerationError, logGenerationInfo } from './_log.js';
-import { buildSeriesWorldPrompt } from '../Prompt/seriesWorld.js';
+import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from '../_auth.js';
+import { generateGeminiJsonWithFallback, parseGeminiJson } from '../_gemini.js';
+import { getRequestLogContext, logGenerationError, logGenerationInfo } from '../_log.js';
+import { buildSeriesWorldPrompt } from '../../Prompt/seriesWorld.js';
+import { normalizeGenerationLanguage } from '../_language.js';
 
 const seriesWorldSchema = {
   type: Type.OBJECT,
@@ -39,6 +40,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const user = await requireFirebaseAuth(req, res);
     if (!user) return;
+    const language = normalizeGenerationLanguage(req.body?.language);
     const prompt = buildSeriesWorldPrompt({
       mode: req.body?.mode === 'extract' ? 'extract' : 'new',
       genreTags: Array.isArray(req.body?.genreTags) ? req.body.genreTags : [],
@@ -47,12 +49,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       lengthHint: req.body?.lengthHint,
       authorSeed: req.body?.authorSeed,
       sourceStory: req.body?.sourceStory,
+      language,
     });
     logGenerationInfo(logContext, 'request', {
       uid: user.uid,
       mode: req.body?.mode === 'extract' ? 'extract' : 'new',
       genreTagCount: Array.isArray(req.body?.genreTags) ? req.body.genreTags.length : 0,
       hasSourceStory: Boolean(req.body?.sourceStory),
+      language,
     });
     const { data, model, keyIndex } = await generateGeminiJsonWithFallback({
       contents: prompt,

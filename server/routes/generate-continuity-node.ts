@@ -1,9 +1,10 @@
 import { Type } from '@google/genai';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from './_auth.js';
-import { generateGeminiJsonWithFallback, parseGeminiJson } from './_gemini.js';
-import { getRequestLogContext, logGenerationError, logGenerationInfo } from './_log.js';
-import { buildContinuityNodePrompt } from '../Prompt/seriesWorld.js';
+import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from '../_auth.js';
+import { generateGeminiJsonWithFallback, parseGeminiJson } from '../_gemini.js';
+import { getRequestLogContext, logGenerationError, logGenerationInfo } from '../_log.js';
+import { buildContinuityNodePrompt } from '../../Prompt/seriesWorld.js';
+import { normalizeGenerationLanguage } from '../_language.js';
 
 const continuityNodeSchema = {
   type: Type.OBJECT,
@@ -44,6 +45,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const user = await requireFirebaseAuth(req, res);
     if (!user) return;
+    const language = normalizeGenerationLanguage(req.body?.language);
     const fallback = {
       endingDomain: req.body?.endingDomain || 'middle',
       endingId: req.body?.endingId || 'default',
@@ -54,6 +56,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       endingDomain: fallback.endingDomain,
       endingId: fallback.endingId,
       requiredBranchIds: Array.isArray(req.body?.requiredBranchIds) ? req.body.requiredBranchIds : [],
+      language,
     });
     logGenerationInfo(logContext, 'request', {
       uid: user.uid,
@@ -61,6 +64,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       sourceStoryId: req.body?.sourceStory?.storyId || null,
       endingDomain: fallback.endingDomain,
       endingId: fallback.endingId,
+      language,
     });
     const { data, model, keyIndex } = await generateGeminiJsonWithFallback({
       contents: prompt,
