@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp, Download, Sun, Moon, Search, GitBranch, Bell, BarChart3 } from 'lucide-react';
 import { auth, db, firebaseInitError } from './firebase';
-import { createEmptyStory, createSharedStoryRecord, createStorySnapshot, adaptBlueprintToStory, createStoryBranch, deleteAllNotifications, deleteNotification, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, favoriteStory, unfavoriteStory, followAuthor, getAppSettings, getAuthorFollowState, getPushConfig, getSharedStoryRecord, getStoryCartridge, getStoryMeta, getUserProgress, incrementShareMetric, incrementStoryMetric, likeStory, unlikeStory, listAuthorStories, listContinuityNodes, listFollowedAuthors, listMySeriesWorlds, listMySharedStories, listMyStories, listNotifications, listPublicStories, markNotificationsRead, refundCoverGenerationUsage, reportStory, reserveCoverGenerationUsage, saveAppSettings, saveContinuityNode, savePushSubscription, saveSeriesWorld, saveStoryMainlineBundle, saveStoryMeta, saveUserProgress, unfollowAuthor, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch, type ContinuityNodeRecord, type SeriesWorldRecord } from './storyStore';
+import { createEmptyStory, createSharedStoryRecord, createStorySnapshot, adaptBlueprintToStory, createStoryBranch, deleteAllNotifications, deleteNotification, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, deleteSeriesWorld, favoriteStory, unfavoriteStory, followAuthor, getAppSettings, getAuthorFollowState, getPushConfig, getSharedStoryRecord, getStoryCartridge, getStoryMeta, getUserProgress, incrementShareMetric, incrementStoryMetric, likeStory, unlikeStory, listAuthorStories, listContinuityNodes, listFollowedAuthors, listMySeriesWorlds, listMySharedStories, listMyStories, listNotifications, listPublicStories, markNotificationsRead, refundCoverGenerationUsage, reportStory, reserveCoverGenerationUsage, saveAppSettings, saveContinuityNode, savePushSubscription, saveSeriesWorld, saveStoryMainlineBundle, saveStoryMeta, saveUserProgress, unfollowAuthor, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch, type ContinuityNodeRecord, type SeriesWorldRecord } from './storyStore';
 import { branchEffectiveWeight, isBranchUnlockedByHistory, normalizeEndingBias } from './storyCartridge';
 import { deleteLocalCache, getLocalCache, setLocalCache } from './localCache';
 import { useAppNavigation } from './navigation/useAppNavigation';
@@ -1551,7 +1551,6 @@ export default function App() {
     sourceStoryId: '',
     continuityNodeId: '',
   });
-  const [seriesWorldStep, setSeriesWorldStep] = useState<'world' | 'continuity' | 'generate'>('world');
   const [seriesGenerating, setSeriesGenerating] = useState(false);
   const [seriesSaving, setSeriesSaving] = useState(false);
   const [seriesForm, setSeriesForm] = useState<Partial<SeriesWorldRecord>>({
@@ -4719,7 +4718,6 @@ export default function App() {
   };
 
   const openSeriesWorldView = async () => {
-    setSeriesWorldStep('world');
     navigateTo('SERIES_WORLD');
     await refreshStories({ force: true });
     await loadSeriesWorlds();
@@ -4783,6 +4781,52 @@ export default function App() {
     } finally {
       setSeriesSaving(false);
     }
+  };
+
+  const resetSeriesWorldDraft = () => {
+    setSelectedSeriesId('');
+    setSeriesForm({
+      title: '',
+      pitch: '',
+      genreTags: [],
+      worldBible: {},
+      timelineNotes: '',
+      ironLaws: [],
+      futureDirections: [],
+      visibility: 'private',
+    });
+    setSeriesWorldBibleText('{}');
+    setSeriesIronLawsText('[]');
+    setSeriesFutureDirectionsText('[]');
+    setSelectedContinuityNodeId('');
+    setContinuityNodes([]);
+  };
+
+  const handleDeleteSeriesWorld = (seriesId = selectedSeriesId) => {
+    if (!db || !seriesId) return;
+    const target = seriesWorlds.find((series) => series.id === seriesId) || selectedSeriesWorld || seriesForm;
+    setConfirmationModal({
+      isOpen: true,
+      title: tr('删除世界观设定', 'Delete world setting'),
+      message: tr(
+        `确认删除「${target?.title || '未命名世界观设定'}」吗？已套用到作品的旧记录不会自动删除，但这个世界观仓库和它的继承节点将无法继续被选择。`,
+        `Delete "${target?.title || 'Untitled world setting'}"? Existing works that already applied it will remain, but this setting archive and its continuity nodes will no longer be selectable.`
+      ),
+      onConfirm: async () => {
+        setSeriesSaving(true);
+        try {
+          await deleteSeriesWorld(db as any, seriesId);
+          await loadSeriesWorlds();
+          resetSeriesWorldDraft();
+          showError(tr('世界观设定已删除。', 'World setting deleted.'));
+        } catch (error) {
+          console.error(error);
+          showError(tr('删除世界观设定失败。', 'Failed to delete world setting.'));
+        } finally {
+          setSeriesSaving(false);
+        }
+      },
+    });
   };
 
   const handleGenerateContinuityNode = async () => {
@@ -7959,6 +8003,7 @@ export default function App() {
 
   const renderSeriesWorldView = () => {
     const seriesGenreText = (seriesForm.genreTags || []).join('，');
+    const seriesWorldStep = 'world' as 'world' | 'continuity' | 'generate';
     return (
       <div className="mx-auto min-h-[100dvh] max-w-6xl px-5 pb-14 pt-[max(5rem,calc(env(safe-area-inset-top)+4rem))] sm:px-6 lg:px-8">
         <div className="mb-8 flex items-center justify-between gap-3">
@@ -7980,21 +8025,19 @@ export default function App() {
           </p>
         </div>
 
-        <div className="mb-6 grid gap-2 rounded-[1.5rem] border border-zinc-800 bg-zinc-950/70 p-1 text-xs font-black sm:grid-cols-3">
-          {([
-            { id: 'world' as const, label: tr('1 世界观设定', '1 World setting') },
-            { id: 'generate' as const, label: tr('2 生成第一部', '2 First story') },
-            { id: 'continuity' as const, label: tr('3 接续续作', '3 Sequel node') },
-          ]).map((step) => (
-            <button
-              key={step.id}
-              type="button"
-              onClick={() => setSeriesWorldStep(step.id)}
-              className={`rounded-[1.15rem] px-4 py-3 transition-colors ${seriesWorldStep === step.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-950/30' : 'text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200'}`}
-            >
-              {step.label}
+        <div className="mb-6 rounded-[1.5rem] border border-zinc-800 bg-zinc-950/70 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-sm font-black text-white">{tr('世界观设定仓库', 'World setting archive')}</div>
+              <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+                {tr('这里只维护可复用设定。要生成第一部或续作，请到高级创作设置里套用世界观设定；续作会在选择前作后再显示继承节点。', 'This page only maintains reusable setting material. To generate a first story or sequel, use Advanced creation and apply a world setting; sequel continuity appears after choosing a previous story.')}
+              </p>
+            </div>
+            <button type="button" onClick={resetSeriesWorldDraft} className={semanticButtonClass('secondary', { compact: true })}>
+              <Sparkles className="h-4 w-4" />
+              {tr('新建空白设定', 'New blank setting')}
             </button>
-          ))}
+          </div>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[0.9fr_1.4fr]">
@@ -8061,10 +8104,18 @@ export default function App() {
                   <div className="text-lg font-black text-white">{tr('世界观设定草稿', 'World Setting Draft')}</div>
                   <div className="mt-1 text-xs text-zinc-500">{tr('所有内容都可以手动编辑，保存后才能用于绑定作品。', 'Everything can be edited manually. Save it before binding stories.')}</div>
                 </div>
-                <button type="button" onClick={() => void handleSaveSeriesWorld()} disabled={seriesSaving} className={semanticButtonClass('primary', { compact: true })}>
-                  {seriesSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                  {tr('保存世界观设定', 'Save world setting')}
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  {selectedSeriesId && (
+                    <button type="button" onClick={() => handleDeleteSeriesWorld()} disabled={seriesSaving} className={semanticButtonClass('danger', { compact: true })}>
+                      <Trash2 className="h-4 w-4" />
+                      {tr('删除世界观', 'Delete setting')}
+                    </button>
+                  )}
+                  <button type="button" onClick={() => void handleSaveSeriesWorld()} disabled={seriesSaving} className={semanticButtonClass('primary', { compact: true })}>
+                    {seriesSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                    {tr('保存世界观设定', 'Save world setting')}
+                  </button>
+                </div>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <input value={seriesForm.title || ''} onChange={(event) => setSeriesForm((prev) => ({ ...prev, title: event.target.value }))} placeholder={tr('世界观设定名称', 'World setting title')} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />

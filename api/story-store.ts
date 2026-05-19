@@ -785,6 +785,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (action === 'deleteSeriesWorld') {
       const seriesId = String(body.seriesId || '');
       if (!seriesId) return res.status(400).json({ error: 'Missing seriesId' });
+      await supabaseRequest('continuity_nodes', {
+        method: 'DELETE',
+        query: { series_id: `eq.${seriesId}`, created_by: `eq.${authUser.uid}` },
+      }).catch((error) => {
+        if (!/continuity_nodes/i.test(String(error?.message || error))) throw error;
+      });
       await supabaseRequest('series_worlds', {
         method: 'DELETE',
         query: { id: `eq.${seriesId}`, author_id: `eq.${authUser.uid}` },
