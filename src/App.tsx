@@ -1447,8 +1447,10 @@ export default function App() {
   const [seriesWorlds, setSeriesWorlds] = useState<SeriesWorldRecord[]>([]);
   const [continuityNodes, setContinuityNodes] = useState<ContinuityNodeRecord[]>([]);
   const [selectedSeriesId, setSelectedSeriesId] = useState('');
+  const [quickSeriesBindingId, setQuickSeriesBindingId] = useState('');
   const [selectedContinuityNodeId, setSelectedContinuityNodeId] = useState('');
   const [seriesSourceStoryId, setSeriesSourceStoryId] = useState('');
+  const [seriesWorldStep, setSeriesWorldStep] = useState<'world' | 'continuity' | 'generate'>('world');
   const [seriesGenerating, setSeriesGenerating] = useState(false);
   const [seriesSaving, setSeriesSaving] = useState(false);
   const [seriesForm, setSeriesForm] = useState<Partial<SeriesWorldRecord>>({
@@ -2749,6 +2751,7 @@ export default function App() {
           narrativePerson,
           endingMode: quickEndingMode,
           endingBias: quickEndingBias,
+          seriesContext: seriesWorlds.find((series) => series.id === quickSeriesBindingId) || null,
         }
   );
   const getIncompleteQuickQuizStep = () => QUICK_QUIZ_STEPS.find((step) => asSafeArray(quickQuizAnswers[step.id]).length < 1);
@@ -2772,6 +2775,7 @@ export default function App() {
     selectedThemes: override?.input?.selectedThemes || selectedThemes,
     customOutline: (override?.input?.customOutline || customOutline).trim(),
     targetWordCount: override?.input?.targetWordCount || targetWordCount,
+    quickSeriesBindingId: override?.input?.seriesContext?.id || quickSeriesBindingId,
     narrativePerson: override?.input?.narrativePerson || narrativePerson,
     quickEndingMode: override?.input?.endingMode || quickEndingMode,
     quickEndingBias: override?.input?.endingBias || quickEndingBias,
@@ -3142,6 +3146,11 @@ export default function App() {
     }, 60000);
     return () => window.clearInterval(timer);
   }, [gameState, authoringCartridge, user?.uid, db, storyLibrarySort]);
+
+  useEffect(() => {
+    if (gameState !== 'THEME_SELECTION' || !user || !db) return;
+    void loadSeriesWorlds();
+  }, [gameState, user?.uid, db]);
 
   useEffect(() => {
     if (gameState !== 'SERIES_WORLD' || !selectedSeriesId) return;
@@ -4571,6 +4580,7 @@ export default function App() {
   };
 
   const openSeriesWorldView = async () => {
+    setSeriesWorldStep('world');
     navigateTo('SERIES_WORLD');
     await refreshStories({ force: true });
     await loadSeriesWorlds();
@@ -7810,8 +7820,27 @@ export default function App() {
           </p>
         </div>
 
+        <div className="mb-6 grid gap-2 rounded-[1.5rem] border border-zinc-800 bg-zinc-950/70 p-1 text-xs font-black sm:grid-cols-3">
+          {([
+            { id: 'world' as const, label: tr('1 世界观设定', '1 World bible') },
+            { id: 'generate' as const, label: tr('2 生成第一部', '2 First story') },
+            { id: 'continuity' as const, label: tr('3 接续续作', '3 Sequel node') },
+          ]).map((step) => (
+            <button
+              key={step.id}
+              type="button"
+              onClick={() => setSeriesWorldStep(step.id)}
+              className={`rounded-[1.15rem] px-4 py-3 transition-colors ${seriesWorldStep === step.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-950/30' : 'text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200'}`}
+            >
+              {step.label}
+            </button>
+          ))}
+        </div>
+
         <div className="grid gap-6 lg:grid-cols-[0.9fr_1.4fr]">
           <section className="space-y-4">
+            {seriesWorldStep === 'world' && (
+            <>
             <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/60 p-4">
               <div className="mb-3 text-sm font-black text-white">{tr('我的长篇设定', 'My Series Worlds')}</div>
               <div className="space-y-2">
@@ -7860,9 +7889,12 @@ export default function App() {
                 </button>
               </div>
             </div>
+            </>
+            )}
           </section>
 
           <section className="space-y-6">
+            {seriesWorldStep === 'world' && (
             <div className="rounded-[2rem] border border-zinc-800 bg-zinc-950/60 p-5">
               <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -7881,12 +7913,23 @@ export default function App() {
               <textarea value={seriesForm.pitch || ''} onChange={(event) => setSeriesForm((prev) => ({ ...prev, pitch: event.target.value }))} placeholder={tr('一句话卖点', 'One-sentence hook')} className="mt-3 min-h-24 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
               <textarea value={seriesForm.timelineNotes || ''} onChange={(event) => setSeriesForm((prev) => ({ ...prev, timelineNotes: event.target.value }))} placeholder={tr('时间线基准', 'Timeline baseline')} className="mt-3 min-h-28 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
               <div className="mt-3 grid gap-3 lg:grid-cols-3">
-                <textarea value={seriesWorldBibleText} onChange={(event) => setSeriesWorldBibleText(event.target.value)} className="min-h-56 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-xs text-zinc-200 outline-none focus:border-indigo-500" />
-                <textarea value={seriesIronLawsText} onChange={(event) => setSeriesIronLawsText(event.target.value)} className="min-h-56 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-xs text-zinc-200 outline-none focus:border-indigo-500" />
-                <textarea value={seriesFutureDirectionsText} onChange={(event) => setSeriesFutureDirectionsText(event.target.value)} className="min-h-56 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-xs text-zinc-200 outline-none focus:border-indigo-500" />
+                <label className="space-y-2 text-xs font-black text-zinc-500">
+                  <span>{tr('世界观细节', 'World bible details')}</span>
+                  <textarea value={seriesWorldBibleText} onChange={(event) => setSeriesWorldBibleText(event.target.value)} className="min-h-56 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-xs text-zinc-200 outline-none focus:border-indigo-500" />
+                </label>
+                <label className="space-y-2 text-xs font-black text-zinc-500">
+                  <span>{tr('长篇铁律', 'Continuity rules')}</span>
+                  <textarea value={seriesIronLawsText} onChange={(event) => setSeriesIronLawsText(event.target.value)} className="min-h-56 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-xs text-zinc-200 outline-none focus:border-indigo-500" />
+                </label>
+                <label className="space-y-2 text-xs font-black text-zinc-500">
+                  <span>{tr('后续方向', 'Future directions')}</span>
+                  <textarea value={seriesFutureDirectionsText} onChange={(event) => setSeriesFutureDirectionsText(event.target.value)} className="min-h-56 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-xs text-zinc-200 outline-none focus:border-indigo-500" />
+                </label>
               </div>
             </div>
+            )}
 
+            {seriesWorldStep === 'continuity' && (
             <div className="rounded-[2rem] border border-zinc-800 bg-zinc-950/60 p-5">
               <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -7903,6 +7946,26 @@ export default function App() {
                   </button>
                 </div>
               </div>
+              <div className="mb-4 rounded-2xl border border-indigo-300/15 bg-indigo-500/10 p-4">
+                <label className="mb-2 block text-xs font-black uppercase tracking-[0.18em] text-indigo-200">{tr('导入前作', 'Import previous story')}</label>
+                <select
+                  value={seriesSourceStoryId}
+                  onChange={(event) => setSeriesSourceStoryId(event.target.value)}
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm text-zinc-200 outline-none"
+                >
+                  <option value="">{tr('先选择作为前作的作品', 'Choose the previous story first')}</option>
+                  {myStories.map((story: any) => (
+                    <option key={story.id} value={story.id}>{getStoryTitle(story)}</option>
+                  ))}
+                </select>
+                {!seriesSourceStoryId && (
+                  <p className="mt-3 text-xs leading-relaxed text-zinc-500">
+                    {tr('接续节点只在需要生成第二部或续作时使用。先导入前作，系统才会根据前作结局、支线和摘要生成可编辑的接续草稿。', 'Continuity nodes are only needed for sequels. Import a previous story first, then the system can generate an editable bridge from its ending, branches, and summary.')}
+                  </p>
+                )}
+              </div>
+              {seriesSourceStoryId && (
+              <>
               <div className="grid gap-3 sm:grid-cols-3">
                 <input value={continuityForm.title || ''} onChange={(event) => setContinuityForm((prev) => ({ ...prev, title: event.target.value }))} placeholder={tr('接续节点名称', 'Continuity node name')} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
                 <select value={continuityForm.endingDomain || 'middle'} onChange={(event) => setContinuityForm((prev) => ({ ...prev, endingDomain: event.target.value as any }))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none">
@@ -7915,8 +7978,14 @@ export default function App() {
               <textarea value={continuityForm.bridgeSummary || ''} onChange={(event) => setContinuityForm((prev) => ({ ...prev, bridgeSummary: event.target.value }))} placeholder={tr('接续摘要', 'Bridge summary')} className="mt-3 min-h-28 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
               <textarea value={continuityForm.sequelSeedPrompt || ''} onChange={(event) => setContinuityForm((prev) => ({ ...prev, sequelSeedPrompt: event.target.value }))} placeholder={tr('续作生成要求', 'Sequel generation brief')} className="mt-3 min-h-28 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
               <div className="mt-3 grid gap-3 lg:grid-cols-2">
-                <textarea value={continuityLegacyText} onChange={(event) => setContinuityLegacyText(event.target.value)} className="min-h-44 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-xs text-zinc-200 outline-none focus:border-indigo-500" />
-                <textarea value={continuityRepairText} onChange={(event) => setContinuityRepairText(event.target.value)} className="min-h-44 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-xs text-zinc-200 outline-none focus:border-indigo-500" />
+                <label className="space-y-2 text-xs font-black text-zinc-500">
+                  <span>{tr('前作继承摘要', 'Inherited state summary')}</span>
+                  <textarea value={continuityLegacyText} onChange={(event) => setContinuityLegacyText(event.target.value)} className="min-h-44 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-xs text-zinc-200 outline-none focus:border-indigo-500" />
+                </label>
+                <label className="space-y-2 text-xs font-black text-zinc-500">
+                  <span>{tr('继承硬设定 / 圆润规则', 'Inheritance hard rules / repair rules')}</span>
+                  <textarea value={continuityRepairText} onChange={(event) => setContinuityRepairText(event.target.value)} className="min-h-44 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-xs text-zinc-200 outline-none focus:border-indigo-500" />
+                </label>
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
                 {continuityNodes.map((node) => (
@@ -7925,21 +7994,38 @@ export default function App() {
                   </button>
                 ))}
               </div>
+              </>
+              )}
             </div>
+            )}
 
+            {seriesWorldStep === 'generate' && (
             <div className="rounded-[2rem] border border-zinc-800 bg-zinc-950/60 p-5">
-              <div className="mb-4 text-lg font-black text-white">{tr('生成作品', 'Generate Story')}</div>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="mb-4">
+                <div className="text-lg font-black text-white">{tr('生成第一部作品', 'Generate the first installment')}</div>
+                <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+                  {tr('第一部生成会回到故事生成流程，并把当前长篇世界作为世界观绑定。也可以在“高级创作设置”里手动选择世界观。', 'The first installment uses the normal story generation flow while binding the selected series world. You can also choose a world bible manually in Advanced creation.')}
+                </p>
+              </div>
+              <div className="grid gap-3">
                 <button type="button" onClick={() => generateStoryFromSeries('main')} disabled={!selectedSeriesWorld} className={semanticButtonClass('primary', { fullWidth: true })}>
                   <Wand2 className="h-4 w-4" />
                   {tr('基于该长篇生成第一部', 'Generate first installment')}
                 </button>
+                <button type="button" onClick={() => { setQuickGenerationMode('advanced'); setQuickSeriesBindingId(selectedSeriesId); navigateTo('THEME_SELECTION'); }} disabled={!selectedSeriesWorld} className={semanticButtonClass('ghost', { fullWidth: true })}>
+                  <BookOpen className="h-4 w-4" />
+                  {tr('到高级创作中继续设定', 'Continue in Advanced creation')}
+                </button>
+              </div>
+              <div className="mt-5 border-t border-zinc-800 pt-5">
+                <div className="mb-3 text-sm font-black text-zinc-300">{tr('需要生成续作？', 'Need a sequel?')}</div>
                 <button type="button" onClick={() => generateStoryFromSeries('sequel')} disabled={!selectedSeriesWorld || !selectedContinuityNode} className={semanticButtonClass('secondary', { fullWidth: true })}>
                   <GitBranch className="h-4 w-4" />
                   {tr('基于接续节点生成续作', 'Generate sequel from node')}
                 </button>
               </div>
             </div>
+            )}
           </section>
         </div>
       </div>
@@ -8208,6 +8294,22 @@ export default function App() {
       </div>
 
       <div className="mx-auto mt-10 w-full max-w-2xl rounded-[2rem] border border-zinc-800 bg-zinc-900/30 p-6 text-left">
+        <div className="mb-6 rounded-2xl border border-indigo-300/15 bg-indigo-500/10 p-4">
+          <label className="mb-2 block text-sm font-black text-indigo-100">{tr('世界观绑定', 'World bible binding')}</label>
+          <select
+            value={quickSeriesBindingId}
+            onChange={(event) => setQuickSeriesBindingId(event.target.value)}
+            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-200 outline-none focus:border-indigo-500"
+          >
+            <option value="">{tr('不绑定长篇世界', 'No series world')}</option>
+            {seriesWorlds.map((series) => (
+              <option key={series.id} value={series.id}>{series.title || tr('未命名长篇', 'Untitled series')}</option>
+            ))}
+          </select>
+          <p className="mt-2 text-xs leading-relaxed text-indigo-100/65">
+            {tr('如果绑定世界观，生成故事时会优先遵守该长篇的世界规则和铁律。', 'If a world bible is selected, generation will prioritize its rules and continuity constraints.')}
+          </p>
+        </div>
         <label className="mb-3 block text-sm font-bold text-zinc-300">{tr('专属故事大纲', 'Custom story outline')}</label>
         <textarea
           value={customOutline}
