@@ -42,6 +42,8 @@ const LEGACY_STORY_CARD_SELECT = STORY_CARD_SELECT
   .split(',')
   .filter((field) => field !== 'share_count')
   .join(',');
+const STORY_CARD_TIMEOUT_MS = Number(process.env.SUPABASE_STORY_CARD_TIMEOUT_MS || 16000);
+const STORY_LIST_ENRICH_TIMEOUT_MS = Number(process.env.SUPABASE_STORY_LIST_ENRICH_TIMEOUT_MS || 3500);
 const SHARED_CARD_SELECT = [
   'id',
   'snapshot_kind',
@@ -141,11 +143,11 @@ function storyListItem(row: any) {
 
 async function fetchStoryCardRows(query: Record<string, string | number | boolean | undefined>) {
   try {
-    return await supabaseRequest<any[]>('stories', { query: { ...query, select: STORY_CARD_SELECT } });
+    return await supabaseRequest<any[]>('stories', { query: { ...query, select: STORY_CARD_SELECT }, timeoutMs: STORY_CARD_TIMEOUT_MS });
   } catch (error: any) {
     if (!/share_count/i.test(String(error?.message || error))) throw error;
     console.warn('[story-store] share_count column unavailable, using legacy story card select.');
-    return supabaseRequest<any[]>('stories', { query: { ...query, select: LEGACY_STORY_CARD_SELECT } });
+    return supabaseRequest<any[]>('stories', { query: { ...query, select: LEGACY_STORY_CARD_SELECT }, timeoutMs: STORY_CARD_TIMEOUT_MS });
   }
 }
 
@@ -157,10 +159,22 @@ async function enrichStoryActionState(items: any[], userId?: string | null) {
   if (storyIds.length === 0) return items;
   const inFilter = `in.(${storyIds.join(',')})`;
   const [likeRows, favoriteRows, branchRows, progressRows] = await Promise.all([
-    userId ? supabaseRequest<any[]>('story_likes', { query: { user_id: `eq.${userId}`, story_id: inFilter, select: 'story_id' } }).catch(() => []) : Promise.resolve([]),
-    userId ? supabaseRequest<any[]>('story_favorites', { query: { user_id: `eq.${userId}`, story_id: inFilter, select: 'story_id' } }).catch(() => []) : Promise.resolve([]),
-    supabaseRequest<any[]>('story_branches', { query: { story_id: inFilter, select: 'story_id,id' } }).catch(() => []),
-    userId ? supabaseRequest<any[]>('user_progress', { query: { user_id: `eq.${userId}`, story_id: inFilter, select: 'story_id,payload' } }).catch(() => []) : Promise.resolve([]),
+    userId ? supabaseRequest<any[]>('story_likes', { query: { user_id: `eq.${userId}`, story_id: inFilter, select: 'story_id' }, timeoutMs: STORY_LIST_ENRICH_TIMEOUT_MS }).catch((error) => {
+      console.warn('[story-store] list likes enrichment skipped:', error?.message || error);
+      return [];
+    }) : Promise.resolve([]),
+    userId ? supabaseRequest<any[]>('story_favorites', { query: { user_id: `eq.${userId}`, story_id: inFilter, select: 'story_id' }, timeoutMs: STORY_LIST_ENRICH_TIMEOUT_MS }).catch((error) => {
+      console.warn('[story-store] list favorites enrichment skipped:', error?.message || error);
+      return [];
+    }) : Promise.resolve([]),
+    supabaseRequest<any[]>('story_branches', { query: { story_id: inFilter, select: 'story_id,id' }, timeoutMs: STORY_LIST_ENRICH_TIMEOUT_MS }).catch((error) => {
+      console.warn('[story-store] list branches enrichment skipped:', error?.message || error);
+      return [];
+    }),
+    userId ? supabaseRequest<any[]>('user_progress', { query: { user_id: `eq.${userId}`, story_id: inFilter, select: 'story_id,payload' }, timeoutMs: STORY_LIST_ENRICH_TIMEOUT_MS }).catch((error) => {
+      console.warn('[story-store] list progress enrichment skipped:', error?.message || error);
+      return [];
+    }) : Promise.resolve([]),
   ]);
   const likedIds = new Set(likeRows.map((row) => String(row.story_id || '')));
   const favoritedIds = new Set(favoriteRows.map((row) => String(row.story_id || '')));
@@ -610,8 +624,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (action === 'listMySharedStories') {
       const authUser = await requireUser(req, res);
       if (!authUser) return;
-      const rows = await supabaseRequest<any[]>('shared_stories', { query: { author_id: `eq.${authUser.uid}`, select: SHARED_CARD_SELECT, order: 'updated_at.desc', limit: body.pageSize || 50 } });
-      const favoriteRows = await supabaseRequest<any[]>('story_favorites', { query: { user_id: `eq.${authUser.uid}`, select: 'story_id,created_at', order: 'created_at.desc', limit: body.pageSize || 50 } });
+      const [rows, favoriteRows] = await Promise.all([
+        supabaseRequest<any[]>('shared_stories', {
+          query: { author_id: `eq.${authUser.uid}`, select: SHARED_CARD_SELECT, order: 'updated_at.desc', limit: body.pageSize || 50 },
+          timeoutMs: STORY_CARD_TIMEOUT_MS,
+        }),
+        supabaseRequest<any[]>('story_favorites', {
+          query: { user_id: `eq.${authUser.uid}`, select: 'story_id,created_at', order: 'created_at.desc', limit: body.pageSize || 50 },
+          timeoutMs: STORY_CARD_TIMEOUT_MS,
+        }),
+      ]);
       const favoriteIds = favoriteRows.map((row) => String(row.story_id || '')).filter(Boolean);
       const favoriteStories = favoriteIds.length
         ? await fetchStoryCardRows({ id: `in.(${favoriteIds.join(',')})` })

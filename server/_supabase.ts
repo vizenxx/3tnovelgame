@@ -28,11 +28,12 @@ export async function supabaseRequest<T = any>(
     query?: Record<string, string | number | boolean | undefined>;
     body?: unknown;
     prefer?: string;
+    timeoutMs?: number;
   } = {}
 ) {
   requireSupabaseConfig();
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), SUPABASE_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? SUPABASE_TIMEOUT_MS);
   try {
     const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}${toQuery(options.query)}`, {
       method: options.method || 'GET',
@@ -56,10 +57,10 @@ export async function supabaseRequest<T = any>(
   }
 }
 
-export async function supabaseRpc<T = any>(fn: string, body: unknown = {}) {
+export async function supabaseRpc<T = any>(fn: string, body: unknown = {}, options: { timeoutMs?: number } = {}) {
   requireSupabaseConfig();
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), SUPABASE_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? SUPABASE_TIMEOUT_MS);
   try {
     const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
       method: 'POST',

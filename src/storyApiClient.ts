@@ -32,6 +32,8 @@ export class StoryApiError extends Error {
 }
 
 const STORY_API_TIMEOUT_MS = 12000;
+const OPTIONAL_AUTH_TOKEN_TIMEOUT_MS = 2500;
+const REQUIRED_AUTH_TOKEN_TIMEOUT_MS = 7000;
 
 const createRequestId = () => (
   `story-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
@@ -47,6 +49,18 @@ const friendlyStoryApiError = (stage: string, code: string, rawMessage: string) 
   return message || `${stage}失败`;
 };
 
+const withAuthTimeout = async <T,>(promise: Promise<T>, timeoutMs: number) => {
+  let timeoutId: number | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = window.setTimeout(() => reject(new Error('Auth token timeout')), timeoutMs);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timeoutId) window.clearTimeout(timeoutId);
+  }
+};
+
 export async function storyApi<T = any>(
   action: string,
   payload: Record<string, any> = {},
@@ -60,8 +74,26 @@ export async function storyApi<T = any>(
   };
   const currentUser = auth?.currentUser;
   if (options.auth || currentUser) {
-    const token = await currentUser?.getIdToken();
-    if (token) headers.Authorization = `Bearer ${token}`;
+    try {
+      const token = currentUser
+        ? await withAuthTimeout(
+          currentUser.getIdToken(),
+          options.auth ? REQUIRED_AUTH_TOKEN_TIMEOUT_MS : OPTIONAL_AUTH_TOKEN_TIMEOUT_MS
+        )
+        : '';
+      if (token) headers.Authorization = `Bearer ${token}`;
+    } catch (error) {
+      if (options.auth) {
+        throw new StoryApiError({
+          action,
+          stage,
+          code: 'AUTH_REQUIRED',
+          requestId,
+          message: friendlyStoryApiError(stage, 'AUTH_REQUIRED', error instanceof Error ? error.message : String(error || '')),
+        });
+      }
+      console.warn('storyApi optional auth skipped:', { action, stage, requestId, error });
+    }
   }
 
   const controller = new AbortController();

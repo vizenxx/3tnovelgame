@@ -2912,12 +2912,12 @@ export default function App() {
       const [publicResult, mineResult] = await Promise.allSettled([
         withTimeout(
           retryOnlineOnce(() => listPublicStories(db as any, PUBLIC_STORY_LIST_LIMIT, requestedPublicSort), 'public story list'),
-          10000,
+          24000,
           '公开作品同步超时。'
         ),
         withTimeout(
           retryOnlineOnce(() => listMyStories(db as any, user.uid, MY_STORY_LIST_LIMIT), 'my story list'),
-          10000,
+          24000,
           '我的作品同步超时。'
         ),
       ]);
@@ -2938,7 +2938,7 @@ export default function App() {
         try {
           shared = asSafeArray(await withTimeout(
             retryOnlineOnce(() => listMySharedStories(db as any, user.uid, ARCHIVE_STORY_LIST_LIMIT), 'archive story list'),
-            12000,
+            28000,
             '连接收藏馆超时，稍后进入收藏馆时会继续同步。'
           ));
           markStoryListSegment('archive', 'idle');
@@ -3008,7 +3008,7 @@ export default function App() {
       markStoryListSegment('archive', 'syncing');
       const shared = asSafeArray(await withTimeout(
         retryOnlineOnce(() => listMySharedStories(db as any, user.uid, ARCHIVE_STORY_LIST_LIMIT), 'archive story list'),
-        14000,
+        28000,
         '连接收藏馆超时，已先显示本机缓存。'
       ));
       setMySharedStories(shared);

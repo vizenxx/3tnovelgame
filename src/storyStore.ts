@@ -354,7 +354,7 @@ const normalizeContinuityNode = (record: any): ContinuityNodeRecord => ({
 
 export async function listPublicStories(db: Firestore, pageSize = 20, sort: StoryListSort = 'updated') {
   if (useSupabaseStories()) {
-    const rows = await storyApi<StoryListItem[]>('listPublicStories', { pageSize, sort }, { timeoutMs: 9000, stage: '公开作品列表同步' });
+    const rows = await storyApi<StoryListItem[]>('listPublicStories', { pageSize, sort }, { timeoutMs: 22000, stage: '公开作品列表同步' });
     return asArray(rows).map(normalizeStoryListItem);
   }
   const orderField = sort === 'likes'
@@ -674,7 +674,7 @@ export async function savePushSubscription(subscription: PushSubscriptionJSON) {
 
 export async function listMyStories(db: Firestore, authorId: string, pageSize = 50) {
   if (useSupabaseStories()) {
-    const rows = await storyApi<StoryListItem[]>('listMyStories', { pageSize }, { auth: true, timeoutMs: 9000, stage: '我的作品同步' });
+    const rows = await storyApi<StoryListItem[]>('listMyStories', { pageSize }, { auth: true, timeoutMs: 22000, stage: '我的作品同步' });
     return asArray(rows).map(normalizeStoryListItem);
   }
   const q = query(
@@ -689,7 +689,7 @@ export async function listMyStories(db: Firestore, authorId: string, pageSize = 
 
 export async function listAuthorStories(db: Firestore, authorId: string, pageSize = 50) {
   if (useSupabaseStories()) {
-    const rows = await storyApi<StoryListItem[]>('listAuthorStories', { authorId, pageSize }, { auth: true, timeoutMs: 9000, stage: '作者作品同步' });
+    const rows = await storyApi<StoryListItem[]>('listAuthorStories', { authorId, pageSize }, { auth: true, timeoutMs: 22000, stage: '作者作品同步' });
     return asArray(rows).map(normalizeStoryListItem);
   }
   const q = query(
@@ -705,7 +705,7 @@ export async function listAuthorStories(db: Firestore, authorId: string, pageSiz
 
 export async function listMySharedStories(db: Firestore, authorId: string, pageSize = 50) {
   if (useSupabaseStories()) {
-    const rows = await storyApi<SharedStoryRecord[]>('listMySharedStories', { pageSize }, { auth: true, timeoutMs: 9000, stage: '馆藏同步' });
+    const rows = await storyApi<SharedStoryRecord[]>('listMySharedStories', { pageSize }, { auth: true, timeoutMs: 26000, stage: '馆藏同步' });
     return asArray(rows).map(normalizeSharedStoryRecord);
   }
   const q = query(
