@@ -70,6 +70,21 @@ export function buildInterventionRewritePrompt(args: {
   const mechanics = args.endingMechanics || {};
   const rewriteRange = mechanics.rewriteRange || { startChapter: args.safeChapterNum, endChapter: 7, reason: 'local' };
   const isEnglish = args.language === 'en-US';
+  const seriesContext = args.blueprint?.seriesContext;
+  const continuityNode = args.blueprint?.continuityNode;
+  const seriesBlock = seriesContext ? `
+${isEnglish ? 'Applied world setting constraints' : '套用的世界观设定约束'}:
+${JSON.stringify({
+  title: seriesContext.title,
+  selectedBaselineRules: seriesContext.selectedBaselineRules || [],
+  selectedCharacterCards: seriesContext.selectedCharacterCards || [],
+  continuityNode: continuityNode ? {
+    title: continuityNode.title,
+    bridgeSummary: continuityNode.bridgeSummary,
+    repairRules: continuityNode.repairRules,
+  } : null,
+}, null, 2)}
+` : '';
   if (isEnglish) {
     return `You are an English-language interactive fiction engine. The player has interfered with fate in chapter ${args.safeChapterNum}.
 
@@ -77,6 +92,7 @@ Character ID map:
 ${args.blueprint.characters.map((character: any) => `${character.name} (ID: ${character.id})`).join('\n')}
 
 ${args.worldStatePrompt}
+${seriesBlock}
 
 Fate math result:
 - Author base tendency: left ${mechanics.endingBias?.leftBaseWeight ?? 1} / right ${mechanics.endingBias?.rightBaseWeight ?? 1}
@@ -119,6 +135,7 @@ Return strict JSON only. Do not include metadata.`;
 ${args.blueprint.characters.map((character: any) => `${character.name} (ID: ${character.id})`).join('\n')}
 
 ${args.worldStatePrompt}
+${seriesBlock}
 
 命运数学判定：
 - 作者初始倾向权重：左 ${mechanics.endingBias?.leftBaseWeight ?? 1} / 右 ${mechanics.endingBias?.rightBaseWeight ?? 1}

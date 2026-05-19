@@ -319,7 +319,7 @@ const normalizeSeriesWorld = (record: any): SeriesWorldRecord => ({
   id: String(record?.id || ''),
   authorId: String(record?.authorId || record?.author_id || ''),
   authorName: record?.authorName || record?.author_name || '',
-  title: String(record?.title || '未命名长篇世界'),
+  title: String(record?.title || '未命名世界观设定'),
   pitch: String(record?.pitch || ''),
   genreTags: asArray<string>(record?.genreTags || record?.genre_tags),
   worldBible: record?.worldBible || record?.world_bible || {},
@@ -401,7 +401,7 @@ export async function saveUserProgress(db: Firestore, userId: string, storyId: s
 
 export async function listMySeriesWorlds(db: Firestore, pageSize = 50) {
   if (useSupabaseStories()) {
-    const rows = await storyApi<SeriesWorldRecord[]>('listMySeriesWorlds', { pageSize }, { auth: true, timeoutMs: 9000, stage: '长篇设定同步' });
+    const rows = await storyApi<SeriesWorldRecord[]>('listMySeriesWorlds', { pageSize }, { auth: true, timeoutMs: 9000, stage: '世界观设定同步' });
     return asArray(rows).map(normalizeSeriesWorld);
   }
   return [];
@@ -409,7 +409,7 @@ export async function listMySeriesWorlds(db: Firestore, pageSize = 50) {
 
 export async function getSeriesWorld(db: Firestore, seriesId: string) {
   if (useSupabaseStories()) {
-    const row = await storyApi<SeriesWorldRecord | null>('getSeriesWorld', { seriesId }, { auth: true, timeoutMs: 9000, stage: '长篇设定读取' });
+    const row = await storyApi<SeriesWorldRecord | null>('getSeriesWorld', { seriesId }, { auth: true, timeoutMs: 9000, stage: '世界观设定读取' });
     return row ? normalizeSeriesWorld(row) : null;
   }
   return null;
@@ -417,14 +417,14 @@ export async function getSeriesWorld(db: Firestore, seriesId: string) {
 
 export async function saveSeriesWorld(db: Firestore, args: Partial<SeriesWorldRecord> & { id?: string }) {
   if (useSupabaseStories()) {
-    return storyApi<string>('saveSeriesWorld', { seriesId: args.id, args }, { auth: true, timeoutMs: 12000, stage: '长篇设定保存' });
+    return storyApi<string>('saveSeriesWorld', { seriesId: args.id, args }, { auth: true, timeoutMs: 12000, stage: '世界观设定保存' });
   }
   return '';
 }
 
 export async function deleteSeriesWorld(db: Firestore, seriesId: string) {
   if (useSupabaseStories()) {
-    return storyApi('deleteSeriesWorld', { seriesId }, { auth: true, timeoutMs: 9000, stage: '长篇设定删除' });
+    return storyApi('deleteSeriesWorld', { seriesId }, { auth: true, timeoutMs: 9000, stage: '世界观设定删除' });
   }
 }
 
@@ -453,7 +453,7 @@ export async function attachStoryToSeries(db: Firestore, args: {
   seriesConstraints?: Record<string, any>;
 }) {
   if (useSupabaseStories()) {
-    return storyApi('attachStoryToSeries', args, { auth: true, timeoutMs: 12000, stage: '作品绑定长篇' });
+    return storyApi('attachStoryToSeries', args, { auth: true, timeoutMs: 12000, stage: '作品绑定世界观设定' });
   }
 }
 
@@ -1081,6 +1081,18 @@ export async function adaptBlueprintToStory(db: Firestore, args: { authorId: str
     endingRates: { left: bp.left_mainline_default || 40, right: bp.right_mainline_default || 40 },
     endingBias: normalizeEndingBias(bp.endingBias || { left: bp.left_mainline_default, right: bp.right_mainline_default }),
     endingNames: { left: '', right: '' },
+    seriesId: bp.seriesContext?.id || null,
+    seriesRole: bp.continuityNode?.id ? 'sequel' : (bp.seriesContext?.id ? 'main' : 'standalone'),
+    continuityNodeId: bp.continuityNode?.id || null,
+    seriesConstraints: {
+      seriesTitle: bp.seriesContext?.title || '',
+      baselineRuleIds: bp.seriesSelection?.baselineRuleIds || [],
+      characterIds: bp.seriesSelection?.characterIds || [],
+      selectedBaselineRules: bp.seriesContext?.selectedBaselineRules || [],
+      selectedCharacterCards: bp.seriesContext?.selectedCharacterCards || [],
+      continuityTitle: bp.continuityNode?.title || '',
+      continuityNodeId: bp.continuityNode?.id || null,
+    },
     createdAt: now,
     updatedAt: now,
     version: 1,

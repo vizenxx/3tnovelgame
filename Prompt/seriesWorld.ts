@@ -16,9 +16,9 @@ export function buildSeriesWorldPrompt(args: {
     : '';
 
   if (isEnglish) {
-    return `You are a series-bible editor for interactive long-form fiction. Generate an editable "series world" draft for an author.
+    return `You are a world-setting archive editor for interactive long-form fiction. Generate an editable "world setting" draft for an author.
 
-Generation mode: ${args.mode === 'extract' ? 'extract a world bible from an existing story' : 'create a new world bible from scratch'}.
+Generation mode: ${args.mode === 'extract' ? 'extract a world setting archive from an existing story' : 'create a new world setting archive from scratch'}.
 Genre tags: ${Array.isArray(args.genreTags) && args.genreTags.length ? args.genreTags.join(', ') : 'unspecified'}.
 Tone: ${args.tone || 'unspecified'}.
 Core conflict: ${args.coreConflict || 'unspecified'}.
@@ -28,11 +28,29 @@ ${source}
 
 Return strict JSON only, with this shape:
 {
-  "title": "series world title",
+  "title": "world setting title",
   "pitch": "one-sentence hook",
   "genreTags": ["tag"],
   "worldBible": {
     "worldview": "worldview summary",
+    "baselineRules": [
+      {
+        "id": "rule_1",
+        "title": "short author-facing rule title",
+        "detail": "what this rule allows or forbids during story generation",
+        "kind": "world / timeline / magic / politics / sequel-safety"
+      }
+    ],
+    "characterPool": [
+      {
+        "id": "char_1",
+        "name": "reusable character name",
+        "role": "series role",
+        "desc": "core identity, motive, contradiction, and how later installments may use them",
+        "status": "default status before a story says otherwise"
+      }
+    ],
+    "plotNotes": ["optional reusable plot premise or unresolved thread"],
     "coreRules": ["how this world works"],
     "majorFactions": ["major factions"],
     "keyPlaces": ["key locations"],
@@ -60,29 +78,49 @@ Return strict JSON only, with this shape:
 
 Requirements:
 1. Write for authors, not developers.
-2. Keep iron laws to 3-6 items; do not over-constrain creation.
-3. Preserve room for player interference, while preventing Part 1 from destroying sequel continuity.
-4. All string values must be natural English.
-5. Return JSON only.`;
+2. baselineRules must be itemized and reusable; write 5-9 rules that an author can later tick on/off for a specific story.
+3. characterPool must include 3-8 reusable characters or character archetypes; major recurring characters should be explicit here.
+4. Keep iron laws to 3-6 items; do not over-constrain creation.
+5. Preserve room for player interference, while preventing Part 1 from destroying sequel continuity.
+6. All string values must be natural English.
+7. Return JSON only.`;
   }
 
-  return `你是互动长篇小说的系列设定编辑。请生成一个可供作者继续编辑的「长篇设定」草稿。
+  return `你是互动小说的世界观设定编辑。请生成一个可供作者继续编辑、勾选和复用的「世界观设定」草稿。
 
 生成方式：${args.mode === 'extract' ? '从已有作品提取世界观' : '从零生成世界观'}。
 题材标签：${Array.isArray(args.genreTags) && args.genreTags.length ? args.genreTags.join('、') : '未指定'}。
 故事气质：${args.tone || '未指定'}。
 核心冲突：${args.coreConflict || '未指定'}。
-长篇长度倾向：${args.lengthHint || '2-3部'}。
+系列长度倾向：${args.lengthHint || '2-3部'}。
 作者补充：${args.authorSeed || '无'}。
 ${source}
 
 输出必须是严格 JSON，字段如下：
 {
-  "title": "长篇世界标题",
+  "title": "世界观设定标题",
   "pitch": "一句话卖点",
   "genreTags": ["标签"],
   "worldBible": {
     "worldview": "世界观说明",
+    "baselineRules": [
+      {
+        "id": "rule_1",
+        "title": "给作者看的简短规则名",
+        "detail": "这条规则在生成故事时允许或禁止什么",
+        "kind": "世界/时间线/能力/势力/续作安全"
+      }
+    ],
+    "characterPool": [
+      {
+        "id": "char_1",
+        "name": "可复用角色名",
+        "role": "系列定位",
+        "desc": "身份、动机、矛盾点，以及后续作品可如何使用",
+        "status": "默认状态"
+      }
+    ],
+    "plotNotes": ["可复用的情节概况或未解伏笔"],
     "coreRules": ["世界运行规则"],
     "majorFactions": ["主要势力"],
     "keyPlaces": ["关键地点"],
@@ -92,7 +130,7 @@ ${source}
   "timelineNotes": "时间线基准",
   "ironLaws": [
     {
-      "title": "长篇铁律名称",
+      "title": "世界观铁律名称",
       "scope": "生效范围，例如第1-2部/某事件前",
       "strength": "绝对不可违背/可假象违背/可短暂违背但需修复",
       "rule": "规则内容",
@@ -110,9 +148,11 @@ ${source}
 
 要求：
 1. 面向作者，不要写开发者术语。
-2. 长篇铁律控制在 3-6 条，不要过度束缚创作。
-3. 必须保留玩家干涉空间，但避免第一部生成无法接续后续作品的绝境。
-4. 只返回 JSON，不要解释。`;
+2. baselineRules 必须是一条一条可勾选复用的世界基准，建议 5-9 条。
+3. characterPool 必须提供 3-8 个可复用角色或角色原型；如果有主要延续角色，必须明确放在这里。
+4. 世界观铁律控制在 3-6 条，不要过度束缚创作。
+5. 必须保留玩家干涉空间，但避免第一部生成无法接续后续作品的绝境。
+6. 只返回 JSON，不要解释。`;
 }
 
 export function buildContinuityNodePrompt(args: {
@@ -132,13 +172,13 @@ export function buildContinuityNodePrompt(args: {
     .filter(Boolean);
 
   if (isEnglish) {
-    return `You are a sequel-continuity editor for interactive long-form fiction. Based on the series world and previous story, generate an editable "ending exit / continuity node" draft.
+    return `You are a sequel-continuity editor for interactive long-form fiction. Based on the world setting and previous story, generate an editable "ending exit / continuity node" draft.
 
-Series world:
+World setting:
 Title: ${args.seriesWorld?.title || 'Untitled series'}
 Pitch: ${args.seriesWorld?.pitch || ''}
-World bible: ${JSON.stringify(args.seriesWorld?.worldBible || {}, null, 2)}
-Iron laws: ${JSON.stringify(args.seriesWorld?.ironLaws || [], null, 2)}
+World setting archive: ${JSON.stringify(args.seriesWorld?.worldBible || {}, null, 2)}
+World laws: ${JSON.stringify(args.seriesWorld?.ironLaws || [], null, 2)}
 
 Previous story:
 Title: ${meta.title || 'Untitled story'}
@@ -173,19 +213,19 @@ Return strict JSON:
 
 Requirements:
 1. Do not negate the player's previous result; translate it into a usable sequel opening.
-2. Obey the series iron laws.
+2. Obey the world setting laws.
 3. Keep repairRules to 2-5 items.
 4. All string values must be natural English.
 5. Return JSON only.`;
   }
 
-  return `你是互动长篇小说的续作接续编辑。请根据长篇设定和前作资料，生成一个「结局出口 / 接续节点」草稿。
+  return `你是互动小说的续作接续编辑。请根据世界观设定和前作资料，生成一个「结局出口 / 接续节点」草稿。
 
-长篇设定：
-标题：${args.seriesWorld?.title || '未命名长篇'}
+世界观设定：
+标题：${args.seriesWorld?.title || '未命名世界观设定'}
 卖点：${args.seriesWorld?.pitch || ''}
 世界观：${JSON.stringify(args.seriesWorld?.worldBible || {}, null, 2)}
-长篇铁律：${JSON.stringify(args.seriesWorld?.ironLaws || [], null, 2)}
+世界观铁律：${JSON.stringify(args.seriesWorld?.ironLaws || [], null, 2)}
 
 前作：
 标题：${meta.title || '未命名作品'}
@@ -220,7 +260,7 @@ Requirements:
 
 要求：
 1. 不要否定玩家前作结果，要把结果转译成续作可用开场。
-2. 必须遵守长篇铁律。
+2. 必须遵守世界观铁律。
 3. repairRules 控制在 2-5 条。
 4. 只返回 JSON。`;
 }

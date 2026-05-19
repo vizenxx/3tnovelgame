@@ -12,21 +12,31 @@ export function buildQuickStoryBlueprintPrompt(args: {
 }) {
   const isSingleEnding = args.endingMode === 'single';
   const isEnglish = args.language === 'en-US';
+  const selectedBaselineRules = Array.isArray(args.seriesContext?.selectedBaselineRules)
+    ? args.seriesContext.selectedBaselineRules
+    : [];
+  const selectedCharacterCards = Array.isArray(args.seriesContext?.selectedCharacterCards)
+    ? args.seriesContext.selectedCharacterCards
+    : [];
   const seriesInstruction = args.seriesContext ? (isEnglish ? `
-Long-form series context:
+Applied world setting:
 Title: ${args.seriesContext.title || 'Untitled series'}
 Pitch: ${args.seriesContext.pitch || ''}
-World Bible: ${JSON.stringify(args.seriesContext.worldBible || {}, null, 2)}
+Selected baseline rules: ${JSON.stringify(selectedBaselineRules, null, 2)}
+Selected character cards: ${JSON.stringify(selectedCharacterCards, null, 2)}
+World setting archive: ${JSON.stringify(args.seriesContext.worldBible || {}, null, 2)}
 Timeline: ${args.seriesContext.timelineNotes || ''}
 Iron Laws: ${JSON.stringify(args.seriesContext.ironLaws || [], null, 2)}
 Future Directions: ${JSON.stringify(args.seriesContext.futureDirections || [], null, 2)}
 ` : `
-长篇设定：
-标题：${args.seriesContext.title || '未命名长篇'}
+套用的世界观设定：
+标题：${args.seriesContext.title || '未命名世界观设定'}
 卖点：${args.seriesContext.pitch || ''}
-世界观：${JSON.stringify(args.seriesContext.worldBible || {}, null, 2)}
+本次勾选的世界基准：${JSON.stringify(selectedBaselineRules, null, 2)}
+本次勾选的角色卡：${JSON.stringify(selectedCharacterCards, null, 2)}
+世界观设定仓库：${JSON.stringify(args.seriesContext.worldBible || {}, null, 2)}
 时间线：${args.seriesContext.timelineNotes || ''}
-长篇铁律：${JSON.stringify(args.seriesContext.ironLaws || [], null, 2)}
+世界观铁律：${JSON.stringify(args.seriesContext.ironLaws || [], null, 2)}
 后续方向：${JSON.stringify(args.seriesContext.futureDirections || [], null, 2)}
 `) : '';
   const continuityInstruction = args.continuityNode ? (isEnglish ? `
@@ -65,8 +75,10 @@ English-market style requirements:
 2. Use natural English names, idiomatic titles, and genre conventions familiar to English readers.
 3. Avoid Chinese book-title punctuation, literal cultivation/wuxia terms, or “fate domain” jargon unless explicitly requested by the premise.
 4. Keep the story playable: clear conflicts, character stakes, and intervention points.
-5. If long-form series context exists, obey its iron laws before local plot convenience.
-6. If a continuation node exists, make this a natural sequel opening without invalidating the previous story result.
+5. If an applied world setting exists, obey selected baseline rules before local plot convenience.
+6. If selected character cards exist, keep them as major available cast unless the request explicitly excludes them.
+7. If a continuation node exists, make this a natural sequel opening without invalidating the previous story result.
+8. If a continuation node contains characterStates or inherited major characters, keep those characters active by default unless the author request explicitly retires them.
 
 Output requirements:
 1. For performance reasons, never write full chapter prose in chapters.
@@ -99,7 +111,7 @@ ${seriesInstruction}${continuityInstruction}
 任务：生成一个完整的首篇章（7章）的故事蓝图骨架。
 
 要求（极度重要）：
-0. 若存在长篇设定，必须优先遵守长篇铁律；若存在接续节点，必须自然接住前作结果，不得粗暴否定前作。
+0. 若存在套用的世界观设定，必须优先遵守本次勾选的世界基准；若存在勾选角色卡，必须把它们作为主要可用角色池，除非用户明确排除；若存在继承节点，必须自然接住前作结果，不得粗暴否定前作，也不得随意忘掉继承状态中的主要人物。
 1. 由于性能限制，严禁在 chapters 中生成章节全文。
 2. 每一章必须提供一个 summary（简短情节大纲，60-80字）。
 3. 每一章的情节必须对上下章节有适当联系且重点不重复。

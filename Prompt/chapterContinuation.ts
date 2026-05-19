@@ -64,10 +64,12 @@ export function buildChapterContinuationPrompt(args: {
   const seriesContext = args.blueprint?.seriesContext;
   const continuityNode = args.blueprint?.continuityNode;
   const seriesBlock = seriesContext ? `
-${isEnglish ? 'Long-form series constraints' : '长篇约束'}:
+${isEnglish ? 'Applied world setting constraints' : '套用的世界观设定约束'}:
 ${JSON.stringify({
   title: seriesContext.title,
   pitch: seriesContext.pitch,
+  selectedBaselineRules: seriesContext.selectedBaselineRules || [],
+  selectedCharacterCards: seriesContext.selectedCharacterCards || [],
   ironLaws: seriesContext.ironLaws,
   timelineNotes: seriesContext.timelineNotes,
   continuityNode: continuityNode ? {
