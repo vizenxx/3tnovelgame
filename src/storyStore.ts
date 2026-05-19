@@ -71,6 +71,10 @@ const normalizeStoryListItem = (item: any): StoryListItem => ({
   intervenerId: item?.intervenerId ?? null,
   intervenerName: item?.intervenerName || '',
   coverUrl: item?.coverUrl || '',
+  seriesId: item?.seriesId ?? item?.series_id ?? null,
+  seriesRole: item?.seriesRole || item?.series_role || 'standalone',
+  continuityNodeId: item?.continuityNodeId ?? item?.continuity_node_id ?? null,
+  seriesConstraints: item?.seriesConstraints || item?.series_constraints || {},
   endingRates: item?.endingRates || { left: 40, right: 40 },
   endingBias: normalizeEndingBias(item?.endingBias || item?.endingRates || { left: 40, right: 40 }),
   endingNames: item?.endingNames || {},
@@ -215,6 +219,10 @@ export type StoryListItem = {
   chapterCount?: number;
   cardExcerpt?: string;
   allowAdaptation?: boolean;
+  seriesId?: string | null;
+  seriesRole?: 'standalone' | 'main' | 'sequel' | 'prequel' | 'side';
+  continuityNodeId?: string | null;
+  seriesConstraints?: Record<string, any>;
   endingMode?: 'dual' | 'single';
   endingRates?: { left: number; right: number };
   endingBias?: { leftBaseWeight: number; rightBaseWeight: number };
@@ -270,6 +278,80 @@ export type FollowedAuthorItem = {
   followedAt: string;
 };
 
+export type SeriesWorldRecord = {
+  id: string;
+  authorId: string;
+  authorName?: string;
+  title: string;
+  pitch: string;
+  genreTags: string[];
+  worldBible: Record<string, any>;
+  timelineNotes: string;
+  ironLaws: any[];
+  futureDirections: any[];
+  visibility: Visibility;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ContinuityNodeRecord = {
+  id: string;
+  seriesId: string;
+  sourceStoryId?: string | null;
+  targetStoryId?: string | null;
+  title: string;
+  endingDomain: 'left' | 'middle' | 'right';
+  endingId: string;
+  requiredBranchIds: string[];
+  optionalBranchIds: string[];
+  bridgeSummary: string;
+  legacyState: Record<string, any>;
+  repairRules: any[];
+  sequelSeedPrompt: string;
+  visibility: Visibility;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+const normalizeSeriesWorld = (record: any): SeriesWorldRecord => ({
+  ...(record || {}),
+  id: String(record?.id || ''),
+  authorId: String(record?.authorId || record?.author_id || ''),
+  authorName: record?.authorName || record?.author_name || '',
+  title: String(record?.title || '未命名长篇世界'),
+  pitch: String(record?.pitch || ''),
+  genreTags: asArray<string>(record?.genreTags || record?.genre_tags),
+  worldBible: record?.worldBible || record?.world_bible || {},
+  timelineNotes: String(record?.timelineNotes || record?.timeline_notes || ''),
+  ironLaws: asArray(record?.ironLaws || record?.iron_laws),
+  futureDirections: asArray(record?.futureDirections || record?.future_directions),
+  visibility: record?.visibility || 'private',
+  createdAt: record?.createdAt || record?.created_at || '',
+  updatedAt: record?.updatedAt || record?.updated_at || '',
+});
+
+const normalizeContinuityNode = (record: any): ContinuityNodeRecord => ({
+  ...(record || {}),
+  id: String(record?.id || ''),
+  seriesId: String(record?.seriesId || record?.series_id || ''),
+  sourceStoryId: record?.sourceStoryId ?? record?.source_story_id ?? null,
+  targetStoryId: record?.targetStoryId ?? record?.target_story_id ?? null,
+  title: String(record?.title || '未命名接续节点'),
+  endingDomain: ['left', 'right', 'middle'].includes(record?.endingDomain || record?.ending_domain) ? (record?.endingDomain || record?.ending_domain) : 'middle',
+  endingId: String(record?.endingId || record?.ending_id || 'default'),
+  requiredBranchIds: asArray<string>(record?.requiredBranchIds || record?.required_branch_ids),
+  optionalBranchIds: asArray<string>(record?.optionalBranchIds || record?.optional_branch_ids),
+  bridgeSummary: String(record?.bridgeSummary || record?.bridge_summary || ''),
+  legacyState: record?.legacyState || record?.legacy_state || {},
+  repairRules: asArray(record?.repairRules || record?.repair_rules),
+  sequelSeedPrompt: String(record?.sequelSeedPrompt || record?.sequel_seed_prompt || ''),
+  visibility: record?.visibility || 'private',
+  createdBy: String(record?.createdBy || record?.created_by || ''),
+  createdAt: record?.createdAt || record?.created_at || '',
+  updatedAt: record?.updatedAt || record?.updated_at || '',
+});
+
 export async function listPublicStories(db: Firestore, pageSize = 20, sort: StoryListSort = 'updated') {
   if (useSupabaseStories()) {
     const rows = await storyApi<StoryListItem[]>('listPublicStories', { pageSize, sort }, { timeoutMs: 9000, stage: '公开作品列表同步' });
@@ -315,6 +397,64 @@ export async function saveUserProgress(db: Firestore, userId: string, storyId: s
     storyId,
     savedAt: serverTimestamp(),
   });
+}
+
+export async function listMySeriesWorlds(db: Firestore, pageSize = 50) {
+  if (useSupabaseStories()) {
+    const rows = await storyApi<SeriesWorldRecord[]>('listMySeriesWorlds', { pageSize }, { auth: true, timeoutMs: 9000, stage: '长篇设定同步' });
+    return asArray(rows).map(normalizeSeriesWorld);
+  }
+  return [];
+}
+
+export async function getSeriesWorld(db: Firestore, seriesId: string) {
+  if (useSupabaseStories()) {
+    const row = await storyApi<SeriesWorldRecord | null>('getSeriesWorld', { seriesId }, { auth: true, timeoutMs: 9000, stage: '长篇设定读取' });
+    return row ? normalizeSeriesWorld(row) : null;
+  }
+  return null;
+}
+
+export async function saveSeriesWorld(db: Firestore, args: Partial<SeriesWorldRecord> & { id?: string }) {
+  if (useSupabaseStories()) {
+    return storyApi<string>('saveSeriesWorld', { seriesId: args.id, args }, { auth: true, timeoutMs: 12000, stage: '长篇设定保存' });
+  }
+  return '';
+}
+
+export async function deleteSeriesWorld(db: Firestore, seriesId: string) {
+  if (useSupabaseStories()) {
+    return storyApi('deleteSeriesWorld', { seriesId }, { auth: true, timeoutMs: 9000, stage: '长篇设定删除' });
+  }
+}
+
+export async function listContinuityNodes(db: Firestore, seriesId: string, pageSize = 50) {
+  if (useSupabaseStories()) {
+    const rows = await storyApi<ContinuityNodeRecord[]>('listContinuityNodes', { seriesId, pageSize }, { auth: true, timeoutMs: 9000, stage: '接续节点同步' });
+    return asArray(rows).map(normalizeContinuityNode);
+  }
+  return [];
+}
+
+export async function saveContinuityNode(db: Firestore, args: Partial<ContinuityNodeRecord> & { seriesId: string; id?: string }) {
+  if (useSupabaseStories()) {
+    return storyApi<string>('saveContinuityNode', { nodeId: args.id, seriesId: args.seriesId, args }, { auth: true, timeoutMs: 12000, stage: '接续节点保存' });
+  }
+  return '';
+}
+
+export async function attachStoryToSeries(db: Firestore, args: {
+  storyId: string;
+  seriesId: string;
+  seriesRole?: 'main' | 'sequel' | 'prequel' | 'side';
+  continuityNodeId?: string | null;
+  entryOrder?: number;
+  timelineLabel?: string;
+  seriesConstraints?: Record<string, any>;
+}) {
+  if (useSupabaseStories()) {
+    return storyApi('attachStoryToSeries', args, { auth: true, timeoutMs: 12000, stage: '作品绑定长篇' });
+  }
 }
 
 export async function getAppSettings(db: Firestore) {

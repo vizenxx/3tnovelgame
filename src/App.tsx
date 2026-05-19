@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp, Download, Sun, Moon, Search, GitBranch, Bell, BarChart3 } from 'lucide-react';
 import { auth, db, firebaseInitError } from './firebase';
-import { createEmptyStory, createSharedStoryRecord, createStorySnapshot, adaptBlueprintToStory, createStoryBranch, deleteAllNotifications, deleteNotification, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, favoriteStory, unfavoriteStory, followAuthor, getAppSettings, getAuthorFollowState, getPushConfig, getSharedStoryRecord, getStoryCartridge, getStoryMeta, getUserProgress, incrementShareMetric, incrementStoryMetric, likeStory, unlikeStory, listAuthorStories, listFollowedAuthors, listMySharedStories, listMyStories, listNotifications, listPublicStories, markNotificationsRead, refundCoverGenerationUsage, reportStory, reserveCoverGenerationUsage, saveAppSettings, savePushSubscription, saveStoryMainlineBundle, saveStoryMeta, saveUserProgress, unfollowAuthor, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch } from './storyStore';
+import { createEmptyStory, createSharedStoryRecord, createStorySnapshot, adaptBlueprintToStory, createStoryBranch, deleteAllNotifications, deleteNotification, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, favoriteStory, unfavoriteStory, followAuthor, getAppSettings, getAuthorFollowState, getPushConfig, getSharedStoryRecord, getStoryCartridge, getStoryMeta, getUserProgress, incrementShareMetric, incrementStoryMetric, likeStory, unlikeStory, listAuthorStories, listContinuityNodes, listFollowedAuthors, listMySeriesWorlds, listMySharedStories, listMyStories, listNotifications, listPublicStories, markNotificationsRead, refundCoverGenerationUsage, reportStory, reserveCoverGenerationUsage, saveAppSettings, saveContinuityNode, savePushSubscription, saveSeriesWorld, saveStoryMainlineBundle, saveStoryMeta, saveUserProgress, unfollowAuthor, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch, type ContinuityNodeRecord, type SeriesWorldRecord } from './storyStore';
 import { branchEffectiveWeight, isBranchUnlockedByHistory, normalizeEndingBias } from './storyCartridge';
 import { deleteLocalCache, getLocalCache, setLocalCache } from './localCache';
 import { useAppNavigation } from './navigation/useAppNavigation';
@@ -47,7 +47,7 @@ import {
 } from 'firebase/firestore';
 
 // --- Types ---
-type GameState = 'STORY_SELECT' | 'AUTHORING' | 'THEME_SELECTION' | 'GENERATING_BLUEPRINT' | 'PLAYING' | 'SUMMARY' | 'READONLY_STORY' | 'ARCHIVE';
+type GameState = 'STORY_SELECT' | 'AUTHORING' | 'THEME_SELECTION' | 'SERIES_WORLD' | 'GENERATING_BLUEPRINT' | 'PLAYING' | 'SUMMARY' | 'READONLY_STORY' | 'ARCHIVE';
 type NarrativePerson = 'first' | 'second' | 'third';
 type EndingMode = 'single' | 'dual';
 type AppTheme = 'dark' | 'light';
@@ -86,6 +86,8 @@ type QuickGenerationInput = {
   narrativePerson: NarrativePerson;
   endingMode: EndingMode;
   endingBias: { leftBaseWeight: number; rightBaseWeight: number };
+  seriesContext?: SeriesWorldRecord | null;
+  continuityNode?: ContinuityNodeRecord | null;
 };
 
 const safeModalBackdropClass = "fixed inset-0 flex items-center justify-center overflow-y-auto overscroll-contain px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]";
@@ -213,6 +215,13 @@ const normalizeTagList = (tags: string[] = []) => {
       return true;
     })
     .slice(0, 20);
+};
+const parseEditableJson = <T,>(raw: string, fallback: T): T => {
+  try {
+    return JSON.parse(raw || '') as T;
+  } catch {
+    return fallback;
+  }
 };
 const parseTagInput = (value: string) => normalizeTagList(String(value || '').split('，'));
 const formatStoryHeading = (chapter: Pick<Chapter, 'chapter_num' | 'title'>) => {
@@ -1391,6 +1400,40 @@ export default function App() {
   const [quickQuizStepIndex, setQuickQuizStepIndex] = useState(0);
   const [quickQuizAnswers, setQuickQuizAnswers] = useState<QuickQuizAnswers>(() => createDefaultQuickQuizAnswers());
   const [quickCharacterSeed, setQuickCharacterSeed] = useState<QuickCharacterSeed>(() => createDefaultQuickCharacterSeed());
+  const [seriesWorlds, setSeriesWorlds] = useState<SeriesWorldRecord[]>([]);
+  const [continuityNodes, setContinuityNodes] = useState<ContinuityNodeRecord[]>([]);
+  const [selectedSeriesId, setSelectedSeriesId] = useState('');
+  const [selectedContinuityNodeId, setSelectedContinuityNodeId] = useState('');
+  const [seriesSourceStoryId, setSeriesSourceStoryId] = useState('');
+  const [seriesGenerating, setSeriesGenerating] = useState(false);
+  const [seriesSaving, setSeriesSaving] = useState(false);
+  const [seriesForm, setSeriesForm] = useState<Partial<SeriesWorldRecord>>({
+    title: '',
+    pitch: '',
+    genreTags: [],
+    worldBible: {},
+    timelineNotes: '',
+    ironLaws: [],
+    futureDirections: [],
+    visibility: 'private',
+  });
+  const [continuityForm, setContinuityForm] = useState<Partial<ContinuityNodeRecord>>({
+    title: '',
+    endingDomain: 'middle',
+    endingId: 'default',
+    requiredBranchIds: [],
+    optionalBranchIds: [],
+    bridgeSummary: '',
+    legacyState: {},
+    repairRules: [],
+    sequelSeedPrompt: '',
+    visibility: 'private',
+  });
+  const [seriesWorldBibleText, setSeriesWorldBibleText] = useState('{}');
+  const [seriesIronLawsText, setSeriesIronLawsText] = useState('[]');
+  const [seriesFutureDirectionsText, setSeriesFutureDirectionsText] = useState('[]');
+  const [continuityLegacyText, setContinuityLegacyText] = useState('{}');
+  const [continuityRepairText, setContinuityRepairText] = useState('[]');
   const [blueprint, setBlueprint] = useState<Blueprint | null>(null);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [changeHighlights, setChangeHighlights] = useState<Record<number, string[]>>({});
@@ -3054,6 +3097,18 @@ export default function App() {
     return () => window.clearInterval(timer);
   }, [gameState, authoringCartridge, user?.uid, db, storyLibrarySort]);
 
+  useEffect(() => {
+    if (gameState !== 'SERIES_WORLD' || !selectedSeriesId) return;
+    const selected = seriesWorlds.find((series) => series.id === selectedSeriesId);
+    if (selected) {
+      setSeriesForm(selected);
+      setSeriesWorldBibleText(JSON.stringify(selected.worldBible || {}, null, 2));
+      setSeriesIronLawsText(JSON.stringify(selected.ironLaws || [], null, 2));
+      setSeriesFutureDirectionsText(JSON.stringify(selected.futureDirections || [], null, 2));
+    }
+    loadContinuityNodesForSeries(selectedSeriesId).catch(() => {});
+  }, [gameState, selectedSeriesId, seriesWorlds.length]);
+
   const toggleTheme = (theme: string) => {
     setSelectedThemes((prev) => (
       prev.includes(theme)
@@ -4442,6 +4497,184 @@ export default function App() {
     );
   };
 
+  const selectedSeriesWorld = seriesWorlds.find((series) => series.id === selectedSeriesId) || null;
+  const selectedContinuityNode = continuityNodes.find((node) => node.id === selectedContinuityNodeId) || null;
+
+  const loadSeriesWorlds = async () => {
+    if (!db || !user) return;
+    try {
+      const rows = await listMySeriesWorlds(db as any, 50);
+      setSeriesWorlds(rows);
+      if (!selectedSeriesId && rows[0]?.id) setSelectedSeriesId(rows[0].id);
+    } catch (error) {
+      console.error(error);
+      showError('长篇设定同步失败。');
+    }
+  };
+
+  const loadContinuityNodesForSeries = async (seriesId: string) => {
+    if (!db || !seriesId) return;
+    try {
+      const rows = await listContinuityNodes(db as any, seriesId, 50);
+      setContinuityNodes(rows);
+      if (!selectedContinuityNodeId && rows[0]?.id) setSelectedContinuityNodeId(rows[0].id);
+    } catch (error) {
+      console.error(error);
+      setContinuityNodes([]);
+    }
+  };
+
+  const openSeriesWorldView = async () => {
+    navigateTo('SERIES_WORLD');
+    await refreshStories({ force: true });
+    await loadSeriesWorlds();
+  };
+
+  const handleGenerateSeriesWorld = async (mode: 'new' | 'extract') => {
+    if (!user || !db) return;
+    setSeriesGenerating(true);
+    try {
+      let sourceStory: any = null;
+      if (mode === 'extract' && seriesSourceStoryId) {
+        sourceStory = await getStoryCartridge(db as any, seriesSourceStoryId);
+      }
+      const response = await apiFetch('/api/generate-series-world', {
+        method: 'POST',
+        body: JSON.stringify({
+          mode,
+          genreTags: normalizeTagList(String(seriesForm.genreTags?.join?.('，') || '').split(/[,，]/).filter(Boolean)),
+          authorSeed: `${seriesForm.pitch || ''}\n${seriesForm.timelineNotes || ''}`,
+          sourceStory,
+        }),
+      }, 90000);
+      if (!response.ok) throw new Error(await readErrorMessage(response));
+      const data = await response.json();
+      setSeriesForm({
+        ...data,
+        visibility: 'private',
+      });
+      setSeriesWorldBibleText(JSON.stringify(data.worldBible || {}, null, 2));
+      setSeriesIronLawsText(JSON.stringify(data.ironLaws || [], null, 2));
+      setSeriesFutureDirectionsText(JSON.stringify(data.futureDirections || [], null, 2));
+      showError('长篇设定草稿已生成，可先编辑再保存。');
+    } catch (error) {
+      console.error(error);
+      showError(`生成长篇设定失败：${error instanceof Error ? error.message : '请稍后再试'}`);
+    } finally {
+      setSeriesGenerating(false);
+    }
+  };
+
+  const handleSaveSeriesWorld = async () => {
+    if (!db || !user) return;
+    setSeriesSaving(true);
+    try {
+      const id = await saveSeriesWorld(db as any, {
+        ...seriesForm,
+        id: selectedSeriesId || seriesForm.id,
+        authorId: user.uid,
+        authorName: getUserAuthorName(user),
+        worldBible: parseEditableJson(seriesWorldBibleText, seriesForm.worldBible || {}),
+        ironLaws: parseEditableJson(seriesIronLawsText, seriesForm.ironLaws || []),
+        futureDirections: parseEditableJson(seriesFutureDirectionsText, seriesForm.futureDirections || []),
+      });
+      await loadSeriesWorlds();
+      setSelectedSeriesId(id);
+      showError('长篇设定已保存。');
+    } catch (error) {
+      console.error(error);
+      showError('保存长篇设定失败。');
+    } finally {
+      setSeriesSaving(false);
+    }
+  };
+
+  const handleGenerateContinuityNode = async () => {
+    if (!db || !selectedSeriesWorld || !seriesSourceStoryId) {
+      showError('请先选择长篇设定和来源作品。');
+      return;
+    }
+    setSeriesGenerating(true);
+    try {
+      const sourceStory = await getStoryCartridge(db as any, seriesSourceStoryId);
+      const response = await apiFetch('/api/generate-continuity-node', {
+        method: 'POST',
+        body: JSON.stringify({
+          seriesWorld: selectedSeriesWorld,
+          sourceStory,
+          endingDomain: continuityForm.endingDomain || 'middle',
+          endingId: continuityForm.endingId || 'default',
+          requiredBranchIds: continuityForm.requiredBranchIds || [],
+        }),
+      }, 90000);
+      if (!response.ok) throw new Error(await readErrorMessage(response));
+      const data = await response.json();
+      setContinuityForm({
+        ...data,
+        seriesId: selectedSeriesWorld.id,
+        sourceStoryId: seriesSourceStoryId,
+        visibility: 'private',
+      });
+      setContinuityLegacyText(JSON.stringify(data.legacyState || {}, null, 2));
+      setContinuityRepairText(JSON.stringify(data.repairRules || [], null, 2));
+      showError('接续节点草稿已生成，可编辑后保存。');
+    } catch (error) {
+      console.error(error);
+      showError(`生成接续节点失败：${error instanceof Error ? error.message : '请稍后再试'}`);
+    } finally {
+      setSeriesGenerating(false);
+    }
+  };
+
+  const handleSaveContinuityNode = async () => {
+    if (!db || !selectedSeriesWorld) return;
+    setSeriesSaving(true);
+    try {
+      const id = await saveContinuityNode(db as any, {
+        ...continuityForm,
+        id: continuityForm.id,
+        seriesId: selectedSeriesWorld.id,
+        sourceStoryId: continuityForm.sourceStoryId || seriesSourceStoryId || null,
+        legacyState: parseEditableJson(continuityLegacyText, continuityForm.legacyState || {}),
+        repairRules: parseEditableJson(continuityRepairText, continuityForm.repairRules || []),
+      });
+      await loadContinuityNodesForSeries(selectedSeriesWorld.id);
+      setSelectedContinuityNodeId(id);
+      showError('接续节点已保存。');
+    } catch (error) {
+      console.error(error);
+      showError('保存接续节点失败。');
+    } finally {
+      setSeriesSaving(false);
+    }
+  };
+
+  const generateStoryFromSeries = (role: 'main' | 'sequel') => {
+    if (!selectedSeriesWorld) {
+      showError('请先选择或保存一个长篇设定。');
+      return;
+    }
+    const continuity = role === 'sequel' ? selectedContinuityNode : null;
+    if (role === 'sequel' && !continuity) {
+      showError('请先选择或保存一个接续节点。');
+      return;
+    }
+    const outline = role === 'sequel'
+      ? `请基于长篇《${selectedSeriesWorld.title}》和接续节点「${continuity?.title}」生成续作。${continuity?.sequelSeedPrompt || continuity?.bridgeSummary || ''}`
+      : `请基于长篇《${selectedSeriesWorld.title}》生成第一部作品。${selectedSeriesWorld.pitch || ''}`;
+    const input: QuickGenerationInput = {
+      selectedThemes: normalizeTagList(selectedSeriesWorld.genreTags || []).slice(0, 4),
+      customOutline: outline,
+      targetWordCount,
+      narrativePerson,
+      endingMode: quickEndingMode,
+      endingBias: quickEndingBias,
+      seriesContext: selectedSeriesWorld,
+      continuityNode: continuity,
+    };
+    void handleGenerateBlueprint(input, quickGenerationSignature({ input }));
+  };
+
   const handleGenerateBlueprint = async (overrideInput?: QuickGenerationInput, overrideSignature?: string) => {
     if (!user || !db) return;
     let generationStage = appLanguage === 'en-US' ? 'preparing generation' : '准备生成';
@@ -4541,6 +4774,8 @@ export default function App() {
       data.endingMode = data.endingMode === 'single' ? 'single' : activeGenerationInput.endingMode;
       data.endingBias = normalizeEndingBias(data.endingBias || activeGenerationInput.endingBias || { left: data.left_mainline_default, right: data.right_mainline_default });
       data.tags = normalizeTagList(data.tags || activeGenerationInput.selectedThemes);
+      data.seriesContext = activeGenerationInput.seriesContext || data.seriesContext || null;
+      data.continuityNode = activeGenerationInput.continuityNode || data.continuityNode || null;
       data.chapters = ensureSevenChapterShells(data.chapters || []);
       await setLocalCache(quickGenerationDraftCacheKey(), { signature: draftSignature, blueprint: data });
 
@@ -6840,6 +7075,13 @@ export default function App() {
             <Sparkles className="h-4 w-4" />
             {t('library.authoring')}
           </button>
+          <button
+            onClick={() => void openSeriesWorldView()}
+            className={semanticButtonClass('ghost', { compact: true })}
+          >
+            <GitBranch className="h-4 w-4" />
+            创建长篇世界
+          </button>
         </div>
         </div>
       </div>
@@ -7492,6 +7734,166 @@ export default function App() {
       )}
     </AnimatePresence>
   );
+
+  const renderSeriesWorldView = () => {
+    const seriesGenreText = (seriesForm.genreTags || []).join('，');
+    return (
+      <div className="mx-auto min-h-[100dvh] max-w-6xl px-5 pb-14 pt-[max(5rem,calc(env(safe-area-inset-top)+4rem))] sm:px-6 lg:px-8">
+        <div className="mb-8 flex items-center justify-between gap-3">
+          <BackNavButton label="返回首页" onClick={() => goBack('STORY_SELECT')} />
+          <button type="button" onClick={() => void loadSeriesWorlds()} className={semanticButtonClass('ghost', { compact: true })}>
+            <RefreshCcw className="h-4 w-4" />
+            刷新长篇
+          </button>
+        </div>
+
+        <div className="mb-8 rounded-[2rem] border border-indigo-300/15 bg-indigo-500/10 p-6">
+          <div className="inline-flex items-center gap-2 rounded-full border border-indigo-300/20 bg-indigo-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-indigo-200">
+            <GitBranch className="h-3.5 w-3.5" />
+            长篇系统
+          </div>
+          <h1 className="mt-4 text-3xl font-black text-white sm:text-4xl">创建长篇世界</h1>
+          <p className="mt-3 max-w-3xl text-sm leading-relaxed text-zinc-400">
+            先搭建可编辑的世界观、时间线和长篇铁律，再绑定作品生成第一部或续作。第一版先验证作者侧闭环，不强制玩家继承。
+          </p>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-[0.9fr_1.4fr]">
+          <section className="space-y-4">
+            <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/60 p-4">
+              <div className="mb-3 text-sm font-black text-white">我的长篇设定</div>
+              <div className="space-y-2">
+                {seriesWorlds.length === 0 && <div className="rounded-2xl bg-zinc-900/60 p-4 text-sm text-zinc-500">还没有长篇设定，可以从零生成或手动保存一个。</div>}
+                {seriesWorlds.map((series) => (
+                  <button
+                    key={series.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedSeriesId(series.id);
+                      setSeriesForm(series);
+                      setSeriesWorldBibleText(JSON.stringify(series.worldBible || {}, null, 2));
+                      setSeriesIronLawsText(JSON.stringify(series.ironLaws || [], null, 2));
+                      setSeriesFutureDirectionsText(JSON.stringify(series.futureDirections || [], null, 2));
+                      void loadContinuityNodesForSeries(series.id);
+                    }}
+                    className={`w-full rounded-2xl border p-4 text-left transition-all hover:-translate-y-0.5 active:scale-[0.98] ${selectedSeriesId === series.id ? 'border-indigo-400 bg-indigo-500/15' : 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-600'}`}
+                  >
+                    <div className="text-sm font-black text-white">{series.title}</div>
+                    <div className="mt-1 line-clamp-2 text-xs leading-relaxed text-zinc-500">{series.pitch || '尚未填写卖点'}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/60 p-4">
+              <div className="mb-3 text-sm font-black text-white">从已有作品提取</div>
+              <select
+                value={seriesSourceStoryId}
+                onChange={(event) => setSeriesSourceStoryId(event.target.value)}
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm text-zinc-200 outline-none"
+              >
+                <option value="">选择来源作品</option>
+                {myStories.map((story: any) => (
+                  <option key={story.id} value={story.id}>{getStoryTitle(story)}</option>
+                ))}
+              </select>
+              <div className="mt-3 grid gap-2">
+                <button type="button" onClick={() => void handleGenerateSeriesWorld('new')} disabled={seriesGenerating} className={semanticButtonClass('secondary', { compact: true, fullWidth: true })}>
+                  {seriesGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  从零生成世界观
+                </button>
+                <button type="button" onClick={() => void handleGenerateSeriesWorld('extract')} disabled={seriesGenerating || !seriesSourceStoryId} className={semanticButtonClass('ghost', { compact: true, fullWidth: true })}>
+                  <BookOpen className="h-4 w-4" />
+                  从作品提取世界观
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section className="space-y-6">
+            <div className="rounded-[2rem] border border-zinc-800 bg-zinc-950/60 p-5">
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="text-lg font-black text-white">长篇设定草稿</div>
+                  <div className="mt-1 text-xs text-zinc-500">所有内容都可以手动编辑，保存后才能用于绑定作品。</div>
+                </div>
+                <button type="button" onClick={() => void handleSaveSeriesWorld()} disabled={seriesSaving} className={semanticButtonClass('primary', { compact: true })}>
+                  {seriesSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  保存长篇设定
+                </button>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <input value={seriesForm.title || ''} onChange={(event) => setSeriesForm((prev) => ({ ...prev, title: event.target.value }))} placeholder="长篇标题" className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
+                <input value={seriesGenreText} onChange={(event) => setSeriesForm((prev) => ({ ...prev, genreTags: event.target.value.split(/[,，]/).map((tag) => tag.trim()).filter(Boolean) }))} placeholder="题材标签，以逗号分隔" className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
+              </div>
+              <textarea value={seriesForm.pitch || ''} onChange={(event) => setSeriesForm((prev) => ({ ...prev, pitch: event.target.value }))} placeholder="一句话卖点" className="mt-3 min-h-24 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
+              <textarea value={seriesForm.timelineNotes || ''} onChange={(event) => setSeriesForm((prev) => ({ ...prev, timelineNotes: event.target.value }))} placeholder="时间线基准" className="mt-3 min-h-28 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
+              <div className="mt-3 grid gap-3 lg:grid-cols-3">
+                <textarea value={seriesWorldBibleText} onChange={(event) => setSeriesWorldBibleText(event.target.value)} className="min-h-56 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-xs text-zinc-200 outline-none focus:border-indigo-500" />
+                <textarea value={seriesIronLawsText} onChange={(event) => setSeriesIronLawsText(event.target.value)} className="min-h-56 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-xs text-zinc-200 outline-none focus:border-indigo-500" />
+                <textarea value={seriesFutureDirectionsText} onChange={(event) => setSeriesFutureDirectionsText(event.target.value)} className="min-h-56 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-xs text-zinc-200 outline-none focus:border-indigo-500" />
+              </div>
+            </div>
+
+            <div className="rounded-[2rem] border border-zinc-800 bg-zinc-950/60 p-5">
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="text-lg font-black text-white">接续节点</div>
+                  <div className="mt-1 text-xs text-zinc-500">从前作结局和支线生成续作入口，之后可用于生成第二部。</div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => void handleGenerateContinuityNode()} disabled={seriesGenerating || !selectedSeriesWorld || !seriesSourceStoryId} className={semanticButtonClass('secondary', { compact: true })}>
+                    {seriesGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <GitBranch className="h-4 w-4" />}
+                    生成接续节点
+                  </button>
+                  <button type="button" onClick={() => void handleSaveContinuityNode()} disabled={seriesSaving || !selectedSeriesWorld} className={semanticButtonClass('primary', { compact: true })}>
+                    保存节点
+                  </button>
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <input value={continuityForm.title || ''} onChange={(event) => setContinuityForm((prev) => ({ ...prev, title: event.target.value }))} placeholder="接续节点名称" className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
+                <select value={continuityForm.endingDomain || 'middle'} onChange={(event) => setContinuityForm((prev) => ({ ...prev, endingDomain: event.target.value as any }))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none">
+                  <option value="middle">均衡域</option>
+                  <option value="left">左域</option>
+                  <option value="right">右域</option>
+                </select>
+                <input value={continuityForm.endingId || 'default'} onChange={(event) => setContinuityForm((prev) => ({ ...prev, endingId: event.target.value }))} placeholder="结局 ID" className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
+              </div>
+              <textarea value={continuityForm.bridgeSummary || ''} onChange={(event) => setContinuityForm((prev) => ({ ...prev, bridgeSummary: event.target.value }))} placeholder="接续摘要" className="mt-3 min-h-28 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
+              <textarea value={continuityForm.sequelSeedPrompt || ''} onChange={(event) => setContinuityForm((prev) => ({ ...prev, sequelSeedPrompt: event.target.value }))} placeholder="续作生成要求" className="mt-3 min-h-28 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
+              <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                <textarea value={continuityLegacyText} onChange={(event) => setContinuityLegacyText(event.target.value)} className="min-h-44 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-xs text-zinc-200 outline-none focus:border-indigo-500" />
+                <textarea value={continuityRepairText} onChange={(event) => setContinuityRepairText(event.target.value)} className="min-h-44 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-xs text-zinc-200 outline-none focus:border-indigo-500" />
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {continuityNodes.map((node) => (
+                  <button key={node.id} type="button" onClick={() => { setSelectedContinuityNodeId(node.id); setContinuityForm(node); setContinuityLegacyText(JSON.stringify(node.legacyState || {}, null, 2)); setContinuityRepairText(JSON.stringify(node.repairRules || [], null, 2)); }} className={`rounded-full px-3 py-2 text-xs font-black ${selectedContinuityNodeId === node.id ? 'bg-indigo-500 text-white' : 'bg-zinc-800 text-zinc-300'}`}>
+                    {node.title}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-[2rem] border border-zinc-800 bg-zinc-950/60 p-5">
+              <div className="mb-4 text-lg font-black text-white">生成作品</div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <button type="button" onClick={() => generateStoryFromSeries('main')} disabled={!selectedSeriesWorld} className={semanticButtonClass('primary', { fullWidth: true })}>
+                  <Wand2 className="h-4 w-4" />
+                  基于该长篇生成第一部
+                </button>
+                <button type="button" onClick={() => generateStoryFromSeries('sequel')} disabled={!selectedSeriesWorld || !selectedContinuityNode} className={semanticButtonClass('secondary', { fullWidth: true })}>
+                  <GitBranch className="h-4 w-4" />
+                  基于接续节点生成续作
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    );
+  };
+
   const renderThemeSelectionView = () => (
     <div className="mx-auto flex min-h-[100dvh] max-w-5xl flex-col justify-center px-6 pb-20 pt-[max(7rem,calc(env(safe-area-inset-top)+6rem))] text-center lg:px-8">
       <div className="mb-8 flex items-center justify-between">
@@ -10595,6 +10997,7 @@ export default function App() {
         <>
           {gameState === 'STORY_SELECT' && renderStorySelectView()}
           {gameState === 'ARCHIVE' && renderArchiveView()}
+          {gameState === 'SERIES_WORLD' && renderSeriesWorldView()}
           {gameState === 'THEME_SELECTION' && renderThemeSelectionView()}
           {gameState === 'GENERATING_BLUEPRINT' && (
             <div className="fixed inset-0 z-[5000] flex flex-col items-center justify-center bg-zinc-950 px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))] text-center">

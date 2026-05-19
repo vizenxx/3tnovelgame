@@ -61,12 +61,29 @@ export function buildChapterContinuationPrompt(args: {
 }) {
   const isSingleEnding = args.blueprint?.endingMode === 'single' || args.blueprint?.ending_mode === 'single';
   const isEnglish = args.language === 'en-US';
+  const seriesContext = args.blueprint?.seriesContext;
+  const continuityNode = args.blueprint?.continuityNode;
+  const seriesBlock = seriesContext ? `
+Long-form series constraints / 长篇约束：
+${JSON.stringify({
+  title: seriesContext.title,
+  pitch: seriesContext.pitch,
+  ironLaws: seriesContext.ironLaws,
+  timelineNotes: seriesContext.timelineNotes,
+  continuityNode: continuityNode ? {
+    title: continuityNode.title,
+    bridgeSummary: continuityNode.bridgeSummary,
+    repairRules: continuityNode.repairRules,
+  } : null,
+}, null, 2)}
+` : '';
   if (isEnglish) {
     return `You are the prose engine for an English-language interactive fiction game.
 Story premise: ${args.blueprint.main_axis}
 Narrative person: ${buildNarrativePersonInstruction(args.narrativePerson || args.blueprint.narrative_person, 'chapter')}
 Characters: ${args.blueprint.characters.map((character: any) => `${character.id}:${character.name}(${character.desc})`).join('; ')}
 Ending structure: ${isSingleEnding ? 'Single ending. Later chapters may change the route, but the finale should naturally converge on the same core ending.' : 'Branching endings. Current compatibility slots are default / left / right, with future expansion possible.'}
+${seriesBlock}
 ${args.worldStatePrompt}
 Current chapter outline: ${args.outlineSummary}
 ${args.futureOutlines ? `Future outline notes:\n${args.futureOutlines}` : ''}
@@ -93,6 +110,7 @@ Return strict JSON Schema only. Do not include image prompts or meta-comments.`;
 叙事人称：${buildNarrativePersonInstruction(args.narrativePerson || args.blueprint.narrative_person, 'chapter')}
 角色列表：${args.blueprint.characters.map((character: any) => `${character.id}:${character.name}(${character.desc})`).join('; ')}
 结局结构：${isSingleEnding ? '单一结局。后续章节必须允许过程变化，但终章需要自然收束到同一个核心结局。' : '多线结局。当前使用默认/左/右三结局，未来可扩展为更多结局。'}
+${seriesBlock}
 ${args.worldStatePrompt}
 当前章节大纲指引：${args.outlineSummary}
 ${args.futureOutlines ? `后续章节走向备忘：\n${args.futureOutlines}` : ''}

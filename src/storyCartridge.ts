@@ -43,6 +43,10 @@ export interface StoryMeta {
   chapterCount?: number;
   cardExcerpt?: string;
   allowAdaptation?: boolean;
+  seriesId?: string | null;
+  seriesRole?: 'standalone' | 'main' | 'sequel' | 'prequel' | 'side';
+  continuityNodeId?: string | null;
+  seriesConstraints?: Record<string, any>;
   endingMode?: EndingMode; // default: dual
   endingRates?: { left: number; right: number }; // 10-80%, only meaningful in dual mode
   endingBias?: EndingBias;

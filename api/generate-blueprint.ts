@@ -242,7 +242,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const user = await requireFirebaseAuth(req, res);
     if (!user) return;
 
-    const { selectedThemes, customOutline, targetWordCount, narrativePerson } = req.body || {};
+    const { selectedThemes, customOutline, targetWordCount, narrativePerson, seriesContext, continuityNode } = req.body || {};
     const language = normalizeGenerationLanguage(req.body?.language);
     const endingMode = req.body?.endingMode === 'single' ? 'single' : 'dual';
     logGenerationInfo(logContext, 'request', {
@@ -268,6 +268,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       narrativePerson,
       endingMode,
       language,
+      seriesContext,
+      continuityNode,
     })}`;
 
     const data = await generateBlueprintWithFallback(prompt, logContext, endingMode);

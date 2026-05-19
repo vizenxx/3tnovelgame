@@ -7,13 +7,35 @@ export function buildQuickStoryBlueprintPrompt(args: {
   narrativePerson?: string;
   endingMode?: 'single' | 'dual' | string;
   language?: 'zh-CN' | 'en-US' | string;
+  seriesContext?: any;
+  continuityNode?: any;
 }) {
   const isSingleEnding = args.endingMode === 'single';
   const isEnglish = args.language === 'en-US';
+  const seriesInstruction = args.seriesContext ? `
+Long-form series context / 长篇设定：
+Title: ${args.seriesContext.title || 'Untitled series'}
+Pitch: ${args.seriesContext.pitch || ''}
+World Bible: ${JSON.stringify(args.seriesContext.worldBible || {}, null, 2)}
+Timeline: ${args.seriesContext.timelineNotes || ''}
+Iron Laws: ${JSON.stringify(args.seriesContext.ironLaws || [], null, 2)}
+Future Directions: ${JSON.stringify(args.seriesContext.futureDirections || [], null, 2)}
+` : '';
+  const continuityInstruction = args.continuityNode ? `
+Continuation node / 接续节点：
+Title: ${args.continuityNode.title || 'Untitled continuity node'}
+Ending Domain: ${args.continuityNode.endingDomain || 'middle'}
+Ending ID: ${args.continuityNode.endingId || 'default'}
+Bridge Summary: ${args.continuityNode.bridgeSummary || ''}
+Legacy State: ${JSON.stringify(args.continuityNode.legacyState || {}, null, 2)}
+Repair Rules: ${JSON.stringify(args.continuityNode.repairRules || [], null, 2)}
+Sequel Seed Prompt: ${args.continuityNode.sequelSeedPrompt || ''}
+` : '';
   if (isEnglish) {
     return `You are a senior interactive fiction worldbuilder for an English-language story game.
 Known themes: ${Array.isArray(args.selectedThemes) && args.selectedThemes.length > 0 ? args.selectedThemes.join(', ') : 'none'}.
 Player story request / outline: ${args.customOutline ? args.customOutline : 'none'}.
+${seriesInstruction}${continuityInstruction}
 Narrative person hard constraint: ${buildNarrativePersonInstruction(args.narrativePerson, 'blueprint')}
 Ending structure hard constraint: ${isSingleEnding
   ? 'Single ending. No matter how players later interfere, the finale must naturally converge on the same core ending. Branches and interventions may change the route, cost, understanding, and relationships, but must not create mutually exclusive finales.'
@@ -26,6 +48,8 @@ English-market style requirements:
 2. Use natural English names, idiomatic titles, and genre conventions familiar to English readers.
 3. Avoid Chinese book-title punctuation, literal cultivation/wuxia terms, or “fate domain” jargon unless explicitly requested by the premise.
 4. Keep the story playable: clear conflicts, character stakes, and intervention points.
+5. If long-form series context exists, obey its iron laws before local plot convenience.
+6. If a continuation node exists, make this a natural sequel opening without invalidating the previous story result.
 
 Output requirements:
 1. For performance reasons, never write full chapter prose in chapters.
@@ -49,6 +73,7 @@ Return strict JSON only. Do not include metadata. Reference chapter length: ${ar
   return `你是一个互动小说世界构建师。
 已知主题：${Array.isArray(args.selectedThemes) && args.selectedThemes.length > 0 ? args.selectedThemes.join(', ') : '无'}。
 用户提供的故事大纲/期望：${args.customOutline ? args.customOutline : '无'}。
+${seriesInstruction}${continuityInstruction}
 叙事人称硬约束：${buildNarrativePersonInstruction(args.narrativePerson, 'blueprint')}
 结局结构硬约束：${isSingleEnding
   ? '单一结局。无论玩家后续如何干涉，终局都必须自然收束到同一个核心结局；支线和干涉只改变抵达终局的过程、代价、认知与关系，不得设计互斥终局。'
@@ -57,6 +82,7 @@ Return strict JSON only. Do not include metadata. Reference chapter length: ${ar
 任务：生成一个完整的首篇章（7章）的故事蓝图骨架。
 
 要求（极度重要）：
+0. 若存在长篇设定，必须优先遵守长篇铁律；若存在接续节点，必须自然接住前作结果，不得粗暴否定前作。
 1. 由于性能限制，严禁在 chapters 中生成章节全文。
 2. 每一章必须提供一个 summary（简短情节大纲，60-80字）。
 3. 每一章的情节必须对上下章节有适当联系且重点不重复。

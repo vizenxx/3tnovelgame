@@ -27,6 +27,10 @@ const STORY_CARD_SELECT = [
   'chapter_count',
   'card_excerpt',
   'allow_adaptation',
+  'series_id',
+  'series_role',
+  'continuity_node_id',
+  'series_constraints',
   'ending_mode',
   'ending_rates',
   'ending_names',
@@ -121,6 +125,10 @@ function storyListItem(row: any) {
     chapterCount: row.chapter_count,
     cardExcerpt: row.card_excerpt,
     allowAdaptation: row.allow_adaptation,
+    seriesId: row.series_id || null,
+    seriesRole: row.series_role || 'standalone',
+    continuityNodeId: row.continuity_node_id || null,
+    seriesConstraints: row.series_constraints || {},
     endingMode: row.ending_mode,
     endingRates: row.ending_rates || { left: 40, right: 40 },
     endingBias: normalizeEndingBias(row.ending_rates || { left: 40, right: 40 }),
@@ -191,6 +199,88 @@ function storyMeta(row: any) {
   };
 }
 
+function seriesWorldRecord(row: any) {
+  return {
+    id: row.id,
+    authorId: row.author_id,
+    authorName: row.author_name,
+    title: row.title,
+    pitch: row.pitch,
+    genreTags: asArray(row.genre_tags),
+    worldBible: row.world_bible || {},
+    timelineNotes: row.timeline_notes || '',
+    ironLaws: asArray(row.iron_laws),
+    futureDirections: asArray(row.future_directions),
+    visibility: row.visibility || 'private',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function seriesWorldRowFromArgs(args: any, authUser: any, id?: string) {
+  const updatedAt = nowIso();
+  return {
+    ...(id ? { id } : {}),
+    author_id: authUser.uid,
+    author_name: args.authorName || args.author_name || guestName(authUser.uid),
+    title: args.title || '未命名长篇世界',
+    pitch: args.pitch || '',
+    genre_tags: asArray(args.genreTags || args.genre_tags),
+    world_bible: args.worldBible || args.world_bible || {},
+    timeline_notes: args.timelineNotes || args.timeline_notes || '',
+    iron_laws: asArray(args.ironLaws || args.iron_laws),
+    future_directions: asArray(args.futureDirections || args.future_directions),
+    visibility: args.visibility === 'public' || args.visibility === 'unlisted' ? args.visibility : 'private',
+    updated_at: updatedAt,
+    created_at: args.createdAt || args.created_at || updatedAt,
+  };
+}
+
+function continuityNodeRecord(row: any) {
+  return {
+    id: row.id,
+    seriesId: row.series_id,
+    sourceStoryId: row.source_story_id,
+    targetStoryId: row.target_story_id,
+    title: row.title,
+    endingDomain: row.ending_domain || 'middle',
+    endingId: row.ending_id || 'default',
+    requiredBranchIds: asArray(row.required_branch_ids),
+    optionalBranchIds: asArray(row.optional_branch_ids),
+    bridgeSummary: row.bridge_summary || '',
+    legacyState: row.legacy_state || {},
+    repairRules: asArray(row.repair_rules),
+    sequelSeedPrompt: row.sequel_seed_prompt || '',
+    visibility: row.visibility || 'private',
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function continuityNodeRowFromArgs(args: any, authUser: any, id?: string) {
+  const updatedAt = nowIso();
+  return {
+    ...(id ? { id } : {}),
+    series_id: args.seriesId || args.series_id,
+    source_story_id: args.sourceStoryId || args.source_story_id || null,
+    target_story_id: args.targetStoryId || args.target_story_id || null,
+    title: args.title || '未命名接续节点',
+    ending_domain: ['left', 'right', 'middle'].includes(args.endingDomain || args.ending_domain) ? (args.endingDomain || args.ending_domain) : 'middle',
+    ending_id: args.endingId || args.ending_id || 'default',
+    required_branch_ids: asArray(args.requiredBranchIds || args.required_branch_ids),
+    optional_branch_ids: asArray(args.optionalBranchIds || args.optional_branch_ids),
+    bridge_summary: args.bridgeSummary || args.bridge_summary || '',
+    legacy_state: args.legacyState || args.legacy_state || {},
+    repair_rules: asArray(args.repairRules || args.repair_rules),
+    sequel_seed_prompt: args.sequelSeedPrompt || args.sequel_seed_prompt || '',
+    visibility: args.visibility === 'public' || args.visibility === 'unlisted' ? args.visibility : 'private',
+    created_by: authUser.uid,
+    updated_at: updatedAt,
+    created_at: args.createdAt || args.created_at || updatedAt,
+  };
+}
+
 function sharedRecord(row: any) {
   return {
     id: row.id,
@@ -241,6 +331,10 @@ function storyRowFromMeta(meta: any, id?: string) {
     chapter_count: asInt(meta.chapterCount),
     card_excerpt: meta.cardExcerpt || '',
     allow_adaptation: Boolean(meta.allowAdaptation),
+    series_id: meta.seriesId || meta.series_id || null,
+    series_role: meta.seriesRole || meta.series_role || (meta.seriesId || meta.series_id ? 'main' : 'standalone'),
+    continuity_node_id: meta.continuityNodeId || meta.continuity_node_id || null,
+    series_constraints: meta.seriesConstraints || meta.series_constraints || {},
     ending_mode: meta.endingMode || 'dual',
     ending_rates: { ...(meta.endingRates || { left: 40, right: 40 }), ...normalizeEndingBias(meta.endingBias || meta.endingRates) },
     ending_names: meta.endingNames || {},
@@ -626,6 +720,121 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ ok: true });
     }
 
+    if (action === 'listMySeriesWorlds') {
+      const rows = await supabaseRequest<any[]>('series_worlds', {
+        query: {
+          author_id: `eq.${authUser.uid}`,
+          select: '*',
+          order: 'updated_at.desc',
+          limit: body.pageSize || 50,
+        },
+      }).catch((error) => {
+        if (/series_worlds/i.test(String(error?.message || error))) return [];
+        throw error;
+      });
+      return res.status(200).json(rows.map(seriesWorldRecord));
+    }
+
+    if (action === 'getSeriesWorld') {
+      const seriesId = String(body.seriesId || '');
+      if (!seriesId) return res.status(400).json({ error: 'Missing seriesId' });
+      const [row] = await supabaseRequest<any[]>('series_worlds', { query: { id: `eq.${seriesId}`, select: '*', limit: 1 } });
+      if (!row || (row.visibility === 'private' && row.author_id !== authUser.uid)) return res.status(200).json(null);
+      return res.status(200).json(seriesWorldRecord(row));
+    }
+
+    if (action === 'saveSeriesWorld') {
+      const args = body.args || {};
+      const seriesId = String(body.seriesId || args.id || '');
+      if (seriesId) {
+        const [existing] = await supabaseRequest<any[]>('series_worlds', { query: { id: `eq.${seriesId}`, select: 'author_id', limit: 1 } });
+        if (!existing || existing.author_id !== authUser.uid) return res.status(403).json({ code: 'OWNER_REQUIRED', error: 'Forbidden' });
+        await supabaseRequest('series_worlds', {
+          method: 'PATCH',
+          query: { id: `eq.${seriesId}`, author_id: `eq.${authUser.uid}` },
+          body: seriesWorldRowFromArgs(args, authUser, seriesId),
+        });
+        return res.status(200).json(seriesId);
+      }
+      const [created] = await supabaseInsert<any[]>('series_worlds', [seriesWorldRowFromArgs(args, authUser)]);
+      return res.status(200).json(created.id);
+    }
+
+    if (action === 'deleteSeriesWorld') {
+      const seriesId = String(body.seriesId || '');
+      if (!seriesId) return res.status(400).json({ error: 'Missing seriesId' });
+      await supabaseRequest('series_worlds', {
+        method: 'DELETE',
+        query: { id: `eq.${seriesId}`, author_id: `eq.${authUser.uid}` },
+      });
+      return res.status(200).json({ ok: true });
+    }
+
+    if (action === 'listContinuityNodes') {
+      const seriesId = String(body.seriesId || '');
+      if (!seriesId) return res.status(400).json({ error: 'Missing seriesId' });
+      const [series] = await supabaseRequest<any[]>('series_worlds', { query: { id: `eq.${seriesId}`, select: 'author_id,visibility', limit: 1 } });
+      if (!series || (series.visibility === 'private' && series.author_id !== authUser.uid)) return res.status(200).json([]);
+      const rows = await supabaseRequest<any[]>('continuity_nodes', {
+        query: { series_id: `eq.${seriesId}`, select: '*', order: 'updated_at.desc', limit: body.pageSize || 50 },
+      }).catch((error) => {
+        if (/continuity_nodes/i.test(String(error?.message || error))) return [];
+        throw error;
+      });
+      return res.status(200).json(rows.map(continuityNodeRecord));
+    }
+
+    if (action === 'saveContinuityNode') {
+      const args = body.args || {};
+      const seriesId = String(args.seriesId || body.seriesId || '');
+      if (!seriesId) return res.status(400).json({ error: 'Missing seriesId' });
+      const [series] = await supabaseRequest<any[]>('series_worlds', { query: { id: `eq.${seriesId}`, select: 'author_id', limit: 1 } });
+      if (!series || series.author_id !== authUser.uid) return res.status(403).json({ code: 'OWNER_REQUIRED', error: 'Forbidden' });
+      const nodeId = String(body.nodeId || args.id || '');
+      if (nodeId) {
+        await supabaseRequest('continuity_nodes', {
+          method: 'PATCH',
+          query: { id: `eq.${nodeId}`, series_id: `eq.${seriesId}` },
+          body: continuityNodeRowFromArgs({ ...args, seriesId }, authUser, nodeId),
+        });
+        return res.status(200).json(nodeId);
+      }
+      const [created] = await supabaseInsert<any[]>('continuity_nodes', [continuityNodeRowFromArgs({ ...args, seriesId }, authUser)]);
+      return res.status(200).json(created.id);
+    }
+
+    if (action === 'attachStoryToSeries') {
+      const seriesId = String(body.seriesId || '');
+      const storyId = String(body.storyId || '');
+      if (!seriesId || !storyId) return res.status(400).json({ error: 'Missing seriesId or storyId' });
+      await requireStoryOwner(storyId, authUser.uid);
+      const [series] = await supabaseRequest<any[]>('series_worlds', { query: { id: `eq.${seriesId}`, select: 'author_id', limit: 1 } });
+      if (!series || series.author_id !== authUser.uid) return res.status(403).json({ code: 'OWNER_REQUIRED', error: 'Forbidden' });
+      const entryOrder = Math.max(1, asInt(body.entryOrder, 1));
+      const seriesRole = ['main', 'sequel', 'prequel', 'side'].includes(String(body.seriesRole || '')) ? String(body.seriesRole) : 'main';
+      const continuityNodeId = body.continuityNodeId || null;
+      await supabaseRequest('stories', {
+        method: 'PATCH',
+        query: { id: `eq.${storyId}` },
+        body: {
+          series_id: seriesId,
+          series_role: seriesRole,
+          continuity_node_id: continuityNodeId,
+          series_constraints: body.seriesConstraints || {},
+          updated_at: nowIso(),
+        },
+      });
+      await supabaseUpsert('series_entries', [{
+        series_id: seriesId,
+        story_id: storyId,
+        entry_order: entryOrder,
+        entry_type: seriesRole,
+        timeline_label: body.timelineLabel || '',
+        created_at: nowIso(),
+      }], 'series_id,story_id');
+      return res.status(200).json({ ok: true });
+    }
+
     if (action === 'saveAppSettings') {
       if (!ADMIN_USER_IDS.has(authUser.uid)) {
         return res.status(403).json({
@@ -1002,6 +1211,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         chapterCount: countReadyChapters(chapters),
         cardExcerpt: buildCardExcerpt(bp.main_axis, chapters),
         allowAdaptation: Boolean(bp.allowAdaptation),
+        seriesId: bp.seriesContext?.id || args.seriesId || null,
+        seriesRole: bp.continuityNode?.id || args.continuityNodeId ? 'sequel' : (bp.seriesContext?.id || args.seriesId ? 'main' : 'standalone'),
+        continuityNodeId: bp.continuityNode?.id || args.continuityNodeId || null,
+        seriesConstraints: {
+          seriesTitle: bp.seriesContext?.title || '',
+          ironLaws: bp.seriesContext?.ironLaws || [],
+          continuityTitle: bp.continuityNode?.title || '',
+        },
         endingMode: bp.endingMode === 'single' ? 'single' : 'dual',
         endingRates: { left: bp.left_mainline_default || 40, right: bp.right_mainline_default || 40 },
         endingBias: normalizeEndingBias(bp.endingBias || { left: bp.left_mainline_default, right: bp.right_mainline_default }),
@@ -1011,6 +1228,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
       const [created] = await supabaseInsert<any[]>('stories', [meta]);
       const storyId = created.id;
+      if (meta.series_id) {
+        await supabaseUpsert('series_entries', [{
+          series_id: meta.series_id,
+          story_id: storyId,
+          entry_order: meta.series_role === 'sequel' ? 2 : 1,
+          entry_type: meta.series_role === 'standalone' ? 'main' : meta.series_role,
+          timeline_label: meta.series_role === 'sequel' ? '续作' : '第一部',
+          created_at: nowIso(),
+        }], 'series_id,story_id').catch((error) => {
+          console.warn('[story-store] series entry create skipped', error);
+        });
+      }
       const chapterByNum = new Map(chapters.map((chapter) => [chapter.chapter_num, chapter]));
       const bpChapterByNum = new Map(asArray(bp.chapters).map((chapter) => [chapter.chapter_num, chapter]));
       await supabaseUpsert('story_chapters', Array.from({ length: 7 }, (_, index) => {
