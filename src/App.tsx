@@ -155,7 +155,9 @@ const getSeriesCharacterCards = (series?: Partial<SeriesWorldRecord> | null): Se
     ? worldBible.characterPool
     : Array.isArray(worldBible.characters)
       ? worldBible.characters
-      : [];
+      : Array.isArray(worldBible.recurringCharacterSeeds)
+        ? worldBible.recurringCharacterSeeds
+        : [];
   return source.map((item: any, index: number) => ({
     id: String(item?.id || makeSeriesItemId('character', item?.name || item, index)),
     name: String(item?.name || item?.title || `角色${index + 1}`),
@@ -8047,6 +8049,9 @@ export default function App() {
         plotNotes: plotNoteDrafts.map((note, noteIndex) => noteIndex === index ? value : note),
       });
     };
+    const organizeSourceLabel = seriesSourceStoryId
+      ? tr('从导入作品提取仓库条目', 'Extract archive items from story')
+      : tr('一键生成仓库条目', 'Generate archive items');
     return (
       <div className="mx-auto min-h-[100dvh] max-w-6xl px-5 pb-14 pt-[max(5rem,calc(env(safe-area-inset-top)+4rem))] sm:px-6 lg:px-8">
         <div className="mb-8 flex items-center justify-between gap-3">
@@ -8113,25 +8118,28 @@ export default function App() {
             </div>
 
             <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/60 p-4">
-              <div className="mb-3 text-sm font-black text-white">{tr('从已有作品提取', 'Extract from an existing story')}</div>
+              <div className="mb-3 text-sm font-black text-white">{tr('AI 整理仓库条目', 'AI organize archive items')}</div>
+              <p className="mb-3 text-xs leading-relaxed text-zinc-500">
+                {tr('先填写右侧基础资料，或在这里导入已有作品，再让 AI 整理出世界基准、角色卡池和情节概况。', 'Fill the basic fields on the right, or import an existing story here, then let AI organize baseline rules, character cards, and plot notes.')}
+              </p>
               <select
                 value={seriesSourceStoryId}
                 onChange={(event) => setSeriesSourceStoryId(event.target.value)}
                 className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm text-zinc-200 outline-none"
               >
-                <option value="">{tr('选择来源作品', 'Choose source story')}</option>
+                <option value="">{tr('不导入作品，使用上方基础资料', 'No story import; use basic fields')}</option>
                 {myStories.map((story: any) => (
                   <option key={story.id} value={story.id}>{getStoryTitle(story)}</option>
                 ))}
               </select>
               <div className="mt-3 grid gap-2">
-                <button type="button" onClick={() => void handleGenerateSeriesWorld('new')} disabled={seriesGenerating} className={semanticButtonClass('secondary', { compact: true, fullWidth: true })}>
+                <button type="button" onClick={() => void handleGenerateSeriesWorld(seriesSourceStoryId ? 'extract' : 'new')} disabled={seriesGenerating} className={semanticButtonClass('secondary', { compact: true, fullWidth: true })}>
                   {seriesGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                  {tr('从零生成世界观', 'Generate world from scratch')}
+                  {organizeSourceLabel}
                 </button>
                 <button type="button" onClick={() => void handleGenerateSeriesWorld('extract')} disabled={seriesGenerating || !seriesSourceStoryId} className={semanticButtonClass('ghost', { compact: true, fullWidth: true })}>
                   <BookOpen className="h-4 w-4" />
-                  {tr('从作品提取世界观', 'Extract world from story')}
+                  {tr('只从作品重新提取', 'Extract only from story')}
                 </button>
               </div>
             </div>
@@ -8334,11 +8342,11 @@ export default function App() {
                 </div>
 
                 <details className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/35 p-4">
-                  <summary className="cursor-pointer text-sm font-black text-zinc-300">{tr('进阶资料', 'Advanced material')}</summary>
-                  <p className="mt-2 text-xs leading-relaxed text-zinc-500">{tr('这些资料会作为辅助背景参与生成，但不会取代上方三类仓库条目。', 'These fields provide supporting background, but do not replace the three archive item types above.')}</p>
+                  <summary className="cursor-pointer text-sm font-black text-zinc-300">{tr('AI 整理来源', 'AI source material')}</summary>
+                  <p className="mt-2 text-xs leading-relaxed text-zinc-500">{tr('这里不是另一个编辑系统，而是给 AI 整理仓库条目的来源资料。通常只需要填写基础资料后点击“一键生成仓库条目”；需要微调底层资料时才打开这里。', 'This is not a second editor. It is source material for AI to organize archive items. Usually, fill the basic fields and click Generate archive items; open this only when the underlying material needs tuning.')}</p>
                   <div className="mt-3 grid gap-3 lg:grid-cols-2">
                     <label className="space-y-2 text-xs font-black text-zinc-500">
-                      <span>{tr('世界观文本 / 其他 JSON', 'World text / extra JSON')}</span>
+                      <span>{tr('世界观来源资料', 'World source material')}</span>
                       <textarea value={seriesWorldBibleText} onChange={(event) => setSeriesWorldBibleText(event.target.value)} className="min-h-44 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-xs text-zinc-200 outline-none focus:border-indigo-500" />
                     </label>
                     <label className="space-y-2 text-xs font-black text-zinc-500">
