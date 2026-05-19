@@ -3135,8 +3135,10 @@ export default function App() {
 
   useEffect(() => {
     if (gameState !== 'AUTHORING' || authoringCartridge || !user || !db) return;
+    void loadSeriesWorlds();
     const timer = window.setInterval(() => {
       void refreshStories({ force: true });
+      void loadSeriesWorlds();
     }, 60000);
     return () => window.clearInterval(timer);
   }, [gameState, authoringCartridge, user?.uid, db, storyLibrarySort]);
@@ -9782,11 +9784,69 @@ export default function App() {
                 <Sparkles className="h-4 w-4" />
                 {tr('新建作品', 'New work')}
               </button>
+              <button type="button" onClick={() => void openSeriesWorldView()} disabled={authoringSaving} className={semanticButtonClass('ghost', { compact: true })}>
+                <GitBranch className="h-4 w-4" />
+                {tr('长篇世界', 'Series worlds')}
+              </button>
               <button type="button" onClick={() => refreshStories({ force: true })} disabled={authoringSaving} className={semanticButtonClass('ghost', { compact: true })}>
                 <RefreshCcw className="h-4 w-4" />
                 {tr('刷新列表', 'Refresh list')}
               </button>
             </div>
+          </div>
+
+          <div className="mb-6 rounded-[2rem] border border-indigo-300/15 bg-indigo-500/10 p-5 sm:p-6">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="inline-flex items-center gap-2 rounded-full border border-indigo-300/20 bg-indigo-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-indigo-200">
+                  <GitBranch className="h-3.5 w-3.5" />
+                  {tr('长篇世界', 'Series Worlds')}
+                </div>
+                <h2 className="mt-3 text-xl font-black text-white">{tr('世界观收录与续作规划', 'World bibles & sequel planning')}</h2>
+                <p className="mt-1 max-w-2xl text-xs leading-relaxed text-zinc-400">
+                  {tr('集中管理长篇设定、长篇铁律和接续节点。这里收录的是可复用的世界观，不是单篇作品本身。', 'Manage series worlds, continuity rules, and sequel nodes here. These are reusable world bibles, not individual story entries.')}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => void loadSeriesWorlds()} className={semanticButtonClass('ghost', { compact: true })}>
+                  <RefreshCcw className="h-4 w-4" />
+                  {tr('刷新', 'Refresh')}
+                </button>
+                <button type="button" onClick={() => void openSeriesWorldView()} className={semanticButtonClass('secondary', { compact: true })}>
+                  <Wand2 className="h-4 w-4" />
+                  {tr('创建或编辑', 'Create or edit')}
+                </button>
+              </div>
+            </div>
+            {seriesWorlds.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-indigo-300/20 bg-zinc-950/40 p-5 text-sm text-zinc-500">
+                {tr('还没有长篇世界。可以先创建一个世界观，再基于它生成第一部或续作。', 'No series world yet. Create a world bible first, then generate a first installment or sequel from it.')}
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {seriesWorlds.slice(0, 6).map((series) => (
+                  <button
+                    key={series.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedSeriesId(series.id);
+                      navigateTo('SERIES_WORLD');
+                    }}
+                    className="rounded-2xl border border-zinc-800 bg-zinc-950/55 p-4 text-left transition-all hover:-translate-y-0.5 hover:border-indigo-400/60 hover:bg-indigo-500/10 active:scale-[0.98]"
+                  >
+                    <div className="line-clamp-2 text-sm font-black text-white">{series.title || tr('未命名长篇', 'Untitled series')}</div>
+                    <p className="mt-2 line-clamp-3 text-xs leading-relaxed text-zinc-500">{series.pitch || tr('尚未填写长篇卖点', 'No series hook yet')}</p>
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {(series.genreTags || []).slice(0, 3).map((tag) => (
+                        <span key={tag} className="rounded-full bg-indigo-500/10 px-2 py-1 text-[10px] font-bold text-indigo-200">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="rounded-[2rem] border border-zinc-800 bg-zinc-900/30 p-6 sm:p-8">
