@@ -4753,7 +4753,7 @@ export default function App() {
         body: JSON.stringify({
           mode,
           genreTags: normalizeTagList(String(seriesForm.genreTags?.join?.('，') || '').split(/[,，]/).filter(Boolean)),
-          authorSeed: `${seriesForm.pitch || ''}\n${seriesForm.timelineNotes || ''}`,
+          authorSeed: `${seriesForm.title || ''}\n${(parseEditableJson<Record<string, any>>(seriesWorldBibleText, seriesForm.worldBible || {}).worldview || '')}`,
           sourceStory,
           language: appLanguage,
         }),
@@ -8172,8 +8172,12 @@ export default function App() {
                 <input value={seriesForm.title || ''} onChange={(event) => setSeriesForm((prev) => ({ ...prev, title: event.target.value }))} placeholder={tr('世界观设定名称', 'World setting title')} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
                 <input value={seriesGenreText} onChange={(event) => setSeriesForm((prev) => ({ ...prev, genreTags: event.target.value.split(/[,，]/).map((tag) => tag.trim()).filter(Boolean) }))} placeholder={tr('题材标签，以逗号分隔', 'Genre tags, comma-separated')} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
               </div>
-              <textarea value={seriesForm.pitch || ''} onChange={(event) => setSeriesForm((prev) => ({ ...prev, pitch: event.target.value }))} placeholder={tr('一句话卖点', 'One-sentence hook')} className="mt-3 min-h-24 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
-              <textarea value={seriesForm.timelineNotes || ''} onChange={(event) => setSeriesForm((prev) => ({ ...prev, timelineNotes: event.target.value }))} placeholder={tr('时间线基准', 'Timeline baseline')} className="mt-3 min-h-28 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
+              <textarea
+                value={worldBibleDraft.worldview || ''}
+                onChange={(event) => updateWorldBibleDraft({ worldview: event.target.value })}
+                placeholder={tr('世界观概况：简单描述这个世界的核心感觉、规则、时代、冲突或创作方向，用来让 AI 整理下方三类仓库条目。', 'World overview: briefly describe the world’s feel, rules, era, conflict, or creative direction so AI can organize the archive items below.')}
+                className="mt-3 min-h-32 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+              />
               <div className="mt-5 space-y-5">
                 <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/55 p-4">
                   <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -8341,24 +8345,6 @@ export default function App() {
                   </div>
                 </div>
 
-                <details className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/35 p-4">
-                  <summary className="cursor-pointer text-sm font-black text-zinc-300">{tr('AI 整理来源', 'AI source material')}</summary>
-                  <p className="mt-2 text-xs leading-relaxed text-zinc-500">{tr('这里不是另一个编辑系统，而是给 AI 整理仓库条目的来源资料。通常只需要填写基础资料后点击“一键生成仓库条目”；需要微调底层资料时才打开这里。', 'This is not a second editor. It is source material for AI to organize archive items. Usually, fill the basic fields and click Generate archive items; open this only when the underlying material needs tuning.')}</p>
-                  <div className="mt-3 grid gap-3 lg:grid-cols-2">
-                    <label className="space-y-2 text-xs font-black text-zinc-500">
-                      <span>{tr('世界观来源资料', 'World source material')}</span>
-                      <textarea value={seriesWorldBibleText} onChange={(event) => setSeriesWorldBibleText(event.target.value)} className="min-h-44 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-xs text-zinc-200 outline-none focus:border-indigo-500" />
-                    </label>
-                    <label className="space-y-2 text-xs font-black text-zinc-500">
-                      <span>{tr('世界观铁律', 'World laws')}</span>
-                      <textarea value={seriesIronLawsText} onChange={(event) => setSeriesIronLawsText(event.target.value)} className="min-h-44 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-xs text-zinc-200 outline-none focus:border-indigo-500" />
-                    </label>
-                    <label className="space-y-2 text-xs font-black text-zinc-500 lg:col-span-2">
-                      <span>{tr('后续方向', 'Future directions')}</span>
-                      <textarea value={seriesFutureDirectionsText} onChange={(event) => setSeriesFutureDirectionsText(event.target.value)} className="min-h-32 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-xs text-zinc-200 outline-none focus:border-indigo-500" />
-                    </label>
-                  </div>
-                </details>
               </div>
             </div>
             )}
@@ -8741,7 +8727,7 @@ export default function App() {
             ))}
           </select>
           <p className="mt-2 text-xs leading-relaxed text-indigo-100/65">
-            {tr('世界观设定是系列级基准仓库。可勾选本次生成要遵守的世界基准、沿用角色卡，并在续作时加入继承节点。', 'A world setting is a reusable series baseline. Pick the rules and character cards this generation should obey, and add a continuity node for sequels.')}
+                {tr('世界观设定是可复用设定仓库。可勾选本次生成要遵守的世界基准、沿用角色卡，并在续作时加入继承节点。', 'A world setting is a reusable setting archive. Pick the rules and character cards this generation should obey, and add a continuity node for sequels.')}
           </p>
           {quickSeriesBindingId && (() => {
             const selected = seriesWorlds.find((series) => series.id === quickSeriesBindingId) || null;
@@ -8752,7 +8738,7 @@ export default function App() {
                 <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-3">
                   <div className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-zinc-500">{tr('世界基准', 'World baseline')}</div>
                   {baselineRules.length === 0 ? (
-                    <div className="text-xs leading-relaxed text-zinc-500">{tr('该世界观设定还没有条目化基准；会先使用世界观铁律和世界观文本作为约束。', 'No itemized baseline rules yet; generation will use the saved world rules as constraints.')}</div>
+                    <div className="text-xs leading-relaxed text-zinc-500">{tr('该世界观设定还没有条目化基准；生成时只会参考世界观概况。', 'No itemized baseline rules yet; generation will only use the world overview as reference.')}</div>
                   ) : (
                     <div className="grid gap-2">
                       {baselineRules.map((rule) => (
