@@ -118,6 +118,8 @@ const safeModalBackdropClass = "fixed inset-0 flex items-center justify-center o
 const PUBLIC_STORY_LIST_LIMIT = 100;
 const MY_STORY_LIST_LIMIT = 80;
 const ARCHIVE_STORY_LIST_LIMIT = 80;
+const APP_VERSION_LABEL = `v${__APP_VERSION__ || '0.0.0'}`;
+const APP_BUILD_LABEL = __APP_BUILD_ID__ ? `build ${__APP_BUILD_ID__}` : '';
 
 const makeSeriesItemId = (prefix: string, value: unknown, index: number) => {
   const raw = typeof value === 'string'
@@ -340,6 +342,19 @@ const parseEditableJson = <T,>(raw: string, fallback: T): T => {
     return fallback;
   }
 };
+const createEmptySeriesBaselineRule = (index: number) => ({
+  id: `rule_${index + 1}`,
+  title: '',
+  detail: '',
+  kind: '世界',
+});
+const createEmptySeriesCharacterCard = (index: number) => ({
+  id: `char_${index + 1}`,
+  name: '',
+  role: '',
+  desc: '',
+  status: '',
+});
 const parseTagInput = (value: string) => normalizeTagList(String(value || '').split('，'));
 const formatStoryHeading = (chapter: Pick<Chapter, 'chapter_num' | 'title'>) => {
   const title = String(chapter.title || '').trim();
@@ -7301,7 +7316,13 @@ export default function App() {
     const languageMineCount = myStories.filter((story) => storyMatchesLanguage(story, appLanguage)).length;
     return (
     <div className="story-library-page mx-auto max-w-7xl px-5 pb-12 pt-[max(3rem,calc(env(safe-area-inset-top)+3rem))] sm:px-6 lg:px-8">
-      <div className="story-library-hero mb-10 overflow-hidden p-5 sm:p-7 lg:p-8">
+      <div className="story-library-hero relative mb-10 overflow-hidden p-5 sm:p-7 lg:p-8">
+        <div
+          className="absolute right-4 top-4 rounded-full border border-zinc-800/70 bg-zinc-950/45 px-2.5 py-1 text-[10px] font-black tracking-[0.12em] text-zinc-500 backdrop-blur-md"
+          title={APP_BUILD_LABEL || APP_VERSION_LABEL}
+        >
+          {APP_VERSION_LABEL}
+        </div>
         <div className="flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
         <div className="max-w-3xl">
           <div className="story-library-eyebrow mb-4">
@@ -8004,6 +8025,28 @@ export default function App() {
   const renderSeriesWorldView = () => {
     const seriesGenreText = (seriesForm.genreTags || []).join('，');
     const seriesWorldStep = 'world' as 'world' | 'continuity' | 'generate';
+    const worldBibleDraft = parseEditableJson<Record<string, any>>(seriesWorldBibleText, seriesForm.worldBible || {});
+    const baselineRuleDrafts = asSafeArray<any>(worldBibleDraft.baselineRules);
+    const characterCardDrafts = asSafeArray<any>(worldBibleDraft.characterPool);
+    const plotNoteDrafts = asSafeArray<any>(worldBibleDraft.plotNotes);
+    const updateWorldBibleDraft = (patch: Record<string, any>) => {
+      setSeriesWorldBibleText(JSON.stringify({ ...worldBibleDraft, ...patch }, null, 2));
+    };
+    const updateBaselineRuleDraft = (index: number, patch: Record<string, any>) => {
+      updateWorldBibleDraft({
+        baselineRules: baselineRuleDrafts.map((rule, ruleIndex) => ruleIndex === index ? { ...rule, ...patch } : rule),
+      });
+    };
+    const updateCharacterCardDraft = (index: number, patch: Record<string, any>) => {
+      updateWorldBibleDraft({
+        characterPool: characterCardDrafts.map((card, cardIndex) => cardIndex === index ? { ...card, ...patch } : card),
+      });
+    };
+    const updatePlotNoteDraft = (index: number, value: string) => {
+      updateWorldBibleDraft({
+        plotNotes: plotNoteDrafts.map((note, noteIndex) => noteIndex === index ? value : note),
+      });
+    };
     return (
       <div className="mx-auto min-h-[100dvh] max-w-6xl px-5 pb-14 pt-[max(5rem,calc(env(safe-area-inset-top)+4rem))] sm:px-6 lg:px-8">
         <div className="mb-8 flex items-center justify-between gap-3">
@@ -8123,19 +8166,191 @@ export default function App() {
               </div>
               <textarea value={seriesForm.pitch || ''} onChange={(event) => setSeriesForm((prev) => ({ ...prev, pitch: event.target.value }))} placeholder={tr('一句话卖点', 'One-sentence hook')} className="mt-3 min-h-24 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
               <textarea value={seriesForm.timelineNotes || ''} onChange={(event) => setSeriesForm((prev) => ({ ...prev, timelineNotes: event.target.value }))} placeholder={tr('时间线基准', 'Timeline baseline')} className="mt-3 min-h-28 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
-              <div className="mt-3 grid gap-3 lg:grid-cols-3">
-                <label className="space-y-2 text-xs font-black text-zinc-500">
-                  <span>{tr('世界观仓库内容', 'World setting archive')}</span>
-                  <textarea value={seriesWorldBibleText} onChange={(event) => setSeriesWorldBibleText(event.target.value)} className="min-h-56 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-xs text-zinc-200 outline-none focus:border-indigo-500" />
-                </label>
-                <label className="space-y-2 text-xs font-black text-zinc-500">
-                  <span>{tr('世界基准条目', 'Baseline rules')}</span>
-                  <textarea value={seriesIronLawsText} onChange={(event) => setSeriesIronLawsText(event.target.value)} className="min-h-56 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-xs text-zinc-200 outline-none focus:border-indigo-500" />
-                </label>
-                <label className="space-y-2 text-xs font-black text-zinc-500">
-                  <span>{tr('后续方向', 'Future directions')}</span>
-                  <textarea value={seriesFutureDirectionsText} onChange={(event) => setSeriesFutureDirectionsText(event.target.value)} className="min-h-56 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-xs text-zinc-200 outline-none focus:border-indigo-500" />
-                </label>
+              <div className="mt-5 space-y-5">
+                <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/55 p-4">
+                  <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="text-sm font-black text-white">{tr('世界基准', 'World baseline')}</div>
+                      <p className="mt-1 text-xs leading-relaxed text-zinc-500">{tr('一条一条记录这个世界允许什么、禁止什么、哪些设定必须被遵守。生成作品时可以按需勾选。', 'Record reusable rules one by one: what is allowed, forbidden, or must be obeyed. They can be selected during generation.')}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => updateWorldBibleDraft({ baselineRules: [...baselineRuleDrafts, createEmptySeriesBaselineRule(baselineRuleDrafts.length)] })}
+                      className={semanticButtonClass('secondary', { compact: true })}
+                    >
+                      <Sparkles className="h-4 w-4" />
+                      {tr('新增基准', 'Add rule')}
+                    </button>
+                  </div>
+                  <div className="grid gap-3">
+                    {baselineRuleDrafts.length === 0 && (
+                      <div className="rounded-2xl border border-dashed border-zinc-800 p-4 text-xs leading-relaxed text-zinc-500">
+                        {tr('还没有世界基准。可以手动新增，或点击左侧从零生成世界观。', 'No baseline rules yet. Add one manually or generate a world setting from scratch.')}
+                      </div>
+                    )}
+                    {baselineRuleDrafts.map((rule, index) => (
+                      <div key={rule.id || index} className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+                        <div className="mb-3 flex items-center justify-between gap-3">
+                          <div className="text-xs font-black uppercase tracking-[0.18em] text-indigo-300">{tr('世界基准', 'Rule')} {index + 1}</div>
+                          <button
+                            type="button"
+                            onClick={() => updateWorldBibleDraft({ baselineRules: baselineRuleDrafts.filter((_, ruleIndex) => ruleIndex !== index) })}
+                            className={semanticIconButtonClass('ghost')}
+                            aria-label={tr('删除基准', 'Delete rule')}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-[1fr_10rem]">
+                          <input
+                            value={rule.title || ''}
+                            onChange={(event) => updateBaselineRuleDraft(index, { title: event.target.value, id: rule.id || `rule_${index + 1}` })}
+                            placeholder={tr('基准标题，例如：王都在第二部前不可陷落', 'Rule title, e.g. The capital cannot fall before Part 2')}
+                            className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                          />
+                          <input
+                            value={rule.kind || ''}
+                            onChange={(event) => updateBaselineRuleDraft(index, { kind: event.target.value })}
+                            placeholder={tr('类别', 'Kind')}
+                            className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                          />
+                        </div>
+                        <textarea
+                          value={rule.detail || rule.rule || ''}
+                          onChange={(event) => updateBaselineRuleDraft(index, { detail: event.target.value })}
+                          placeholder={tr('具体说明：这条基准如何限制或保护后续作品生成。', 'Details: how this rule limits or protects later story generation.')}
+                          className="mt-3 min-h-24 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-200 outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/55 p-4">
+                  <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="text-sm font-black text-white">{tr('角色卡池', 'Character pool')}</div>
+                      <p className="mt-1 text-xs leading-relaxed text-zinc-500">{tr('保存系列内可复用角色。续作默认可以从这里沿用主要角色，不再每次重新发明。', 'Store reusable characters for the series. Sequels can inherit major characters from here by default.')}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => updateWorldBibleDraft({ characterPool: [...characterCardDrafts, createEmptySeriesCharacterCard(characterCardDrafts.length)] })}
+                      className={semanticButtonClass('secondary', { compact: true })}
+                    >
+                      <Sparkles className="h-4 w-4" />
+                      {tr('新增角色卡', 'Add character')}
+                    </button>
+                  </div>
+                  <div className="grid gap-3">
+                    {characterCardDrafts.length === 0 && (
+                      <div className="rounded-2xl border border-dashed border-zinc-800 p-4 text-xs leading-relaxed text-zinc-500">
+                        {tr('还没有角色卡。可以加入主角、重要配角、势力代表或会贯穿多部作品的角色。', 'No character cards yet. Add protagonists, key supporting characters, faction representatives, or recurring figures.')}
+                      </div>
+                    )}
+                    {characterCardDrafts.map((card, index) => (
+                      <div key={card.id || index} className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+                        <div className="mb-3 flex items-center justify-between gap-3">
+                          <div className="text-xs font-black uppercase tracking-[0.18em] text-amber-300">{tr('角色卡', 'Character')} {index + 1}</div>
+                          <button
+                            type="button"
+                            onClick={() => updateWorldBibleDraft({ characterPool: characterCardDrafts.filter((_, cardIndex) => cardIndex !== index) })}
+                            className={semanticIconButtonClass('ghost')}
+                            aria-label={tr('删除角色卡', 'Delete character card')}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <input
+                            value={card.name || ''}
+                            onChange={(event) => updateCharacterCardDraft(index, { name: event.target.value, id: card.id || `char_${index + 1}` })}
+                            placeholder={tr('角色名', 'Character name')}
+                            className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                          />
+                          <input
+                            value={card.role || ''}
+                            onChange={(event) => updateCharacterCardDraft(index, { role: event.target.value })}
+                            placeholder={tr('系列定位，例如：主角/导师/宿敌', 'Series role, e.g. protagonist / mentor / rival')}
+                            className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                          />
+                        </div>
+                        <textarea
+                          value={card.desc || ''}
+                          onChange={(event) => updateCharacterCardDraft(index, { desc: event.target.value })}
+                          placeholder={tr('角色说明：身份、动机、矛盾点，以及后续作品可如何使用。', 'Profile: identity, motive, contradiction, and how later stories may use this character.')}
+                          className="mt-3 min-h-24 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-200 outline-none focus:border-indigo-500"
+                        />
+                        <input
+                          value={card.status || ''}
+                          onChange={(event) => updateCharacterCardDraft(index, { status: event.target.value })}
+                          placeholder={tr('默认状态，例如：仍在王都、失踪、被封印', 'Default status, e.g. in the capital / missing / sealed away')}
+                          className="mt-3 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/55 p-4">
+                  <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="text-sm font-black text-white">{tr('情节概况', 'Plot notes')}</div>
+                      <p className="mt-1 text-xs leading-relaxed text-zinc-500">{tr('记录可复用的伏笔、历史事件、未解谜团或适合未来作品调用的情节素材。', 'Store reusable foreshadowing, historical events, unresolved mysteries, or plot material for future stories.')}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => updateWorldBibleDraft({ plotNotes: [...plotNoteDrafts, ''] })}
+                      className={semanticButtonClass('secondary', { compact: true })}
+                    >
+                      <Sparkles className="h-4 w-4" />
+                      {tr('新增概况', 'Add note')}
+                    </button>
+                  </div>
+                  <div className="grid gap-3">
+                    {plotNoteDrafts.length === 0 && (
+                      <div className="rounded-2xl border border-dashed border-zinc-800 p-4 text-xs leading-relaxed text-zinc-500">
+                        {tr('还没有情节概况。可以记录“某场旧战争”“某个未解预言”“某角色的失踪原因”等。', 'No plot notes yet. You can record old wars, unsolved prophecies, missing-character causes, and similar material.')}
+                      </div>
+                    )}
+                    {plotNoteDrafts.map((note, index) => (
+                      <div key={index} className="flex items-start gap-2">
+                        <textarea
+                          value={String(note || '')}
+                          onChange={(event) => updatePlotNoteDraft(index, event.target.value)}
+                          placeholder={tr('情节概况', 'Plot note')}
+                          className="min-h-20 flex-1 resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-200 outline-none focus:border-indigo-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => updateWorldBibleDraft({ plotNotes: plotNoteDrafts.filter((_, noteIndex) => noteIndex !== index) })}
+                          className={semanticIconButtonClass('ghost')}
+                          aria-label={tr('删除情节概况', 'Delete plot note')}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <details className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/35 p-4">
+                  <summary className="cursor-pointer text-sm font-black text-zinc-300">{tr('进阶资料', 'Advanced material')}</summary>
+                  <p className="mt-2 text-xs leading-relaxed text-zinc-500">{tr('这些资料会作为辅助背景参与生成，但不会取代上方三类仓库条目。', 'These fields provide supporting background, but do not replace the three archive item types above.')}</p>
+                  <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                    <label className="space-y-2 text-xs font-black text-zinc-500">
+                      <span>{tr('世界观文本 / 其他 JSON', 'World text / extra JSON')}</span>
+                      <textarea value={seriesWorldBibleText} onChange={(event) => setSeriesWorldBibleText(event.target.value)} className="min-h-44 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-xs text-zinc-200 outline-none focus:border-indigo-500" />
+                    </label>
+                    <label className="space-y-2 text-xs font-black text-zinc-500">
+                      <span>{tr('世界观铁律', 'World laws')}</span>
+                      <textarea value={seriesIronLawsText} onChange={(event) => setSeriesIronLawsText(event.target.value)} className="min-h-44 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-xs text-zinc-200 outline-none focus:border-indigo-500" />
+                    </label>
+                    <label className="space-y-2 text-xs font-black text-zinc-500 lg:col-span-2">
+                      <span>{tr('后续方向', 'Future directions')}</span>
+                      <textarea value={seriesFutureDirectionsText} onChange={(event) => setSeriesFutureDirectionsText(event.target.value)} className="min-h-32 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-xs text-zinc-200 outline-none focus:border-indigo-500" />
+                    </label>
+                  </div>
+                </details>
               </div>
             </div>
             )}
@@ -8906,6 +9121,20 @@ export default function App() {
                       {pushSubscribeBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
                       {tr('开启手机通知', 'Enable mobile notifications')}
                     </button>
+                  </div>
+                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-black text-zinc-100">{tr('版本', 'Version')}</div>
+                        <div className="mt-1 text-xs leading-relaxed text-zinc-500">
+                          {tr('用于确认当前安装的 App 是否已经更新。', 'Use this to confirm whether the installed app is up to date.')}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-black text-indigo-200">{APP_VERSION_LABEL}</div>
+                        {APP_BUILD_LABEL && <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-600">{APP_BUILD_LABEL}</div>}
+                      </div>
+                    </div>
                   </div>
                   <input
                     value={profileDisplayName}
