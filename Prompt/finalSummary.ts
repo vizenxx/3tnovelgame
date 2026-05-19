@@ -1,4 +1,22 @@
-export function buildFinalSummaryPrompt(args: { blueprint: any; safeChapters: any[]; endingValue: number }) {
+export function buildFinalSummaryPrompt(args: { blueprint: any; safeChapters: any[]; endingValue: number; language?: 'zh-CN' | 'en-US' | string }) {
+  if (args.language === 'en-US') {
+    return `You are a chronicler of English-language interactive fiction.
+Story premise: ${args.blueprint.main_axis}
+Chapter history: ${args.safeChapters.map((chapter: any) => `
+--- Chapter ${chapter.chapter_num}: ${chapter.title} ---
+Plot summary: ${chapter.summary}
+Excerpt: ${String(chapter.text || '').substring(0, 500)}
+`).join('\n')}
+
+Final fate balance: ${Number(args.endingValue) || 0}
+
+Task: Write one poetic closing line for this adventure.
+
+Requirements:
+1. Write only one sentence or one short phrase.
+2. Keep it around 8-18 English words.
+3. It must express whether the story ends in order, chaos, or balance without using app UI jargon.`;
+  }
   return `你是一个互动小说编年史家。
 小说主轴：${args.blueprint.main_axis}
 章节历史：${args.safeChapters.map((chapter: any) => `

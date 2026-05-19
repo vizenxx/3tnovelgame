@@ -159,6 +159,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           `初版结局原型：\n${endingsText || '（未提供）'}`,
           `支线事件：\n${branchesText || '（未提供）'}`,
         ].join('\n\n'),
+        language,
       })}`;
 
       const { data: result } = await generateGeminiJsonWithFallback({
@@ -193,6 +194,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           text: String(rewrittenChapter.text || '').substring(0, 800),
         },
         interventionAction,
+        language,
       })}`;
 
       const { data } = await generateGeminiJsonWithFallback({

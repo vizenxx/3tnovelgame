@@ -39,7 +39,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const safeChapters = chapters.slice(0, 7);
-    const prompt = `${generationLanguageInstruction(language)}\n\n${buildFinalSummaryPrompt({ blueprint, safeChapters, endingValue })}`;
+    const prompt = `${generationLanguageInstruction(language)}\n\n${buildFinalSummaryPrompt({ blueprint, safeChapters, endingValue, language })}`;
 
     const { data } = await generateGeminiJsonWithFallback({
       contents: prompt,

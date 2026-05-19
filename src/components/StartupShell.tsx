@@ -32,7 +32,7 @@ const SimulatedProgressBar = () => {
   );
 };
 
-export const StartupShell = ({ message, title = '命运干涉', subtitle = '正在连接时空枢纽，请稍候片刻。' }: { message: string; title?: string; subtitle?: string }) => (
+export const StartupShell = ({ message, title = 'Fate Interference', subtitle = 'Linking the fate archive. Please wait.' }: { message: string; title?: string; subtitle?: string }) => (
   <div className="app-boot-screen">
     <div className="app-boot-cover-main">
       <div className="app-boot-mark" aria-hidden="true">

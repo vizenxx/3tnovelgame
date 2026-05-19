@@ -6,8 +6,26 @@ export function buildChapterWorldStatePrompt(args: {
   prevChapterText?: string;
   historyChapters?: any[];
   targetChapterNum: number;
+  language?: 'zh-CN' | 'en-US' | string;
 }) {
+  const isEnglish = args.language === 'en-US';
   if (args.worldState?.canonical) {
+    if (isEnglish) {
+      return `Story baseline (hard constraint, do not contradict):
+Characters: ${JSON.stringify(args.worldState.canonical.characters || [])}
+Objects: ${JSON.stringify(args.worldState.canonical.objects || [])}
+Scenes: ${JSON.stringify(args.worldState.canonical.scenes || [])}
+Core rules: ${(args.worldState.canonical.core_rules || []).join('; ')}
+
+Intervention delta notes (soft reference, current weight ${Math.round((args.worldState.deltaWeight || 0) * 100)}%):
+${(args.worldState.deltas || []).map((delta: any) => delta.characters_changed?.map((item: any) => item.delta_description).join('; ')).filter(Boolean).join('\n') || 'No significant delta.'}
+
+Ending direction guide: ${args.worldState.endingDirection || 'neutral'}
+${args.worldState.endingDirection && args.worldState.endingDirection !== 'neutral' && args.endingProto ? `Ending prototype reference:\n${String(args.endingProto[args.worldState.endingDirection] || '').substring(0, 400)}` : ''}
+
+Immediate previous text (chapter ${args.targetChapterNum - 1}, style anchor):
+${String(args.prevChapterText || '').substring(0, 400)}`;
+    }
     return `故事基准（硬约束，不可违背）：
 人物：${JSON.stringify(args.worldState.canonical.characters || [])}
 物件：${JSON.stringify(args.worldState.canonical.objects || [])}
@@ -24,7 +42,9 @@ ${args.worldState.endingDirection && args.worldState.endingDirection !== 'neutra
 ${String(args.prevChapterText || '').substring(0, 400)}`;
   }
 
-  return `历史剧情回忆：${(args.historyChapters || []).map((chapter: any) => `[${chapter.chapter_num}] ${String(chapter.text || '').substring(0, 200)}...`).join('\n')}`;
+  return isEnglish
+    ? `Story history recap: ${(args.historyChapters || []).map((chapter: any) => `[${chapter.chapter_num}] ${String(chapter.text || '').substring(0, 200)}...`).join('\n')}`
+    : `历史剧情回忆：${(args.historyChapters || []).map((chapter: any) => `[${chapter.chapter_num}] ${String(chapter.text || '').substring(0, 200)}...`).join('\n')}`;
 }
 
 export function buildChapterContinuationPrompt(args: {
@@ -37,8 +57,37 @@ export function buildChapterContinuationPrompt(args: {
   endingProto?: any;
   targetChapterNum: number;
   targetWordCount: number;
+  language?: 'zh-CN' | 'en-US' | string;
 }) {
   const isSingleEnding = args.blueprint?.endingMode === 'single' || args.blueprint?.ending_mode === 'single';
+  const isEnglish = args.language === 'en-US';
+  if (isEnglish) {
+    return `You are the prose engine for an English-language interactive fiction game.
+Story premise: ${args.blueprint.main_axis}
+Narrative person: ${buildNarrativePersonInstruction(args.narrativePerson || args.blueprint.narrative_person, 'chapter')}
+Characters: ${args.blueprint.characters.map((character: any) => `${character.id}:${character.name}(${character.desc})`).join('; ')}
+Ending structure: ${isSingleEnding ? 'Single ending. Later chapters may change the route, but the finale should naturally converge on the same core ending.' : 'Branching endings. Current compatibility slots are default / left / right, with future expansion possible.'}
+${args.worldStatePrompt}
+Current chapter outline: ${args.outlineSummary}
+${args.futureOutlines ? `Future outline notes:\n${args.futureOutlines}` : ''}
+${args.defaultText ? `Author default mainline text (chapter ${args.targetChapterNum}, priority reference):\n${String(args.defaultText).substring(0, 1200)}` : ''}
+${(!args.worldStatePrompt.includes('Story baseline') && args.endingProto) ? `Author ending prototypes:\n- default: ${String(args.endingProto.default || '').substring(0, 400)}\n- left: ${String(args.endingProto.left || '').substring(0, 400)}\n- right: ${String(args.endingProto.right || '').substring(0, 400)}` : ''}
+
+Task: Write the full prose for chapter ${args.targetChapterNum}.
+
+Requirements:
+1. Continue directly from prior events and preserve the established style.
+2. Set chapter_num to ${args.targetChapterNum}.
+3. Target about ${args.targetWordCount} English words.
+4. Split the prose into 6-10 paragraphs, each 2-4 sentences, separated by two newline characters.
+5. Maintain character logic and relationships established in the blueprint.
+6. Preserve continuity with future outline notes; do not introduce a contradiction that breaks later chapters.
+7. If intervention deltas or branch effects exist, express their ripple effects subtly through plot, decisions, clues, and consequences.
+8. Keep the requested narrative person consistent throughout. Do not switch viewpoint as a shortcut.
+9. Use idiomatic English prose and punctuation; avoid translated Chinese phrasing or meta system terms.
+
+Return strict JSON Schema only. Do not include image prompts or meta-comments.`;
+  }
   return `你是一个互动小说引擎的织梦者。
 小说大纲/主轴：${args.blueprint.main_axis}
 叙事人称：${buildNarrativePersonInstruction(args.narrativePerson || args.blueprint.narrative_person, 'chapter')}

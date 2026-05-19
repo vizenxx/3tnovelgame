@@ -5,8 +5,28 @@ export function buildInterventionWorldStatePrompt(args: {
   safeChapters: any[];
   safeChapterNum: number;
   prevChapterText?: string;
+  language?: 'zh-CN' | 'en-US' | string;
 }) {
+  const isEnglish = args.language === 'en-US';
   if (args.worldState?.canonical) {
+    if (isEnglish) {
+      return `Story premise: ${args.blueprint.main_axis || '(not provided)'}
+
+Story baseline (hard constraint, do not contradict):
+Characters: ${JSON.stringify(args.worldState.canonical.characters || [])}
+Objects: ${JSON.stringify(args.worldState.canonical.objects || [])}
+Scenes: ${JSON.stringify(args.worldState.canonical.scenes || [])}
+Core rules: ${(args.worldState.canonical.core_rules || []).join('; ')}
+
+Intervention delta notes (soft reference, current weight ${Math.round((args.worldState.deltaWeight || 0) * 100)}%):
+${(args.worldState.deltas || []).map((delta: any) => delta.characters_changed?.map((item: any) => item.delta_description).join('; ')).filter(Boolean).join('\n') || 'No significant delta.'}
+
+Ending direction guide: ${args.worldState.endingDirection || 'neutral'}
+${args.worldState.endingDirection && args.worldState.endingDirection !== 'neutral' && args.endingProto ? `Ending prototype:\n${String(args.endingProto[args.worldState.endingDirection] || '').substring(0, 400)}` : ''}
+
+Immediate previous text (chapter ${args.safeChapterNum - 1}, style anchor):
+${String(args.prevChapterText || '').substring(0, 400)}`;
+    }
     return `故事主轴：${args.blueprint.main_axis || '（未提供）'}
 
 故事基准（硬约束，不可违背）：
@@ -25,7 +45,9 @@ ${args.worldState.endingDirection && args.worldState.endingDirection !== 'neutra
 ${String(args.prevChapterText || '').substring(0, 400)}`;
   }
 
-  return `前置剧情摘要：${args.safeChapters.filter((chapter: any) => chapter.chapter_num < args.safeChapterNum).map((chapter: any) => `第${chapter.chapter_num}章：${chapter.text}`).join('\n\n')}`;
+  return isEnglish
+    ? `Previous plot recap: ${args.safeChapters.filter((chapter: any) => chapter.chapter_num < args.safeChapterNum).map((chapter: any) => `Chapter ${chapter.chapter_num}: ${chapter.text}`).join('\n\n')}`
+    : `前置剧情摘要：${args.safeChapters.filter((chapter: any) => chapter.chapter_num < args.safeChapterNum).map((chapter: any) => `第${chapter.chapter_num}章：${chapter.text}`).join('\n\n')}`;
 }
 
 export function buildInterventionRewritePrompt(args: {
@@ -42,10 +64,55 @@ export function buildInterventionRewritePrompt(args: {
   endingProto?: any;
   endingMechanics?: any;
   targetWordCount: number;
+  language?: 'zh-CN' | 'en-US' | string;
 }) {
   const isSingleEnding = args.blueprint?.endingMode === 'single' || args.blueprint?.ending_mode === 'single';
   const mechanics = args.endingMechanics || {};
   const rewriteRange = mechanics.rewriteRange || { startChapter: args.safeChapterNum, endChapter: 7, reason: 'local' };
+  const isEnglish = args.language === 'en-US';
+  if (isEnglish) {
+    return `You are an English-language interactive fiction engine. The player has interfered with fate in chapter ${args.safeChapterNum}.
+
+Character ID map:
+${args.blueprint.characters.map((character: any) => `${character.name} (ID: ${character.id})`).join('\n')}
+
+${args.worldStatePrompt}
+
+Fate math result:
+- Author base tendency: left ${mechanics.endingBias?.leftBaseWeight ?? 1} / right ${mechanics.endingBias?.rightBaseWeight ?? 1}
+- Settlement pools: left ${Math.round((mechanics.leftPool ?? 1) * 100) / 100} / right ${Math.round((mechanics.rightPool ?? 1) * 100) / 100}
+- Ending domain: ${mechanics.endingDomain || 'middle'}; strongest guided ending: ${mechanics.selectedEndingId || 'default'}
+- Ripple rewrite range: chapter ${rewriteRange.startChapter} to chapter ${rewriteRange.endChapter}; reason: ${rewriteRange.reason}
+
+Chapter outline overview:
+${args.safeChapters.map((chapter: any) => `Chapter ${chapter.chapter_num}: ${chapter.summary || String(chapter.text || '').substring(0, 80)}`).join('\n')}
+
+Intervention parameter: target character [${args.targetCharacterName}], polarity [${args.actionLabel}]. This is a system parameter, not a fact characters should perceive.
+Fate tendency value before → after: ${args.currentEndingValue} → ${args.newEndingValue}. ${isSingleEnding ? 'This work uses a single-ending structure: the value may affect route, cost, relationships, and interpretation, but must not create a mutually exclusive finale.' : 'Higher values lean toward the left/order ending; lower values lean toward the right/chaos ending.'}
+${args.newlyUnlocked.length > 0 ? `Newly unlocked branches: ${args.newlyUnlocked.map((branch: any) => branch.name).join(', ')}` : 'No branch event was triggered this time; create only a local ripple.'}
+${args.injected ? `Active branch injection package (integrate both prior active branches and newly triggered branches):\n${args.injected.map((item: any, index: number) => `- [${item.id}] ${item.name}${args.newlyUnlocked.some((branch: any) => branch.id === item.id) ? ' (newly triggered, higher priority)' : ' (previously triggered, preserve if possible)'}\n  - priority: ${index + 1}\n  - desc: ${String(item.desc || '').substring(0, 260)}\n  - mustHappen: ${(item.inject?.mustHappen || []).join('; ')}\n  - mustReveal: ${(item.inject?.mustReveal || []).join('; ')}\n  - mustChange: ${(item.inject?.mustChange || []).join('; ')}\n  - sceneText: ${String(item.sceneText || '').substring(0, 400)}`).join('\n')}` : ''}
+
+${(!args.worldStatePrompt.includes('Story baseline') && args.endingProto) ? `Author ending prototypes:\n- default: ${String(args.endingProto.default || '').substring(0, 800)}\n- left: ${String(args.endingProto.left || '').substring(0, 800)}\n- right: ${String(args.endingProto.right || '').substring(0, 800)}` : ''}
+
+Invisible intervention writing rules:
+1. Never mention “blessing”, “hardship”, “interference”, “player action”, “system instruction”, or other meta terms in the prose.
+2. Translate the intervention into natural causality: new events, accidents, insights, revealed clues, altered decisions, emotional pressure, or consequences.
+3. Every shift must grow from the original story and active branches; avoid sudden divine intervention.
+4. Results may lean left/right, but characters must not state they are blessed, cursed, controlled, or manipulated.
+5. If active branches do not conflict, weave their events, setups, and foreshadowing together. If they conflict, preserve traces of prior events where possible, but let the newest branch lead the direction.
+
+Requirements:
+1. Rewrite only chapters in the ripple range: chapter ${rewriteRange.startChapter} to chapter ${rewriteRange.endChapter}. The system keeps all chapters outside this range.
+2. Each rewritten chapter should be about ${args.targetWordCount} English words.
+3. Each chapter must be split into 6-10 paragraphs, each 2-4 sentences, separated by two newline characters.
+4. Prose must be plain text. Never output HTML, Markdown, XML, code tags, <mark>, </mark>, or highlight brackets.
+5. All changes caused by this intervention must be written naturally into the story. Highlighting is handled by the frontend, not by prose tags.
+6. Also output change_highlights for temporary frontend highlighting: each item has chapter_num, quote, reason. quote must be an exact plain-text phrase already present in that chapter, with no tags.
+7. Even if no branch triggers, the ripple range must contain a perceptible shift and must not simply copy old prose.
+8. Use idiomatic English fiction style and natural English punctuation.
+
+Return strict JSON only. Do not include metadata.`;
+  }
   return `你是一个互动小说引擎。玩家在第 ${args.safeChapterNum} 章进行了一次命运干涉。
 
 角色ID对照表：

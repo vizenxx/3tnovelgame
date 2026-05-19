@@ -1332,6 +1332,7 @@ export default function App() {
   const [appLanguage, setAppLanguageState] = useState<AppLanguage>(() => getInitialLanguage());
   const t = createTranslator(appLanguage, dictionaries);
   const isEnglish = appLanguage === 'en-US';
+  const tr = (zh: string, en: string) => (isEnglish ? en : zh);
   const setAppLanguage = (language: AppLanguage) => {
     setAppLanguageState(language);
     window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
@@ -2281,6 +2282,25 @@ export default function App() {
     opacity: readingTextOpacity,
   } as React.CSSProperties;
 
+  const renderReadingParagraph = (text: unknown, characters: Character[] = [], changeQuotes: string[] = []) => {
+    const paragraph = String(text || '');
+    if (!isEnglish) {
+      return renderParagraphWithHighlights(paragraph, characters, changeQuotes);
+    }
+    const match = paragraph.match(/^(\s*)([A-Za-z][A-Za-z'’-]*)([\s\S]*)$/);
+    if (!match) {
+      return renderParagraphWithHighlights(paragraph, characters, changeQuotes);
+    }
+    const [, leadingSpace, firstWord, rest] = match;
+    return (
+      <>
+        {leadingSpace}
+        <span className="mr-1 align-baseline text-[1.35em] font-black leading-none text-indigo-300">{firstWord}</span>
+        {renderParagraphWithHighlights(rest, characters, changeQuotes)}
+      </>
+    );
+  };
+
   const isChapterTextReady = (chapter: Chapter | undefined) => {
     return Boolean(
       chapter &&
@@ -2598,8 +2618,8 @@ export default function App() {
     );
     const fallbackTags = QUICK_QUIZ_STEPS.flatMap((step) => asSafeArray(answers[step.id]).map((id) => String(id))).filter(Boolean);
     const keyTags = normalizeTagList(
-      selectedOptions.map(({ option }) => option.tag || quickText(option.label)).filter(Boolean).length > 0
-        ? selectedOptions.map(({ option }) => option.tag || quickText(option.label))
+      selectedOptions.map(({ option }) => appLanguage === 'en-US' ? quickText(option.label) : (option.tag || quickText(option.label))).filter(Boolean).length > 0
+        ? selectedOptions.map(({ option }) => appLanguage === 'en-US' ? quickText(option.label) : (option.tag || quickText(option.label)))
         : fallbackTags
     ).slice(0, 4);
     const outlinePieces = selectedOptions
@@ -7837,8 +7857,8 @@ export default function App() {
         </div>
         <div className="mt-6 space-y-3">
           <div className="flex items-center justify-between text-sm">
-            <span className="font-bold text-zinc-400">每章目标字数</span>
-            <span className="font-black text-indigo-300">{targetWordCount} 字</span>
+            <span className="font-bold text-zinc-400">{tr('每章目标字数', 'Target words per chapter')}</span>
+            <span className="font-black text-indigo-300">{targetWordCount} {tr('字', 'words')}</span>
           </div>
           <input
             type="range"
@@ -7850,8 +7870,8 @@ export default function App() {
             className="w-full accent-indigo-500"
           />
           <div className="flex justify-between text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-600">
-            <span>精简</span>
-            <span>宏大</span>
+            <span>{tr('精简', 'Lean')}</span>
+            <span>{tr('宏大', 'Epic')}</span>
           </div>
         </div>
         <button
@@ -7861,7 +7881,7 @@ export default function App() {
           className={`${semanticButtonClass('primary', { fullWidth: true })} mt-6`}
         >
           <Sparkles className="h-4 w-4" />
-          生成世界蓝图
+          {tr('生成世界蓝图', 'Generate story blueprint')}
         </button>
       </div>
       </>
@@ -7870,10 +7890,10 @@ export default function App() {
   );
 
   const accountAssetStats = [
-    { label: '收藏原作', value: mySharedStories.filter((story: any) => story.archiveKind === 'favorite').length },
-    { label: '收藏命运', value: mySharedStories.filter((story: any) => story.archiveKind !== 'favorite').length },
-    { label: '追踪作者', value: followedAuthors.length },
-    { label: '我的作品', value: myStories.length },
+    { label: tr('收藏原作', 'Favorited originals'), value: mySharedStories.filter((story: any) => story.archiveKind === 'favorite').length },
+    { label: tr('收藏命运', 'Saved fate lines'), value: mySharedStories.filter((story: any) => story.archiveKind !== 'favorite').length },
+    { label: tr('追踪作者', 'Followed authors'), value: followedAuthors.length },
+    { label: tr('我的作品', 'My works'), value: myStories.length },
   ];
 
   const accountCenterModal = (
@@ -7895,16 +7915,16 @@ export default function App() {
           >
             <div className="mb-6 flex items-center justify-between">
               <div>
-                <div className="text-xs font-black uppercase tracking-[0.24em] text-zinc-500">个人中心</div>
+                <div className="text-xs font-black uppercase tracking-[0.24em] text-zinc-500">{tr('个人中心', 'Account Center')}</div>
                 <div className="mt-1 text-2xl font-black text-white">{getUserAuthorName(user)}</div>
-                <div className="text-sm text-zinc-500">{user?.email || '游客账号'}</div>
+                <div className="text-sm text-zinc-500">{user?.email || tr('游客账号', 'Guest account')}</div>
                 {user?.isAnonymous && (
                   <div className="mt-3 max-w-xl rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-50/80">
                     {GUEST_RETENTION_NOTICE}
                   </div>
                 )}
               </div>
-              <button type="button" onClick={() => setIsAccountCenterOpen(false)} className={semanticIconButtonClass('ghost')} aria-label="返回">
+              <button type="button" onClick={() => setIsAccountCenterOpen(false)} className={semanticIconButtonClass('ghost')} aria-label={tr('返回', 'Back')}>
                 <ChevronLeft className="h-5 w-5" />
               </button>
             </div>
@@ -7912,9 +7932,9 @@ export default function App() {
             <section className="mb-6 rounded-[1.5rem] border border-indigo-300/15 bg-indigo-500/10 p-5">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
-                  <div className="text-lg font-black text-white">我的资产</div>
+                  <div className="text-lg font-black text-white">{tr('我的资产', 'My Library')}</div>
                   <div className="mt-1 text-xs leading-relaxed text-zinc-500">
-                    收藏、命运线、追踪和创作集中查看，方便快速找到相关内容。
+                    {tr('收藏、命运线、追踪和创作集中查看，方便快速找到相关内容。', 'Favorites, fate lines, follows, and works are gathered here for quick access.')}
                   </div>
                 </div>
                 <BarChart3 className="h-5 w-5 text-indigo-200" />
@@ -7933,7 +7953,7 @@ export default function App() {
               <section className="rounded-[1.5rem] border border-zinc-800 bg-zinc-900/30 p-5">
                 <div className="mb-4 flex items-center gap-2 text-lg font-black text-white">
                   <Settings className="h-5 w-5 text-indigo-300" />
-                  账号设置
+                  {tr('账号设置', 'Account Settings')}
                 </div>
                 <div className="space-y-3">
                   <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
@@ -7970,17 +7990,17 @@ export default function App() {
                   <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
                     <div className="mb-3 flex items-center justify-between gap-3">
                       <div>
-                        <div className="text-sm font-black text-zinc-100">界面主题</div>
+                        <div className="text-sm font-black text-zinc-100">{tr('界面主题', 'Theme')}</div>
                         <div className="mt-1 text-xs leading-relaxed text-zinc-500">
-                          浅色主题使用柔和低疲劳配色，暗色主题保留原本氛围。
+                          {tr('浅色主题使用柔和低疲劳配色，暗色主题保留原本氛围。', 'Light theme uses softer low-fatigue colors; dark theme keeps the original atmosphere.')}
                         </div>
                       </div>
                       {appTheme === 'light' ? <Sun className="h-5 w-5 text-amber-500" /> : <Moon className="h-5 w-5 text-indigo-300" />}
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       {[
-                        { value: 'dark' as const, label: '暗色' },
-                        { value: 'light' as const, label: '浅色' },
+                        { value: 'dark' as const, label: tr('暗色', 'Dark') },
+                        { value: 'light' as const, label: tr('浅色', 'Light') },
                       ].map((option) => (
                         <button
                           key={option.value}
@@ -8000,27 +8020,27 @@ export default function App() {
                   <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
                     <div className="mb-3 flex items-center justify-between gap-3">
                       <div>
-                        <div className="text-sm font-black text-zinc-100">手机通知</div>
+                        <div className="text-sm font-black text-zinc-100">{tr('手机通知', 'Mobile notifications')}</div>
                         <div className="mt-1 text-xs leading-relaxed text-zinc-500">
-                          接收作者更新、作品互动和系统提醒。若曾在系统弹窗中拒绝，需要到浏览器或手机设置里重新允许。
+                          {tr('接收作者更新、作品互动和系统提醒。若曾在系统弹窗中拒绝，需要到浏览器或手机设置里重新允许。', 'Receive author updates, story interactions, and system reminders. If blocked before, re-enable it in browser or phone settings.')}
                         </div>
                       </div>
                       <Bell className="h-5 w-5 text-indigo-300" />
                     </div>
                     <button type="button" onClick={enablePushNotifications} disabled={pushSubscribeBusy} className={semanticButtonClass('secondary', { fullWidth: true })}>
                       {pushSubscribeBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
-                      开启手机通知
+                      {tr('开启手机通知', 'Enable mobile notifications')}
                     </button>
                   </div>
                   <input
                     value={profileDisplayName}
                     onChange={(event) => setProfileDisplayName(event.target.value)}
-                    placeholder="显示名称"
+                    placeholder={tr('显示名称', 'Display name')}
                     className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
                   />
                   <button type="button" onClick={handleUpdateProfileDisplayName} className={semanticButtonClass('secondary', { fullWidth: true })}>
                     <PenSquare className="h-4 w-4" />
-                    更新名称
+                    {tr('更新名称', 'Update name')}
                   </button>
                   {!user?.isAnonymous && (
                     <>
@@ -8028,23 +8048,23 @@ export default function App() {
                         type="password"
                         value={profileCurrentPassword}
                         onChange={(event) => setProfileCurrentPassword(event.target.value)}
-                        placeholder="当前密码"
+                        placeholder={tr('当前密码', 'Current password')}
                         className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
                       />
                       <input
                         type="password"
                         value={profileNewPassword}
                         onChange={(event) => setProfileNewPassword(event.target.value)}
-                        placeholder="新密码（至少 6 位）"
+                        placeholder={tr('新密码（至少 6 位）', 'New password (at least 6 characters)')}
                         className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
                       />
                       <button type="button" onClick={handleUpdateAccountPassword} className={semanticButtonClass('ghost', { fullWidth: true })}>
                         <Lock className="h-4 w-4" />
-                        修改密码
+                        {tr('修改密码', 'Change password')}
                       </button>
                       <button type="button" onClick={() => handlePasswordResetForEmail(user?.email || '')} className={semanticButtonClass('ghost', { fullWidth: true })}>
                         <Mail className="h-4 w-4" />
-                        发送重设邮件
+                        {tr('发送重设邮件', 'Send reset email')}
                       </button>
                     </>
                   )}
@@ -8057,7 +8077,7 @@ export default function App() {
                     className={semanticButtonClass('danger', { fullWidth: true })}
                   >
                     <LogOut className="h-4 w-4" />
-                    登出
+                    {tr('登出', 'Log out')}
                   </button>
                 </div>
               </section>
@@ -8065,11 +8085,11 @@ export default function App() {
               <section className="rounded-[1.5rem] border border-zinc-800 bg-zinc-900/30 p-5">
                 <div className="mb-4 flex items-center gap-2 text-lg font-black text-white">
                   <Archive className="h-5 w-5 text-indigo-300" />
-                  命运收藏馆
+                  {t('archive.title')}
                 </div>
                 <div className="space-y-3 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
                   <div className="text-sm text-zinc-400">
-                    收藏命运和分享记录现在集中在独立页面管理。
+                    {tr('收藏命运和分享记录现在集中在独立页面管理。', 'Saved fate lines and share records are managed on a separate page.')}
                   </div>
                   <button
                     type="button"
@@ -8077,7 +8097,7 @@ export default function App() {
                     className={semanticButtonClass('secondary', { fullWidth: true })}
                   >
                     <Archive className="h-4 w-4" />
-                    打开命运收藏馆页
+                    {tr('打开命运收藏馆页', 'Open fate archive')}
                   </button>
                 </div>
               </section>
@@ -8135,21 +8155,21 @@ export default function App() {
         <div className="mb-10 flex items-start justify-between gap-4">
           <div className="flex min-w-0 gap-4">
             {story.meta?.coverUrl && (
-              <img src={story.meta.coverUrl} alt={`${formatBookTitle(story.meta?.title)} 封面`} className="h-24 w-24 shrink-0 rounded-2xl border border-zinc-800 object-cover sm:h-32 sm:w-32" />
+              <img src={story.meta.coverUrl} alt={`${formatBookTitle(story.meta?.title)} ${tr('封面', 'cover')}`} className="h-24 w-24 shrink-0 rounded-2xl border border-zinc-800 object-cover sm:h-32 sm:w-32" />
             )}
             <div className="min-w-0 space-y-3">
-              <div className="text-xs font-black uppercase tracking-[0.24em] text-zinc-500">故事记录</div>
+              <div className="text-xs font-black uppercase tracking-[0.24em] text-zinc-500">{tr('故事记录', 'Story Record')}</div>
               <h1 className="break-words text-4xl font-black text-white">{formatBookTitle(story.meta?.title)}</h1>
               <div className="space-y-1 text-sm font-bold text-zinc-500">
-                <div><AuthorNameButton prefix="原作者：" authorId={story.meta?.originalAuthorId || story.meta?.sourceStoryId || story.meta?.authorId} authorName={getOriginalAuthorName(story.meta)} /></div>
-                {getIntervenerName(story.meta) && <div>干涉者：{getIntervenerName(story.meta)}</div>}
+                <div><AuthorNameButton prefix={tr('原作者：', 'Original author: ')} authorId={story.meta?.originalAuthorId || story.meta?.sourceStoryId || story.meta?.authorId} authorName={getOriginalAuthorName(story.meta)} /></div>
+                {getIntervenerName(story.meta) && <div>{tr('干涉者：', 'Intervener: ')}{getIntervenerName(story.meta)}</div>}
               </div>
             </div>
           </div>
-          {readonlyCanGoBack && <BackNavButton label="返回上一页" onClick={leaveReadonlyStory} />}
+          {readonlyCanGoBack && <BackNavButton label={tr('返回上一页', 'Back')} onClick={leaveReadonlyStory} />}
         </div>
         <div className="app-card-quiet mb-10 rounded-[2rem] p-6 text-sm leading-relaxed text-zinc-300">
-          {story.meta?.main_axis || '暂无故事主轴摘要。'}
+          {story.meta?.main_axis || tr('暂无故事主轴摘要。', 'No story premise summary yet.')}
         </div>
         <div className="mb-8 flex justify-end">
           <ReadingTextControls />
@@ -8158,9 +8178,9 @@ export default function App() {
           <div className="app-card-quiet mb-8 rounded-[2rem] p-5">
             <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <div className="text-xs font-black uppercase tracking-[0.22em] text-zinc-500">馆藏管理</div>
+                <div className="text-xs font-black uppercase tracking-[0.22em] text-zinc-500">{tr('馆藏管理', 'Archive Management')}</div>
                 <div className="mt-1 text-sm font-bold text-zinc-300">
-                  当前状态：{story.meta?.visibility === 'unlisted' ? '非公开链接，可通过链接访问' : '私人，仅当前账号可见'}
+                  {tr('当前状态：', 'Current status: ')}{story.meta?.visibility === 'unlisted' ? tr('非公开链接，可通过链接访问', 'Unlisted link, accessible by URL') : tr('私人，仅当前账号可见', 'Private, only visible to this account')}
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -8171,7 +8191,7 @@ export default function App() {
                   className={semanticButtonClass('ghost', { compact: true })}
                 >
                   <Lock className="h-4 w-4" />
-                  设为私人
+                  {tr('设为私人', 'Set private')}
                 </button>
                 <button
                   type="button"
@@ -8180,7 +8200,7 @@ export default function App() {
                   className={semanticButtonClass('secondary', { compact: true })}
                 >
                   <ExternalLink className="h-4 w-4" />
-                  设为非公开链接
+                  {tr('设为非公开链接', 'Set unlisted link')}
                 </button>
                 <button
                   type="button"
@@ -8189,7 +8209,7 @@ export default function App() {
                   className={semanticButtonClass('primary', { compact: true })}
                 >
                   {isSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
-                  分享
+                  {tr('分享', 'Share')}
                 </button>
                 <button
                   type="button"
@@ -8198,12 +8218,12 @@ export default function App() {
                   className={semanticButtonClass('danger', { compact: true })}
                 >
                   <Trash2 className="h-4 w-4" />
-                  删除
+                  {tr('删除', 'Delete')}
                 </button>
               </div>
             </div>
             <p className="text-xs leading-relaxed text-zinc-500">
-              分享会使用当前这条馆藏记录本身，不会重复创建新的通篇馆藏作品。
+              {tr('分享会使用当前这条馆藏记录本身，不会重复创建新的通篇馆藏作品。', 'Sharing uses this archive record itself and will not create another full duplicate.')}
             </p>
           </div>
         )}
@@ -8214,12 +8234,12 @@ export default function App() {
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-800/60 bg-zinc-950/45 text-xs font-black text-zinc-500">
                   {chapter.chapter_num}
                 </div>
-                <h2 className="text-xl font-black text-zinc-100">{chapter.title || `第${chapter.chapter_num}章`}</h2>
+                <h2 className="text-xl font-black text-zinc-100">{chapter.title || (isEnglish ? `Chapter ${chapter.chapter_num}` : `第${chapter.chapter_num}章`)}</h2>
                 <div className="h-px flex-1 bg-gradient-to-r from-zinc-800/70 to-transparent" />
               </div>
               <div className="space-y-5 text-zinc-300">
                 {(chapter.text || '').split('\n').filter(Boolean).map((paragraph, idx) => (
-                  <p key={idx} style={readingParagraphStyle} className="leading-relaxed">{renderParagraphWithHighlights(paragraph, story.meta?.characters || [])}</p>
+                  <p key={idx} style={readingParagraphStyle} className="leading-relaxed">{renderReadingParagraph(paragraph, story.meta?.characters || [])}</p>
                 ))}
               </div>
               <div className="reading-divider mt-12" />
@@ -8227,9 +8247,9 @@ export default function App() {
           ))}
         </div>
         <div className="app-card mt-12 rounded-[2rem] p-6 text-center">
-          <h3 className="text-2xl font-black text-white">想亲手改变这条命运线吗？</h3>
+          <h3 className="text-2xl font-black text-white">{tr('想亲手改变这条命运线吗？', 'Want to change this fate line?')}</h3>
           <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-zinc-400">
-            这页是只读故事记录。注册或登录后，可从原版故事开始干涉命运；若作者开放权限，也可一键改编成个人作品。
+            {tr('这页是只读故事记录。注册或登录后，可从原版故事开始干涉命运；若作者开放权限，也可一键改编成个人作品。', 'This is a read-only story record. After signing in, start from the original story to interfere with fate; if adaptation is allowed, it can also become a personal work.')}
           </p>
           <div className="mt-6 grid gap-3 sm:grid-cols-3">
             <button
@@ -8238,13 +8258,13 @@ export default function App() {
                 setReadonlyStoryData(null);
                 window.history.replaceState({}, '', window.location.pathname);
                 resetToHome();
-                showError('请先注册或登录，然后再干涉故事。');
+                showError(tr('请先注册或登录，然后再干涉故事。', 'Please sign in before interfering with the story.'));
               }}
               disabled={user ? !story.meta?.sourceStoryId : false}
               className={semanticButtonClass('primary', { compact: true })}
             >
               <Zap className="h-4 w-4" />
-              {user ? '干涉原版故事' : '登录后干涉'}
+              {user ? tr('干涉原版故事', 'Interfere with original') : tr('登录后干涉', 'Sign in to interfere')}
             </button>
             <button
               type="button"
@@ -8252,12 +8272,12 @@ export default function App() {
                 setReadonlyStoryData(null);
                 window.history.replaceState({}, '', window.location.pathname);
                 resetToHome();
-                showError('请先注册或登录，然后再改编故事。');
+                showError(tr('请先注册或登录，然后再改编故事。', 'Please sign in before adapting this story.'));
               }}
               className={semanticButtonClass('secondary', { compact: true })}
             >
               <Wand2 className="h-4 w-4" />
-              {user ? (canAdaptReadonlyStory(story.meta) ? '一键改编' : '未开放改编') : '注册成用户'}
+              {user ? (canAdaptReadonlyStory(story.meta) ? tr('一键改编', 'Adapt') : tr('未开放改编', 'Adaptation unavailable')) : tr('注册成用户', 'Create account')}
             </button>
             <button
               type="button"
@@ -8269,7 +8289,7 @@ export default function App() {
               className={semanticButtonClass('ghost', { compact: true })}
             >
               <BookOpen className="h-4 w-4" />
-              浏览故事库
+              {tr('浏览故事库', 'Browse library')}
             </button>
           </div>
         </div>
@@ -8289,7 +8309,7 @@ export default function App() {
         >
           <div className="flex h-full flex-col">
             <div className="flex items-center justify-between border-b border-zinc-800 px-6 pb-6 pt-[max(1.5rem,calc(env(safe-area-inset-top)+1rem))]">
-              <h3 className="text-xl font-black text-white">故事信息</h3>
+              <h3 className="text-xl font-black text-white">{tr('故事信息', 'Story Info')}</h3>
               <button
                 type="button"
                 onClick={() => setIsStoryInfoOpen(false)}
@@ -8302,11 +8322,11 @@ export default function App() {
               {blueprint && (
                 <>
                   <section className="space-y-3">
-                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">故事背景</h4>
+                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">{tr('故事背景', 'Story Background')}</h4>
                     <p className="text-sm leading-relaxed text-zinc-300">{blueprint.main_axis}</p>
                   </section>
                   <section className="space-y-3">
-                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">作者预设倾向</h4>
+                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">{tr('作者预设倾向', 'Author Tendency')}</h4>
                     <div className="grid grid-cols-2 gap-3">
                       {endingBiasStoryCardLabels(blueprint).map((bias) => (
                         <div
@@ -8323,11 +8343,11 @@ export default function App() {
                       ))}
                     </div>
                     <p className="text-xs leading-relaxed text-zinc-500">
-                      这是作者为左右结局域设置的基础倾向，只作为命运走向参考，不代表最终结局必然落点。
+                      {tr('这是作者为左右结局域设置的基础倾向，只作为命运走向参考，不代表最终结局必然落点。', 'This is the author’s base tendency for left/right ending domains. It is a reference, not a guaranteed final outcome.')}
                     </p>
                   </section>
                   <section className="space-y-4">
-                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">登场角色</h4>
+                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">{tr('登场角色', 'Characters')}</h4>
                     <div className="grid gap-3">
                       {blueprint.characters.map(char => (
                         <div key={char.id} className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
@@ -8335,7 +8355,7 @@ export default function App() {
                             <div className="font-bold text-indigo-300">{char.name}</div>
                             {characterStatuses[char.id] && (
                               <div className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${characterStatuses[char.id].isDead ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
-                                {characterStatuses[char.id].status || '在场'}
+                                {characterStatuses[char.id].status || tr('在场', 'Present')}
                               </div>
                             )}
                           </div>
@@ -8345,11 +8365,11 @@ export default function App() {
                     </div>
                   </section>
                   <section className="space-y-4">
-                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">命运支线</h4>
+                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">{tr('命运支线', 'Fate Branches')}</h4>
                     <div className="grid gap-3">
                       {(blueprint.branches || []).length === 0 ? (
                         <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 text-sm text-zinc-500">
-                          暂无支线记录。
+                          {tr('暂无支线记录。', 'No branch records yet.')}
                         </div>
                       ) : (
                         (blueprint.branches || []).filter((branch: any) => {
@@ -8362,10 +8382,10 @@ export default function App() {
                           const wasUnlocked = historicallyUnlockedBranches.some((item: any) => item.id === branch.id);
                           const isHidden = branch.is_hidden || branch.hidden || branch.tier === 'hidden' || branch.inject?.hidden;
                           const canRevealBranchContent = isUnlocked || wasUnlocked;
-                          const visibleName = isHidden && !canRevealBranchContent ? '隐藏支线' : branch.name;
+                          const visibleName = isHidden && !canRevealBranchContent ? tr('隐藏支线', 'Hidden branch') : branch.name;
                           const visibleDesc = canRevealBranchContent
-                            ? (branch.desc || branch.sceneText || branch.hint || '尚无支线描述。')
-                            : (branch.hint || '继续干涉命运，寻找这条支线的触发契机。');
+                            ? (branch.desc || branch.sceneText || branch.hint || tr('尚无支线描述。', 'No branch description yet.'))
+                            : (branch.hint || tr('继续干涉命运，寻找这条支线的触发契机。', 'Keep interfering with fate to find the trigger for this branch.'));
                           return (
                             <div
                               key={branch.id || branch.name}
@@ -8386,23 +8406,23 @@ export default function App() {
                                       ? 'bg-zinc-700/60 text-zinc-300'
                                       : 'bg-zinc-800 text-zinc-500'
                                 }`}>
-                                  {isUnlocked ? '已解锁' : wasUnlocked ? '曾解锁' : '待解锁'}
+                                  {isUnlocked ? tr('已解锁', 'Unlocked') : wasUnlocked ? tr('曾解锁', 'Previously unlocked') : tr('待解锁', 'Locked')}
                                 </div>
                               </div>
                               <div className="text-xs leading-relaxed text-zinc-500">{visibleDesc}</div>
                               {canRevealBranchContent && (
                                 <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-black">
                                   <span className="rounded-full bg-zinc-800 px-2 py-1 text-zinc-300">
-                                    {branch.side === 'left' ? '左向支线' : '右向支线'}
+                                    {branch.side === 'left' ? tr('左向支线', 'Left branch') : tr('右向支线', 'Right branch')}
                                   </span>
                                   <span className="rounded-full bg-indigo-500/10 px-2 py-1 text-indigo-200">
-                                    影响：{branchTierLabel(branch.tier)}
+                                    {tr('影响：', 'Impact: ')}{branchTierLabel(branch.tier)}
                                   </span>
                                   <span className="rounded-full bg-sky-500/10 px-2 py-1 text-sky-200">
-                                    导向 {authoringEndingIdToLabel(branch.endingId || branch.inject?.endingId || branch.inject?.targetEndingId || branch.side)}
+                                    {tr('导向', 'Leads to')} {authoringEndingIdToLabel(branch.endingId || branch.inject?.endingId || branch.inject?.targetEndingId || branch.side)}
                                   </span>
                                   {(branch.is_hidden || branch.hidden || branch.tier === 'hidden' || branch.inject?.hidden) && (
-                                    <span className="rounded-full bg-amber-500/10 px-2 py-1 text-amber-200">隐藏支线</span>
+                                    <span className="rounded-full bg-amber-500/10 px-2 py-1 text-amber-200">{tr('隐藏支线', 'Hidden branch')}</span>
                                   )}
                                 </div>
                               )}
@@ -8427,7 +8447,7 @@ export default function App() {
     <button
       type="button"
       onClick={() => void openNotificationCenter()}
-      aria-label="打开通知"
+      aria-label={tr('打开通知', 'Open notifications')}
       className={`relative inline-flex ${size === 'md' ? 'h-12 w-12' : 'h-11 w-11'} items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950/85 text-zinc-200 transition-colors hover:border-indigo-400/60 hover:text-white backdrop-blur-md`}
     >
       <Bell className="h-5 w-5" />
@@ -8445,7 +8465,7 @@ export default function App() {
         <button
           type="button"
           onClick={() => setShowLeaveGameModal(true)}
-          aria-label="返回作品库"
+          aria-label={tr('返回作品库', 'Back to library')}
           className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950/80 text-zinc-200 transition-colors hover:border-zinc-600 hover:text-white backdrop-blur-md"
         >
           <ChevronLeft className="h-6 w-6" />
@@ -8459,13 +8479,13 @@ export default function App() {
             className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-zinc-800 bg-zinc-950/80 px-4 text-sm font-bold text-zinc-200 transition-colors hover:border-zinc-600 hover:text-white backdrop-blur-md"
           >
             <BookOpen className="h-4 w-4" />
-            故事信息
+            {tr('故事信息', 'Story Info')}
           </button>
         )}
         <button
           type="button"
           onClick={() => setIsAccountCenterOpen(true)}
-          aria-label="打开个人中心"
+          aria-label={tr('打开个人中心', 'Open account center')}
           className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950/80 text-zinc-200 transition-colors hover:border-zinc-600 hover:text-white backdrop-blur-md"
         >
           <UserIcon className="h-5 w-5" />
@@ -8487,7 +8507,7 @@ export default function App() {
       <button
         type="button"
         onClick={() => openArchiveView('STORY_SELECT')}
-        aria-label="打开命运收藏馆"
+        aria-label={tr('打开命运收藏馆', 'Open fate archive')}
         className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950/85 text-zinc-200 transition-colors hover:border-zinc-600 hover:text-white backdrop-blur-md"
       >
         <Archive className="h-5 w-5" />
@@ -8496,7 +8516,7 @@ export default function App() {
       <button
         type="button"
         onClick={() => setIsAccountCenterOpen(true)}
-        aria-label="打开个人中心"
+        aria-label={tr('打开个人中心', 'Open account center')}
         className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950/85 text-zinc-200 transition-colors hover:border-zinc-600 hover:text-white backdrop-blur-md"
       >
         <UserIcon className="h-5 w-5" />
@@ -8509,7 +8529,7 @@ export default function App() {
       <div className="destiny-dock play-destiny-dock rounded-full px-3 py-1.5 backdrop-blur-xl">
         <div className="flex min-h-9 items-center justify-between gap-2 px-1">
           <div className="shrink-0 text-xs font-black text-zinc-300 sm:text-sm">
-            {interventionsLeft}/3 干涉数
+            {interventionsLeft}/3 {tr('干涉数', 'interventions')}
           </div>
           <div className="min-w-0 flex-1 text-center text-xs font-black sm:text-sm">
             {(() => {
@@ -8519,9 +8539,9 @@ export default function App() {
               }
               const left = Math.round(uiFeedback.leftProgress || 0);
               const right = Math.round(uiFeedback.rightProgress || 0);
-              if (left <= 0 && right <= 0) return <span className="text-zinc-400">均衡</span>;
-              if (left >= right) return <span className="text-indigo-300/85">左{left}%</span>;
-              return <span className="text-rose-300/85">右{right}%</span>;
+              if (left <= 0 && right <= 0) return <span className="text-zinc-400">{tr('均衡', 'Balanced')}</span>;
+              if (left >= right) return <span className="text-indigo-300/85">{isEnglish ? `Left ${left}%` : `左${left}%`}</span>;
+              return <span className="text-rose-300/85">{isEnglish ? `Right ${right}%` : `右${right}%`}</span>;
             })()}
           </div>
           <button
@@ -8552,7 +8572,7 @@ export default function App() {
             animate={{ opacity: 1, y: 0 }}
             className="inline-block rounded-full bg-indigo-500/10 px-4 py-1 text-[10px] font-bold tracking-[0.2em] text-indigo-400 uppercase"
           >
-            正在干涉世界线
+            {tr('正在干涉世界线', 'Interfering with the timeline')}
           </motion.div>
           <h1 className="text-4xl font-black text-white sm:text-6xl">{formatBookTitle(blueprint.title)}</h1>
           <div className="text-sm font-bold text-zinc-500">
@@ -8589,7 +8609,7 @@ export default function App() {
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-800/60 bg-zinc-950/45 text-xs font-black text-zinc-500 transition-colors group-hover:border-indigo-500/40 group-hover:text-indigo-300">
                 {chapter.chapter_num}
               </div>
-              <h2 className="text-xl font-bold text-zinc-100">{chapter.title || `第${chapter.chapter_num}章`}</h2>
+              <h2 className="text-xl font-bold text-zinc-100">{chapter.title || (isEnglish ? `Chapter ${chapter.chapter_num}` : `第${chapter.chapter_num}章`)}</h2>
               <div className="h-px flex-1 bg-gradient-to-r from-zinc-800/70 to-transparent" />
             </div>
             
@@ -8597,16 +8617,16 @@ export default function App() {
               <div className="prose prose-invert max-w-none space-y-6">
                 {isChapterTextReady(chapter) ? (
                   String(chapter.text || '').split('\n').filter(Boolean).map((p, pIdx) => (
-                    <p key={pIdx} style={readingParagraphStyle} className="leading-relaxed first-letter:text-3xl first-letter:font-black first-letter:text-indigo-400 first-letter:mr-1">
-                      {renderParagraphWithHighlights(p, blueprint?.characters, changeHighlights[chapter.chapter_num] || [])}
+                    <p key={pIdx} style={readingParagraphStyle} className={`leading-relaxed ${isEnglish ? '' : 'first-letter:text-3xl first-letter:font-black first-letter:text-indigo-400 first-letter:mr-1'}`}>
+                      {renderReadingParagraph(p, blueprint?.characters, changeHighlights[chapter.chapter_num] || [])}
                     </p>
                   ))
                 ) : (
                   <div className="flex items-center gap-3 rounded-2xl border border-indigo-500/20 bg-indigo-500/10 p-5 text-sm font-bold text-indigo-100">
                     <Loader2 className={`h-5 w-5 ${backgroundGeneratingChapter === chapter.chapter_num ? 'animate-spin' : ''}`} />
                     {backgroundGeneratingChapter === chapter.chapter_num
-                      ? `第${chapter.chapter_num}章正在生成中，完成后会自动出现。`
-                      : `第${chapter.chapter_num}章已排入生成队列。`}
+                      ? (isEnglish ? `Chapter ${chapter.chapter_num} is generating and will appear when ready.` : `第${chapter.chapter_num}章正在生成中，完成后会自动出现。`)
+                      : (isEnglish ? `Chapter ${chapter.chapter_num} is queued for generation.` : `第${chapter.chapter_num}章已排入生成队列。`)}
                   </div>
                 )}
               </div>
@@ -8654,9 +8674,9 @@ export default function App() {
                         >
                           <div className="mt-6 flex w-full flex-col items-center gap-6 rounded-[1.75rem] border border-zinc-800/70 bg-zinc-950/40 p-5 sm:p-6">
                             <div className="max-w-xl text-center">
-                              <div className="mb-1 text-sm font-black text-zinc-100">因果节点已就绪</div>
+                              <div className="mb-1 text-sm font-black text-zinc-100">{tr('因果节点已就绪', 'Causal node ready')}</div>
                               <div className="text-xs leading-relaxed text-zinc-500">
-                                请选择本章登场角色，再决定施加庇佑或磨难。支线提示只作为命运走向的参考，不会直接写进故事表面。
+                                {tr('请选择本章登场角色，再决定施加庇佑或磨难。支线提示只作为命运走向的参考，不会直接写进故事表面。', 'Choose a character in this chapter, then apply blessing or hardship. Branch hints guide fate direction but are not written directly into the story surface.')}
                               </div>
                             </div>
                             <div className="grid w-full gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -8674,7 +8694,7 @@ export default function App() {
                                         <div className="text-sm font-black text-zinc-100">{char.name}</div>
                                         {characterStatuses[char.id] && (
                                           <div className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${characterStatuses[char.id].isDead ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
-                                            {characterStatuses[char.id].status || '在场'}
+                                            {characterStatuses[char.id].status || tr('在场', 'Present')}
                                           </div>
                                         )}
                                       </div>
@@ -8694,7 +8714,7 @@ export default function App() {
                                         className="flex min-h-14 items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-3 text-sm font-black text-emerald-300 transition-colors hover:border-emerald-400/60 hover:bg-emerald-500/15 disabled:opacity-30"
                                       >
                                         <Zap className="h-4 w-4" />
-                                        庇佑
+                                        {tr('庇佑', 'Bless')}
                                       </button>
                                       <button
                                         type="button"
@@ -8703,7 +8723,7 @@ export default function App() {
                                         className="flex min-h-14 items-center justify-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-3 text-sm font-black text-rose-300 transition-colors hover:border-rose-400/60 hover:bg-rose-500/15 disabled:opacity-30"
                                       >
                                         <Skull className="h-4 w-4" />
-                                        磨难
+                                        {tr('磨难', 'Hardship')}
                                       </button>
                                     </div>
                                   </div>
@@ -8746,32 +8766,32 @@ export default function App() {
                 />
               </div>
             </div>
-            <div className="text-xs text-zinc-600">平均每章 {getAverageChapterWords(chapters) || '未知'} 字</div>
+            <div className="text-xs text-zinc-600">{tr('平均每章', 'Avg. per chapter')} {getAverageChapterWords(chapters) || tr('未知', 'unknown')} {tr('字', 'words')}</div>
           </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             <button type="button" onClick={() => handleStoryInteraction('like')} className={`${semanticButtonClass(hasOptimisticStoryAction('like', activeStoryId) ? 'secondary' : 'ghost', { compact: true })} ${hasOptimisticStoryAction('like', activeStoryId) ? 'text-pink-200' : ''}`}>
-              <Heart className={`h-4 w-4 ${hasOptimisticStoryAction('like', activeStoryId) ? 'fill-current' : ''}`} /> 点赞
+              <Heart className={`h-4 w-4 ${hasOptimisticStoryAction('like', activeStoryId) ? 'fill-current' : ''}`} /> {tr('点赞', 'Like')}
             </button>
             <button type="button" onClick={() => handleStoryInteraction('favorite')} className={`${semanticButtonClass(hasOptimisticStoryAction('favorite', activeStoryId) ? 'secondary' : 'ghost', { compact: true })} ${hasOptimisticStoryAction('favorite', activeStoryId) ? 'text-amber-200' : ''}`}>
-              <Bookmark className={`h-4 w-4 ${hasOptimisticStoryAction('favorite', activeStoryId) ? 'fill-current' : ''}`} /> 收藏
+              <Bookmark className={`h-4 w-4 ${hasOptimisticStoryAction('favorite', activeStoryId) ? 'fill-current' : ''}`} /> {tr('收藏', 'Favorite')}
             </button>
             <button type="button" onClick={handleShareStory} disabled={isSharing || !blueprint} className={semanticButtonClass('secondary', { compact: true })}>
-              {isSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />} 分享
+              {isSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />} {tr('分享', 'Share')}
             </button>
             <button type="button" onClick={handleSaveWorkAndReturn} className={semanticButtonClass('secondary', { compact: true })}>
               <Archive className="h-4 w-4" /> {t('play.archiveFate')}
             </button>
             {!activeStoryId && (
               <button type="button" onClick={handleRegenerateQuickStory} className={semanticButtonClass('ghost', { compact: true })}>
-                <RefreshCcw className="h-4 w-4" /> 重新生成
+                <RefreshCcw className="h-4 w-4" /> {tr('重新生成', 'Regenerate')}
               </button>
             )}
             <button type="button" onClick={handleAdaptCurrentStory} disabled={!canAdaptCurrentStory() || isLoadingStories} className={semanticButtonClass('secondary', { compact: true })}>
               {isLoadingStories ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
-              {canAdaptCurrentStory() ? '一键改编' : '未开放改编'}
+              {canAdaptCurrentStory() ? tr('一键改编', 'Adapt') : tr('未开放改编', 'Adaptation unavailable')}
             </button>
             <button type="button" onClick={() => handleStoryInteraction('report')} className={semanticButtonClass('danger', { compact: true })}>
-              <Flag className="h-4 w-4" /> 举报
+              <Flag className="h-4 w-4" /> {tr('举报', 'Report')}
             </button>
           </div>
         </div>
@@ -8783,9 +8803,9 @@ export default function App() {
     <div className="mx-auto max-w-4xl px-6 pb-24 pt-[max(7rem,calc(env(safe-area-inset-top)+6rem))] sm:px-8">
       <div className="mb-16 text-center space-y-4">
         <div className="inline-block rounded-full bg-amber-500/10 px-4 py-1 text-[10px] font-bold tracking-[0.2em] text-amber-500 uppercase">
-          命运之卷已封存
+          {tr('命运之卷已封存', 'Fate volume sealed')}
         </div>
-        <h1 className="text-4xl font-black text-white sm:text-6xl">最终命运总结</h1>
+        <h1 className="text-4xl font-black text-white sm:text-6xl">{tr('最终命运总结', 'Final Fate Summary')}</h1>
       </div>
 
       <div className="relative rounded-[3rem] border border-zinc-800 bg-zinc-900/30 p-10 shadow-2xl backdrop-blur-xl sm:p-12">
@@ -8835,25 +8855,25 @@ export default function App() {
   const renderBranchForm = (isNew: boolean) => (
     <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/40 p-5 space-y-4">
       <div className="flex items-center justify-between">
-        <div className="text-sm font-black text-white">{isNew ? '新建支线' : '编辑支线'}</div>
+        <div className="text-sm font-black text-white">{isNew ? tr('新建支线', 'New branch') : tr('编辑支线', 'Edit branch')}</div>
         <button type="button" onClick={() => setExpandedBranchId(null)} className={semanticButtonClass('ghost', { compact: true })}>
           <X className="h-4 w-4" />
-          取消
+          {tr('取消', 'Cancel')}
         </button>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
-        <input value={branchForm.name} onChange={(event) => setBranchForm((prev) => ({ ...prev, name: event.target.value }))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" placeholder="支线名" />
-        <input value={branchForm.hint} onChange={(event) => setBranchForm((prev) => ({ ...prev, hint: event.target.value }))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" placeholder="提示短句" />
+        <input value={branchForm.name} onChange={(event) => setBranchForm((prev) => ({ ...prev, name: event.target.value }))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" placeholder={tr('支线名', 'Branch name')} />
+        <input value={branchForm.hint} onChange={(event) => setBranchForm((prev) => ({ ...prev, hint: event.target.value }))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" placeholder={tr('提示短句', 'Hint line')} />
       </div>
       <div className="grid gap-3 md:grid-cols-2">
         <select value={branchForm.side} onChange={(event) => setBranchForm((prev) => ({ ...prev, side: event.target.value as 'left' | 'right' }))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500">
-          <option value="left">左倾支线</option>
-          <option value="right">右倾支线</option>
+          <option value="left">{tr('左倾支线', 'Left-leaning branch')}</option>
+          <option value="right">{tr('右倾支线', 'Right-leaning branch')}</option>
         </select>
         <select value={branchForm.tier} onChange={(event) => setBranchForm((prev) => ({ ...prev, tier: event.target.value as 'small' | 'medium' | 'large' }))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500">
-          <option value="small">影响：小</option>
-          <option value="medium">影响：中</option>
-          <option value="large">影响：大</option>
+          <option value="small">{tr('影响：小', 'Impact: small')}</option>
+          <option value="medium">{tr('影响：中', 'Impact: medium')}</option>
+          <option value="large">{tr('影响：大', 'Impact: large')}</option>
         </select>
       </div>
       <label className="flex items-start gap-3 rounded-2xl border border-amber-500/15 bg-amber-500/5 p-4 text-sm text-zinc-300">
@@ -8864,61 +8884,61 @@ export default function App() {
           className="mt-1 h-4 w-4 accent-amber-500"
         />
         <span>
-          <span className="block font-black text-amber-200">隐藏支线</span>
-          <span className="mt-1 block text-xs leading-relaxed text-zinc-500">隐藏支线不会提前暴露完整内容；玩家需要在游玩中触发后，才会看到这条支线的具体情节。</span>
+          <span className="block font-black text-amber-200">{tr('隐藏支线', 'Hidden branch')}</span>
+          <span className="mt-1 block text-xs leading-relaxed text-zinc-500">{tr('隐藏支线不会提前暴露完整内容；玩家需要在游玩中触发后，才会看到这条支线的具体情节。', 'Hidden branches do not reveal full content early. Players see the details only after triggering them during play.')}</span>
         </span>
       </label>
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4">
         <label className="block space-y-2 text-sm font-bold text-zinc-300">
-          <span>导向结局绑定</span>
+          <span>{tr('导向结局绑定', 'Ending binding')}</span>
           <select
             value={branchForm.endingId}
             onChange={(event) => setBranchForm((prev) => ({ ...prev, endingId: event.target.value }))}
             className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
           >
-            <option value="">自动进入该方向的域内默认结局</option>
+            <option value="">{tr('自动进入该方向的域内默认结局', 'Auto-use the default ending in this direction')}</option>
             {(authoringCartridge?.endings || []).map((ending: any) => (
               <option key={ending.id} value={ending.id}>
-                绑定{ending.title || authoringEndingIdToLabel(ending.id)}
+                {tr('绑定', 'Bind')} {ending.title || authoringEndingIdToLabel(ending.id)}
               </option>
             ))}
           </select>
         </label>
-        <p className="mt-2 text-xs leading-relaxed text-zinc-500">支线可以只影响左/右走向，也可以进一步绑定到某个具体结局。没有绑定时，会自动进入该方向的默认结局。</p>
+        <p className="mt-2 text-xs leading-relaxed text-zinc-500">{tr('支线可以只影响左/右走向，也可以进一步绑定到某个具体结局。没有绑定时，会自动进入该方向的默认结局。', 'A branch can affect only left/right direction, or bind to a specific ending. Without a binding, it uses that direction’s default ending.')}</p>
       </div>
-      <textarea value={branchForm.sceneText} onChange={(event) => setBranchForm((prev) => ({ ...prev, sceneText: event.target.value }))} className="authoring-resizable-textarea min-h-[180px] w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-sm text-white outline-none focus:border-indigo-500" placeholder="支线情节（300 字以内）" />
+      <textarea value={branchForm.sceneText} onChange={(event) => setBranchForm((prev) => ({ ...prev, sceneText: event.target.value }))} className="authoring-resizable-textarea min-h-[180px] w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-sm text-white outline-none focus:border-indigo-500" placeholder={tr('支线情节（300 字以内）', 'Branch scene (within 300 words)')} />
       <div className="space-y-3">
-        <div className="text-sm font-black text-white">触发条件</div>
+        <div className="text-sm font-black text-white">{tr('触发条件', 'Trigger Conditions')}</div>
         {branchConditions.map((condition, idx) => (
           <div key={idx} className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 space-y-3">
             <div className="flex items-center justify-between gap-3">
-              <div className="text-xs font-black text-zinc-500">条件组 {idx + 1}</div>
+              <div className="text-xs font-black text-zinc-500">{tr('条件组', 'Condition group')} {idx + 1}</div>
               {branchConditions.length > 1 && (
                 <button type="button" onClick={() => setBranchConditions((prev) => prev.filter((_, itemIdx) => itemIdx !== idx))} className={semanticButtonClass('danger', { compact: true })}>
                   <Trash2 className="h-4 w-4" />
-                  删除条件
+                  {tr('删除条件', 'Delete condition')}
                 </button>
               )}
             </div>
             <div className="grid gap-3 md:grid-cols-4">
               <select value={condition.kind} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, kind: event.target.value as 'single' | 'count' } : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500">
-                <option value="single">单次判定</option>
-                <option value="count">累计判定</option>
+                <option value="single">{tr('单次判定', 'Single check')}</option>
+                <option value="count">{tr('累计判定', 'Cumulative check')}</option>
               </select>
               <select value={condition.kind === 'single' ? condition.singleChapterNum : condition.upToChapterNum} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? (condition.kind === 'single' ? { ...item, singleChapterNum: Number(event.target.value) } : { ...item, upToChapterNum: Number(event.target.value) }) : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500">
-                {chapterOptions.map((chapterNum) => <option key={chapterNum} value={chapterNum}>第{chapterNum}章</option>)}
+                {chapterOptions.map((chapterNum) => <option key={chapterNum} value={chapterNum}>{isEnglish ? `Chapter ${chapterNum}` : `第${chapterNum}章`}</option>)}
               </select>
               <select value={condition.kind === 'single' ? condition.singleCharId : condition.countCharId} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? (condition.kind === 'single' ? { ...item, singleCharId: event.target.value } : { ...item, countCharId: event.target.value }) : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500">
-                <option value="">选择角色</option>
+                <option value="">{tr('选择角色', 'Choose character')}</option>
                 {normalizeCharacters(authoringCartridge?.meta?.characters || []).map((character: any) => <option key={character.id} value={character.id}>{character.name}</option>)}
               </select>
               {condition.kind === 'single' ? (
                 <select value={condition.singleAction} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, singleAction: event.target.value as 'bless' | 'curse' } : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500">
-                  <option value="bless">庇佑</option>
-                  <option value="curse">磨难</option>
+                  <option value="bless">{tr('庇佑', 'Bless')}</option>
+                  <option value="curse">{tr('磨难', 'Hardship')}</option>
                 </select>
               ) : (
-                <input type="number" min={1} value={condition.minCount} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, minCount: Math.max(1, Number(event.target.value) || 1) } : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500" placeholder="累计次数" />
+                <input type="number" min={1} value={condition.minCount} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, minCount: Math.max(1, Number(event.target.value) || 1) } : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500" placeholder={tr('累计次数', 'Count')} />
               )}
             </div>
             <div className="text-xs text-indigo-300">
@@ -8939,13 +8959,13 @@ export default function App() {
       </div>
       <div className="flex flex-wrap gap-3">
         <button type="button" onClick={() => setBranchConditions((prev) => prev.length >= 3 ? prev : [...prev, { kind: 'single', singleChapterNum: 2, singleCharId: '', singleAction: 'bless', countCharId: '', countAction: 'bless', minCount: 1, upToChapterNum: 6 }])} className={semanticButtonClass('ghost', { compact: true })}>
-          新增条件组
+          {tr('新增条件组', 'Add condition group')}
         </button>
         <button
           type="button"
           onClick={async () => {
             if (!authoringStoryId || !branchForm.name.trim()) {
-              showError('请先填写支线名。');
+              showError(tr('请先填写支线名。', 'Please enter a branch name first.'));
               return;
             }
             const payload = {
@@ -8966,17 +8986,17 @@ export default function App() {
               const newId = await createStoryBranch(db as any, authoringStoryId, payload);
               await selectAuthoringStory(authoringStoryId);
               setExpandedBranchId(null);
-              showError('支线已创建。');
+              showError(tr('支线已创建。', 'Branch created.'));
             } else {
               await upsertStoryBranch(db as any, authoringStoryId, branchForm.id, payload);
               await selectAuthoringStory(authoringStoryId);
               setExpandedBranchId(null);
-              showError('支线已保存。');
+              showError(tr('支线已保存。', 'Branch saved.'));
             }
           }}
           className={semanticButtonClass('primary', { compact: true })}
         >
-          {isNew ? '创建支线' : '保存修改'}
+          {isNew ? tr('创建支线', 'Create branch') : tr('保存修改', 'Save changes')}
         </button>
       </div>
     </div>
@@ -9097,11 +9117,11 @@ export default function App() {
           >
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
-                <div className="text-xs font-black uppercase tracking-[0.2em] text-indigo-300">作者档案</div>
+                <div className="text-xs font-black uppercase tracking-[0.2em] text-indigo-300">{tr('作者档案', 'Author Profile')}</div>
                 <h3 className="mt-2 text-2xl font-black text-white">{authorProfileTarget.authorName}</h3>
-                <p className="mt-1 text-xs font-semibold text-zinc-500">查看这个作者公开或非公开链接作品，并决定是否追踪后续更新。</p>
+                <p className="mt-1 text-xs font-semibold text-zinc-500">{tr('查看这个作者公开或非公开链接作品，并决定是否追踪后续更新。', 'View this author’s public or unlisted works, and decide whether to follow future updates.')}</p>
               </div>
-              <button type="button" onClick={() => setAuthorProfileTarget(null)} className={semanticIconButtonClass('ghost')} aria-label="关闭作者档案">
+              <button type="button" onClick={() => setAuthorProfileTarget(null)} className={semanticIconButtonClass('ghost')} aria-label={tr('关闭作者档案', 'Close author profile')}>
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -9109,7 +9129,7 @@ export default function App() {
               {authorProfileTarget.authorId !== user?.uid && (
                 <button type="button" onClick={toggleAuthorFollow} disabled={authorProfileBusy} className={semanticButtonClass(authorProfileFollowing ? 'secondary' : 'primary', { compact: true })}>
                   {authorProfileBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
-                  {authorProfileFollowing ? '已追踪' : '追踪作者'}
+                  {authorProfileFollowing ? tr('已追踪', 'Following') : tr('追踪作者', 'Follow author')}
                 </button>
               )}
             </div>
@@ -9120,7 +9140,7 @@ export default function App() {
               </div>
             ) : authorProfileStories.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/30 p-8 text-center text-sm font-semibold text-zinc-500">
-                暂时没有可查看的作者作品。
+                {tr('暂时没有可查看的作者作品。', 'No viewable works from this author yet.')}
               </div>
             ) : (
               <div className="grid max-h-[50vh] gap-3 overflow-y-auto pr-1">
@@ -9136,10 +9156,10 @@ export default function App() {
                   >
                     <div className="font-black text-zinc-100">{formatBookTitle(getStoryTitle(story))}</div>
                     <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-black text-zinc-500">
-                      <span>点赞 {getStoryLikeCount(story)}</span>
-                      <span>收藏 {getStoryFavoriteCount(story)}</span>
-                      <span>分享 {getStoryShareCount(story)}</span>
-                      <span>干涉 {getStoryInterventionCount(story)}</span>
+                      <span>{tr('点赞', 'Likes')} {getStoryLikeCount(story)}</span>
+                      <span>{tr('收藏', 'Favorites')} {getStoryFavoriteCount(story)}</span>
+                      <span>{tr('分享', 'Shares')} {getStoryShareCount(story)}</span>
+                      <span>{tr('干涉', 'Interventions')} {getStoryInterventionCount(story)}</span>
                     </div>
                   </button>
                 ))}
@@ -9170,26 +9190,26 @@ export default function App() {
           >
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
-                <div className="text-xs font-black uppercase tracking-[0.2em] text-indigo-300">通知</div>
-                <h3 className="mt-2 text-2xl font-black text-white">命运动态</h3>
-                <p className="mt-1 text-xs font-semibold text-zinc-500">点赞、收藏、分享、追踪作者更新和创作提醒都会集中在这里。</p>
+                <div className="text-xs font-black uppercase tracking-[0.2em] text-indigo-300">{tr('通知', 'Notifications')}</div>
+                <h3 className="mt-2 text-2xl font-black text-white">{tr('命运动态', 'Fate Updates')}</h3>
+                <p className="mt-1 text-xs font-semibold text-zinc-500">{tr('点赞、收藏、分享、追踪作者更新和创作提醒都会集中在这里。', 'Likes, favorites, shares, followed author updates, and creation nudges gather here.')}</p>
               </div>
-              <button type="button" onClick={() => setNotificationCenterOpen(false)} className={semanticIconButtonClass('ghost')} aria-label="关闭通知">
+              <button type="button" onClick={() => setNotificationCenterOpen(false)} className={semanticIconButtonClass('ghost')} aria-label={tr('关闭通知', 'Close notifications')}>
                 <X className="h-5 w-5" />
               </button>
             </div>
             <div className="mb-3 grid grid-cols-3 gap-2">
               <button type="button" onClick={() => void refreshNotificationCenter()} className={semanticButtonClass('ghost', { compact: true })} disabled={notificationLoading}>
                 {notificationLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
-                刷新通知
+                {tr('刷新通知', 'Refresh')}
               </button>
               <button type="button" onClick={() => void markAllNotificationsRead()} className={semanticButtonClass('secondary', { compact: true })} disabled={notificationLoading || notificationItems.every((item) => item.readAt)}>
                 <CheckCircle2 className="h-4 w-4" />
-                全部已读
+                {tr('全部已读', 'Mark all read')}
               </button>
               <button type="button" onClick={() => void clearAllNotifications()} className={semanticButtonClass('danger', { compact: true })} disabled={notificationLoading || notificationItems.length === 0}>
                 <Trash2 className="h-4 w-4" />
-                清空
+                {tr('清空', 'Clear')}
               </button>
             </div>
             {notificationLoading && notificationItems.length === 0 ? (
@@ -9199,7 +9219,7 @@ export default function App() {
               </div>
             ) : notificationItems.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/30 p-8 text-center text-sm font-semibold text-zinc-500">
-                暂时没有新的通知。
+                {tr('暂时没有新的通知。', 'No new notifications yet.')}
               </div>
             ) : (
               <div className="grid max-h-[56vh] gap-3 overflow-y-auto pr-1">
@@ -9222,8 +9242,8 @@ export default function App() {
                         <Bell className="h-4 w-4 text-indigo-200" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="font-black text-zinc-100">{item.title || '新的通知'}</div>
-                        <div className="mt-1 text-xs font-semibold leading-relaxed text-zinc-400">{item.body || '有新的命运动态。'}</div>
+                        <div className="font-black text-zinc-100">{item.title || tr('新的通知', 'New notification')}</div>
+                        <div className="mt-1 text-xs font-semibold leading-relaxed text-zinc-400">{item.body || tr('有新的命运动态。', 'There is a new fate update.')}</div>
                         <div className="mt-2 text-[10px] font-black uppercase tracking-[0.16em] text-zinc-600">
                           {new Date(item.createdAt || Date.now()).toLocaleString()}
                         </div>
@@ -9233,7 +9253,7 @@ export default function App() {
                       type="button"
                       onClick={() => void deleteNotificationItem(item.id)}
                       className="shrink-0 rounded-full p-2 text-zinc-500 transition-colors hover:bg-rose-500/10 hover:text-rose-200 active:scale-95"
-                      aria-label="删除通知"
+                      aria-label={tr('删除通知', 'Delete notification')}
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -9266,15 +9286,15 @@ export default function App() {
           >
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
-                <div className="text-xs font-black uppercase tracking-[0.2em] text-indigo-300">分享前确认</div>
+                <div className="text-xs font-black uppercase tracking-[0.2em] text-indigo-300">{tr('分享前确认', 'Share Preview')}</div>
                 <h3 className="mt-2 text-2xl font-black text-white">{String(shareComposer.title || t('play.share'))}</h3>
-                <p className="mt-1 text-xs font-semibold text-zinc-500">可以先调整要发出去的文字；确认分享后才会调用设备分享功能，并在成功后计入分享数。</p>
+                <p className="mt-1 text-xs font-semibold text-zinc-500">{tr('可以先调整要发出去的文字；确认分享后才会调用设备分享功能，并在成功后计入分享数。', 'Edit the share text first. The device share sheet opens only after confirmation, and successful shares count toward stats.')}</p>
               </div>
-              <button type="button" onClick={() => closeShareComposer(false)} className={semanticIconButtonClass('ghost')} aria-label="关闭分享编辑">
+              <button type="button" onClick={() => closeShareComposer(false)} className={semanticIconButtonClass('ghost')} aria-label={tr('关闭分享编辑', 'Close share editor')}>
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <label className="mb-3 block text-xs font-black uppercase tracking-[0.16em] text-zinc-500">分享文字</label>
+            <label className="mb-3 block text-xs font-black uppercase tracking-[0.16em] text-zinc-500">{tr('分享文字', 'Share text')}</label>
             <textarea
               value={shareComposerText}
               onChange={(event) => setShareComposerText(event.target.value)}
@@ -9285,11 +9305,11 @@ export default function App() {
             </div>
             <div className="mt-5 grid grid-cols-2 gap-3">
               <button type="button" onClick={() => closeShareComposer(false)} className={semanticButtonClass('ghost', { fullWidth: true })}>
-                取消
+                {tr('取消', 'Cancel')}
               </button>
               <button type="button" onClick={() => void confirmShareComposer()} className={semanticButtonClass('primary', { fullWidth: true })}>
                 <ExternalLink className="h-4 w-4" />
-                确认分享
+                {tr('确认分享', 'Share now')}
               </button>
             </div>
           </motion.div>
@@ -9303,15 +9323,15 @@ export default function App() {
       {!authoringCartridge ? (
         <>
           <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
-            <BackNavButton label="返回上一页" onClick={() => goBack('STORY_SELECT')} />
+            <BackNavButton label={tr('返回上一页', 'Back')} onClick={() => goBack('STORY_SELECT')} />
             <div className="flex flex-wrap gap-3">
               <button type="button" onClick={() => handleCreateAuthoringStory()} disabled={authoringSaving} className={semanticButtonClass('secondary', { compact: true })}>
                 <Sparkles className="h-4 w-4" />
-                新建作品
+                {tr('新建作品', 'New work')}
               </button>
               <button type="button" onClick={() => refreshStories({ force: true })} disabled={authoringSaving} className={semanticButtonClass('ghost', { compact: true })}>
                 <RefreshCcw className="h-4 w-4" />
-                刷新列表
+                {tr('刷新列表', 'Refresh list')}
               </button>
             </div>
           </div>
@@ -9321,11 +9341,11 @@ export default function App() {
               <div>
                 <div className="flex items-center gap-2 text-2xl font-black text-white">
                   <BarChart3 className="h-5 w-5 text-indigo-300" />
-                  我的作品
+                  {tr('我的作品', 'My Works')}
                 </div>
-                <div className="mt-1 text-xs font-semibold text-zinc-500">用数据判断哪些命运线值得继续扩写、改版或推广。</div>
+                <div className="mt-1 text-xs font-semibold text-zinc-500">{tr('用数据判断哪些命运线值得继续扩写、改版或推广。', 'Use stats to decide which fate lines deserve expansion, revision, or promotion.')}</div>
               </div>
-              <div className="text-xs font-black text-zinc-500">{myStories.length} 部作品</div>
+              <div className="text-xs font-black text-zinc-500">{myStories.length} {tr('部作品', 'works')}</div>
             </div>
             <div className="mb-5 grid gap-3 lg:grid-cols-[1fr_auto_auto_auto]">
               <label className="relative block">
@@ -9333,7 +9353,7 @@ export default function App() {
                 <input
                   value={authoringListSearch}
                   onChange={(event) => setAuthoringListSearch(event.target.value)}
-                  placeholder="搜索作品、标签或主轴"
+                  placeholder={tr('搜索作品、标签或主轴', 'Search works, tags, or premise')}
                   className="w-full rounded-2xl border border-zinc-800 bg-zinc-950/60 py-3 pl-10 pr-4 text-sm font-semibold text-zinc-100 outline-none transition-colors placeholder:text-zinc-600 focus:border-indigo-400/70"
                 />
               </label>
@@ -9342,41 +9362,41 @@ export default function App() {
                 onChange={(event) => setAuthoringListVisibilityFilter(event.target.value as typeof authoringListVisibilityFilter)}
                 className="rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-sm font-black text-zinc-200 outline-none focus:border-indigo-400/70"
               >
-                <option value="all">全部可见性</option>
-                <option value="public">公开</option>
-                <option value="unlisted">非公开链接</option>
-                <option value="private">私人</option>
+                <option value="all">{tr('全部可见性', 'All visibility')}</option>
+                <option value="public">{tr('公开', 'Public')}</option>
+                <option value="unlisted">{tr('非公开链接', 'Unlisted link')}</option>
+                <option value="private">{tr('私人', 'Private')}</option>
               </select>
               <select
                 value={authoringCreatedFilter}
                 onChange={(event) => setAuthoringCreatedFilter(event.target.value as typeof authoringCreatedFilter)}
                 className="rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-sm font-black text-zinc-200 outline-none focus:border-indigo-400/70"
               >
-                <option value="all">全部创作日期</option>
-                <option value="7d">近 7 天</option>
-                <option value="30d">近 30 天</option>
-                <option value="365d">近 1 年</option>
+                <option value="all">{tr('全部创作日期', 'All creation dates')}</option>
+                <option value="7d">{tr('近 7 天', 'Last 7 days')}</option>
+                <option value="30d">{tr('近 30 天', 'Last 30 days')}</option>
+                <option value="365d">{tr('近 1 年', 'Last year')}</option>
               </select>
               <select
                 value={authoringListSort}
                 onChange={(event) => setAuthoringListSort(event.target.value as AuthoringListSort)}
                 className="rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-sm font-black text-zinc-200 outline-none focus:border-indigo-400/70"
               >
-                <option value="updated">最近更新</option>
-                <option value="created">创作日期</option>
-                <option value="likes">点赞最多</option>
-                <option value="favorites">收藏最多</option>
-                <option value="shares">分享最多</option>
-                <option value="interventions">干涉最多</option>
+                <option value="updated">{tr('最近更新', 'Recently updated')}</option>
+                <option value="created">{tr('创作日期', 'Creation date')}</option>
+                <option value="likes">{tr('点赞最多', 'Most liked')}</option>
+                <option value="favorites">{tr('收藏最多', 'Most favorited')}</option>
+                <option value="shares">{tr('分享最多', 'Most shared')}</option>
+                <option value="interventions">{tr('干涉最多', 'Most intervened')}</option>
               </select>
             </div>
             {myStories.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/40 p-10 text-center text-zinc-500">
-                还没有作品，点击“新建作品”开始创作。
+                {tr('还没有作品，点击“新建作品”开始创作。', 'No works yet. Click “New work” to start creating.')}
               </div>
             ) : getFilteredAuthoringStories().length === 0 ? (
               <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/40 p-8 text-center text-sm font-semibold text-zinc-500">
-                没有符合当前筛选的作品。
+                {tr('没有符合当前筛选的作品。', 'No works match the current filters.')}
               </div>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2">
@@ -9408,13 +9428,13 @@ export default function App() {
                     </span>
                     <div className="pr-24">
                       <div className="line-clamp-3 text-lg font-black text-white leading-tight">{formatBookTitle(getStoryTitle(story))}</div>
-                      <div className="mt-2 text-xs font-semibold text-zinc-500">创作 {formatShortDate(getStoryCreatedMs(story))} · 更新 {formatShortDate(getStoryUpdatedMs(story))}</div>
+                      <div className="mt-2 text-xs font-semibold text-zinc-500">{tr('创作', 'Created')} {formatShortDate(getStoryCreatedMs(story))} · {tr('更新', 'Updated')} {formatShortDate(getStoryUpdatedMs(story))}</div>
                     </div>
                     <div className="mt-5 flex flex-wrap gap-2">
-                      {renderAuthoringStatChip('点赞', getStoryLikeCount(story), Heart, 'text-rose-300')}
-                      {renderAuthoringStatChip('收藏', getStoryFavoriteCount(story), Bookmark, 'text-amber-300')}
-                      {renderAuthoringStatChip('分享', getStoryShareCount(story), ExternalLink, 'text-cyan-300')}
-                      {renderAuthoringStatChip('干涉', getStoryInterventionCount(story), Sparkles, 'text-indigo-300')}
+                      {renderAuthoringStatChip(tr('点赞', 'Likes'), getStoryLikeCount(story), Heart, 'text-rose-300')}
+                      {renderAuthoringStatChip(tr('收藏', 'Favorites'), getStoryFavoriteCount(story), Bookmark, 'text-amber-300')}
+                      {renderAuthoringStatChip(tr('分享', 'Shares'), getStoryShareCount(story), ExternalLink, 'text-cyan-300')}
+                      {renderAuthoringStatChip(tr('干涉', 'Interventions'), getStoryInterventionCount(story), Sparkles, 'text-indigo-300')}
                     </div>
                   </button>
                 ))}
@@ -9426,13 +9446,13 @@ export default function App() {
         <>
           <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
             <BackNavButton
-              label="返回列表"
+              label={tr('返回列表', 'Back to list')}
               onClick={() => {
                 if (authoringDirty) {
                   setConfirmationModal({
                     isOpen: true,
-                    title: '放弃未保存的更改',
-                    message: '退出编辑模式将丢失当前未保存的内容，确定要离开吗？',
+                    title: tr('放弃未保存的更改', 'Discard unsaved changes'),
+                    message: tr('退出编辑模式将丢失当前未保存的内容，确定要离开吗？', 'Leaving the editor will discard unsaved changes. Continue?'),
                     onConfirm: () => {
                       setAuthoringDirty(false);
                       setAuthoringStoryId(null);
@@ -9451,28 +9471,28 @@ export default function App() {
                 data-state={authoringSaving ? 'saving' : authoringDirty ? 'dirty' : 'saved'}
               >
                 {authoringSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : authoringDirty ? <AlertCircle className="h-4 w-4" /> : <Check className="h-4 w-4" />}
-                {authoringSaving ? '保存中' : authoringDirty ? '有未保存更改' : '已保存'}
+                {authoringSaving ? tr('保存中', 'Saving') : authoringDirty ? tr('有未保存更改', 'Unsaved changes') : tr('已保存', 'Saved')}
               </div>
               <button type="button" onClick={() => handleDeleteAuthoringStory()} disabled={authoringSaving} className={semanticButtonClass('danger', { compact: true })}>
                 <Trash2 className="h-4 w-4" />
-                删除作品
+                {tr('删除作品', 'Delete work')}
               </button>
               <button type="button" onClick={handleSaveAuthoringChanges} disabled={authoringSaving} className={semanticButtonClass('primary', { compact: true })}>
                 {authoringSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                保存更改
+                {tr('保存更改', 'Save changes')}
               </button>
             </div>
           </div>
 
           <div className="mb-6 flex gap-1 overflow-x-auto whitespace-nowrap rounded-2xl border border-zinc-800 bg-zinc-950/70 p-1">
             <button type="button" onClick={() => setAuthoringTab('settings')} className={`flex-1 flex min-h-12 flex-col items-center justify-center rounded-xl px-1 py-2 text-[10px] sm:text-[11px] font-black transition-colors ${authoringTab === 'settings' ? 'bg-indigo-600 text-white shadow-md' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'}`}>
-              <Copy className="mb-1 h-4 w-4 shrink-0" />作品设置
+              <Copy className="mb-1 h-4 w-4 shrink-0" />{tr('作品设置', 'Settings')}
             </button>
             <button type="button" onClick={() => setAuthoringTab('mainline')} className={`flex-1 flex min-h-12 flex-col items-center justify-center rounded-xl px-1 py-2 text-[10px] sm:text-[11px] font-black transition-colors ${authoringTab === 'mainline' ? 'bg-indigo-600 text-white shadow-md' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'}`}>
-              <BookOpen className="mb-1 h-4 w-4 shrink-0" />主线和结局
+              <BookOpen className="mb-1 h-4 w-4 shrink-0" />{tr('主线和结局', 'Mainline & Endings')}
             </button>
             <button type="button" onClick={() => setAuthoringTab('branches')} className={`flex-1 flex min-h-12 flex-col items-center justify-center rounded-xl px-1 py-2 text-[10px] sm:text-[11px] font-black transition-colors ${authoringTab === 'branches' ? 'bg-indigo-600 text-white shadow-md' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'}`}>
-              <Sparkles className="mb-1 h-4 w-4 shrink-0" />角色和支线
+              <Sparkles className="mb-1 h-4 w-4 shrink-0" />{tr('角色和支线', 'Characters & Branches')}
             </button>
           </div>
 
@@ -9487,7 +9507,7 @@ export default function App() {
                 }
                 setAuthoringFindReplaceOpen((prev) => !prev);
               }}
-              aria-label="查找 / 替换"
+              aria-label={tr('查找 / 替换', 'Find / Replace')}
               className={`flex h-12 w-12 items-center justify-center rounded-full border shadow-2xl backdrop-blur-md transition-all hover:-translate-y-0.5 active:scale-95 ${
                 authoringFindReplaceOpen || authoringFindCompact
                   ? 'border-indigo-400 bg-indigo-500 text-white'
@@ -9499,10 +9519,10 @@ export default function App() {
             {authoringFindCompact && (
               <div className="absolute bottom-16 left-0 grid w-44 gap-1.5 rounded-[1.25rem] border border-indigo-500/30 bg-zinc-950/95 p-2 shadow-2xl shadow-black/40 backdrop-blur-xl">
                 <button type="button" onClick={() => moveAuthoringFindMatch(-1)} className={semanticButtonClass('ghost', { compact: true, fullWidth: true })}>
-                  上一个
+                  {tr('上一个', 'Previous')}
                 </button>
                 <button type="button" onClick={() => moveAuthoringFindMatch(1)} className={semanticButtonClass('ghost', { compact: true, fullWidth: true })}>
-                  下一个
+                  {tr('下一个', 'Next')}
                 </button>
                 <button
                   type="button"
@@ -9510,10 +9530,10 @@ export default function App() {
                   disabled={!authoringFindQuery}
                   className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-400/40 bg-amber-500/15 px-3 py-2 text-xs font-black text-amber-100 transition-all hover:border-amber-300 hover:bg-amber-500/25 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  替换
+                  {tr('替换', 'Replace')}
                 </button>
                 <div className="px-1 text-center text-[10px] font-bold text-zinc-500">
-                  点击左下角 X 返回设置
+                  {tr('点击左下角 X 返回设置', 'Tap the X to return to settings')}
                 </div>
               </div>
             )}
@@ -9521,8 +9541,8 @@ export default function App() {
               <div className="absolute bottom-16 left-0 grid max-h-[min(76dvh,680px)] w-[min(92vw,44rem)] gap-3 overflow-y-auto rounded-[1.75rem] border border-indigo-500/30 bg-zinc-950/95 p-4 shadow-2xl shadow-black/40 backdrop-blur-xl sm:p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <div className="text-lg font-black text-white">查找 / 替换</div>
-                    <p className="mt-1 text-xs leading-relaxed text-zinc-500">可指定章节、结局或角色范围，避免误改其他段落。</p>
+                    <div className="text-lg font-black text-white">{tr('查找 / 替换', 'Find / Replace')}</div>
+                    <p className="mt-1 text-xs leading-relaxed text-zinc-500">{tr('可指定章节、结局或角色范围，避免误改其他段落。', 'Choose chapter, ending, or character scope to avoid changing unrelated text.')}</p>
                   </div>
                   <button type="button" onClick={() => setAuthoringFindReplaceOpen(false)} className={semanticIconButtonClass('ghost')}>
                     <X className="h-4 w-4" />
@@ -9530,30 +9550,30 @@ export default function App() {
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="space-y-1 text-xs font-bold text-zinc-400">
-                    <span>查找文字</span>
+                    <span>{tr('查找文字', 'Find text')}</span>
                     <input
                       value={authoringFindQuery}
                       onChange={(event) => setAuthoringFindQuery(event.target.value)}
                       className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
-                      placeholder="输入要查找的文字"
+                      placeholder={tr('输入要查找的文字', 'Enter text to find')}
                     />
                   </label>
                   <label className="space-y-1 text-xs font-bold text-zinc-400">
-                    <span>替换成</span>
+                    <span>{tr('替换成', 'Replace with')}</span>
                     <input
                       value={authoringReplaceQuery}
                       onChange={(event) => setAuthoringReplaceQuery(event.target.value)}
                       className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
-                      placeholder="留空则删除查找文字"
+                      placeholder={tr('留空则删除查找文字', 'Leave blank to delete matched text')}
                     />
                   </label>
                 </div>
                 <div className="grid gap-3">
                   <div className="flex flex-wrap gap-2">
                     {([
-                      ['chapters', '章节'],
-                      ['endings', '结局'],
-                      ['characters', '角色'],
+                      ['chapters', tr('章节', 'Chapters')],
+                      ['endings', tr('结局', 'Endings')],
+                      ['characters', tr('角色', 'Characters')],
                     ] as const).map(([key, label]) => (
                       <label key={key} className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/50 px-3 py-2 text-xs font-bold text-zinc-300">
                         <input
@@ -9569,13 +9589,13 @@ export default function App() {
                   {authoringFindScope.chapters && (
                     <div className="rounded-2xl border border-zinc-800 bg-zinc-900/35 p-3">
                       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                        <div className="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-500">章节范围</div>
+                        <div className="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-500">{tr('章节范围', 'Chapter scope')}</div>
                         <button
                           type="button"
                           onClick={() => setAuthoringFindChapterNums((authoringCartridge.chapters || []).map((chapter: any) => Number(chapter.chapter_num)).filter((chapterNum: number) => Number.isFinite(chapterNum)))}
                           className="text-xs font-black text-indigo-300 hover:text-indigo-100"
                         >
-                          全选章节
+                          {tr('全选章节', 'Select all chapters')}
                         </button>
                       </div>
                       <div className="flex flex-wrap gap-2">
@@ -9590,7 +9610,7 @@ export default function App() {
                                 onChange={(event) => setAuthoringFindChapterNums((prev) => event.target.checked ? [...new Set([...prev, chapterNum])].sort((a, b) => a - b) : prev.filter((item) => item !== chapterNum))}
                                 className="accent-indigo-500"
                               />
-                              第{chapterNum}章
+                              {isEnglish ? `Chapter ${chapterNum}` : `第${chapterNum}章`}
                             </label>
                           );
                         })}
@@ -9600,13 +9620,13 @@ export default function App() {
                   {authoringFindScope.endings && (
                     <div className="rounded-2xl border border-zinc-800 bg-zinc-900/35 p-3">
                       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                        <div className="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-500">结局范围</div>
+                        <div className="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-500">{tr('结局范围', 'Ending scope')}</div>
                         <button
                           type="button"
                           onClick={() => setAuthoringFindEndingIds((authoringCartridge.endings || []).map((ending: any) => String(ending.id || '')).filter(Boolean))}
                           className="text-xs font-black text-indigo-300 hover:text-indigo-100"
                         >
-                          全选结局
+                          {tr('全选结局', 'Select all endings')}
                         </button>
                       </div>
                       <div className="flex flex-wrap gap-2">
@@ -9643,7 +9663,7 @@ export default function App() {
                     }
                     className={semanticButtonClass('secondary', { compact: true })}
                   >
-                    查找
+                    {tr('查找', 'Find')}
                   </button>
                   <button
                     type="button"
@@ -9658,7 +9678,7 @@ export default function App() {
                     }
                     className={semanticButtonClass('primary', { compact: true })}
                   >
-                    全部替换
+                    {tr('全部替换', 'Replace all')}
                   </button>
                   <button
                     type="button"
@@ -9668,7 +9688,7 @@ export default function App() {
                     }}
                     className={semanticButtonClass('ghost', { compact: true })}
                   >
-                    清空
+                    {tr('清空', 'Clear')}
                   </button>
                 </div>
               </div>
@@ -9681,12 +9701,12 @@ export default function App() {
                 <section className="space-y-4">
 
                   <div className="border-t border-zinc-800 pt-6">
-                    <h3 className="text-xl font-black text-white">作品设置</h3>
-                    <p className="mt-1 text-xs leading-relaxed text-zinc-500">正式作品可选择私人、非公开链接或公开；收藏命运记录不会出现在这里。</p>
+                    <h3 className="text-xl font-black text-white">{tr('作品设置', 'Story Settings')}</h3>
+                    <p className="mt-1 text-xs leading-relaxed text-zinc-500">{tr('正式作品可选择私人、非公开链接或公开；收藏命运记录不会出现在这里。', 'Formal works can be private, unlisted, or public. Saved fate records do not appear here.')}</p>
                   </div>
                   <div className="grid gap-4 md:grid-cols-2">
                     <label className="space-y-2 text-sm text-zinc-400">
-                      <div>作品标题</div>
+                      <div>{tr('作品标题', 'Story title')}</div>
                       <input
                         value={stripBookTitle(authoringCartridge.meta?.title || '')}
                         onChange={(event) => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, title: event.target.value } }))}
@@ -9694,11 +9714,11 @@ export default function App() {
                       />
                     </label>
                     <label className="space-y-2 text-sm text-zinc-400">
-                      <div>标签（以中文逗号分隔）</div>
+                      <div>{tr('标签（以中文逗号分隔）', 'Tags (comma-separated)')}</div>
                       <input
                         value={authoringCustomTagsInput}
                         onChange={(event) => setAuthoringCustomTagsInput(event.target.value)}
-                        placeholder="在此手动输入标签或点击下方快速添加"
+                        placeholder={tr('在此手动输入标签或点击下方快速添加', 'Type tags here, or use quick tags below')}
                         className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-white outline-none focus:border-indigo-500"
                       />
                       <div className="mt-2 flex flex-wrap gap-2">
@@ -9723,7 +9743,7 @@ export default function App() {
                     <div className="mb-4 flex flex-col gap-4 sm:flex-row">
                       <div className="h-32 w-32 shrink-0 overflow-hidden rounded-2xl border border-zinc-800 bg-gradient-to-br from-zinc-800 via-zinc-950 to-indigo-950">
                         {authoringCartridge.meta?.coverUrl ? (
-                          <img src={authoringCartridge.meta.coverUrl} alt="作品封面预览" className="h-full w-full object-cover" />
+                          <img src={authoringCartridge.meta.coverUrl} alt={tr('作品封面预览', 'Story cover preview')} className="h-full w-full object-cover" />
                         ) : (
                           <div className="flex h-full w-full items-center justify-center p-4 text-center text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">
                             NO COVER
@@ -9732,13 +9752,13 @@ export default function App() {
                       </div>
                       <div className="min-w-0 flex-1 space-y-3">
                         <div>
-                          <h4 className="text-lg font-black text-white">作品封面</h4>
-                          <p className="mt-1 text-xs leading-relaxed text-zinc-500">用于作品卡和分享预览，建议 1:1。可上传图片，或直接粘贴剪贴板图片。</p>
+                          <h4 className="text-lg font-black text-white">{tr('作品封面', 'Story Cover')}</h4>
+                          <p className="mt-1 text-xs leading-relaxed text-zinc-500">{tr('用于作品卡和分享预览，建议 1:1。可上传图片，或直接粘贴剪贴板图片。', 'Used for story cards and share previews. 1:1 is recommended. Upload an image or paste from clipboard.')}</p>
                         </div>
                         <div className="flex flex-wrap gap-2">
                           <label className={`${semanticButtonClass('secondary', { compact: true })} cursor-pointer`}>
                             <BookOpen className="h-4 w-4" />
-                            上传封面
+                            {tr('上传封面', 'Upload cover')}
                             <input
                               type="file"
                               accept="image/*"
@@ -9752,7 +9772,7 @@ export default function App() {
                           {authoringCartridge.meta?.coverUrl && (
                             <button type="button" onClick={() => applyAuthoringCover('')} className={semanticButtonClass('ghost', { compact: true })}>
                               <X className="h-4 w-4" />
-                              移除封面
+                              {tr('移除封面', 'Remove cover')}
                             </button>
                           )}
                         </div>
@@ -9763,18 +9783,18 @@ export default function App() {
                         <input
                           value={authoringCoverPrompt}
                           onChange={(event) => setAuthoringCoverPrompt(event.target.value)}
-                          placeholder="描述封面画面..."
+                          placeholder={tr('描述封面画面...', 'Describe the cover image...')}
                           className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
                         />
                         <button type="button" onClick={handleGenerateAuthoringCover} disabled={isGeneratingCover} className={semanticButtonClass('primary', { compact: true })}>
                           {isGeneratingCover ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                          AI 生成
+                          {tr('AI 生成', 'AI Generate')}
                         </button>
                       </div>
                     )}
                   </section>
                   <label className="block space-y-2 text-sm text-zinc-400">
-                    <div>故事主轴</div>
+                    <div>{tr('故事主轴', 'Story premise')}</div>
                     <textarea
                       value={authoringCartridge.meta?.main_axis || ''}
                       onChange={(event) => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, main_axis: event.target.value } }))}
@@ -9782,18 +9802,18 @@ export default function App() {
                     />
                   </label>
                   <section className="app-card-quiet rounded-2xl p-4">
-                    <div className="mb-3 text-sm font-black text-zinc-100">结局结构</div>
+                    <div className="mb-3 text-sm font-black text-zinc-100">{tr('结局结构', 'Ending Structure')}</div>
                     <div className="grid gap-2 sm:grid-cols-2">
                       {([
                         {
                           value: 'single',
-                          label: '单一结局',
-                          hint: '所有干涉都需要自然收束到同一个默认结局，适合宿命感或强主线作品。',
+                          label: tr('单一结局', 'Single ending'),
+                          hint: tr('所有干涉都需要自然收束到同一个默认结局，适合宿命感或强主线作品。', 'All interventions naturally converge to one default ending. Best for fated or strong-mainline stories.'),
                         },
                         {
                           value: 'dual',
-                          label: '多线结局',
-                          hint: '使用默认、左向、右向三类收束，每一类都可以继续扩展具体结局。',
+                          label: tr('多线结局', 'Branching endings'),
+                          hint: tr('使用默认、左向、右向三类收束，每一类都可以继续扩展具体结局。', 'Uses default, left, and right domains. Each domain can later expand into specific endings.'),
                         },
                       ] as const).map((option) => {
                         const selected = (authoringCartridge.meta?.endingMode || 'dual') === option.value;
@@ -9815,12 +9835,12 @@ export default function App() {
                       })}
                     </div>
                     <div className="app-card-quiet mt-4 rounded-2xl p-4">
-                      <div className="text-sm font-black text-zinc-100">故事倾向</div>
-                      <p className="mt-1 text-xs leading-relaxed text-zinc-500">设置作品本身比较容易走向哪一种收束。读者只会感受到故事倾向，不会看到具体数值。</p>
+                      <div className="text-sm font-black text-zinc-100">{tr('故事倾向', 'Story Tendency')}</div>
+                      <p className="mt-1 text-xs leading-relaxed text-zinc-500">{tr('设置作品本身比较容易走向哪一种收束。读者只会感受到故事倾向，不会看到具体数值。', 'Set which ending direction the work naturally leans toward. Readers feel the tendency but do not see exact values.')}</p>
                       <div className="mt-3 grid gap-3 sm:grid-cols-2">
                         {([
-                          { key: 'leftBaseWeight', label: '左向结局域' },
-                          { key: 'rightBaseWeight', label: '右向结局域' },
+                          { key: 'leftBaseWeight', label: tr('左向结局域', 'Left ending domain') },
+                          { key: 'rightBaseWeight', label: tr('右向结局域', 'Right ending domain') },
                         ] as const).map((option) => {
                           const bias = normalizeEndingBias(authoringCartridge.meta?.endingBias || authoringCartridge.meta?.endingRates);
                           const value = normalizeEndingBiasPercent(bias[option.key]);
@@ -9854,16 +9874,16 @@ export default function App() {
                           );
                         })}
                       </div>
-                      <p className="mt-3 text-[11px] leading-relaxed text-zinc-500">如果不确定，保持两边相同即可；支线与玩家干涉会继续影响故事最终走向。</p>
+                      <p className="mt-3 text-[11px] leading-relaxed text-zinc-500">{tr('如果不确定，保持两边相同即可；支线与玩家干涉会继续影响故事最终走向。', 'If unsure, keep both sides equal. Branches and player interventions still affect the final direction.')}</p>
                     </div>
                   </section>
                   <section className="app-card-quiet rounded-2xl p-4">
-                    <div className="mb-3 text-sm font-black text-zinc-100">作品可见性</div>
+                    <div className="mb-3 text-sm font-black text-zinc-100">{tr('作品可见性', 'Visibility')}</div>
                     <div className="grid gap-2 sm:grid-cols-3">
                       {[
-                        { value: 'private', label: '私人', hint: '只有作者自己可见。' },
-                        { value: 'unlisted', label: '非公开链接', hint: '不进公开列表，但链接可读。' },
-                        { value: 'public', label: '公开', hint: '会出现在公开作品库。' },
+                        { value: 'private', label: tr('私人', 'Private'), hint: tr('只有作者自己可见。', 'Only the author can view it.') },
+                        { value: 'unlisted', label: tr('非公开链接', 'Unlisted link'), hint: tr('不进公开列表，但链接可读。', 'Not listed publicly, but readable by link.') },
+                        { value: 'public', label: tr('公开', 'Public'), hint: tr('会出现在公开作品库。', 'Appears in the public library.') },
                       ].map((option) => {
                         const selected = (authoringCartridge.meta?.visibility || 'private') === option.value;
                         return (
@@ -9892,19 +9912,19 @@ export default function App() {
                       className="mt-1 h-4 w-4 accent-indigo-500"
                     />
                     <span>
-                      <span className="block font-black text-zinc-100">开放一键改编权限</span>
-                      <span className="mt-1 block text-xs leading-relaxed text-zinc-500">开启后，其他已登录用户可以把这篇作品改编成个人草稿继续创作。</span>
+                      <span className="block font-black text-zinc-100">{tr('开放一键改编权限', 'Allow one-click adaptation')}</span>
+                      <span className="mt-1 block text-xs leading-relaxed text-zinc-500">{tr('开启后，其他已登录用户可以把这篇作品改编成个人草稿继续创作。', 'When enabled, other logged-in users can adapt this work into their own draft.')}</span>
                     </span>
                   </label>
                   
                   <div className="border-t border-zinc-800 pt-6">
-                    <h3 className="text-xl font-black text-white">一键导入</h3>
-                    <p className="mt-1 text-xs leading-relaxed text-zinc-500">支持按“主线设置 / 支线设置”范本格式自动解析并写入当前作品。</p>
+                    <h3 className="text-xl font-black text-white">{tr('一键导入', 'One-click Import')}</h3>
+                    <p className="mt-1 text-xs leading-relaxed text-zinc-500">{tr('支持按“主线设置 / 支线设置”范本格式自动解析并写入当前作品。', 'Parse and import text using the “Mainline / Branch Settings” template format.')}</p>
                   </div>
                   <textarea
                     value={authoringImportText}
                     onChange={(event) => setAuthoringImportText(event.target.value)}
-                    placeholder="把其他 AI 生成的完整文本粘贴到这里..."
+                    placeholder={tr('把其他 AI 生成的完整文本粘贴到这里...', 'Paste a complete generated story here...')}
                     className="authoring-resizable-textarea min-h-[320px] w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-950 p-5 text-sm text-zinc-300 outline-none transition-colors focus:border-indigo-500"
                   />
                   <label className="flex items-center gap-2 text-xs text-zinc-400">
@@ -9913,20 +9933,20 @@ export default function App() {
                       checked={authoringImportReplaceBranches}
                       onChange={(event) => setAuthoringImportReplaceBranches(event.target.checked)}
                     />
-                    导入时尝试覆盖支线结构
+                    {tr('导入时尝试覆盖支线结构', 'Try replacing branch structure during import')}
                   </label>
                   <div className="flex flex-col sm:flex-row gap-3">
                     <button type="button" onClick={handleAuthoringImport} className={semanticButtonClass('primary', { fullWidth: true })}>
                       <Copy className="h-4 w-4" />
-                      解析并导入
+                      {tr('解析并导入', 'Parse and import')}
                     </button>
                     <button type="button" onClick={() => {
                         const template = `# 主线设置\n## 标题\n作品名称\n\n## 主轴\n一句话描述故事核心冲突\n\n## 主要角色\n### 角色1\n- 名字: 角色名A\n- 简介: 角色A的简介\n\n### 角色2\n- 名字: 角色名B\n- 简介: 角色B的简介\n\n## 默认故事\n### 第 1 章 标题一\n第一章大纲或正文\n\n### 第 2 章 标题二\n第二章大纲或正文\n\n## 结局设置\n### 默认结局\n默认结局正文\n### 左向默认结局\n左向默认结局正文\n### 右向默认结局\n右向默认结局正文\n\n# 支线设置\n## 支线1\n- 支线名: 支线名称\n- 倾向: 左倾\n- 影响: 中\n- 隐藏: 否\n- 导向结局: 左向默认结局\n- 提示短句: 留意这里的变化\n- 支线情节: 这里写支线发生时的具体剧情\n- 条件组1: 第 2 章 角色名A 庇佑`;
                         navigator.clipboard.writeText(template);
-                        showError('蓝本格式已复制到剪贴板！');
+                        showError(tr('蓝本格式已复制到剪贴板！', 'Template format copied to clipboard.'));
                     }} className={semanticButtonClass('secondary', { fullWidth: true })}>
                       <Copy className="h-4 w-4" />
-                      拷贝蓝本格式
+                      {tr('拷贝蓝本格式', 'Copy template format')}
                     </button>
                   </div>
                 </section>
@@ -10331,7 +10351,7 @@ export default function App() {
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-black text-white">时空菜单</h3>
+              <h3 className="text-xl font-black text-white">{tr('时空菜单', 'Time Menu')}</h3>
               <button
                 onClick={() => setIsActionMenuOpen(false)}
                 className={semanticIconButtonClass('ghost')}
@@ -10341,7 +10361,7 @@ export default function App() {
             </div>
             <div className="grid max-h-[min(72vh,34rem)] gap-5 overflow-y-auto pr-1">
               <section className="grid gap-2">
-                <div className="px-1 text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">阅读与资料</div>
+                <div className="px-1 text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">{tr('阅读与资料', 'Reading & Info')}</div>
                 <button
                   onClick={() => {
                     setIsActionMenuOpen(false);
@@ -10350,25 +10370,25 @@ export default function App() {
                   className={semanticMenuButtonClass('ghost')}
                 >
                   <BookOpen className="h-5 w-5" />
-                  故事信息
+                  {tr('故事信息', 'Story Info')}
                 </button>
                 <button
                   onClick={() => openArchiveView('PLAYING')}
                   className={semanticMenuButtonClass('ghost')}
                 >
                   <Archive className="h-5 w-5" />
-                  命运收藏馆
+                  {t('archive.title')}
                 </button>
               </section>
               {gameState === 'PLAYING' && (
                 <>
                   <section className="grid gap-2">
-                    <div className="px-1 text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">作品互动</div>
+                    <div className="px-1 text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">{tr('作品互动', 'Story Actions')}</div>
                     <button onClick={() => { setIsActionMenuOpen(false); handleStoryInteraction('like'); }} className={semanticMenuButtonClass('ghost')}>
-                      <Heart className={`h-5 w-5 ${hasOptimisticStoryAction('like', activeStoryId) ? 'fill-current text-pink-300' : ''}`} /> 点赞
+                      <Heart className={`h-5 w-5 ${hasOptimisticStoryAction('like', activeStoryId) ? 'fill-current text-pink-300' : ''}`} /> {tr('点赞', 'Like')}
                     </button>
                     <button onClick={() => { setIsActionMenuOpen(false); handleStoryInteraction('favorite'); }} className={semanticMenuButtonClass('ghost')}>
-                      <Bookmark className={`h-5 w-5 ${hasOptimisticStoryAction('favorite', activeStoryId) ? 'fill-current text-amber-300' : ''}`} /> 收藏
+                      <Bookmark className={`h-5 w-5 ${hasOptimisticStoryAction('favorite', activeStoryId) ? 'fill-current text-amber-300' : ''}`} /> {tr('收藏', 'Favorite')}
                     </button>
                     <button
                       onClick={() => {
@@ -10386,23 +10406,23 @@ export default function App() {
                     </button>
                   </section>
                   <section className="grid gap-2">
-                    <div className="px-1 text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">创作与重开</div>
+                    <div className="px-1 text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">{tr('创作与重开', 'Create & Restart')}</div>
                     {!activeStoryId && (
                       <button onClick={() => { setIsActionMenuOpen(false); handleRegenerateQuickStory(); }} className={semanticMenuButtonClass('ghost')}>
-                        <RefreshCcw className="h-5 w-5" /> 重新生成
+                        <RefreshCcw className="h-5 w-5" /> {tr('重新生成', 'Regenerate')}
                       </button>
                     )}
                     <button onClick={() => { setIsActionMenuOpen(false); handleAdaptCurrentStory(); }} disabled={!canAdaptCurrentStory() || isLoadingStories} className={semanticMenuButtonClass('secondary')}>
-                      <Wand2 className="h-5 w-5" /> {activeStoryMeta?.authorId === user?.uid ? '改变命运' : '创作同人'}
+                      <Wand2 className="h-5 w-5" /> {activeStoryMeta?.authorId === user?.uid ? tr('改变命运', 'Edit fate') : tr('创作同人', 'Create adaptation')}
                     </button>
                     <button onClick={() => { setIsActionMenuOpen(false); restartCurrentStory(); }} className={semanticMenuButtonClass('ghost')}>
-                      <RefreshCcw className="h-5 w-5" /> 重新干涉
+                      <RefreshCcw className="h-5 w-5" /> {tr('重新干涉', 'Restart play')}
                     </button>
                   </section>
                 </>
               )}
               <section className="grid gap-2">
-                <div className="px-1 text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">离开</div>
+                <div className="px-1 text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">{tr('离开', 'Leave')}</div>
                 <button
                   onClick={() => {
                     setIsActionMenuOpen(false);
@@ -10411,7 +10431,7 @@ export default function App() {
                   className={semanticMenuButtonClass('ghost')}
                 >
                   <LogIn className="h-5 w-5" />
-                  退出游玩
+                  {tr('退出游玩', 'Exit play')}
                 </button>
               </section>
             </div>
@@ -10451,7 +10471,7 @@ export default function App() {
           exit={{ opacity: 0, y: 12, scale: 0.92 }}
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
           className={`play-float-button ${gameState === 'PLAYING' ? 'play-scroll-top-button' : 'app-scroll-top-button'}`}
-          aria-label="返回顶端"
+          aria-label={tr('返回顶端', 'Back to top')}
         >
           <ArrowUp className="h-5 w-5" />
         </motion.button>
@@ -10471,7 +10491,7 @@ export default function App() {
               exit={{ opacity: 0, y: 8, scale: 0.97 }}
               className="play-quick-panel p-2"
             >
-              <div className="px-2 pb-1 pt-1 text-center text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">快速浏览</div>
+              <div className="px-2 pb-1 pt-1 text-center text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">{tr('快速浏览', 'Quick Nav')}</div>
               {chapters.map((chapter) => {
                 const ready = isChapterTextReady(chapter);
                 return (
@@ -10487,7 +10507,7 @@ export default function App() {
                     <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-black ${ready ? 'bg-indigo-500/15 text-indigo-300' : 'bg-zinc-800 text-zinc-500'}`}>
                       {chapter.chapter_num}
                     </span>
-                    <span className="min-w-0 flex-1 truncate">第{chapter.chapter_num}章</span>
+                    <span className="min-w-0 flex-1 truncate">{isEnglish ? `Chapter ${chapter.chapter_num}` : `第${chapter.chapter_num}章`}</span>
                     {!ready && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-zinc-600" />}
                   </button>
                 );
@@ -10502,7 +10522,7 @@ export default function App() {
             exit={{ opacity: 0, y: 12, scale: 0.92 }}
             onClick={() => setPlayingTocOpen((prev) => !prev)}
             className="play-float-button play-quick-button"
-            aria-label={playingTocOpen ? '关闭快速浏览' : '打开快速浏览'}
+            aria-label={playingTocOpen ? tr('关闭快速浏览', 'Close quick nav') : tr('打开快速浏览', 'Open quick nav')}
           >
             {playingTocOpen ? <X className="h-5 w-5" /> : <BookOpen className="h-5 w-5" />}
           </motion.button>
@@ -10530,19 +10550,19 @@ export default function App() {
           >
             <div className="mb-5 flex items-center justify-between gap-3">
               <div>
-                <div className="text-xs font-black uppercase tracking-[0.22em] text-zinc-500">下载 App</div>
-                <h2 className="mt-1 text-xl font-black text-white">添加到手机桌面</h2>
+                <div className="text-xs font-black uppercase tracking-[0.22em] text-zinc-500">{tr('下载 App', 'Install App')}</div>
+                <h2 className="mt-1 text-xl font-black text-white">{tr('添加到手机桌面', 'Add to home screen')}</h2>
               </div>
               <button type="button" onClick={() => setShowIosInstallModal(false)} className={semanticIconButtonClass('ghost')}>
                 <X className="h-4 w-4" />
               </button>
             </div>
             <div className="space-y-3 text-sm leading-relaxed text-zinc-400">
-              <p>在 iPhone/iPad：点击浏览器底部的分享按钮，然后选择“添加到主屏幕”。</p>
-              <p>在 Android/桌面浏览器：如果没有自动弹出安装窗口，请打开浏览器菜单，选择“安装应用”或“添加到主屏幕”。</p>
+              <p>{tr('在 iPhone/iPad：点击浏览器底部的分享按钮，然后选择“添加到主屏幕”。', 'On iPhone/iPad: tap the browser share button, then choose “Add to Home Screen”.')}</p>
+              <p>{tr('在 Android/桌面浏览器：如果没有自动弹出安装窗口，请打开浏览器菜单，选择“安装应用”或“添加到主屏幕”。', 'On Android/desktop: if no install prompt appears, open the browser menu and choose “Install app” or “Add to Home Screen”.')}</p>
             </div>
             <button type="button" onClick={() => setShowIosInstallModal(false)} className={`${semanticButtonClass('primary', { fullWidth: true })} mt-6`}>
-              明白了
+              {tr('明白了', 'Got it')}
             </button>
           </motion.div>
         </motion.div>

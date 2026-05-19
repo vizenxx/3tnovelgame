@@ -6,8 +6,46 @@ export function buildQuickStoryBlueprintPrompt(args: {
   targetWordCount: number;
   narrativePerson?: string;
   endingMode?: 'single' | 'dual' | string;
+  language?: 'zh-CN' | 'en-US' | string;
 }) {
   const isSingleEnding = args.endingMode === 'single';
+  const isEnglish = args.language === 'en-US';
+  if (isEnglish) {
+    return `You are a senior interactive fiction worldbuilder for an English-language story game.
+Known themes: ${Array.isArray(args.selectedThemes) && args.selectedThemes.length > 0 ? args.selectedThemes.join(', ') : 'none'}.
+Player story request / outline: ${args.customOutline ? args.customOutline : 'none'}.
+Narrative person hard constraint: ${buildNarrativePersonInstruction(args.narrativePerson, 'blueprint')}
+Ending structure hard constraint: ${isSingleEnding
+  ? 'Single ending. No matter how players later interfere, the finale must naturally converge on the same core ending. Branches and interventions may change the route, cost, understanding, and relationships, but must not create mutually exclusive finales.'
+  : 'Branching endings. The current version uses default / left / right compatibility slots; treat them as expandable ending domains that can later support many specific endings.'}
+
+Task: Create a complete blueprint for a seven-chapter interactive story.
+
+English-market style requirements:
+1. Write as native English interactive fiction, not translated Chinese prose.
+2. Use natural English names, idiomatic titles, and genre conventions familiar to English readers.
+3. Avoid Chinese book-title punctuation, literal cultivation/wuxia terms, or “fate domain” jargon unless explicitly requested by the premise.
+4. Keep the story playable: clear conflicts, character stakes, and intervention points.
+
+Output requirements:
+1. For performance reasons, never write full chapter prose in chapters.
+2. Each chapter must include a summary of 45-70 English words.
+3. Chapters must connect logically and avoid repeating the same beat.
+4. Each chapter must include a title of 2-7 English words.
+5. Create 3-5 characters. IDs must be c1, c2, ...
+6. Each character desc must be a concrete 12-28 word English description containing at least two of: role, motive, contradiction.
+7. Set endingMode to ${isSingleEnding ? '"single"' : '"dual"'}; also keep left_mainline_default and right_mainline_default (0-100) for compatibility.
+8. The endings array must still output 3 items for compatibility: normal=default, good=left, bad=right. ${isSingleEnding ? 'All three must converge on the same core finale, with only route, cost, and understanding differing.' : 'All three should be coherent chapter-seven ending directions.'}
+9. Plan 6-10 branch fate points. ${isSingleEnding ? 'Branches may have directional weight, but must not lead to mutually exclusive finales; they should change route, cost, and revealed meaning.' : 'Split them roughly between left and right. Branch events must work with the left/right mainline math.'}
+10. Each branch must include a hint of 4-12 English words for subtle UI foreshadowing without exposing the full trigger.
+11. condition_char must use an existing character ID; condition_chapter must be an integer from 2 to 6; condition_action must be bless or curse.
+12. desc must clearly state the concrete story change and hidden implication when that branch happens.
+13. name must be a branch name, not a paragraph of background.
+14. chapter titles/summaries must fit the requested narrative person and avoid forcing viewpoint shifts.
+
+Return strict JSON only. Do not include metadata. Reference chapter length: ${args.targetWordCount} words.`;
+  }
+
   return `你是一个互动小说世界构建师。
 已知主题：${Array.isArray(args.selectedThemes) && args.selectedThemes.length > 0 ? args.selectedThemes.join(', ') : '无'}。
 用户提供的故事大纲/期望：${args.customOutline ? args.customOutline : '无'}。

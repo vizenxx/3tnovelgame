@@ -164,7 +164,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       : (blueprintChapter?.summary || '');
     const futureOutlines = allChapters
       .filter((chapter: any) => chapter.chapter_num > safeTargetChapterNum && chapter.summary && String(chapter.summary).trim())
-      .map((chapter: any) => `第${chapter.chapter_num}章要点：${String(chapter.summary).trim()}`)
+      .map((chapter: any) => language === 'en-US'
+        ? `Chapter ${chapter.chapter_num} outline: ${String(chapter.summary).trim()}`
+        : `第${chapter.chapter_num}章要点：${String(chapter.summary).trim()}`)
       .join('\n');
 
     const defaultText = blueprint?.authorAssets?.defaultChapters?.[safeTargetChapterNum]?.text;
@@ -177,6 +179,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       prevChapterText,
       historyChapters,
       targetChapterNum: safeTargetChapterNum,
+      language,
     });
     const prompt = `${generationLanguageInstruction(language)}\n\n${buildChapterContinuationPrompt({
       blueprint,
@@ -188,6 +191,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       endingProto,
       targetChapterNum: safeTargetChapterNum,
       targetWordCount: safeTargetWordCount,
+      language,
     })}`;
 
     const data = await generateChapterWithFallback(prompt, safeTargetChapterNum, logContext);

@@ -1,4 +1,15 @@
-export function buildCanonicalWorldStatePrompt(args: { blueprint?: any; fullText: string }) {
+export function buildCanonicalWorldStatePrompt(args: { blueprint?: any; fullText: string; language?: 'zh-CN' | 'en-US' | string }) {
+  if (args.language === 'en-US') {
+    return `You are an interactive fiction story analyst. Extract the canonicalWorldState from the original full text.
+
+Story premise: ${args.blueprint?.main_axis || '(not provided)'}
+Characters: ${(args.blueprint?.characters || []).map((character: any) => `${character.id}:${character.name} (${character.desc})`).join('; ')}
+
+Full story:
+${args.fullText}
+
+Extract only facts clearly established in the text. Do not invent missing details.`;
+  }
   return `你是一个互动小说故事解析专家。你的任务是从故事初版全文中，提取“不可违背的世界状态基准”(canonicalWorldState)。
 
 故事主轴：${args.blueprint?.main_axis || '（未提供）'}
@@ -14,7 +25,27 @@ export function buildDeltaWorldStatePrompt(args: {
   canonicalWorldState: any;
   rewrittenChapter: any;
   interventionAction: 'bless' | 'curse';
+  language?: 'zh-CN' | 'en-US' | string;
 }) {
+  if (args.language === 'en-US') {
+    return `You are an interactive fiction story-state analyst. Chapter ${args.rewrittenChapter.chapter_num} has been rewritten after a player intervention (${args.interventionAction}).
+
+Original canonical world state:
+Characters: ${JSON.stringify(args.canonicalWorldState.characters || [])}
+Objects: ${JSON.stringify(args.canonicalWorldState.objects || [])}
+Scenes: ${JSON.stringify(args.canonicalWorldState.scenes || [])}
+Core rules: ${(args.canonicalWorldState.core_rules || []).join('; ')}
+
+Rewritten chapter:
+${args.rewrittenChapter.text}
+
+Task: Compare with canonicalWorldState and identify actual state deltas.
+
+Rules:
+1. Record only details that clearly differ from canonical facts.
+2. Do not record wording-only changes.
+3. Keep delta descriptions short and specific.`;
+  }
   return `你是一个互动小说故事状态分析师。玩家对第${args.rewrittenChapter.chapter_num}章施加了【${args.interventionAction === 'bless' ? '庇佑' : '磨难'}】，章节内容已被重写。
 
 故事初版世界状态基准：

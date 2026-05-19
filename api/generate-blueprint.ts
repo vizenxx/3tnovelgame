@@ -267,6 +267,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       targetWordCount: safeTargetWordCount,
       narrativePerson,
       endingMode,
+      language,
     })}`;
 
     const data = await generateBlueprintWithFallback(prompt, logContext, endingMode);

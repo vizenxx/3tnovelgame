@@ -12,6 +12,11 @@ export function generationLanguageInstruction(language: GenerationLanguage) {
       'Write all user-facing generated content in natural English.',
       'This includes titles, chapter summaries, prose, character descriptions, branch names, status updates, and final summaries.',
       'Keep JSON keys exactly as requested; only translate the values.',
+      'ENGLISH PRODUCT LOCALIZATION RULES:',
+      'Do not merely translate Chinese wuxia/xianxia/命运 terminology unless the requested premise explicitly asks for it.',
+      'Prefer idiomatic English genre language, natural character names, readable chapter titles, and culturally familiar pacing for English-language interactive fiction.',
+      'Avoid Chinese punctuation styles, Chinese book-title brackets, and literal phrases such as “left ending domain” in prose; use natural English story terms instead.',
+      'If the input contains Chinese tags, reinterpret them into equivalent English genre concepts before writing.',
     ].join('\n');
   }
   return [

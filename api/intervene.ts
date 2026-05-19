@@ -356,6 +356,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       safeChapters,
       safeChapterNum,
       prevChapterText,
+      language,
     });
 
     const prompt = `${generationLanguageInstruction(language)}\n\n${buildInterventionRewritePrompt({
@@ -372,6 +373,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       endingProto,
       endingMechanics,
       targetWordCount: safeTargetWordCount,
+      language,
     })}`;
 
     const aiData = await generateWithGeminiFallback(prompt, logContext, safeChapterNum);
