@@ -8160,7 +8160,7 @@ export default function App() {
     const isSeriesWorldGeneratePage = gameState === 'SERIES_WORLD_GENERATE';
     const isSeriesWorldEditPage = gameState === 'SERIES_WORLD_EDIT';
     const pageTitle = isSeriesWorldListPage
-      ? tr('世界观收录', 'World Settings')
+      ? tr('世界观列表', 'World Settings')
       : isSeriesWorldGeneratePage
         ? tr('生成 / 提取世界观设定', 'Generate / Extract World Setting')
         : tr('编辑世界观仓库', 'Edit World Setting Archive');
@@ -8173,7 +8173,7 @@ export default function App() {
       <div className="mx-auto min-h-[100dvh] max-w-6xl px-5 pb-14 pt-[max(5rem,calc(env(safe-area-inset-top)+4rem))] sm:px-6 lg:px-8">
         <div className="mb-8 flex items-center justify-between gap-3">
           <BackNavButton
-            label={isSeriesWorldListPage ? tr('返回首页', 'Back home') : tr('返回世界观收录', 'Back to settings')}
+            label={isSeriesWorldListPage ? tr('返回首页', 'Back home') : tr('返回世界观列表', 'Back to settings')}
             onClick={() => isSeriesWorldListPage ? resetToHome() : navigateTo('SERIES_WORLD_LIST', { reset: true })}
           />
           <div className="flex flex-wrap justify-end gap-2">
@@ -8207,7 +8207,7 @@ export default function App() {
             <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/60 p-4">
               <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <div className="text-sm font-black text-white">{tr('我的世界观设定', 'My World Settings')}</div>
+                  <div className="text-sm font-black text-white">{tr('已保存设定', 'Saved settings')}</div>
                   <p className="mt-1 text-xs leading-relaxed text-zinc-500">{tr('这是独立的收录页，只负责查找、进入编辑和删除后的管理。', 'This is a dedicated library page for finding, opening, and managing saved settings.')}</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -10509,64 +10509,6 @@ export default function App() {
                 {tr('刷新列表', 'Refresh list')}
               </button>
             </div>
-          </div>
-
-          <div className="mb-6 rounded-[2rem] border border-indigo-300/15 bg-indigo-500/10 p-5 sm:p-6">
-            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <div className="inline-flex items-center gap-2 rounded-full border border-indigo-300/20 bg-indigo-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-indigo-200">
-                  <GitBranch className="h-3.5 w-3.5" />
-                  {tr('世界观设定', 'World Settings')}
-                </div>
-                <h2 className="mt-3 text-xl font-black text-white">{tr('世界观设定仓库', 'World setting archive')}</h2>
-                <p className="mt-1 max-w-2xl text-xs leading-relaxed text-zinc-400">
-                  {tr('集中管理可复用的世界基准、角色卡池和继承节点。这里不是单篇作品，而是生成作品时可勾选套用的设定仓库。', 'Manage reusable baseline rules, character cards, and continuity nodes. This is not a single story, but a setting archive you can apply during generation.')}
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => void loadSeriesWorlds()} className={semanticButtonClass('ghost', { compact: true })}>
-                  <RefreshCcw className="h-4 w-4" />
-                  {tr('刷新', 'Refresh')}
-                </button>
-                <button type="button" onClick={() => void openSeriesWorldView()} className={semanticButtonClass('secondary', { compact: true })}>
-                  <Wand2 className="h-4 w-4" />
-                  {tr('创建或编辑', 'Create or edit')}
-                </button>
-              </div>
-            </div>
-            {seriesWorlds.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-indigo-300/20 bg-zinc-950/40 p-5 text-sm text-zinc-500">
-                {tr('还没有世界观设定。可以先创建一个设定仓库，再在故事生成时勾选套用。', 'No world setting yet. Create a setting archive first, then apply it during story generation.')}
-              </div>
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {seriesWorlds.slice(0, 6).map((series) => (
-                  <button
-                    key={series.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedSeriesId(series.id);
-                      setSeriesForm(series);
-                      setSeriesWorldBibleText(JSON.stringify(series.worldBible || {}, null, 2));
-                      setSeriesIronLawsText(JSON.stringify(series.ironLaws || [], null, 2));
-                      setSeriesFutureDirectionsText(JSON.stringify(series.futureDirections || [], null, 2));
-                      navigateTo('SERIES_WORLD_EDIT');
-                    }}
-                    className="rounded-2xl border border-zinc-800 bg-zinc-950/55 p-4 text-left transition-all hover:-translate-y-0.5 hover:border-indigo-400/60 hover:bg-indigo-500/10 active:scale-[0.98]"
-                  >
-                    <div className="line-clamp-2 text-sm font-black text-white">{series.title || tr('未命名世界观设定', 'Untitled world setting')}</div>
-                    <p className="mt-2 line-clamp-3 text-xs leading-relaxed text-zinc-500">{(series.worldBible as any)?.worldview || series.pitch || tr('尚未填写世界观概况', 'No world overview yet')}</p>
-                    <div className="mt-3 flex flex-wrap gap-1.5">
-                      {(series.genreTags || []).slice(0, 3).map((tag) => (
-                        <span key={tag} className="rounded-full bg-indigo-500/10 px-2 py-1 text-[10px] font-bold text-indigo-200">
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
 
           <div className="rounded-[2rem] border border-zinc-800 bg-zinc-900/30 p-6 sm:p-8">
