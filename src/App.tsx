@@ -1561,6 +1561,7 @@ export default function App() {
   const [quickSeriesBindingId, setQuickSeriesBindingId] = useState('');
   const [selectedContinuityNodeId, setSelectedContinuityNodeId] = useState('');
   const [seriesSourceStoryId, setSeriesSourceStoryId] = useState('');
+  const [seriesWorldMode, setSeriesWorldMode] = useState<'library' | 'generate' | 'edit'>('library');
   const [quickSeriesSelection, setQuickSeriesSelection] = useState<SeriesSelectionState>({
     baselineRuleIds: [],
     characterIds: [],
@@ -4735,6 +4736,7 @@ export default function App() {
   };
 
   const openSeriesWorldView = async () => {
+    setSeriesWorldMode('library');
     navigateTo('SERIES_WORLD');
     await refreshStories({ force: true });
     await loadSeriesWorlds();
@@ -4767,6 +4769,8 @@ export default function App() {
       setSeriesWorldBibleText(JSON.stringify(data.worldBible || {}, null, 2));
       setSeriesIronLawsText(JSON.stringify(data.ironLaws || [], null, 2));
       setSeriesFutureDirectionsText(JSON.stringify(data.futureDirections || [], null, 2));
+      setSelectedSeriesId('');
+      setSeriesWorldMode('edit');
       showError(tr('世界观设定草稿已生成，可先编辑再保存。', 'World setting draft generated. Edit it before saving.'));
     } catch (error) {
       console.error(error);
@@ -4780,12 +4784,14 @@ export default function App() {
     if (!db || !user) return;
     setSeriesSaving(true);
     try {
+      const parsedWorldBible = parseEditableJson(seriesWorldBibleText, seriesForm.worldBible || {});
       const id = await saveSeriesWorld(db as any, {
         ...seriesForm,
         id: selectedSeriesId || seriesForm.id,
+        pitch: parsedWorldBible.worldview || seriesForm.pitch || '',
         authorId: user.uid,
         authorName: getUserAuthorName(user),
-        worldBible: parseEditableJson(seriesWorldBibleText, seriesForm.worldBible || {}),
+        worldBible: parsedWorldBible,
         ironLaws: parseEditableJson(seriesIronLawsText, seriesForm.ironLaws || []),
         futureDirections: parseEditableJson(seriesFutureDirectionsText, seriesForm.futureDirections || []),
       });
@@ -4802,6 +4808,7 @@ export default function App() {
 
   const resetSeriesWorldDraft = () => {
     setSelectedSeriesId('');
+    setSeriesWorldMode('edit');
     setSeriesForm({
       title: '',
       pitch: '',
@@ -4835,6 +4842,7 @@ export default function App() {
           await deleteSeriesWorld(db as any, seriesId);
           await loadSeriesWorlds();
           resetSeriesWorldDraft();
+          setSeriesWorldMode('library');
           showError(tr('世界观设定已删除。', 'World setting deleted.'));
         } catch (error) {
           console.error(error);
@@ -8026,10 +8034,27 @@ export default function App() {
 
   const renderSeriesWorldView = () => {
     const seriesGenreText = (seriesForm.genreTags || []).join('，');
-    const seriesWorldStep = 'world' as 'world' | 'continuity' | 'generate';
     const worldBibleDraft = parseEditableJson<Record<string, any>>(seriesWorldBibleText, seriesForm.worldBible || {});
-    const baselineRuleDrafts = asSafeArray<any>(worldBibleDraft.baselineRules);
-    const characterCardDrafts = asSafeArray<any>(worldBibleDraft.characterPool);
+    const baselineRuleDrafts = asSafeArray<any>(worldBibleDraft.baselineRules).length > 0
+      ? asSafeArray<any>(worldBibleDraft.baselineRules)
+      : asSafeArray<any>(worldBibleDraft.coreRules || worldBibleDraft.ironLaws).map((rule, index) => ({
+          id: (rule as any)?.id || `rule_${index + 1}`,
+          title: (rule as any)?.title || (rule as any)?.rule || `${tr('世界基准', 'Baseline rule')} ${index + 1}`,
+          kind: (rule as any)?.kind || tr('世界', 'World'),
+          detail: (rule as any)?.detail || (rule as any)?.rule || String(rule || ''),
+        }));
+    const characterCardDrafts = asSafeArray<any>(worldBibleDraft.characterPool).length > 0
+      ? asSafeArray<any>(worldBibleDraft.characterPool)
+      : (asSafeArray<any>(worldBibleDraft.characters).length > 0
+          ? asSafeArray<any>(worldBibleDraft.characters)
+          : asSafeArray<any>(worldBibleDraft.recurringCharacterSeeds)
+        ).map((card, index) => ({
+          id: (card as any)?.id || `char_${index + 1}`,
+          name: (card as any)?.name || (card as any)?.title || `${tr('角色', 'Character')} ${index + 1}`,
+          role: (card as any)?.role || (card as any)?.type || '',
+          desc: (card as any)?.desc || (card as any)?.description || (card as any)?.profile || String(card || ''),
+          status: (card as any)?.status || '',
+        }));
     const plotNoteDrafts = asSafeArray<any>(worldBibleDraft.plotNotes);
     const updateWorldBibleDraft = (patch: Record<string, any>) => {
       setSeriesWorldBibleText(JSON.stringify({ ...worldBibleDraft, ...patch }, null, 2));
@@ -8052,6 +8077,23 @@ export default function App() {
     const organizeSourceLabel = seriesSourceStoryId
       ? tr('从导入作品提取仓库条目', 'Extract archive items from story')
       : tr('一键生成仓库条目', 'Generate archive items');
+    const seriesModeCards = [
+      {
+        id: 'library' as const,
+        title: tr('世界观收录', 'World settings'),
+        desc: tr('查看、选择和管理已经保存的世界观设定。', 'View, select, and manage saved world settings.'),
+      },
+      {
+        id: 'generate' as const,
+        title: tr('生成 / 提取', 'Generate / Extract'),
+        desc: tr('从基本概况生成仓库条目，或从已有作品提取。', 'Generate archive items from an overview or extract them from an existing story.'),
+      },
+      {
+        id: 'edit' as const,
+        title: tr('编辑仓库', 'Edit archive'),
+        desc: tr('编辑世界基准、角色卡池和情节素材。', 'Edit baseline rules, character cards, and plot material.'),
+      },
+    ];
     return (
       <div className="mx-auto min-h-[100dvh] max-w-6xl px-5 pb-14 pt-[max(5rem,calc(env(safe-area-inset-top)+4rem))] sm:px-6 lg:px-8">
         <div className="mb-8 flex items-center justify-between gap-3">
@@ -8088,14 +8130,40 @@ export default function App() {
           </div>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[0.9fr_1.4fr]">
+        <div className="mb-6 grid gap-3 lg:grid-cols-3">
+          {seriesModeCards.map((card) => (
+            <button
+              key={card.id}
+              type="button"
+              onClick={() => setSeriesWorldMode(card.id)}
+              className={`rounded-[1.5rem] border p-4 text-left transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
+                seriesWorldMode === card.id
+                  ? 'border-indigo-400 bg-indigo-500/15 shadow-lg shadow-indigo-950/20'
+                  : 'border-zinc-800 bg-zinc-950/55 hover:border-zinc-600'
+              }`}
+            >
+              <div className="text-sm font-black text-white">{card.title}</div>
+              <div className="mt-1 text-xs leading-relaxed text-zinc-500">{card.desc}</div>
+            </button>
+          ))}
+        </div>
+
+        <div className="grid gap-6">
           <section className="space-y-4">
-            {seriesWorldStep === 'world' && (
-            <>
+            {seriesWorldMode === 'library' && (
             <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/60 p-4">
-              <div className="mb-3 text-sm font-black text-white">{tr('我的世界观设定', 'My World Settings')}</div>
-              <div className="space-y-2">
-                {seriesWorlds.length === 0 && <div className="rounded-2xl bg-zinc-900/60 p-4 text-sm text-zinc-500">{tr('还没有世界观设定，可以从零生成或手动保存一个。', 'No world setting yet. Generate one from scratch or save a manual draft.')}</div>}
+              <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="text-sm font-black text-white">{tr('我的世界观设定', 'My World Settings')}</div>
+                  <p className="mt-1 text-xs leading-relaxed text-zinc-500">{tr('这里是已经收录的世界观设定。选择一个进入编辑；新建或提取请去“生成 / 提取”。', 'Saved world settings live here. Choose one to edit; use Generate / Extract to create or extract a new one.')}</p>
+                </div>
+                <button type="button" onClick={() => setSeriesWorldMode('generate')} className={semanticButtonClass('primary', { compact: true })}>
+                  <Sparkles className="h-4 w-4" />
+                  {tr('生成新世界观', 'Create new setting')}
+                </button>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {seriesWorlds.length === 0 && <div className="rounded-2xl bg-zinc-900/60 p-4 text-sm text-zinc-500 sm:col-span-2 lg:col-span-3">{tr('还没有世界观设定，可以先生成或手动建立一个。', 'No world setting yet. Generate one or create a manual draft first.')}</div>}
                 {seriesWorlds.map((series) => (
                   <button
                     key={series.id}
@@ -8106,49 +8174,64 @@ export default function App() {
                       setSeriesWorldBibleText(JSON.stringify(series.worldBible || {}, null, 2));
                       setSeriesIronLawsText(JSON.stringify(series.ironLaws || [], null, 2));
                       setSeriesFutureDirectionsText(JSON.stringify(series.futureDirections || [], null, 2));
+                      setSeriesWorldMode('edit');
                       void loadContinuityNodesForSeries(series.id);
                     }}
                     className={`w-full rounded-2xl border p-4 text-left transition-all hover:-translate-y-0.5 active:scale-[0.98] ${selectedSeriesId === series.id ? 'border-indigo-400 bg-indigo-500/15' : 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-600'}`}
                   >
                     <div className="text-sm font-black text-white">{series.title}</div>
-                    <div className="mt-1 line-clamp-2 text-xs leading-relaxed text-zinc-500">{series.pitch || tr('尚未填写卖点', 'No hook yet')}</div>
+                    <div className="mt-1 line-clamp-2 text-xs leading-relaxed text-zinc-500">{(series.worldBible as any)?.worldview || series.pitch || tr('尚未填写世界观概况', 'No world overview yet')}</div>
                   </button>
                 ))}
               </div>
             </div>
+            )}
 
+            {seriesWorldMode === 'generate' && (
             <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/60 p-4">
-              <div className="mb-3 text-sm font-black text-white">{tr('AI 整理仓库条目', 'AI organize archive items')}</div>
-              <p className="mb-3 text-xs leading-relaxed text-zinc-500">
-                {tr('先填写右侧基础资料，或在这里导入已有作品，再让 AI 整理出世界基准、角色卡池和情节概况。', 'Fill the basic fields on the right, or import an existing story here, then let AI organize baseline rules, character cards, and plot notes.')}
-              </p>
-              <select
-                value={seriesSourceStoryId}
-                onChange={(event) => setSeriesSourceStoryId(event.target.value)}
-                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm text-zinc-200 outline-none"
-              >
-                <option value="">{tr('不导入作品，使用上方基础资料', 'No story import; use basic fields')}</option>
-                {myStories.map((story: any) => (
-                  <option key={story.id} value={story.id}>{getStoryTitle(story)}</option>
-                ))}
-              </select>
-              <div className="mt-3 grid gap-2">
-                <button type="button" onClick={() => void handleGenerateSeriesWorld(seriesSourceStoryId ? 'extract' : 'new')} disabled={seriesGenerating} className={semanticButtonClass('secondary', { compact: true, fullWidth: true })}>
+              <div className="mb-4">
+                <div className="text-lg font-black text-white">{tr('生成 / 提取世界观设定', 'Generate / Extract world setting')}</div>
+                <p className="mt-1 text-xs leading-relaxed text-zinc-500">{tr('这是独立的生成页：可以从概况生成全新的仓库条目，也可以先选择已有作品，再从作品中提取三类条目。生成完成后会进入编辑页。', 'This is a dedicated generation page: generate archive items from an overview, or choose an existing story and extract the three item types. After generation, the editor opens.')}</p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <input value={seriesForm.title || ''} onChange={(event) => setSeriesForm((prev) => ({ ...prev, title: event.target.value }))} placeholder={tr('世界观设定名称', 'World setting title')} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
+                <input value={seriesGenreText} onChange={(event) => setSeriesForm((prev) => ({ ...prev, genreTags: event.target.value.split(/[,，]/).map((tag) => tag.trim()).filter(Boolean) }))} placeholder={tr('题材标签，以逗号分隔', 'Genre tags, comma-separated')} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
+              </div>
+              <textarea
+                value={worldBibleDraft.worldview || ''}
+                onChange={(event) => updateWorldBibleDraft({ worldview: event.target.value })}
+                placeholder={tr('世界观概况：简单描述这个世界的核心感觉、规则、时代、冲突或创作方向。', 'World overview: briefly describe the world’s feel, rules, era, conflict, or creative direction.')}
+                className="mt-3 min-h-32 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+              />
+              <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900/35 p-4">
+                <label className="mb-2 block text-xs font-black uppercase tracking-[0.18em] text-zinc-500">{tr('来源作品（可选）', 'Source story (optional)')}</label>
+                <select
+                  value={seriesSourceStoryId}
+                  onChange={(event) => setSeriesSourceStoryId(event.target.value)}
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm text-zinc-200 outline-none"
+                >
+                  <option value="">{tr('不导入作品，生成全新世界观设定', 'No story import; generate a new world setting')}</option>
+                  {myStories.map((story: any) => (
+                    <option key={story.id} value={story.id}>{getStoryTitle(story)}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                <button type="button" onClick={() => void handleGenerateSeriesWorld(seriesSourceStoryId ? 'extract' : 'new')} disabled={seriesGenerating} className={semanticButtonClass('primary', { compact: true, fullWidth: true })}>
                   {seriesGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                   {organizeSourceLabel}
                 </button>
-                <button type="button" onClick={() => void handleGenerateSeriesWorld('extract')} disabled={seriesGenerating || !seriesSourceStoryId} className={semanticButtonClass('ghost', { compact: true, fullWidth: true })}>
-                  <BookOpen className="h-4 w-4" />
-                  {tr('只从作品重新提取', 'Extract only from story')}
+                <button type="button" onClick={() => { resetSeriesWorldDraft(); setSeriesWorldMode('edit'); }} className={semanticButtonClass('secondary', { compact: true, fullWidth: true })}>
+                  <PenSquare className="h-4 w-4" />
+                  {tr('手动建立空白仓库', 'Create blank archive')}
                 </button>
               </div>
             </div>
-            </>
             )}
           </section>
 
           <section className="space-y-6">
-            {seriesWorldStep === 'world' && (
+            {seriesWorldMode === 'edit' && (
             <div className="rounded-[2rem] border border-zinc-800 bg-zinc-950/60 p-5">
               <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -8306,7 +8389,7 @@ export default function App() {
                 <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/55 p-4">
                   <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <div className="text-sm font-black text-white">{tr('情节概况', 'Plot notes')}</div>
+                      <div className="text-sm font-black text-white">{tr('情节素材', 'Plot material')}</div>
                       <p className="mt-1 text-xs leading-relaxed text-zinc-500">{tr('记录可复用的伏笔、历史事件、未解谜团或适合未来作品调用的情节素材。', 'Store reusable foreshadowing, historical events, unresolved mysteries, or plot material for future stories.')}</p>
                     </div>
                     <button
@@ -8321,7 +8404,7 @@ export default function App() {
                   <div className="grid gap-3">
                     {plotNoteDrafts.length === 0 && (
                       <div className="rounded-2xl border border-dashed border-zinc-800 p-4 text-xs leading-relaxed text-zinc-500">
-                        {tr('还没有情节概况。可以记录“某场旧战争”“某个未解预言”“某角色的失踪原因”等。', 'No plot notes yet. You can record old wars, unsolved prophecies, missing-character causes, and similar material.')}
+                        {tr('还没有情节素材。可以记录“某场旧战争”“某个未解预言”“某角色的失踪原因”等。', 'No plot material yet. You can record old wars, unsolved prophecies, missing-character causes, and similar material.')}
                       </div>
                     )}
                     {plotNoteDrafts.map((note, index) => (
@@ -8329,14 +8412,14 @@ export default function App() {
                         <textarea
                           value={String(note || '')}
                           onChange={(event) => updatePlotNoteDraft(index, event.target.value)}
-                          placeholder={tr('情节概况', 'Plot note')}
+                          placeholder={tr('情节素材', 'Plot material')}
                           className="min-h-20 flex-1 resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-200 outline-none focus:border-indigo-500"
                         />
                         <button
                           type="button"
                           onClick={() => updateWorldBibleDraft({ plotNotes: plotNoteDrafts.filter((_, noteIndex) => noteIndex !== index) })}
                           className={semanticIconButtonClass('ghost')}
-                          aria-label={tr('删除情节概况', 'Delete plot note')}
+                          aria-label={tr('删除情节素材', 'Delete plot material')}
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -8345,104 +8428,6 @@ export default function App() {
                   </div>
                 </div>
 
-              </div>
-            </div>
-            )}
-
-            {seriesWorldStep === 'continuity' && (
-            <div className="rounded-[2rem] border border-zinc-800 bg-zinc-950/60 p-5">
-              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <div className="text-lg font-black text-white">{tr('接续节点', 'Continuity Node')}</div>
-                  <div className="mt-1 text-xs text-zinc-500">{tr('从前作结局和支线生成续作入口，之后可用于生成第二部。', 'Create a sequel entry point from a previous ending and branches. It can later generate the next installment.')}</div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <button type="button" onClick={() => void handleGenerateContinuityNode()} disabled={seriesGenerating || !selectedSeriesWorld || !seriesSourceStoryId} className={semanticButtonClass('secondary', { compact: true })}>
-                    {seriesGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <GitBranch className="h-4 w-4" />}
-                    {tr('生成接续节点', 'Generate continuity node')}
-                  </button>
-                  <button type="button" onClick={() => void handleSaveContinuityNode()} disabled={seriesSaving || !selectedSeriesWorld} className={semanticButtonClass('primary', { compact: true })}>
-                    {tr('保存节点', 'Save node')}
-                  </button>
-                </div>
-              </div>
-              <div className="mb-4 rounded-2xl border border-indigo-300/15 bg-indigo-500/10 p-4">
-                <label className="mb-2 block text-xs font-black uppercase tracking-[0.18em] text-indigo-200">{tr('导入前作', 'Import previous story')}</label>
-                <select
-                  value={seriesSourceStoryId}
-                  onChange={(event) => setSeriesSourceStoryId(event.target.value)}
-                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm text-zinc-200 outline-none"
-                >
-                  <option value="">{tr('先选择作为前作的作品', 'Choose the previous story first')}</option>
-                  {myStories.map((story: any) => (
-                    <option key={story.id} value={story.id}>{getStoryTitle(story)}</option>
-                  ))}
-                </select>
-                {!seriesSourceStoryId && (
-                  <p className="mt-3 text-xs leading-relaxed text-zinc-500">
-                    {tr('接续节点只在需要生成第二部或续作时使用。先导入前作，系统才会根据前作结局、支线和摘要生成可编辑的接续草稿。', 'Continuity nodes are only needed for sequels. Import a previous story first, then the system can generate an editable bridge from its ending, branches, and summary.')}
-                  </p>
-                )}
-              </div>
-              {seriesSourceStoryId && (
-              <>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <input value={continuityForm.title || ''} onChange={(event) => setContinuityForm((prev) => ({ ...prev, title: event.target.value }))} placeholder={tr('接续节点名称', 'Continuity node name')} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
-                <select value={continuityForm.endingDomain || 'middle'} onChange={(event) => setContinuityForm((prev) => ({ ...prev, endingDomain: event.target.value as any }))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none">
-                  <option value="middle">{tr('均衡域', 'Balanced domain')}</option>
-                  <option value="left">{tr('左域', 'Left domain')}</option>
-                  <option value="right">{tr('右域', 'Right domain')}</option>
-                </select>
-                <input value={continuityForm.endingId || 'default'} onChange={(event) => setContinuityForm((prev) => ({ ...prev, endingId: event.target.value }))} placeholder={tr('结局 ID', 'Ending ID')} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
-              </div>
-              <textarea value={continuityForm.bridgeSummary || ''} onChange={(event) => setContinuityForm((prev) => ({ ...prev, bridgeSummary: event.target.value }))} placeholder={tr('接续摘要', 'Bridge summary')} className="mt-3 min-h-28 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
-              <textarea value={continuityForm.sequelSeedPrompt || ''} onChange={(event) => setContinuityForm((prev) => ({ ...prev, sequelSeedPrompt: event.target.value }))} placeholder={tr('续作生成要求', 'Sequel generation brief')} className="mt-3 min-h-28 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
-              <div className="mt-3 grid gap-3 lg:grid-cols-2">
-                <label className="space-y-2 text-xs font-black text-zinc-500">
-                  <span>{tr('前作继承摘要', 'Inherited state summary')}</span>
-                  <textarea value={continuityLegacyText} onChange={(event) => setContinuityLegacyText(event.target.value)} className="min-h-44 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-xs text-zinc-200 outline-none focus:border-indigo-500" />
-                </label>
-                <label className="space-y-2 text-xs font-black text-zinc-500">
-                  <span>{tr('继承硬设定 / 圆润规则', 'Inheritance hard rules / repair rules')}</span>
-                  <textarea value={continuityRepairText} onChange={(event) => setContinuityRepairText(event.target.value)} className="min-h-44 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 font-mono text-xs text-zinc-200 outline-none focus:border-indigo-500" />
-                </label>
-              </div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {continuityNodes.map((node) => (
-                  <button key={node.id} type="button" onClick={() => { setSelectedContinuityNodeId(node.id); setContinuityForm(node); setContinuityLegacyText(JSON.stringify(node.legacyState || {}, null, 2)); setContinuityRepairText(JSON.stringify(node.repairRules || [], null, 2)); }} className={`rounded-full px-3 py-2 text-xs font-black ${selectedContinuityNodeId === node.id ? 'bg-indigo-500 text-white' : 'bg-zinc-800 text-zinc-300'}`}>
-                    {node.title}
-                  </button>
-                ))}
-              </div>
-              </>
-              )}
-            </div>
-            )}
-
-            {seriesWorldStep === 'generate' && (
-            <div className="rounded-[2rem] border border-zinc-800 bg-zinc-950/60 p-5">
-              <div className="mb-4">
-                <div className="text-lg font-black text-white">{tr('生成第一部作品', 'Generate the first installment')}</div>
-                <p className="mt-1 text-xs leading-relaxed text-zinc-500">
-                  {tr('生成作品会回到原本的故事生成流程，并把当前世界观设定作为可勾选的上级基准。也可以在“高级创作设置”里手动选择。', 'Story generation returns to the normal creation flow and applies this world setting as selectable upper-level constraints. You can also choose it manually in Advanced creation.')}
-                </p>
-              </div>
-              <div className="grid gap-3">
-                <button type="button" onClick={() => generateStoryFromSeries('main')} disabled={!selectedSeriesWorld} className={semanticButtonClass('primary', { fullWidth: true })}>
-                  <Wand2 className="h-4 w-4" />
-                  {tr('套用该世界观生成作品', 'Generate with this world setting')}
-                </button>
-                <button type="button" onClick={() => { setQuickGenerationMode('advanced'); setQuickSeriesBindingId(selectedSeriesId); navigateTo('THEME_SELECTION'); }} disabled={!selectedSeriesWorld} className={semanticButtonClass('ghost', { fullWidth: true })}>
-                  <BookOpen className="h-4 w-4" />
-                  {tr('到高级创作中继续设定', 'Continue in Advanced creation')}
-                </button>
-              </div>
-              <div className="mt-5 border-t border-zinc-800 pt-5">
-                <div className="mb-3 text-sm font-black text-zinc-300">{tr('需要生成续作？', 'Need a sequel?')}</div>
-                <button type="button" onClick={() => generateStoryFromSeries('sequel')} disabled={!selectedSeriesWorld || !selectedContinuityNode} className={semanticButtonClass('secondary', { fullWidth: true })}>
-                  <GitBranch className="h-4 w-4" />
-                  {tr('基于接续节点生成续作', 'Generate sequel from node')}
-                </button>
               </div>
             </div>
             )}
@@ -10473,12 +10458,17 @@ export default function App() {
                     type="button"
                     onClick={() => {
                       setSelectedSeriesId(series.id);
+                      setSeriesForm(series);
+                      setSeriesWorldBibleText(JSON.stringify(series.worldBible || {}, null, 2));
+                      setSeriesIronLawsText(JSON.stringify(series.ironLaws || [], null, 2));
+                      setSeriesFutureDirectionsText(JSON.stringify(series.futureDirections || [], null, 2));
+                      setSeriesWorldMode('edit');
                       navigateTo('SERIES_WORLD');
                     }}
                     className="rounded-2xl border border-zinc-800 bg-zinc-950/55 p-4 text-left transition-all hover:-translate-y-0.5 hover:border-indigo-400/60 hover:bg-indigo-500/10 active:scale-[0.98]"
                   >
                     <div className="line-clamp-2 text-sm font-black text-white">{series.title || tr('未命名世界观设定', 'Untitled world setting')}</div>
-                    <p className="mt-2 line-clamp-3 text-xs leading-relaxed text-zinc-500">{series.pitch || tr('尚未填写世界观设定卖点', 'No world setting hook yet')}</p>
+                    <p className="mt-2 line-clamp-3 text-xs leading-relaxed text-zinc-500">{(series.worldBible as any)?.worldview || series.pitch || tr('尚未填写世界观概况', 'No world overview yet')}</p>
                     <div className="mt-3 flex flex-wrap gap-1.5">
                       {(series.genreTags || []).slice(0, 3).map((tag) => (
                         <span key={tag} className="rounded-full bg-indigo-500/10 px-2 py-1 text-[10px] font-bold text-indigo-200">
