@@ -113,6 +113,9 @@ type SeriesSelectionState = {
   useContinuity: boolean;
   sourceStoryId: string;
   continuityNodeId: string;
+  requiredBranchIds: string[];
+  endingId: string;
+  hardSettings: string;
 };
 
 const safeModalBackdropClass = "fixed inset-0 flex items-center justify-center overflow-y-auto overscroll-contain px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]";
@@ -1631,12 +1634,17 @@ export default function App() {
   const [quickSeriesBindingId, setQuickSeriesBindingId] = useState('');
   const [selectedContinuityNodeId, setSelectedContinuityNodeId] = useState('');
   const [seriesSourceStoryId, setSeriesSourceStoryId] = useState('');
+  const [quickContinuitySourceStory, setQuickContinuitySourceStory] = useState<any | null>(null);
+  const [quickContinuityLoading, setQuickContinuityLoading] = useState(false);
   const [quickSeriesSelection, setQuickSeriesSelection] = useState<SeriesSelectionState>({
     baselineRuleIds: [],
     characterIds: [],
     useContinuity: false,
     sourceStoryId: '',
     continuityNodeId: '',
+    requiredBranchIds: [],
+    endingId: '',
+    hardSettings: '',
   });
   const [seriesGenerating, setSeriesGenerating] = useState(false);
   const [seriesSaving, setSeriesSaving] = useState(false);
@@ -2933,8 +2941,41 @@ export default function App() {
   const getActiveQuickGenerationInput = (): QuickGenerationInput => (
     (() => {
       const selectedSeries = seriesWorlds.find((series) => series.id === quickSeriesBindingId) || null;
-      const selectedNode = quickSeriesSelection.useContinuity
-        ? continuityNodes.find((node) => node.id === quickSeriesSelection.continuityNodeId) || null
+      const selectedEnding = asSafeArray<any>(quickContinuitySourceStory?.endings).find((ending) => String(ending.id || '') === quickSeriesSelection.endingId);
+      const selectedBranches = asSafeArray<any>(quickContinuitySourceStory?.branches).filter((branch) => quickSeriesSelection.requiredBranchIds.includes(String(branch.id || '')));
+      const selectedNode = quickSeriesSelection.useContinuity && quickSeriesSelection.sourceStoryId && quickSeriesSelection.endingId
+        ? {
+            id: `anchor:${quickSeriesSelection.sourceStoryId}:${quickSeriesSelection.endingId}:${quickSeriesSelection.requiredBranchIds.join('-')}`,
+            seriesId: quickSeriesBindingId,
+            sourceStoryId: quickSeriesSelection.sourceStoryId,
+            title: selectedEnding?.title
+              ? `${tr('继承', 'Inherit')}: ${selectedEnding.title}`
+              : tr('自定义继承节点', 'Custom continuity anchor'),
+            endingDomain: endingDomainFromId(quickSeriesSelection.endingId),
+            endingId: quickSeriesSelection.endingId,
+            requiredBranchIds: quickSeriesSelection.requiredBranchIds,
+            optionalBranchIds: [],
+            bridgeSummary: [
+              quickContinuitySourceStory?.meta?.main_axis ? `${tr('前作主轴', 'Previous premise')}: ${quickContinuitySourceStory.meta.main_axis}` : '',
+              selectedEnding ? `${tr('指定结局', 'Selected ending')}: ${selectedEnding.title || selectedEnding.id}` : '',
+              selectedBranches.length ? `${tr('指定支线', 'Selected branches')}: ${selectedBranches.map((branch) => branch.name || branch.title || branch.id).join('、')}` : '',
+            ].filter(Boolean).join('\n'),
+            legacyState: {
+              sourceTitle: quickContinuitySourceStory?.meta?.title || '',
+              ending: selectedEnding || null,
+              branches: selectedBranches,
+            },
+            repairRules: quickSeriesSelection.hardSettings
+              .split(/\n+/)
+              .map((line) => line.trim())
+              .filter(Boolean)
+              .map((rule) => ({ rule })),
+            sequelSeedPrompt: quickSeriesSelection.hardSettings,
+            visibility: 'private',
+            createdBy: user?.uid || '',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          } as ContinuityNodeRecord
         : null;
       const seriesContext = buildAppliedSeriesContext(selectedSeries, quickSeriesSelection, selectedNode);
       const baseInput = quickGenerationMode === 'quiz'
@@ -3363,7 +3404,11 @@ export default function App() {
         useContinuity: false,
         sourceStoryId: '',
         continuityNodeId: '',
+        requiredBranchIds: [],
+        endingId: '',
+        hardSettings: '',
       }));
+      setQuickContinuitySourceStory(null);
       return;
     }
     const selected = seriesWorlds.find((series) => series.id === quickSeriesBindingId);
@@ -3375,9 +3420,50 @@ export default function App() {
       ...prev,
       baselineRuleIds: prev.baselineRuleIds.length ? prev.baselineRuleIds.filter((id) => baselineRuleIds.includes(id)) : baselineRuleIds,
       characterIds: prev.characterIds.length ? prev.characterIds.filter((id) => characterIds.includes(id)) : characterIds,
+      sourceStoryId: '',
+      continuityNodeId: '',
+      requiredBranchIds: [],
+      endingId: '',
+      hardSettings: '',
     }));
     void loadContinuityNodesForSeries(quickSeriesBindingId);
   }, [quickSeriesBindingId, seriesWorlds.length]);
+
+  useEffect(() => {
+    const sourceStoryId = quickSeriesSelection.sourceStoryId;
+    if (!sourceStoryId || !db) {
+      setQuickContinuitySourceStory(null);
+      return;
+    }
+    let cancelled = false;
+    setQuickContinuityLoading(true);
+    getStoryCartridge(db as any, sourceStoryId)
+      .then((story) => {
+        if (cancelled) return;
+        setQuickContinuitySourceStory(story);
+        const branchIds = new Set(asSafeArray<any>(story?.branches).map((branch) => String(branch.id || '')).filter(Boolean));
+        const endingIds = new Set(asSafeArray<any>(story?.endings).map((ending) => String(ending.id || '')).filter(Boolean));
+        setQuickSeriesSelection((prev) => ({
+          ...prev,
+          requiredBranchIds: prev.requiredBranchIds.filter((id) => branchIds.has(id)),
+          endingId: prev.endingId && endingIds.has(prev.endingId) ? prev.endingId : '',
+          continuityNodeId: '',
+        }));
+      })
+      .catch((error) => {
+        console.error(error);
+        if (!cancelled) {
+          setQuickContinuitySourceStory(null);
+          showError(tr('前作资料读取失败。', 'Failed to load previous story data.'));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setQuickContinuityLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [quickSeriesSelection.sourceStoryId, db]);
 
   useEffect(() => {
     if (gameState !== 'SERIES_WORLD_EDIT' || !selectedSeriesId) return;
@@ -5047,6 +5133,9 @@ export default function App() {
         useContinuity: role === 'sequel',
         sourceStoryId: seriesSourceStoryId,
         continuityNodeId: continuity?.id || '',
+        requiredBranchIds: continuity?.requiredBranchIds || [],
+        endingId: continuity?.endingId || '',
+        hardSettings: continuity?.sequelSeedPrompt || '',
       }, continuity),
       continuityNode: continuity,
       seriesSelection: {
@@ -5055,6 +5144,9 @@ export default function App() {
         useContinuity: role === 'sequel',
         sourceStoryId: seriesSourceStoryId,
         continuityNodeId: continuity?.id || '',
+        requiredBranchIds: continuity?.requiredBranchIds || [],
+        endingId: continuity?.endingId || '',
+        hardSettings: continuity?.sequelSeedPrompt || '',
       },
     };
     void handleGenerateBlueprint(input, quickGenerationSignature({ input }));
@@ -5120,8 +5212,8 @@ export default function App() {
     if (!activeGenerationInput) return;
     if (activeGenerationInput.seriesSelection?.useContinuity && !activeGenerationInput.continuityNode) {
       showError(appLanguage === 'en-US'
-        ? 'Please choose a previous story and a continuity node before generating a sequel.'
-        : '生成续作前，请先选择前作和继承节点。');
+        ? 'Please choose a previous story and required ending before generating a sequel.'
+        : '生成续作前，请先选择前作和前置结局。');
       return;
     }
 
@@ -8804,7 +8896,7 @@ export default function App() {
         </div>
       </div>
 
-      <div className="mx-auto mt-10 w-full max-w-2xl rounded-[2rem] border border-zinc-800 bg-zinc-900/30 p-6 text-left">
+      <div className="mx-auto mt-10 w-full max-w-2xl px-4 text-left">
         <div className="mb-6 rounded-2xl border border-indigo-300/15 bg-indigo-500/10 p-4">
           <label className="mb-2 block text-sm font-black text-indigo-100">{tr('套用世界观设定', 'Apply world setting')}</label>
           <select
@@ -8824,9 +8916,12 @@ export default function App() {
             const selected = seriesWorlds.find((series) => series.id === quickSeriesBindingId) || null;
             const baselineRules = getSeriesBaselineRules(selected);
             const characterCards = getSeriesCharacterCards(selected);
+            const seriesStoryOptions = myStories.filter((story: any) => String(story?.seriesId || story?.series_id || story?.meta?.seriesId || story?.meta?.series_id || '') === quickSeriesBindingId);
+            const continuityBranches = asSafeArray<any>(quickContinuitySourceStory?.branches);
+            const continuityEndings = asSafeArray<any>(quickContinuitySourceStory?.endings);
             return (
               <div className="mt-4 space-y-4">
-                <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-3">
+                <div className="border-t border-zinc-800 pt-4">
                   <div className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-zinc-500">{tr('世界基准', 'World baseline')}</div>
                   {baselineRules.length === 0 ? (
                     <div className="text-xs leading-relaxed text-zinc-500">{tr('该世界观设定还没有条目化基准；生成时只会参考世界观概况。', 'No itemized baseline rules yet; generation will only use the world overview as reference.')}</div>
@@ -8896,33 +8991,84 @@ export default function App() {
                       onChange={(event) => setQuickSeriesSelection((prev) => ({ ...prev, useContinuity: event.target.checked }))}
                       className="accent-indigo-500"
                     />
-                    {tr('作为续作生成，套用继承节点', 'Generate as sequel with a continuity node')}
+                    {tr('作为续作生成，设置前作继承锚点', 'Generate as sequel with previous-story anchors')}
                   </label>
                   {quickSeriesSelection.useContinuity && (
-                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <div className="mt-3 space-y-3">
                       <select
                         value={quickSeriesSelection.sourceStoryId}
-                        onChange={(event) => setQuickSeriesSelection((prev) => ({ ...prev, sourceStoryId: event.target.value }))}
+                        onChange={(event) => setQuickSeriesSelection((prev) => ({ ...prev, sourceStoryId: event.target.value, requiredBranchIds: [], endingId: '', continuityNodeId: '' }))}
                         className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm text-zinc-200 outline-none"
                       >
                         <option value="">{tr('选择前作', 'Choose previous story')}</option>
-                        {myStories.map((story: any) => (
+                        {seriesStoryOptions.map((story: any) => (
                           <option key={story.id} value={story.id}>{getStoryTitle(story)}</option>
                         ))}
                       </select>
-                      <select
-                        value={quickSeriesSelection.continuityNodeId}
-                        onChange={(event) => {
-                          setQuickSeriesSelection((prev) => ({ ...prev, continuityNodeId: event.target.value }));
-                          setSelectedContinuityNodeId(event.target.value);
-                        }}
-                        className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm text-zinc-200 outline-none"
-                      >
-                        <option value="">{tr('选择继承节点', 'Choose continuity node')}</option>
-                        {continuityNodes.map((node) => (
-                          <option key={node.id} value={node.id}>{node.title}</option>
-                        ))}
-                      </select>
+                      {seriesStoryOptions.length === 0 && (
+                        <div className="text-xs leading-relaxed text-zinc-500">{tr('该世界观下还没有可作为前作的作品。请先生成或绑定第一部。', 'No previous story is bound to this world setting yet.')}</div>
+                      )}
+                      {quickContinuityLoading && (
+                        <div className="flex items-center gap-2 text-xs font-bold text-indigo-200"><Loader2 className="h-3.5 w-3.5 animate-spin" />{tr('正在读取前作支线与结局...', 'Loading branches and endings...')}</div>
+                      )}
+                      {quickSeriesSelection.sourceStoryId && !quickContinuityLoading && (
+                        <div className="grid gap-3">
+                          <div>
+                            <div className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-zinc-500">{tr('前置支线，可复选', 'Required branches')}</div>
+                            {continuityBranches.length === 0 ? (
+                              <div className="text-xs leading-relaxed text-zinc-500">{tr('该前作没有可选支线。', 'This previous story has no branches.')}</div>
+                            ) : (
+                              <div className="grid gap-2 sm:grid-cols-2">
+                                {continuityBranches.map((branch: any) => {
+                                  const branchId = String(branch.id || '');
+                                  return (
+                                    <label key={branchId} className="flex items-start gap-2 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 text-xs text-zinc-300">
+                                      <input
+                                        type="checkbox"
+                                        checked={quickSeriesSelection.requiredBranchIds.includes(branchId)}
+                                        onChange={(event) => setQuickSeriesSelection((prev) => ({
+                                          ...prev,
+                                          requiredBranchIds: event.target.checked
+                                            ? [...new Set([...prev.requiredBranchIds, branchId])]
+                                            : prev.requiredBranchIds.filter((id) => id !== branchId),
+                                        }))}
+                                        className="mt-1 accent-indigo-500"
+                                      />
+                                      <span className="font-bold text-zinc-100">{branch.name || branch.title || branchId}</span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <div className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-zinc-500">{tr('前置结局，单选', 'Required ending')}</div>
+                            <div className="grid gap-2 sm:grid-cols-3">
+                              {continuityEndings.map((ending: any) => {
+                                const endingId = String(ending.id || '');
+                                return (
+                                  <label key={endingId} className="flex items-start gap-2 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 text-xs text-zinc-300">
+                                    <input
+                                      type="radio"
+                                      name="quick-continuity-ending"
+                                      checked={quickSeriesSelection.endingId === endingId}
+                                      onChange={() => setQuickSeriesSelection((prev) => ({ ...prev, endingId }))}
+                                      className="mt-1 accent-indigo-500"
+                                    />
+                                    <span className="font-bold text-zinc-100">{ending.title || endingId}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                          <textarea
+                            value={quickSeriesSelection.hardSettings}
+                            onChange={(event) => setQuickSeriesSelection((prev) => ({ ...prev, hardSettings: event.target.value }))}
+                            placeholder={tr('继承硬设定：一行一条，例如「前作中阵亡的人物不能无解释复活」或「第二部开场必须承认王都已陷落」。', 'Continuity hard rules: one per line, e.g. “Dead characters cannot return without explanation.”')}
+                            className="min-h-24 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-200 outline-none focus:border-indigo-500"
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -9057,7 +9203,7 @@ export default function App() {
           disabled={
             (selectedThemes.length < 1 && customOutline.trim().length === 0 && !quickSeriesBindingId) ||
             selectedThemes.length > 4 ||
-            (quickSeriesSelection.useContinuity && !quickSeriesSelection.continuityNodeId)
+            (quickSeriesSelection.useContinuity && (!quickSeriesSelection.sourceStoryId || !quickSeriesSelection.endingId))
           }
           className={`${semanticButtonClass('primary', { fullWidth: true })} mt-6`}
         >
@@ -10547,7 +10693,7 @@ export default function App() {
             </div>
           </div>
 
-          <div className="rounded-[2rem] border border-zinc-800 bg-zinc-900/30 p-6 sm:p-8">
+          <div>
             <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2 text-2xl font-black text-white">
