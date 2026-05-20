@@ -4811,6 +4811,29 @@ export default function App() {
     await loadSeriesWorlds();
   };
 
+  const openSeriesWorldCreateView = async () => {
+    setSelectedSeriesId('');
+    setSeriesForm({
+      title: '',
+      pitch: '',
+      genreTags: [],
+      worldBible: {},
+      timelineNotes: '',
+      ironLaws: [],
+      futureDirections: [],
+      visibility: 'private',
+    });
+    setSeriesWorldBibleText('{}');
+    setSeriesIronLawsText('[]');
+    setSeriesFutureDirectionsText('[]');
+    setSeriesSourceStoryId('');
+    setSelectedContinuityNodeId('');
+    setContinuityNodes([]);
+    navigateTo('SERIES_WORLD_GENERATE');
+    await refreshStories({ force: true });
+    await loadSeriesWorlds();
+  };
+
   const handleGenerateSeriesWorld = async (mode: 'new' | 'extract') => {
     if (!user || !db) return;
     setSeriesGenerating(true);
@@ -7452,7 +7475,7 @@ export default function App() {
             {t('library.authoring')}
           </button>
           <button
-            onClick={() => void openSeriesWorldView()}
+            onClick={() => void openSeriesWorldCreateView()}
             className={semanticButtonClass('ghost', { compact: true })}
           >
             <GitBranch className="h-4 w-4" />
