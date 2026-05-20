@@ -326,6 +326,8 @@ function sharedRecord(row: any) {
 
 function storyRowFromMeta(meta: any, id?: string) {
   const updatedAt = nowIso();
+  const rawContinuityNodeId = meta.continuityNodeId || meta.continuity_node_id || '';
+  const continuityNodeId = String(rawContinuityNodeId).startsWith('anchor:') ? null : rawContinuityNodeId || null;
   return {
     ...(id ? { id } : {}),
     title: meta.title || '未命名作品',
@@ -347,7 +349,7 @@ function storyRowFromMeta(meta: any, id?: string) {
     allow_adaptation: Boolean(meta.allowAdaptation),
     series_id: meta.seriesId || meta.series_id || null,
     series_role: meta.seriesRole || meta.series_role || (meta.seriesId || meta.series_id ? 'main' : 'standalone'),
-    continuity_node_id: meta.continuityNodeId || meta.continuity_node_id || null,
+    continuity_node_id: continuityNodeId,
     series_constraints: meta.seriesConstraints || meta.series_constraints || {},
     ending_mode: meta.endingMode || 'dual',
     ending_rates: { ...(meta.endingRates || { left: 40, right: 40 }), ...normalizeEndingBias(meta.endingBias || meta.endingRates) },
@@ -358,6 +360,47 @@ function storyRowFromMeta(meta: any, id?: string) {
     created_at: meta.createdAt || updatedAt,
     updated_at: updatedAt,
   };
+}
+
+const OPTIONAL_STORY_INSERT_COLUMNS = [
+  'share_count',
+  'series_id',
+  'series_role',
+  'continuity_node_id',
+  'series_constraints',
+];
+
+function isSupabaseMissingStoryColumnError(error: any) {
+  const message = String(error?.message || error || '');
+  return /Could not find|column|schema cache|PGRST/i.test(message)
+    && OPTIONAL_STORY_INSERT_COLUMNS.some((column) => message.includes(column));
+}
+
+function stripOptionalStoryInsertColumns(row: Record<string, any>) {
+  const next = { ...row };
+  OPTIONAL_STORY_INSERT_COLUMNS.forEach((column) => {
+    delete next[column];
+  });
+  return next;
+}
+
+async function insertStoryRow(row: Record<string, any>, context: string) {
+  try {
+    return {
+      rows: await supabaseInsert<any[]>('stories', [row]),
+      usedOptionalColumns: true,
+    };
+  } catch (error) {
+    if (!isSupabaseMissingStoryColumnError(error)) throw error;
+    console.warn('[story-store] stories insert optional-column fallback', {
+      context,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    return {
+      rows: await supabaseInsert<any[]>('stories', [stripOptionalStoryInsertColumns(row)]),
+      usedOptionalColumns: false,
+    };
+  }
 }
 
 async function optionalUser(req: VercelRequest) {
@@ -1205,7 +1248,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           { id: 'c3', name: '角色三', desc: '（待填写简介）' },
         ],
       });
-      const [created] = await supabaseInsert<any[]>('stories', [meta]);
+      const { rows: createdRows } = await insertStoryRow(meta, 'createEmptyStory');
+      const [created] = createdRows;
       const storyId = created.id;
       await supabaseUpsert('story_chapters', Array.from({ length: 7 }, (_, index) => ({
         story_id: storyId,
@@ -1224,6 +1268,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (action === 'adaptBlueprintToStory') {
+      let adaptStage = 'prepare';
+      const runAdaptStage = async <T,>(stage: string, task: () => Promise<T>) => {
+        adaptStage = stage;
+        try {
+          return await task();
+        } catch (error) {
+          console.error('[story-store] adaptBlueprintToStory failed', {
+            stage: adaptStage,
+            message: error instanceof Error ? error.message : String(error),
+          });
+          throw new StoryStoreHttpError(
+            500,
+            'ADAPT_BLUEPRINT_FAILED',
+            `一键改编失败（${adaptStage}）：${error instanceof Error ? error.message : String(error)}`
+          );
+        }
+      };
       const args = body.args || {};
       const bp = args.blueprint || {};
       const chapters = asArray(args.chapters);
@@ -1259,23 +1320,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         characters: characters.length ? characters : [{ id: 'c1', name: '角色一', desc: '（待填写简介）' }],
         coverUrl: bp.coverUrl || '',
       });
-      const [created] = await supabaseInsert<any[]>('stories', [meta]);
+      const { rows: createdRows, usedOptionalColumns } = await runAdaptStage('create-story', () => insertStoryRow(meta, 'adaptBlueprintToStory'));
+      const [created] = createdRows;
       const storyId = created.id;
-      if (meta.series_id) {
-        await supabaseUpsert('series_entries', [{
+      if (usedOptionalColumns && meta.series_id) {
+        await runAdaptStage('create-series-entry', () => supabaseUpsert('series_entries', [{
           series_id: meta.series_id,
           story_id: storyId,
           entry_order: meta.series_role === 'sequel' ? 2 : 1,
           entry_type: meta.series_role === 'standalone' ? 'main' : meta.series_role,
           timeline_label: meta.series_role === 'sequel' ? '续作' : '第一部',
           created_at: nowIso(),
-        }], 'series_id,story_id').catch((error) => {
+        }], 'series_id,story_id')).catch((error) => {
           console.warn('[story-store] series entry create skipped', error);
         });
       }
       const chapterByNum = new Map(chapters.map((chapter) => [chapter.chapter_num, chapter]));
       const bpChapterByNum = new Map(asArray(bp.chapters).map((chapter) => [chapter.chapter_num, chapter]));
-      await supabaseUpsert('story_chapters', Array.from({ length: 7 }, (_, index) => {
+      await runAdaptStage('create-chapters', () => supabaseUpsert('story_chapters', Array.from({ length: 7 }, (_, index) => {
         const chapterNum = index + 1;
         const chapter: any = chapterByNum.get(chapterNum) || bpChapterByNum.get(chapterNum) || {};
         return {
@@ -1286,14 +1348,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           present_characters: asArray(chapter.present_characters),
           text: chapter.text || '',
         };
-      }), 'story_id,chapter_num');
+      }), 'story_id,chapter_num'));
       const defaultEndingText = chapterByNum.get(7)?.text || args.conclusionText || asArray(bp.endings).find((ending) => ending.type === 'normal')?.text || asArray(bp.endings)[0]?.text || '';
       const isSingleEnding = bp.endingMode === 'single';
-      await supabaseUpsert('story_endings', [
+      await runAdaptStage('create-endings', () => supabaseUpsert('story_endings', [
         { story_id: storyId, id: 'default', chapter_num: 7, title: chapterByNum.get(7)?.title || '第七章', text: defaultEndingText },
         { story_id: storyId, id: 'left', chapter_num: 7, title: '左结局', text: isSingleEnding ? defaultEndingText : asArray(bp.endings).find((ending) => ending.type === 'good' || ending.type === 'left')?.text || '' },
         { story_id: storyId, id: 'right', chapter_num: 7, title: '右结局', text: isSingleEnding ? defaultEndingText : asArray(bp.endings).find((ending) => ending.type === 'bad' || ending.type === 'right')?.text || '' },
-      ], 'story_id,id');
+      ], 'story_id,id'));
       const branches = asArray(bp.branches).map((branch) => ({
         story_id: storyId,
         side: branch.side === 'right' ? 'right' : 'left',
@@ -1307,7 +1369,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         inject: { ...(branch.inject || { mustHappen: [], mustReveal: [], mustChange: [] }), hidden: Boolean(branch.is_hidden || branch.hidden || branch.score >= 5) },
         scene_text: branch.sceneText || branch.desc || '',
       }));
-      if (branches.length) await supabaseInsert('story_branches', branches);
+      if (branches.length) await runAdaptStage('create-branches', () => supabaseInsert('story_branches', branches));
       return res.status(200).json(storyId);
     }
 

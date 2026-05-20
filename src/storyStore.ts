@@ -1047,7 +1047,7 @@ export async function updateSharedStoryVisibility(
 
 export async function adaptBlueprintToStory(db: Firestore, args: { authorId: string; authorName?: string; blueprint: any; chapters: any[]; conclusionText?: string; tags?: string[] }) {
   if (useSupabaseStories()) {
-    return storyApi<string>('adaptBlueprintToStory', { args }, { auth: true });
+    return storyApi<string>('adaptBlueprintToStory', { args }, { auth: true, timeoutMs: 30000, stage: '一键改编' });
   }
   const now = new Date().toISOString();
   const bp = args.blueprint;

@@ -3608,7 +3608,7 @@ export default function App() {
       window.history.replaceState({}, '', window.location.pathname);
     } catch (error) {
       console.error(error);
-      showError('一键改编失败，请稍后再试。');
+      showError(`一键改编失败：${error instanceof Error ? error.message : '请稍后再试。'}`);
     } finally {
       setIsLoadingStories(false);
     }
@@ -4272,7 +4272,7 @@ export default function App() {
       showError('已完成一键改编，正在进入作者编辑界面。');
     } catch (error) {
       console.error(error);
-      showError('一键改编失败，请稍后再试。');
+      showError(`一键改编失败：${error instanceof Error ? error.message : '请稍后再试。'}`);
     } finally {
       setIsLoadingStories(false);
     }
@@ -12041,7 +12041,7 @@ export default function App() {
                       </button>
                     )}
                     <button onClick={() => { setIsActionMenuOpen(false); handleAdaptCurrentStory(); }} disabled={!canAdaptCurrentStory() || isLoadingStories} className={semanticMenuButtonClass('secondary')}>
-                      <Wand2 className="h-5 w-5" /> {activeStoryMeta?.authorId === user?.uid ? tr('改变命运', 'Edit fate') : tr('创作同人', 'Create adaptation')}
+                      <Wand2 className="h-5 w-5" /> {canAdaptCurrentStory() ? tr('一键改编', 'Adapt') : tr('未开放改编', 'Adaptation unavailable')}
                     </button>
                     <button onClick={() => { setIsActionMenuOpen(false); restartCurrentStory(); }} className={semanticMenuButtonClass('ghost')}>
                       <RefreshCcw className="h-5 w-5" /> {tr('重新干涉', 'Restart play')}
