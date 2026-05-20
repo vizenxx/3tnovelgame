@@ -68,10 +68,83 @@ function normalizeWorldBible(raw: any, fallbackTitle: string) {
   };
 }
 
-function normalizeSeriesWorld(raw: any) {
+function fallbackCharactersFromStory(sourceStory: any) {
+  const characters = [
+    ...(Array.isArray(sourceStory?.meta?.characters) ? sourceStory.meta.characters : []),
+    ...(Array.isArray(sourceStory?.characters) ? sourceStory.characters : []),
+    ...(Array.isArray(sourceStory?.blueprint?.characters) ? sourceStory.blueprint.characters : []),
+  ];
+  const seen = new Set<string>();
+  return characters
+    .map((character: any, index: number) => {
+      const name = String(character?.name || character?.title || '').trim();
+      if (!name || seen.has(name)) return null;
+      seen.add(name);
+      return {
+        id: String(character?.id || `char_${index + 1}`),
+        name,
+        role: String(character?.role || '原作角色').trim(),
+        desc: String(character?.desc || character?.description || character?.profile || `${name} 是从原作中提取的角色。`).trim(),
+        status: String(character?.status || '').trim(),
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 12);
+}
+
+function fallbackRulesFromStory(sourceStory: any) {
+  const meta = sourceStory?.meta || sourceStory || {};
+  const rules: any[] = [];
+  const mainAxis = String(meta.main_axis || sourceStory?.main_axis || '').trim();
+  if (mainAxis) {
+    rules.push({
+      id: 'rule_main_axis',
+      title: '保留原作核心命题',
+      detail: `后续生成需要尊重原作主轴：${mainAxis}`,
+      kind: '主轴',
+    });
+  }
+  const branches = Array.isArray(sourceStory?.branches) ? sourceStory.branches : [];
+  branches.slice(0, 6).forEach((branch: any, index: number) => {
+    const name = String(branch?.name || branch?.title || `支线 ${index + 1}`).trim();
+    const detail = String(branch?.desc || branch?.description || branch?.story || '').trim();
+    if (name || detail) {
+      rules.push({
+        id: `rule_branch_${index + 1}`,
+        title: `保留支线条件：${name}`,
+        detail: detail || `原作存在「${name}」这条支线，续作或同世界作品应尊重其条件与影响。`,
+        kind: '支线',
+      });
+    }
+  });
+  const endings = Array.isArray(sourceStory?.endings) ? sourceStory.endings : [];
+  if (endings.length > 0) {
+    rules.push({
+      id: 'rule_endings',
+      title: '保留结局域的可能性',
+      detail: `原作包含这些结局出口：${endings.map((ending: any) => ending?.title || ending?.id || '未命名结局').filter(Boolean).join('、')}。后续设定不应轻易否定这些出口。`,
+      kind: '结局',
+    });
+  }
+  return rules.slice(0, 12);
+}
+
+function normalizeSeriesWorld(raw: any, sourceStory?: any, mode: 'new' | 'extract' = 'new') {
   if (!raw || typeof raw !== 'object') throw new Error('AI_RESPONSE_INVALID: series world is not an object.');
   const title = String(raw.title || '未命名长篇世界').trim();
   const worldBible = normalizeWorldBible(raw.worldBible, title);
+  if (mode === 'extract' && sourceStory) {
+    if (!worldBible.worldview) {
+      const meta = sourceStory.meta || sourceStory;
+      worldBible.worldview = String(meta.main_axis || meta.description || meta.premise || title).trim();
+    }
+    if (!Array.isArray(worldBible.characterPool) || worldBible.characterPool.length === 0) {
+      worldBible.characterPool = fallbackCharactersFromStory(sourceStory);
+    }
+    if (!Array.isArray(worldBible.baselineRules) || worldBible.baselineRules.length === 0) {
+      worldBible.baselineRules = fallbackRulesFromStory(sourceStory);
+    }
+  }
   return {
     title: String(raw.title || '未命名长篇世界').trim(),
     pitch: String(raw.pitch || worldBible.worldview || '').trim(),
@@ -108,10 +181,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       hasSourceStory: Boolean(req.body?.sourceStory),
       language,
     });
+    const mode = req.body?.mode === 'extract' ? 'extract' : 'new';
+    const sourceStory = req.body?.sourceStory;
     const { data, model, keyIndex } = await generateGeminiJsonWithFallback({
       contents: prompt,
       config: { responseMimeType: 'application/json', responseSchema: seriesWorldSchema },
-      parseResponse: (rawText) => normalizeSeriesWorld(parseGeminiJson(rawText)),
+      parseResponse: (rawText) => normalizeSeriesWorld(parseGeminiJson(rawText), sourceStory, mode),
       logContext,
       logInfo: logGenerationInfo,
       logError: logGenerationError,

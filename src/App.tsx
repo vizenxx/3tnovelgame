@@ -8093,7 +8093,7 @@ export default function App() {
         <div className="mb-8 flex items-center justify-between gap-3">
           <BackNavButton
             label={isSeriesWorldListPage ? tr('返回首页', 'Back home') : tr('返回世界观收录', 'Back to settings')}
-            onClick={() => isSeriesWorldListPage ? goBack('STORY_SELECT') : navigateTo('SERIES_WORLD_LIST')}
+            onClick={() => isSeriesWorldListPage ? resetToHome() : navigateTo('SERIES_WORLD_LIST', { reset: true })}
           />
           <div className="flex flex-wrap justify-end gap-2">
             {!isSeriesWorldGeneratePage && (
