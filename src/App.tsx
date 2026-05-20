@@ -93,9 +93,10 @@ type QuickGenerationInput = {
 
 type SeriesBaselineRule = {
   id: string;
-  title: string;
   detail: string;
+  title?: string;
   kind?: string;
+  tags?: string[];
 };
 
 type SeriesCharacterCard = {
@@ -8355,7 +8356,7 @@ export default function App() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => updateWorldBibleDraft({ baselineRules: [...baselineRuleDrafts, createEmptySeriesBaselineRule(baselineRuleDrafts.length)] })}
+                      onClick={() => updateWorldBibleDraft({ baselineRules: [...baselineRuleDrafts, { id: `rule_${baselineRuleDrafts.length + 1}`, detail: '', tags: [] }] })}
                       className={semanticButtonClass('secondary', { compact: true })}
                     >
                       <Sparkles className="h-4 w-4" />
@@ -8381,7 +8382,7 @@ export default function App() {
                             <Trash2 className="h-4 w-4" />
                           </button>
                         </div>
-                        <div className="grid gap-3 sm:grid-cols-[1fr_10rem]">
+                        <div className="hidden">
                           <input
                             value={rule.title || ''}
                             onChange={(event) => updateBaselineRuleDraft(index, { title: event.target.value, id: rule.id || `rule_${index + 1}` })}
@@ -8399,7 +8400,13 @@ export default function App() {
                           value={rule.detail || rule.rule || ''}
                           onChange={(event) => updateBaselineRuleDraft(index, { detail: event.target.value })}
                           placeholder={tr('具体说明：这条基准如何限制或保护后续作品生成。', 'Details: how this rule limits or protects later story generation.')}
-                          className="mt-3 min-h-24 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-200 outline-none focus:border-indigo-500"
+                          className="min-h-24 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-200 outline-none focus:border-indigo-500"
+                        />
+                        <input
+                          value={normalizeTagList(Array.isArray(rule.tags) ? rule.tags : String(rule.tags || rule.kind || '').split(/[,，]/)).join('，')}
+                          onChange={(event) => updateBaselineRuleDraft(index, { tags: normalizeTagList(event.target.value.split(/[,，]/)), kind: '' })}
+                          placeholder={tr('标签，可选，例如：角色限制，时间限制，势力规则', 'Tags, optional: character limit, timeline, faction rule')}
+                          className="mt-3 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
                         />
                       </div>
                     ))}
@@ -8839,8 +8846,14 @@ export default function App() {
                             className="mt-1 accent-indigo-500"
                           />
                           <span>
-                            <span className="block font-black text-zinc-100">{rule.title}</span>
-                            {rule.detail && <span className="mt-1 block leading-relaxed text-zinc-500">{rule.detail}</span>}
+                            <span className="block font-black leading-relaxed text-zinc-100">{rule.detail || rule.title}</span>
+                            {normalizeTagList(Array.isArray(rule.tags) ? rule.tags : String(rule.tags || rule.kind || '').split(/[,，]/)).length > 0 && (
+                              <span className="mt-2 flex flex-wrap gap-1.5">
+                                {normalizeTagList(Array.isArray(rule.tags) ? rule.tags : String(rule.tags || rule.kind || '').split(/[,，]/)).map((tag) => (
+                                  <span key={tag} className="rounded-full bg-indigo-500/10 px-2 py-0.5 text-[10px] font-bold text-indigo-200">{tag}</span>
+                                ))}
+                              </span>
+                            )}
                           </span>
                         </label>
                       ))}
@@ -11279,8 +11292,14 @@ export default function App() {
                                     className="mt-1 accent-indigo-500"
                                   />
                                   <span>
-                                    <span className="block font-black text-zinc-100">{rule.title}</span>
-                                    {rule.detail && <span className="mt-1 block leading-relaxed text-zinc-500">{rule.detail}</span>}
+                                    <span className="block font-black leading-relaxed text-zinc-100">{rule.detail || rule.title}</span>
+                                    {normalizeTagList(Array.isArray(rule.tags) ? rule.tags : String(rule.tags || rule.kind || '').split(/[,，]/)).length > 0 && (
+                                      <span className="mt-2 flex flex-wrap gap-1.5">
+                                        {normalizeTagList(Array.isArray(rule.tags) ? rule.tags : String(rule.tags || rule.kind || '').split(/[,，]/)).map((tag) => (
+                                          <span key={tag} className="rounded-full bg-indigo-500/10 px-2 py-0.5 text-[10px] font-bold text-indigo-200">{tag}</span>
+                                        ))}
+                                      </span>
+                                    )}
                                   </span>
                                 </label>
                               ))}

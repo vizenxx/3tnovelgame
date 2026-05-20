@@ -57,9 +57,8 @@ Return strict JSON only, with this shape:
     "baselineRules": [
       {
         "id": "rule_1",
-        "title": "short author-facing rule title",
-        "detail": "what this rule allows or forbids during story generation",
-        "kind": "world / timeline / magic / politics / sequel-safety"
+        "detail": "one reusable rule that allows, forbids, or protects something during story generation",
+        "tags": ["timeline", "character limit"]
       }
     ],
     "characterPool": [
