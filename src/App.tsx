@@ -47,7 +47,7 @@ import {
 } from 'firebase/firestore';
 
 // --- Types ---
-type GameState = 'STORY_SELECT' | 'AUTHORING' | 'THEME_SELECTION' | 'SERIES_WORLD' | 'GENERATING_BLUEPRINT' | 'PLAYING' | 'SUMMARY' | 'READONLY_STORY' | 'ARCHIVE';
+type GameState = 'STORY_SELECT' | 'AUTHORING' | 'THEME_SELECTION' | 'SERIES_WORLD_LIST' | 'SERIES_WORLD_GENERATE' | 'SERIES_WORLD_EDIT' | 'GENERATING_BLUEPRINT' | 'PLAYING' | 'SUMMARY' | 'READONLY_STORY' | 'ARCHIVE';
 type NarrativePerson = 'first' | 'second' | 'third';
 type EndingMode = 'single' | 'dual';
 type AppTheme = 'dark' | 'light';
@@ -1561,7 +1561,6 @@ export default function App() {
   const [quickSeriesBindingId, setQuickSeriesBindingId] = useState('');
   const [selectedContinuityNodeId, setSelectedContinuityNodeId] = useState('');
   const [seriesSourceStoryId, setSeriesSourceStoryId] = useState('');
-  const [seriesWorldMode, setSeriesWorldMode] = useState<'library' | 'generate' | 'edit'>('library');
   const [quickSeriesSelection, setQuickSeriesSelection] = useState<SeriesSelectionState>({
     baselineRuleIds: [],
     characterIds: [],
@@ -3309,7 +3308,7 @@ export default function App() {
   }, [quickSeriesBindingId, seriesWorlds.length]);
 
   useEffect(() => {
-    if (gameState !== 'SERIES_WORLD' || !selectedSeriesId) return;
+    if (gameState !== 'SERIES_WORLD_EDIT' || !selectedSeriesId) return;
     const selected = seriesWorlds.find((series) => series.id === selectedSeriesId);
     if (selected) {
       setSeriesForm(selected);
@@ -4736,8 +4735,7 @@ export default function App() {
   };
 
   const openSeriesWorldView = async () => {
-    setSeriesWorldMode('library');
-    navigateTo('SERIES_WORLD');
+    navigateTo('SERIES_WORLD_LIST');
     await refreshStories({ force: true });
     await loadSeriesWorlds();
   };
@@ -4770,7 +4768,7 @@ export default function App() {
       setSeriesIronLawsText(JSON.stringify(data.ironLaws || [], null, 2));
       setSeriesFutureDirectionsText(JSON.stringify(data.futureDirections || [], null, 2));
       setSelectedSeriesId('');
-      setSeriesWorldMode('edit');
+      navigateTo('SERIES_WORLD_EDIT');
       showError(tr('世界观设定草稿已生成，可先编辑再保存。', 'World setting draft generated. Edit it before saving.'));
     } catch (error) {
       console.error(error);
@@ -4808,7 +4806,6 @@ export default function App() {
 
   const resetSeriesWorldDraft = () => {
     setSelectedSeriesId('');
-    setSeriesWorldMode('edit');
     setSeriesForm({
       title: '',
       pitch: '',
@@ -4824,6 +4821,7 @@ export default function App() {
     setSeriesFutureDirectionsText('[]');
     setSelectedContinuityNodeId('');
     setContinuityNodes([]);
+    navigateTo('SERIES_WORLD_EDIT');
   };
 
   const handleDeleteSeriesWorld = (seriesId = selectedSeriesId) => {
@@ -4842,7 +4840,7 @@ export default function App() {
           await deleteSeriesWorld(db as any, seriesId);
           await loadSeriesWorlds();
           resetSeriesWorldDraft();
-          setSeriesWorldMode('library');
+          navigateTo('SERIES_WORLD_LIST');
           showError(tr('世界观设定已删除。', 'World setting deleted.'));
         } catch (error) {
           console.error(error);
@@ -8077,31 +8075,38 @@ export default function App() {
     const organizeSourceLabel = seriesSourceStoryId
       ? tr('从导入作品提取仓库条目', 'Extract archive items from story')
       : tr('一键生成仓库条目', 'Generate archive items');
-    const seriesModeCards = [
-      {
-        id: 'library' as const,
-        title: tr('世界观收录', 'World settings'),
-        desc: tr('查看、选择和管理已经保存的世界观设定。', 'View, select, and manage saved world settings.'),
-      },
-      {
-        id: 'generate' as const,
-        title: tr('生成 / 提取', 'Generate / Extract'),
-        desc: tr('从基本概况生成仓库条目，或从已有作品提取。', 'Generate archive items from an overview or extract them from an existing story.'),
-      },
-      {
-        id: 'edit' as const,
-        title: tr('编辑仓库', 'Edit archive'),
-        desc: tr('编辑世界基准、角色卡池和情节素材。', 'Edit baseline rules, character cards, and plot material.'),
-      },
-    ];
+    const isSeriesWorldListPage = gameState === 'SERIES_WORLD_LIST';
+    const isSeriesWorldGeneratePage = gameState === 'SERIES_WORLD_GENERATE';
+    const isSeriesWorldEditPage = gameState === 'SERIES_WORLD_EDIT';
+    const pageTitle = isSeriesWorldListPage
+      ? tr('世界观收录', 'World Settings')
+      : isSeriesWorldGeneratePage
+        ? tr('生成 / 提取世界观设定', 'Generate / Extract World Setting')
+        : tr('编辑世界观仓库', 'Edit World Setting Archive');
+    const pageDescription = isSeriesWorldListPage
+      ? tr('这里集中管理已经保存的世界观设定。选择一个进入编辑；新建或提取请进入生成页。', 'Manage saved world settings here. Choose one to edit, or open the generation page to create/extract a new one.')
+      : isSeriesWorldGeneratePage
+        ? tr('从基本概况生成全新的世界观仓库，或导入已有作品提取世界基准、角色卡池和情节素材。生成完成后会进入编辑页。', 'Generate a new setting archive from an overview, or import an existing story to extract baseline rules, character cards, and plot material. After generation, the editor opens.')
+        : tr('这里只编辑世界观仓库条目。后续生成作品时，再到高级创作设置里选择要套用的世界观设定。', 'Edit archive items here. Later, apply the world setting from Advanced creation when generating a story.');
     return (
       <div className="mx-auto min-h-[100dvh] max-w-6xl px-5 pb-14 pt-[max(5rem,calc(env(safe-area-inset-top)+4rem))] sm:px-6 lg:px-8">
         <div className="mb-8 flex items-center justify-between gap-3">
-          <BackNavButton label={tr('返回首页', 'Back home')} onClick={() => goBack('STORY_SELECT')} />
-          <button type="button" onClick={() => void loadSeriesWorlds()} className={semanticButtonClass('ghost', { compact: true })}>
-            <RefreshCcw className="h-4 w-4" />
-            {tr('刷新世界观设定', 'Refresh settings')}
-          </button>
+          <BackNavButton
+            label={isSeriesWorldListPage ? tr('返回首页', 'Back home') : tr('返回世界观收录', 'Back to settings')}
+            onClick={() => isSeriesWorldListPage ? goBack('STORY_SELECT') : navigateTo('SERIES_WORLD_LIST')}
+          />
+          <div className="flex flex-wrap justify-end gap-2">
+            {!isSeriesWorldGeneratePage && (
+              <button type="button" onClick={() => navigateTo('SERIES_WORLD_GENERATE')} className={semanticButtonClass('secondary', { compact: true })}>
+                <Sparkles className="h-4 w-4" />
+                {tr('生成 / 提取', 'Generate / Extract')}
+              </button>
+            )}
+            <button type="button" onClick={() => void loadSeriesWorlds()} className={semanticButtonClass('ghost', { compact: true })}>
+              <RefreshCcw className="h-4 w-4" />
+              {tr('刷新', 'Refresh')}
+            </button>
+          </div>
         </div>
 
         <div className="mb-8 rounded-[2rem] border border-indigo-300/15 bg-indigo-500/10 p-6">
@@ -8109,58 +8114,31 @@ export default function App() {
             <GitBranch className="h-3.5 w-3.5" />
             {tr('世界观设定', 'World Settings')}
           </div>
-          <h1 className="mt-4 text-3xl font-black text-white sm:text-4xl">{tr('创建世界观设定', 'Create a World Setting')}</h1>
+          <h1 className="mt-4 text-3xl font-black text-white sm:text-4xl">{pageTitle}</h1>
           <p className="mt-3 max-w-3xl text-sm leading-relaxed text-zinc-400">
-            {tr('这里维护可复用的世界基准、角色卡池和继承节点。生成作品时，再从这些设定里勾选本次要套用的内容。', 'Maintain reusable baseline rules, character cards, and continuity nodes here. When generating a story, pick only the items this work should apply.')}
+            {pageDescription}
           </p>
-        </div>
-
-        <div className="mb-6 rounded-[1.5rem] border border-zinc-800 bg-zinc-950/70 p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="text-sm font-black text-white">{tr('世界观设定仓库', 'World setting archive')}</div>
-              <p className="mt-1 text-xs leading-relaxed text-zinc-500">
-                {tr('这里只维护可复用设定。要生成第一部或续作，请到高级创作设置里套用世界观设定；续作会在选择前作后再显示继承节点。', 'This page only maintains reusable setting material. To generate a first story or sequel, use Advanced creation and apply a world setting; sequel continuity appears after choosing a previous story.')}
-              </p>
-            </div>
-            <button type="button" onClick={resetSeriesWorldDraft} className={semanticButtonClass('secondary', { compact: true })}>
-              <Sparkles className="h-4 w-4" />
-              {tr('新建空白设定', 'New blank setting')}
-            </button>
-          </div>
-        </div>
-
-        <div className="mb-6 grid gap-3 lg:grid-cols-3">
-          {seriesModeCards.map((card) => (
-            <button
-              key={card.id}
-              type="button"
-              onClick={() => setSeriesWorldMode(card.id)}
-              className={`rounded-[1.5rem] border p-4 text-left transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
-                seriesWorldMode === card.id
-                  ? 'border-indigo-400 bg-indigo-500/15 shadow-lg shadow-indigo-950/20'
-                  : 'border-zinc-800 bg-zinc-950/55 hover:border-zinc-600'
-              }`}
-            >
-              <div className="text-sm font-black text-white">{card.title}</div>
-              <div className="mt-1 text-xs leading-relaxed text-zinc-500">{card.desc}</div>
-            </button>
-          ))}
         </div>
 
         <div className="grid gap-6">
           <section className="space-y-4">
-            {seriesWorldMode === 'library' && (
+            {isSeriesWorldListPage && (
             <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/60 p-4">
               <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <div className="text-sm font-black text-white">{tr('我的世界观设定', 'My World Settings')}</div>
-                  <p className="mt-1 text-xs leading-relaxed text-zinc-500">{tr('这里是已经收录的世界观设定。选择一个进入编辑；新建或提取请去“生成 / 提取”。', 'Saved world settings live here. Choose one to edit; use Generate / Extract to create or extract a new one.')}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-zinc-500">{tr('这是独立的收录页，只负责查找、进入编辑和删除后的管理。', 'This is a dedicated library page for finding, opening, and managing saved settings.')}</p>
                 </div>
-                <button type="button" onClick={() => setSeriesWorldMode('generate')} className={semanticButtonClass('primary', { compact: true })}>
-                  <Sparkles className="h-4 w-4" />
-                  {tr('生成新世界观', 'Create new setting')}
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => navigateTo('SERIES_WORLD_GENERATE')} className={semanticButtonClass('primary', { compact: true })}>
+                    <Sparkles className="h-4 w-4" />
+                    {tr('生成新世界观', 'Create new setting')}
+                  </button>
+                  <button type="button" onClick={resetSeriesWorldDraft} className={semanticButtonClass('secondary', { compact: true })}>
+                    <PenSquare className="h-4 w-4" />
+                    {tr('手动建立', 'Manual create')}
+                  </button>
+                </div>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {seriesWorlds.length === 0 && <div className="rounded-2xl bg-zinc-900/60 p-4 text-sm text-zinc-500 sm:col-span-2 lg:col-span-3">{tr('还没有世界观设定，可以先生成或手动建立一个。', 'No world setting yet. Generate one or create a manual draft first.')}</div>}
@@ -8174,7 +8152,7 @@ export default function App() {
                       setSeriesWorldBibleText(JSON.stringify(series.worldBible || {}, null, 2));
                       setSeriesIronLawsText(JSON.stringify(series.ironLaws || [], null, 2));
                       setSeriesFutureDirectionsText(JSON.stringify(series.futureDirections || [], null, 2));
-                      setSeriesWorldMode('edit');
+                      navigateTo('SERIES_WORLD_EDIT');
                       void loadContinuityNodesForSeries(series.id);
                     }}
                     className={`w-full rounded-2xl border p-4 text-left transition-all hover:-translate-y-0.5 active:scale-[0.98] ${selectedSeriesId === series.id ? 'border-indigo-400 bg-indigo-500/15' : 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-600'}`}
@@ -8187,7 +8165,7 @@ export default function App() {
             </div>
             )}
 
-            {seriesWorldMode === 'generate' && (
+            {isSeriesWorldGeneratePage && (
             <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/60 p-4">
               <div className="mb-4">
                 <div className="text-lg font-black text-white">{tr('生成 / 提取世界观设定', 'Generate / Extract world setting')}</div>
@@ -8221,7 +8199,7 @@ export default function App() {
                   {seriesGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                   {organizeSourceLabel}
                 </button>
-                <button type="button" onClick={() => { resetSeriesWorldDraft(); setSeriesWorldMode('edit'); }} className={semanticButtonClass('secondary', { compact: true, fullWidth: true })}>
+                <button type="button" onClick={resetSeriesWorldDraft} className={semanticButtonClass('secondary', { compact: true, fullWidth: true })}>
                   <PenSquare className="h-4 w-4" />
                   {tr('手动建立空白仓库', 'Create blank archive')}
                 </button>
@@ -8231,7 +8209,7 @@ export default function App() {
           </section>
 
           <section className="space-y-6">
-            {seriesWorldMode === 'edit' && (
+            {isSeriesWorldEditPage && (
             <div className="rounded-[2rem] border border-zinc-800 bg-zinc-950/60 p-5">
               <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -10462,8 +10440,7 @@ export default function App() {
                       setSeriesWorldBibleText(JSON.stringify(series.worldBible || {}, null, 2));
                       setSeriesIronLawsText(JSON.stringify(series.ironLaws || [], null, 2));
                       setSeriesFutureDirectionsText(JSON.stringify(series.futureDirections || [], null, 2));
-                      setSeriesWorldMode('edit');
-                      navigateTo('SERIES_WORLD');
+                      navigateTo('SERIES_WORLD_EDIT');
                     }}
                     className="rounded-2xl border border-zinc-800 bg-zinc-950/55 p-4 text-left transition-all hover:-translate-y-0.5 hover:border-indigo-400/60 hover:bg-indigo-500/10 active:scale-[0.98]"
                   >
@@ -11952,7 +11929,7 @@ export default function App() {
         <>
           {gameState === 'STORY_SELECT' && renderStorySelectView()}
           {gameState === 'ARCHIVE' && renderArchiveView()}
-          {gameState === 'SERIES_WORLD' && renderSeriesWorldView()}
+          {(gameState === 'SERIES_WORLD_LIST' || gameState === 'SERIES_WORLD_GENERATE' || gameState === 'SERIES_WORLD_EDIT') && renderSeriesWorldView()}
           {gameState === 'THEME_SELECTION' && renderThemeSelectionView()}
           {gameState === 'GENERATING_BLUEPRINT' && (
             <div className="fixed inset-0 z-[5000] flex flex-col items-center justify-center bg-zinc-950 px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))] text-center">

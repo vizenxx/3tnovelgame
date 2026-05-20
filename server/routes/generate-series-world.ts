@@ -20,13 +20,63 @@ const seriesWorldSchema = {
   required: ['title', 'pitch', 'genreTags', 'worldBible', 'timelineNotes', 'ironLaws', 'futureDirections'],
 };
 
+function normalizeBaselineRules(worldBible: any) {
+  const source = Array.isArray(worldBible?.baselineRules) && worldBible.baselineRules.length
+    ? worldBible.baselineRules
+    : Array.isArray(worldBible?.coreRules)
+      ? worldBible.coreRules
+      : Array.isArray(worldBible?.ironLaws)
+        ? worldBible.ironLaws
+        : [];
+  return source.map((rule: any, index: number) => ({
+    id: String(rule?.id || `rule_${index + 1}`),
+    title: String(rule?.title || rule?.rule || rule || `世界基准 ${index + 1}`).trim(),
+    detail: String(rule?.detail || rule?.rule || rule || '').trim(),
+    kind: String(rule?.kind || rule?.scope || '世界').trim(),
+  })).filter((rule: any) => rule.title || rule.detail).slice(0, 12);
+}
+
+function normalizeCharacterPool(worldBible: any) {
+  const source = Array.isArray(worldBible?.characterPool) && worldBible.characterPool.length
+    ? worldBible.characterPool
+    : Array.isArray(worldBible?.characters) && worldBible.characters.length
+      ? worldBible.characters
+      : Array.isArray(worldBible?.recurringCharacterSeeds)
+        ? worldBible.recurringCharacterSeeds
+        : [];
+  return source.map((card: any, index: number) => ({
+    id: String(card?.id || `char_${index + 1}`),
+    name: String(card?.name || card?.title || card || `角色 ${index + 1}`).trim(),
+    role: String(card?.role || card?.type || '').trim(),
+    desc: String(card?.desc || card?.description || card?.profile || card || '').trim(),
+    status: String(card?.status || '').trim(),
+  })).filter((card: any) => card.name || card.desc).slice(0, 12);
+}
+
+function normalizeWorldBible(raw: any, fallbackTitle: string) {
+  const worldBible = raw && typeof raw === 'object' ? raw : {};
+  return {
+    ...worldBible,
+    worldview: String(worldBible.worldview || worldBible.summary || worldBible.overview || fallbackTitle || '').trim(),
+    baselineRules: normalizeBaselineRules(worldBible),
+    characterPool: normalizeCharacterPool(worldBible),
+    plotNotes: Array.isArray(worldBible.plotNotes)
+      ? worldBible.plotNotes.map(String).filter(Boolean).slice(0, 12)
+      : Array.isArray(worldBible.plotMaterials)
+        ? worldBible.plotMaterials.map(String).filter(Boolean).slice(0, 12)
+        : [],
+  };
+}
+
 function normalizeSeriesWorld(raw: any) {
   if (!raw || typeof raw !== 'object') throw new Error('AI_RESPONSE_INVALID: series world is not an object.');
+  const title = String(raw.title || '未命名长篇世界').trim();
+  const worldBible = normalizeWorldBible(raw.worldBible, title);
   return {
     title: String(raw.title || '未命名长篇世界').trim(),
-    pitch: String(raw.pitch || '').trim(),
+    pitch: String(raw.pitch || worldBible.worldview || '').trim(),
     genreTags: Array.isArray(raw.genreTags) ? raw.genreTags.map(String).filter(Boolean).slice(0, 8) : [],
-    worldBible: raw.worldBible && typeof raw.worldBible === 'object' ? raw.worldBible : {},
+    worldBible,
     timelineNotes: String(raw.timelineNotes || '').trim(),
     ironLaws: Array.isArray(raw.ironLaws) ? raw.ironLaws.slice(0, 8) : [],
     futureDirections: Array.isArray(raw.futureDirections) ? raw.futureDirections.slice(0, 8) : [],

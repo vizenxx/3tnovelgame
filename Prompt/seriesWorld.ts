@@ -9,10 +9,31 @@ export function buildSeriesWorldPrompt(args: {
   language?: 'zh-CN' | 'en-US';
 }) {
   const isEnglish = args.language === 'en-US';
+  const sourceCharacters = args.sourceStory
+    ? [
+        ...(Array.isArray(args.sourceStory?.characters) ? args.sourceStory.characters : []),
+        ...(Array.isArray(args.sourceStory?.meta?.characters) ? args.sourceStory.meta.characters : []),
+        ...(Array.isArray(args.sourceStory?.blueprint?.characters) ? args.sourceStory.blueprint.characters : []),
+      ]
+    : [];
+  const sourceBranches = args.sourceStory
+    ? [
+        ...(Array.isArray(args.sourceStory?.branches) ? args.sourceStory.branches : []),
+        ...(Array.isArray(args.sourceStory?.blueprint?.branches) ? args.sourceStory.blueprint.branches : []),
+      ]
+    : [];
+  const chapterMaterial = (args.sourceStory?.chapters || [])
+    .map((chapter: any) => {
+      const body = String(chapter.content || chapter.text || '').slice(0, 1200);
+      return isEnglish
+        ? `Chapter ${chapter.chapter_num}: ${chapter.title || ''}\nSummary: ${chapter.summary || ''}\nText excerpt: ${body}`
+        : `第${chapter.chapter_num}章：${chapter.title || ''}\n摘要：${chapter.summary || ''}\n正文节选：${body}`;
+    })
+    .join('\n\n');
   const source = args.sourceStory
     ? isEnglish
-      ? `\nExisting story material:\nTitle: ${args.sourceStory?.meta?.title || args.sourceStory?.title || 'Untitled story'}\nMain axis: ${args.sourceStory?.meta?.main_axis || args.sourceStory?.main_axis || ''}\nChapter summaries: ${(args.sourceStory?.chapters || []).map((chapter: any) => `Chapter ${chapter.chapter_num}: ${chapter.summary || chapter.title || ''}`).join('\n')}\nEndings: ${(args.sourceStory?.endings || []).map((ending: any) => `${ending.id || 'ending'}: ${ending.title || ''} ${ending.text || ''}`).join('\n')}`
-      : `\n已有作品资料：\n标题：${args.sourceStory?.meta?.title || args.sourceStory?.title || '未命名作品'}\n主轴：${args.sourceStory?.meta?.main_axis || args.sourceStory?.main_axis || ''}\n章节摘要：${(args.sourceStory?.chapters || []).map((chapter: any) => `第${chapter.chapter_num}章：${chapter.summary || chapter.title || ''}`).join('\n')}\n结局：${(args.sourceStory?.endings || []).map((ending: any) => `${ending.id || 'ending'}：${ending.title || ''} ${ending.text || ''}`).join('\n')}`
+      ? `\nExisting story material:\nTitle: ${args.sourceStory?.meta?.title || args.sourceStory?.title || 'Untitled story'}\nMain axis: ${args.sourceStory?.meta?.main_axis || args.sourceStory?.main_axis || ''}\nPremise/description: ${args.sourceStory?.meta?.description || args.sourceStory?.meta?.premise || args.sourceStory?.description || ''}\nCharacters: ${JSON.stringify(sourceCharacters, null, 2)}\nBranches: ${JSON.stringify(sourceBranches, null, 2)}\nChapters:\n${chapterMaterial}\nEndings: ${(args.sourceStory?.endings || []).map((ending: any) => `${ending.id || 'ending'}: ${ending.title || ''} ${ending.text || ending.content || ''}`).join('\n')}`
+      : `\n已有作品资料：\n标题：${args.sourceStory?.meta?.title || args.sourceStory?.title || '未命名作品'}\n主轴：${args.sourceStory?.meta?.main_axis || args.sourceStory?.main_axis || ''}\n简介/前提：${args.sourceStory?.meta?.description || args.sourceStory?.meta?.premise || args.sourceStory?.description || ''}\n角色资料：${JSON.stringify(sourceCharacters, null, 2)}\n支线资料：${JSON.stringify(sourceBranches, null, 2)}\n章节资料：\n${chapterMaterial}\n结局：${(args.sourceStory?.endings || []).map((ending: any) => `${ending.id || 'ending'}：${ending.title || ''} ${ending.text || ending.content || ''}`).join('\n')}`
     : '';
 
   if (isEnglish) {
@@ -82,8 +103,10 @@ Requirements:
 3. characterPool must include 3-8 reusable characters or character archetypes; major recurring characters should be explicit here.
 4. Keep iron laws to 3-6 items; do not over-constrain creation.
 5. Preserve room for player interference, while preventing Part 1 from destroying sequel continuity.
-6. All string values must be natural English.
-7. Return JSON only.`;
+6. In extract mode, do not merely copy the title and tags. You must infer a useful worldview summary, directly extract recognizable characters into characterPool, and infer baselineRules from repeated constraints, factions, powers, places, relationship limits, chapter events, branches, and endings.
+7. plotNotes may be sparse if the source does not contain clear reusable plot material, but worldview, baselineRules, and characterPool must not be empty in extract mode.
+8. All string values must be natural English.
+9. Return JSON only.`;
   }
 
   return `你是互动小说的世界观设定编辑。请生成一个可供作者继续编辑、勾选和复用的「世界观设定」草稿。
@@ -99,7 +122,7 @@ ${source}
 输出必须是严格 JSON，字段如下：
 {
   "title": "世界观设定标题",
-  "pitch": "一句话卖点",
+  "pitch": "世界观概况的一句话摘要",
   "genreTags": ["标签"],
   "worldBible": {
     "worldview": "世界观说明",
@@ -127,10 +150,10 @@ ${source}
     "recurringCharacterSeeds": ["可复用角色原型"],
     "styleGuide": "文风与叙事气质"
   },
-  "timelineNotes": "时间线基准",
+  "timelineNotes": "兼容字段，可简短记录时间线提示；主要规则请放入 worldBible.baselineRules",
   "ironLaws": [
     {
-      "title": "世界观铁律名称",
+      "title": "关键边界名称",
       "scope": "生效范围，例如第1-2部/某事件前",
       "strength": "绝对不可违背/可假象违背/可短暂违背但需修复",
       "rule": "规则内容",
@@ -150,9 +173,11 @@ ${source}
 1. 面向作者，不要写开发者术语。
 2. baselineRules 必须是一条一条可勾选复用的世界基准，建议 5-9 条。
 3. characterPool 必须提供 3-8 个可复用角色或角色原型；如果有主要延续角色，必须明确放在这里。
-4. 世界观铁律控制在 3-6 条，不要过度束缚创作。
+4. ironLaws 是兼容字段，只放极少数真正不能被破坏的关键边界；主要可勾选设定必须放在 baselineRules。
 5. 必须保留玩家干涉空间，但避免第一部生成无法接续后续作品的绝境。
-6. 只返回 JSON，不要解释。`;
+6. 提取模式下，不可以只复制作品名和标签。必须整理出可用的世界观概况；必须把能直接识别的主要角色放进 characterPool；必须从反复出现的限制、势力、能力、地点、人物关系、章节事件、支线和结局里推断 baselineRules。
+7. 如果原作没有明显可复用的情节素材，plotNotes 可以较少；但提取模式下 worldview、baselineRules、characterPool 不可以为空。
+8. 只返回 JSON，不要解释。`;
 }
 
 export function buildContinuityNodePrompt(args: {
@@ -225,7 +250,7 @@ Requirements:
 标题：${args.seriesWorld?.title || '未命名世界观设定'}
 卖点：${args.seriesWorld?.pitch || ''}
 世界观：${JSON.stringify(args.seriesWorld?.worldBible || {}, null, 2)}
-世界观铁律：${JSON.stringify(args.seriesWorld?.ironLaws || [], null, 2)}
+关键边界：${JSON.stringify(args.seriesWorld?.ironLaws || [], null, 2)}
 
 前作：
 标题：${meta.title || '未命名作品'}
@@ -260,7 +285,7 @@ Requirements:
 
 要求：
 1. 不要否定玩家前作结果，要把结果转译成续作可用开场。
-2. 必须遵守世界观铁律。
+2. 必须遵守世界观关键边界。
 3. repairRules 控制在 2-5 条。
 4. 只返回 JSON。`;
 }
