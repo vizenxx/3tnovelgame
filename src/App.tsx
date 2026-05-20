@@ -118,8 +118,8 @@ const safeModalBackdropClass = "fixed inset-0 flex items-center justify-center o
 const PUBLIC_STORY_LIST_LIMIT = 100;
 const MY_STORY_LIST_LIMIT = 80;
 const ARCHIVE_STORY_LIST_LIMIT = 80;
-const APP_VERSION_LABEL = `v${__APP_VERSION__ || '0.0.0'}`;
-const APP_BUILD_LABEL = __APP_BUILD_ID__ ? `build ${__APP_BUILD_ID__}` : '';
+const APP_VERSION_LABEL = `Beta v${__APP_VERSION__ || '0.8.0'}`;
+const APP_BUILD_LABEL = [__APP_COMMIT__ ? `commit ${__APP_COMMIT__}` : '', __APP_BUILD_ID__ ? `build ${__APP_BUILD_ID__}` : ''].filter(Boolean).join(' · ');
 
 const makeSeriesItemId = (prefix: string, value: unknown, index: number) => {
   const raw = typeof value === 'string'
