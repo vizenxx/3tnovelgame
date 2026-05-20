@@ -358,6 +358,75 @@ const createEmptySeriesCharacterCard = (index: number) => ({
   status: '',
 });
 const parseTagInput = (value: string) => normalizeTagList(String(value || '').split('，'));
+const createEmptySeriesPlotMaterial = (index: number) => ({
+  id: `plot_${index + 1}`,
+  title: '',
+  tag: '灵感',
+  detail: '',
+});
+const normalizeSeriesPlotMaterial = (note: any, index: number) => {
+  if (note && typeof note === 'object') {
+    return {
+      id: String(note.id || `plot_${index + 1}`),
+      title: String(note.title || note.name || `情节素材 ${index + 1}`),
+      tag: String(note.tag || note.kind || '灵感'),
+      detail: String(note.detail || note.desc || note.description || ''),
+      sourceType: note.sourceType,
+      sourceId: note.sourceId,
+    };
+  }
+  return {
+    id: `plot_${index + 1}`,
+    title: `情节素材 ${index + 1}`,
+    tag: '灵感',
+    detail: String(note || ''),
+  };
+};
+const buildSeriesWorldDraftFromSourceStory = (sourceStory: any) => {
+  const meta = sourceStory?.meta || sourceStory || {};
+  const title = String(meta.title || sourceStory?.title || '未命名作品').trim();
+  const characters = Array.isArray(meta.characters) ? meta.characters : Array.isArray(sourceStory?.characters) ? sourceStory.characters : [];
+  const branches = Array.isArray(sourceStory?.branches) ? sourceStory.branches : [];
+  const endings = Array.isArray(sourceStory?.endings) ? sourceStory.endings : [];
+  return {
+    title: `${title}世界观设定`,
+    pitch: String(meta.main_axis || meta.description || '').trim(),
+    genreTags: normalizeTagList([...(Array.isArray(meta.tags) ? meta.tags : []), ...(Array.isArray(sourceStory?.tags) ? sourceStory.tags : [])]),
+    worldBible: {
+      worldview: String(meta.main_axis || meta.description || meta.premise || '').trim(),
+      baselineRules: [],
+      characterPool: characters.map((character: any, index: number) => ({
+        id: String(character?.id || `char_${index + 1}`),
+        name: String(character?.name || character?.title || `角色 ${index + 1}`).trim(),
+        role: String(character?.role || '原作角色').trim(),
+        desc: String(character?.desc || character?.description || character?.profile || '').trim(),
+        status: '',
+      })).filter((character: any) => character.name || character.desc).slice(0, 12),
+      plotNotes: [
+        ...branches.map((branch: any, index: number) => ({
+          id: `branch_${branch?.id || index + 1}`,
+          title: String(branch?.name || branch?.title || `支线 ${index + 1}`).trim(),
+          tag: '支线',
+          detail: String(branch?.desc || branch?.description || branch?.story || branch?.content || '').trim(),
+          sourceType: 'branch',
+          sourceId: branch?.id || null,
+        })),
+        ...endings.map((ending: any, index: number) => ({
+          id: `ending_${ending?.id || index + 1}`,
+          title: String(ending?.title || ending?.name || `结局 ${index + 1}`).trim(),
+          tag: '结局',
+          detail: String(ending?.text || ending?.content || ending?.summary || '').trim(),
+          sourceType: 'ending',
+          sourceId: ending?.id || null,
+        })),
+      ].filter((item: any) => item.title || item.detail).slice(0, 24),
+    },
+    timelineNotes: '',
+    ironLaws: [],
+    futureDirections: [],
+    visibility: 'private',
+  };
+};
 const formatStoryHeading = (chapter: Pick<Chapter, 'chapter_num' | 'title'>) => {
   const title = String(chapter.title || '').trim();
   return title ? `第${chapter.chapter_num}章：${title}` : `第${chapter.chapter_num}章`;
@@ -1696,6 +1765,8 @@ export default function App() {
   const [storyDetailStory, setStoryDetailStory] = useState<any | null>(null);
   const [authoringListSearch, setAuthoringListSearch] = useState('');
   const [authoringListVisibilityFilter, setAuthoringListVisibilityFilter] = useState<'all' | 'public' | 'private' | 'unlisted'>('all');
+  const [authoringSeriesKindFilter, setAuthoringSeriesKindFilter] = useState<'all' | 'standalone' | 'series'>('all');
+  const [authoringSeriesWorldFilter, setAuthoringSeriesWorldFilter] = useState('all');
   const [authoringCreatedFilter, setAuthoringCreatedFilter] = useState<'all' | '7d' | '30d' | '365d'>('all');
   const [authoringListSort, setAuthoringListSort] = useState<AuthoringListSort>('updated');
   const [authorPulseNotifications, setAuthorPulseNotifications] = useState<Array<{
@@ -4747,6 +4818,15 @@ export default function App() {
       let sourceStory: any = null;
       if (mode === 'extract' && seriesSourceStoryId) {
         sourceStory = await getStoryCartridge(db as any, seriesSourceStoryId);
+        const data = buildSeriesWorldDraftFromSourceStory(sourceStory);
+        setSeriesForm(data);
+        setSeriesWorldBibleText(JSON.stringify(data.worldBible || {}, null, 2));
+        setSeriesIronLawsText('[]');
+        setSeriesFutureDirectionsText('[]');
+        setSelectedSeriesId('');
+        navigateTo('SERIES_WORLD_EDIT');
+        showError(tr('已从作品提取世界观概况、角色卡池、支线与结局素材。', 'Extracted overview, characters, branches, and endings from the story.'));
+        return;
       }
       const response = await apiFetch('/api/ai?action=generate-series-world', {
         method: 'POST',
@@ -5243,6 +5323,7 @@ export default function App() {
     setAuthoringCartridge(null);
     setAuthoringTab('settings');
     await refreshStories({ force: true });
+    await loadSeriesWorlds();
   };
 
   const selectAuthoringStory = async (storyId: string) => {
@@ -8053,7 +8134,7 @@ export default function App() {
           desc: (card as any)?.desc || (card as any)?.description || (card as any)?.profile || String(card || ''),
           status: (card as any)?.status || '',
         }));
-    const plotNoteDrafts = asSafeArray<any>(worldBibleDraft.plotNotes);
+    const plotNoteDrafts = asSafeArray<any>(worldBibleDraft.plotNotes).map(normalizeSeriesPlotMaterial);
     const updateWorldBibleDraft = (patch: Record<string, any>) => {
       setSeriesWorldBibleText(JSON.stringify({ ...worldBibleDraft, ...patch }, null, 2));
     };
@@ -8067,14 +8148,14 @@ export default function App() {
         characterPool: characterCardDrafts.map((card, cardIndex) => cardIndex === index ? { ...card, ...patch } : card),
       });
     };
-    const updatePlotNoteDraft = (index: number, value: string) => {
+    const updatePlotNoteDraft = (index: number, patch: Record<string, any>) => {
       updateWorldBibleDraft({
-        plotNotes: plotNoteDrafts.map((note, noteIndex) => noteIndex === index ? value : note),
+        plotNotes: plotNoteDrafts.map((note, noteIndex) => noteIndex === index ? { ...note, ...patch } : note),
       });
     };
     const organizeSourceLabel = seriesSourceStoryId
-      ? tr('从导入作品提取仓库条目', 'Extract archive items from story')
-      : tr('一键生成仓库条目', 'Generate archive items');
+      ? tr('提取世界观', 'Extract world setting')
+      : tr('生成世界观', 'Generate world setting');
     const isSeriesWorldListPage = gameState === 'SERIES_WORLD_LIST';
     const isSeriesWorldGeneratePage = gameState === 'SERIES_WORLD_GENERATE';
     const isSeriesWorldEditPage = gameState === 'SERIES_WORLD_EDIT';
@@ -8168,8 +8249,8 @@ export default function App() {
             {isSeriesWorldGeneratePage && (
             <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/60 p-4">
               <div className="mb-4">
-                <div className="text-lg font-black text-white">{tr('生成 / 提取世界观设定', 'Generate / Extract world setting')}</div>
-                <p className="mt-1 text-xs leading-relaxed text-zinc-500">{tr('这是独立的生成页：可以从概况生成全新的仓库条目，也可以先选择已有作品，再从作品中提取三类条目。生成完成后会进入编辑页。', 'This is a dedicated generation page: generate archive items from an overview, or choose an existing story and extract the three item types. After generation, the editor opens.')}</p>
+                <div className="text-lg font-black text-white">{tr('世界观生成', 'World setting generation')}</div>
+                <p className="mt-1 text-xs leading-relaxed text-zinc-500">{tr('填写世界观概况即可生成新设定；如果选择来源作品，则会直接从该作品提取世界观概况、角色卡池、支线和结局素材。', 'Write an overview to generate a new setting. If a source story is selected, the app extracts the overview, character cards, branches, and ending material from that story.')}</p>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <input value={seriesForm.title || ''} onChange={(event) => setSeriesForm((prev) => ({ ...prev, title: event.target.value }))} placeholder={tr('世界观设定名称', 'World setting title')} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
@@ -8183,6 +8264,9 @@ export default function App() {
               />
               <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900/35 p-4">
                 <label className="mb-2 block text-xs font-black uppercase tracking-[0.18em] text-zinc-500">{tr('来源作品（可选）', 'Source story (optional)')}</label>
+                <p className="mb-3 text-xs leading-relaxed text-zinc-500">
+                  {tr('不选择作品时，按上方概况生成世界观；选择作品后，主按钮会改为从该作品提取。', 'Without a story, the button generates from the overview. With a story selected, it extracts from that story.')}
+                </p>
                 <select
                   value={seriesSourceStoryId}
                   onChange={(event) => setSeriesSourceStoryId(event.target.value)}
@@ -8194,7 +8278,7 @@ export default function App() {
                   ))}
                 </select>
               </div>
-              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                 <button type="button" onClick={() => void handleGenerateSeriesWorld(seriesSourceStoryId ? 'extract' : 'new')} disabled={seriesGenerating} className={semanticButtonClass('primary', { compact: true, fullWidth: true })}>
                   {seriesGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                   {organizeSourceLabel}
@@ -8372,7 +8456,7 @@ export default function App() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => updateWorldBibleDraft({ plotNotes: [...plotNoteDrafts, ''] })}
+                      onClick={() => updateWorldBibleDraft({ plotNotes: [...plotNoteDrafts, createEmptySeriesPlotMaterial(plotNoteDrafts.length)] })}
                       className={semanticButtonClass('secondary', { compact: true })}
                     >
                       <Sparkles className="h-4 w-4" />
@@ -8386,21 +8470,35 @@ export default function App() {
                       </div>
                     )}
                     {plotNoteDrafts.map((note, index) => (
-                      <div key={index} className="flex items-start gap-2">
+                      <div key={note.id || index} className="grid gap-2 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-3">
+                        <div className="grid gap-2 sm:grid-cols-[1fr_9rem_auto]">
+                          <input
+                            value={note.title || ''}
+                            onChange={(event) => updatePlotNoteDraft(index, { title: event.target.value, id: note.id || `plot_${index + 1}` })}
+                            placeholder={tr('素材标题', 'Material title')}
+                            className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500"
+                          />
+                          <input
+                            value={note.tag || ''}
+                            onChange={(event) => updatePlotNoteDraft(index, { tag: event.target.value })}
+                            placeholder={tr('标签', 'Tag')}
+                            className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => updateWorldBibleDraft({ plotNotes: plotNoteDrafts.filter((_, noteIndex) => noteIndex !== index) })}
+                            className={semanticIconButtonClass('ghost')}
+                            aria-label={tr('删除情节素材', 'Delete plot material')}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
                         <textarea
-                          value={String(note || '')}
-                          onChange={(event) => updatePlotNoteDraft(index, event.target.value)}
-                          placeholder={tr('情节素材', 'Plot material')}
-                          className="min-h-20 flex-1 resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-200 outline-none focus:border-indigo-500"
+                          value={note.detail || ''}
+                          onChange={(event) => updatePlotNoteDraft(index, { detail: event.target.value })}
+                          placeholder={tr('情节素材内容', 'Plot material details')}
+                          className="min-h-20 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-200 outline-none focus:border-indigo-500"
                         />
-                        <button
-                          type="button"
-                          onClick={() => updateWorldBibleDraft({ plotNotes: plotNoteDrafts.filter((_, noteIndex) => noteIndex !== index) })}
-                          className={semanticIconButtonClass('ghost')}
-                          aria-label={tr('删除情节素材', 'Delete plot material')}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
                       </div>
                     ))}
                   </div>
@@ -10065,8 +10163,13 @@ export default function App() {
 
   const getFilteredAuthoringStories = () => {
     const query = authoringListSearch.trim().toLowerCase();
+    const getAuthoringStorySeriesId = (story: any) => String(story?.seriesId || story?.series_id || story?.meta?.seriesId || story?.meta?.series_id || '').trim();
     return [...myStories]
       .filter((story: any) => {
+        const seriesId = getAuthoringStorySeriesId(story);
+        if (authoringSeriesKindFilter === 'standalone' && seriesId) return false;
+        if (authoringSeriesKindFilter === 'series' && !seriesId) return false;
+        if (authoringSeriesWorldFilter !== 'all' && seriesId !== authoringSeriesWorldFilter) return false;
         if (authoringListVisibilityFilter !== 'all' && (story.visibility || 'private') !== authoringListVisibilityFilter) return false;
         if (authoringCreatedFilter !== 'all') {
           const createdAt = getStoryCreatedMs(story);
@@ -10094,6 +10197,13 @@ export default function App() {
         if (authoringListSort === 'interventions') return getStoryInterventionCount(b) - getStoryInterventionCount(a);
         return getStoryUpdatedMs(b) - getStoryUpdatedMs(a);
       });
+  };
+
+  const getAuthoringStorySeriesId = (story: any) => String(story?.seriesId || story?.series_id || story?.meta?.seriesId || story?.meta?.series_id || '').trim();
+  const getAuthoringStorySeriesName = (story: any) => {
+    const seriesId = getAuthoringStorySeriesId(story);
+    if (!seriesId) return tr('单独作品', 'Standalone');
+    return seriesWorlds.find((series) => series.id === seriesId)?.title || tr('世界观作品', 'World setting work');
   };
 
   const renderAuthoringStatChip = (label: string, value: string | number, Icon: any, tone = 'text-zinc-300') => (
@@ -10470,7 +10580,7 @@ export default function App() {
               </div>
               <div className="text-xs font-black text-zinc-500">{myStories.length} {tr('部作品', 'works')}</div>
             </div>
-            <div className="mb-5 grid gap-3 lg:grid-cols-[1fr_auto_auto_auto]">
+            <div className="mb-5 grid gap-3 lg:grid-cols-2 xl:grid-cols-[1.2fr_auto_auto_auto_auto_auto]">
               <label className="relative block">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
                 <input
@@ -10480,6 +10590,32 @@ export default function App() {
                   className="w-full rounded-2xl border border-zinc-800 bg-zinc-950/60 py-3 pl-10 pr-4 text-sm font-semibold text-zinc-100 outline-none transition-colors placeholder:text-zinc-600 focus:border-indigo-400/70"
                 />
               </label>
+              <select
+                value={authoringSeriesKindFilter}
+                onChange={(event) => {
+                  const value = event.target.value as typeof authoringSeriesKindFilter;
+                  setAuthoringSeriesKindFilter(value);
+                  if (value !== 'series') setAuthoringSeriesWorldFilter('all');
+                }}
+                className="rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-sm font-black text-zinc-200 outline-none focus:border-indigo-400/70"
+              >
+                <option value="all">{tr('全部作品', 'All works')}</option>
+                <option value="standalone">{tr('单独作品', 'Standalone')}</option>
+                <option value="series">{tr('世界观作品', 'World setting')}</option>
+              </select>
+              <select
+                value={authoringSeriesWorldFilter}
+                onChange={(event) => {
+                  setAuthoringSeriesWorldFilter(event.target.value);
+                  if (event.target.value !== 'all') setAuthoringSeriesKindFilter('series');
+                }}
+                className="rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-sm font-black text-zinc-200 outline-none focus:border-indigo-400/70"
+              >
+                <option value="all">{tr('全部世界观', 'All settings')}</option>
+                {seriesWorlds.map((series) => (
+                  <option key={series.id} value={series.id}>{series.title || tr('未命名世界观', 'Untitled setting')}</option>
+                ))}
+              </select>
               <select
                 value={authoringListVisibilityFilter}
                 onChange={(event) => setAuthoringListVisibilityFilter(event.target.value as typeof authoringListVisibilityFilter)}
@@ -10552,6 +10688,14 @@ export default function App() {
                     <div className="pr-24">
                       <div className="line-clamp-3 text-lg font-black text-white leading-tight">{formatBookTitle(getStoryTitle(story))}</div>
                       <div className="mt-2 text-xs font-semibold text-zinc-500">{tr('创作', 'Created')} {formatShortDate(getStoryCreatedMs(story))} · {tr('更新', 'Updated')} {formatShortDate(getStoryUpdatedMs(story))}</div>
+                      <div className={`mt-2 inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-black ${
+                        getAuthoringStorySeriesId(story)
+                          ? 'border-indigo-400/25 bg-indigo-500/10 text-indigo-200'
+                          : 'border-zinc-700 bg-zinc-900/70 text-zinc-400'
+                      }`}>
+                        <GitBranch className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{getAuthoringStorySeriesName(story)}</span>
+                      </div>
                     </div>
                     <div className="mt-5 flex flex-wrap gap-2">
                       {renderAuthoringStatChip(tr('点赞', 'Likes'), getStoryLikeCount(story), Heart, 'text-rose-300')}
