@@ -2943,6 +2943,21 @@ export default function App() {
       const selectedSeries = seriesWorlds.find((series) => series.id === quickSeriesBindingId) || null;
       const selectedEnding = asSafeArray<any>(quickContinuitySourceStory?.endings).find((ending) => String(ending.id || '') === quickSeriesSelection.endingId);
       const selectedBranches = asSafeArray<any>(quickContinuitySourceStory?.branches).filter((branch) => quickSeriesSelection.requiredBranchIds.includes(String(branch.id || '')));
+      const previousStorySummary = asSafeArray<any>(quickContinuitySourceStory?.chapters)
+        .sort((a, b) => Number(a.chapter_num || a.chapterNum || 0) - Number(b.chapter_num || b.chapterNum || 0))
+        .map((chapter) => ({
+          chapterNum: Number(chapter.chapter_num || chapter.chapterNum || 0),
+          title: chapter.title || '',
+          summary: chapter.summary || String(chapter.text || '').slice(0, 260),
+        }))
+        .filter((chapter) => chapter.chapterNum || chapter.summary);
+      const previousCharacters = asSafeArray<any>(quickContinuitySourceStory?.meta?.characters || quickContinuitySourceStory?.characters)
+        .map((character) => ({
+          id: character.id || '',
+          name: character.name || '',
+          desc: character.desc || character.description || '',
+        }))
+        .filter((character) => character.name || character.desc);
       const selectedNode = quickSeriesSelection.useContinuity && quickSeriesSelection.sourceStoryId && quickSeriesSelection.endingId
         ? {
             id: `anchor:${quickSeriesSelection.sourceStoryId}:${quickSeriesSelection.endingId}:${quickSeriesSelection.requiredBranchIds.join('-')}`,
@@ -2956,12 +2971,17 @@ export default function App() {
             requiredBranchIds: quickSeriesSelection.requiredBranchIds,
             optionalBranchIds: [],
             bridgeSummary: [
+              quickContinuitySourceStory?.meta?.title ? `${tr('前作', 'Previous story')}: ${quickContinuitySourceStory.meta.title}` : '',
               quickContinuitySourceStory?.meta?.main_axis ? `${tr('前作主轴', 'Previous premise')}: ${quickContinuitySourceStory.meta.main_axis}` : '',
+              previousStorySummary.length ? `${tr('前作章节概况', 'Previous chapter arc')}: ${previousStorySummary.map((chapter) => `${chapter.chapterNum}. ${chapter.title || ''} ${chapter.summary || ''}`.trim()).join(' / ')}` : '',
               selectedEnding ? `${tr('指定结局', 'Selected ending')}: ${selectedEnding.title || selectedEnding.id}` : '',
-              selectedBranches.length ? `${tr('指定支线', 'Selected branches')}: ${selectedBranches.map((branch) => branch.name || branch.title || branch.id).join('、')}` : '',
+              selectedBranches.length ? `${tr('指定支线重点', 'Selected branch focus')}: ${selectedBranches.map((branch) => `${branch.name || branch.title || branch.id}: ${branch.desc || branch.description || asSafeArray(branch.inject?.mustHappen).join('，')}`).join(' / ')}` : '',
             ].filter(Boolean).join('\n'),
             legacyState: {
               sourceTitle: quickContinuitySourceStory?.meta?.title || '',
+              premise: quickContinuitySourceStory?.meta?.main_axis || quickContinuitySourceStory?.meta?.description || '',
+              chapterArc: previousStorySummary,
+              characters: previousCharacters,
               ending: selectedEnding || null,
               branches: selectedBranches,
             },
@@ -8289,8 +8309,8 @@ export default function App() {
       <div className="mx-auto min-h-[100dvh] max-w-6xl px-5 pb-14 pt-[max(5rem,calc(env(safe-area-inset-top)+4rem))] sm:px-6 lg:px-8">
         <div className="mb-8 flex items-center justify-between gap-3">
           <BackNavButton
-            label={isSeriesWorldListPage ? tr('返回首页', 'Back home') : tr('返回世界观列表', 'Back to settings')}
-            onClick={() => isSeriesWorldListPage ? resetToHome() : navigateTo('SERIES_WORLD_LIST', { reset: true })}
+            label={tr('返回上一页', 'Back')}
+            onClick={() => goBack('STORY_SELECT')}
           />
           <div className="flex flex-wrap justify-end gap-2">
             {!isSeriesWorldGeneratePage && (

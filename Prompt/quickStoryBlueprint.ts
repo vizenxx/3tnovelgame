@@ -58,11 +58,28 @@ Sequel Seed Prompt: ${args.continuityNode.sequelSeedPrompt || ''}
 修复规则：${JSON.stringify(args.continuityNode.repairRules || [], null, 2)}
 续作生成要求：${args.continuityNode.sequelSeedPrompt || ''}
 `) : '';
+  const continuityHardInstruction = args.continuityNode ? (isEnglish ? `
+Sequel continuity hard requirements:
+1. Read Legacy State as a compact previous-story canon packet: premise, chapterArc, characters, selected ending, and selected branch focus.
+2. Treat the selected ending and selected branches as already happened before this sequel starts.
+3. The first chapter must acknowledge the previous story's broad arc, the selected ending outcome, and at least one concrete consequence of every selected required branch.
+4. Do not contradict, erase, or re-randomize the selected previous ending/branches. If the sequel needs a different direction, bridge it with a clear cause.
+5. Repair Rules / Sequel Seed Prompt are hard continuity constraints, not optional flavor.
+6. The sequel may introduce a new central conflict, but its opening situation must be visibly produced by the predecessor's main plot plus the selected special branch outcomes.
+` : `
+续作继承硬要求：
+1. 继承状态是前作轻量正史包，包含前作主轴、章节概况、角色、指定结局和指定支线重点。
+2. 指定结局与指定支线，必须被视为续作开始前已经发生的前置剧情。
+3. 第一章必须承认前作整体走向、指定结局的结果，并至少呈现每一条指定支线带来的具体后果。
+4. 不得否定、抹除、重随机化被选中的前作结局与支线；若续作要转向，必须用清楚因果桥接。
+5. 修复规则 / 续作生成要求属于硬性继承条件，不是可有可无的气氛提示。
+6. 续作可以开启新的主冲突，但开场局面必须明显由前作主线结果加上被选中的特殊支线结果共同导出。
+`) : '';
   if (isEnglish) {
     return `You are a senior interactive fiction worldbuilder for an English-language story game.
 Known themes: ${Array.isArray(args.selectedThemes) && args.selectedThemes.length > 0 ? args.selectedThemes.join(', ') : 'none'}.
 Player story request / outline: ${args.customOutline ? args.customOutline : 'none'}.
-${seriesInstruction}${continuityInstruction}
+${seriesInstruction}${continuityInstruction}${continuityHardInstruction}
 Narrative person hard constraint: ${buildNarrativePersonInstruction(args.narrativePerson, 'blueprint', args.language)}
 Ending structure hard constraint: ${isSingleEnding
   ? 'Single ending. No matter how players later interfere, the finale must naturally converge on the same core ending. Branches and interventions may change the route, cost, understanding, and relationships, but must not create mutually exclusive finales.'
@@ -102,7 +119,7 @@ Return strict JSON only. Do not include metadata. Reference chapter length: ${ar
   return `你是一个互动小说世界构建师。
 已知主题：${Array.isArray(args.selectedThemes) && args.selectedThemes.length > 0 ? args.selectedThemes.join(', ') : '无'}。
 用户提供的故事大纲/期望：${args.customOutline ? args.customOutline : '无'}。
-${seriesInstruction}${continuityInstruction}
+${seriesInstruction}${continuityInstruction}${continuityHardInstruction}
 叙事人称硬约束：${buildNarrativePersonInstruction(args.narrativePerson, 'blueprint', args.language)}
 结局结构硬约束：${isSingleEnding
   ? '单一结局。无论玩家后续如何干涉，终局都必须自然收束到同一个核心结局；支线和干涉只改变抵达终局的过程、代价、认知与关系，不得设计互斥终局。'
