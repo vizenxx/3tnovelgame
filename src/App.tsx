@@ -1263,6 +1263,12 @@ const endingDomainUserLabel = (domain: 'left' | 'right' | 'middle') => {
   return '均衡';
 };
 
+const inheritedEndingDisplayLabel = (record: Partial<FateCompletionRecord>, requirement?: any) => {
+  const titled = String(record.selectedEndingTitle || requirement?.endingName || '').trim();
+  if (titled && !['秩序律', '混沌终', '均衡道'].includes(titled)) return titled;
+  return `${endingDomainUserLabel((record.endingDomain || requirement?.endingDomain || 'middle') as 'left' | 'right' | 'middle')}结局`;
+};
+
 const endingDomainToneClass = (domain: 'left' | 'right' | 'middle') => {
   if (domain === 'left') return 'text-indigo-200 bg-indigo-500/12 border-indigo-400/20';
   if (domain === 'right') return 'text-rose-200 bg-rose-500/12 border-rose-400/20';
@@ -3277,16 +3283,16 @@ export default function App() {
       storyTitle: overrides.storyTitle || activeStoryMeta?.title || blueprint?.title || '未命名作品',
       endingDomain: overrides.endingDomain || endingSnapshot.endingDomain,
       selectedEndingId: overrides.selectedEndingId || endingSnapshot.selectedEndingId,
-      selectedEndingTitle: overrides.selectedEndingTitle || uiFeedback?.endingLabel || '',
+      selectedEndingTitle: overrides.selectedEndingTitle || inheritedEndingDisplayLabel({ endingDomain: endingSnapshot.endingDomain, selectedEndingId: endingSnapshot.selectedEndingId }),
       unlockedBranchIds: overrides.unlockedBranchIds || branchList.map((branch) => String(branch?.id || '')).filter(Boolean),
       unlockedBranches: overrides.unlockedBranches || branchList.map((branch) => ({ id: String(branch?.id || ''), name: String(branch?.name || branch?.title || branch?.id || '') })).filter((branch) => branch.id),
       historicallyUnlockedBranchIds: overrides.historicallyUnlockedBranchIds || historicalBranchList.map((branch) => String(branch?.id || '')).filter(Boolean),
       characterStatuses: overrides.characterStatuses || characterStatuses,
       storyConclusion: overrides.storyConclusion ?? storyConclusion ?? '',
-      chapterSummaries: overrides.chapterSummaries || asSafeArray<any>(chapters).map((chapter) => ({
+      chapterSummaries: overrides.chapterSummaries || asSafeArray<any>(chapters).slice(0, 7).map((chapter) => ({
         chapterNum: Number(chapter.chapter_num || 0),
         title: String(chapter.title || ''),
-        summary: String(chapter.summary || chapter.text || '').slice(0, 260),
+        summary: String(chapter.summary || chapter.text || '').slice(0, 520),
       })).filter((chapter) => chapter.chapterNum > 0),
       completedAt,
     };
@@ -3502,16 +3508,16 @@ export default function App() {
       storyTitle: String(progressData.activeStoryMeta?.title || progressData.blueprint?.title || findStoryListItemById(sourceStoryId)?.title || '前作命运线'),
       endingDomain: endingDomain as 'left' | 'right' | 'middle',
       selectedEndingId,
-      selectedEndingTitle: String(progressData.uiFeedback?.endingLabel || ''),
+      selectedEndingTitle: inheritedEndingDisplayLabel({ endingDomain: endingDomain as 'left' | 'right' | 'middle', selectedEndingId }),
       unlockedBranchIds: branchList.map((branch) => String(typeof branch === 'string' ? branch : branch?.id || '')).filter(Boolean),
       unlockedBranches: branchList.map((branch) => ({ id: String(typeof branch === 'string' ? branch : branch?.id || ''), name: String(typeof branch === 'string' ? branch : branch?.name || branch?.title || branch?.id || '') })).filter((branch) => branch.id),
       historicallyUnlockedBranchIds: historicalList.map((branch) => String(typeof branch === 'string' ? branch : branch?.id || '')).filter(Boolean),
       characterStatuses: progressData.characterStatuses || {},
       storyConclusion: String(progressData.storyConclusion || ''),
-      chapterSummaries: asSafeArray<any>(progressData.currentChapters || progressData.chapters).map((chapter) => ({
+      chapterSummaries: asSafeArray<any>(progressData.currentChapters || progressData.chapters).slice(0, 7).map((chapter) => ({
         chapterNum: Number(chapter.chapter_num || chapter.chapterNum || 0),
         title: String(chapter.title || ''),
-        summary: String(chapter.summary || chapter.text || '').slice(0, 260),
+        summary: String(chapter.summary || chapter.text || '').slice(0, 520),
       })).filter((chapter) => chapter.chapterNum > 0),
       completedAt,
     };
@@ -5418,13 +5424,23 @@ export default function App() {
 
   const startStoryPlay = async (storyId: string) => {
     if (!user || !db) return;
-    const launchProgress = startStoryLaunchProgress();
+    let launchProgress: number | null = null;
     try {
       if (gameState === 'STORY_SELECT') {
         storySelectScrollYRef.current = window.scrollY;
       }
-      setIsLoadingStories(true);
       const expectedStory = [...publicStories, ...myStories].find((story: any) => story.id === storyId);
+      let precheckedSequelGate: any = null;
+      if (expectedStory) {
+        precheckedSequelGate = await evaluateSequelGate({ meta: { ...expectedStory, id: storyId } });
+        if (!precheckedSequelGate.allowed) {
+          setSequelGateModal(precheckedSequelGate.modal);
+          return;
+        }
+      }
+
+      launchProgress = startStoryLaunchProgress();
+      setIsLoadingStories(true);
       let cartridge = await getCachedStoryCartridge(storyId, expectedStory);
       if (cartridge) {
         setStoryLaunchOverlay({ progress: 34, status: isEnglish ? 'Local story archive loaded...' : '已读取本机故事档案...' });
@@ -5456,7 +5472,7 @@ export default function App() {
       }
       
       setStoryLaunchOverlay({ progress: 82, status: isEnglish ? 'Checking sequel requirements...' : '正在检查续作前置条件...' });
-      const sequelGate = await evaluateSequelGate({ ...cartridge, meta: { ...(cartridge.meta || {}), id: storyId } });
+      const sequelGate = precheckedSequelGate || await evaluateSequelGate({ ...cartridge, meta: { ...(cartridge.meta || {}), id: storyId } });
       if (!sequelGate.allowed) {
         setSequelGateModal(sequelGate.modal);
         return;
@@ -5491,7 +5507,7 @@ export default function App() {
       console.error(e);
       showError("无法开启故事");
     } finally {
-      window.clearInterval(launchProgress);
+      if (launchProgress !== null) window.clearInterval(launchProgress);
       setStoryLaunchOverlay((prev) => prev ? { progress: 100, status: isEnglish ? 'Story ready' : '故事已就绪' } : prev);
       window.setTimeout(() => setStoryLaunchOverlay(null), 180);
       setIsLoadingStories(false);
@@ -5520,6 +5536,10 @@ export default function App() {
       .filter((branch) => requirement?.requiredBranchIds?.includes(branch.id))
       .map((branch) => branch.name || branch.id)
       .filter(Boolean);
+    const branchDetails = asSafeArray<any>(requirement?.requiredBranches)
+      .filter((branch) => requirement?.requiredBranchIds?.includes(String(branch.id || '')))
+      .map((branch) => `${branch.name || branch.title || branch.id}：${branch.desc || branch.description || branch.sceneText || ''}`)
+      .filter(Boolean);
     const statusLines = Object.entries(record.characterStatuses || {})
       .slice(0, 6)
       .map(([id, status]: any) => `${id}：${status?.status || '状态未明'}`)
@@ -5529,19 +5549,21 @@ export default function App() {
       .map((rule) => String(rule?.rule || rule?.text || rule || '').trim())
       .filter(Boolean)
       .slice(0, 5);
-    const previousArc = asSafeArray<any>(requirement?.previousStorySummary)
-      .slice(0, 4)
+    const previousArc = asSafeArray<any>(record?.chapterSummaries?.length ? record.chapterSummaries : requirement?.previousStorySummary)
+      .slice(0, 7)
       .map((chapter) => `${chapter.chapterNum || chapter.chapter_num || ''}${chapter.title ? `.${chapter.title}` : ''} ${chapter.summary || ''}`.trim())
       .filter(Boolean)
       .join('；');
+    const endingLabel = inheritedEndingDisplayLabel(record, requirement);
     const bridge = [
       '【继承前情】',
       `本次续作继承自前作《${stripBookTitle(record.storyTitle || requirement?.sourceTitle || '前作')}》的命运线。`,
-      `前作结局：${record.selectedEndingTitle || requirement?.endingName || record.selectedEndingId || '指定结局'}。`,
+      `前作结局：${endingLabel}。`,
       branchNames.length ? `关键支线：${branchNames.join('、')}。` : '',
+      branchDetails.length ? `支线要素：${branchDetails.join('；')}。` : '',
       bridgeSummary ? `接续摘要：${bridgeSummary.slice(0, 220)}。` : '',
-      previousArc ? `前作概况：${previousArc.slice(0, 260)}。` : '',
-      record.storyConclusion ? `前作余波：${String(record.storyConclusion).slice(0, 180)}。` : '',
+      previousArc ? `前作概况：${previousArc.slice(0, 720)}。` : '',
+      record.storyConclusion ? `前作余波：${String(record.storyConclusion).slice(0, 520)}。` : '',
       statusLines ? `人物状态：${statusLines}。` : '',
       repairRules.length ? `继承硬设定：${repairRules.join('；')}。` : '',
       requirement?.continuityTitle ? `续作会以「${requirement.continuityTitle}」作为接续锚点，并在开场后逐步回到本作既定轨道。` : '续作会在开场后逐步回到本作既定轨道。',
@@ -5555,8 +5577,40 @@ export default function App() {
 
   const startSequelWithInheritedRecord = async (storyId: string, cartridge: any, progressData: any, record: FateCompletionRecord, requirement: any) => {
     const baseBlueprint = buildBlueprintFromCartridge(cartridge);
+    const originalChapterOne = asSafeArray<any>(baseBlueprint.chapters).find((chapter) => Number(chapter.chapter_num) === 1) || baseBlueprint.chapters?.[0] || {};
+    let inheritedChapterOne = buildInheritedFirstChapterText(originalChapterOne, record, requirement);
+    try {
+      setStoryLaunchOverlay({ progress: 88, status: isEnglish ? 'Rewriting sequel opening...' : '正在融合前作命运线并重写续作开场...' });
+      const response = await apiFetch('/api/ai?action=generate-inherited-opening', {
+        method: 'POST',
+        body: JSON.stringify({
+          blueprint: baseBlueprint,
+          originalChapter: originalChapterOne,
+          fateRecord: {
+            ...record,
+            selectedEndingTitle: inheritedEndingDisplayLabel(record, requirement),
+          },
+          requirement,
+          targetWordCount,
+          language: appLanguage,
+        }),
+      }, 90000);
+      if (!response.ok) throw new Error(await readErrorMessage(response));
+      const rewritten = await response.json();
+      inheritedChapterOne = {
+        ...originalChapterOne,
+        ...rewritten,
+        chapter_num: 1,
+        text: rewritten.text || inheritedChapterOne.text,
+        summary: rewritten.summary || inheritedChapterOne.summary,
+        present_characters: Array.isArray(rewritten.present_characters) ? rewritten.present_characters : originalChapterOne.present_characters || [],
+      };
+    } catch (error) {
+      console.warn('[inherited-opening:rewrite-fallback]', error);
+      showError('继承开场生成暂时失败，已使用本机接续文本进入续作。');
+    }
     const inheritedChapters = asSafeArray<any>(baseBlueprint.chapters).map((chapter) =>
-      Number(chapter.chapter_num) === 1 ? buildInheritedFirstChapterText(chapter, record, requirement) : chapter
+      Number(chapter.chapter_num) === 1 ? inheritedChapterOne : chapter
     );
     const inheritedProgress = {
       ...(progressData || {}),
@@ -7697,7 +7751,7 @@ export default function App() {
                   className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-left transition-colors hover:border-indigo-400/45 hover:bg-indigo-500/10 active:scale-[0.99]"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="font-black text-zinc-100">{record.selectedEndingTitle || endingDomainUserLabel(record.endingDomain)}</div>
+                    <div className="font-black text-zinc-100">{inheritedEndingDisplayLabel(record, pendingSequelInheritance.requirement)}</div>
                     <div className="text-[10px] font-black uppercase tracking-[0.16em] text-zinc-500">
                       {record.completedAt ? new Date(record.completedAt).toLocaleString() : '完成记录'}
                     </div>

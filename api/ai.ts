@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import generateBlueprint from '../server/routes/generate-blueprint.js';
 import generateContinuityNode from '../server/routes/generate-continuity-node.js';
 import generateCover from '../server/routes/generate-cover.js';
+import generateInheritedOpening from '../server/routes/generate-inherited-opening.js';
 import generateNextChapter from '../server/routes/generate-next-chapter.js';
 import generateSeriesWorld from '../server/routes/generate-series-world.js';
 import generateSummary from '../server/routes/generate-summary.js';
@@ -16,6 +17,7 @@ const handlers: Record<string, ApiHandler> = {
   'generate-blueprint': generateBlueprint,
   'generate-continuity-node': generateContinuityNode,
   'generate-cover': generateCover,
+  'generate-inherited-opening': generateInheritedOpening,
   'generate-next-chapter': generateNextChapter,
   'generate-series-world': generateSeriesWorld,
   'generate-summary': generateSummary,
