@@ -146,6 +146,8 @@ type FateCompletionRecord = {
   storyConclusion: string;
   chapterSummaries: Array<{ chapterNum: number; title: string; summary: string }>;
   completedAt: string;
+  sourceType?: 'auto' | 'archived';
+  pinned?: boolean;
 };
 
 type PendingSequelInheritance = {
@@ -2470,7 +2472,12 @@ export default function App() {
     };
     setMySharedStories((prev) => [sharedRecord, ...prev.filter((story: any) => story.id !== shareId)]);
     if (activeStoryId && (storyConclusion || interventionsLeft <= 0)) {
-      const completionRecord = createFateCompletionRecord({ runId: shareId, storyConclusion: storyConclusion || '' });
+      const completionRecord = createFateCompletionRecord({
+        runId: shareId,
+        storyConclusion: storyConclusion || '',
+        sourceType: 'archived',
+        pinned: true,
+      });
       void saveCompletedRunRecord(completionRecord, {
         ...buildCurrentRunSnapshot(),
         storyConclusion,
@@ -3295,6 +3302,8 @@ export default function App() {
         summary: String(chapter.summary || chapter.text || '').slice(0, 520),
       })).filter((chapter) => chapter.chapterNum > 0),
       completedAt,
+      sourceType: overrides.sourceType || 'auto',
+      pinned: Boolean(overrides.pinned),
     };
   };
 
@@ -3314,15 +3323,20 @@ export default function App() {
         storyConclusion: String(record?.storyConclusion || ''),
         chapterSummaries: asSafeArray<any>(record?.chapterSummaries),
         completedAt: String(record?.completedAt || record?.createdAt || ''),
+        sourceType: record?.sourceType === 'archived' ? 'archived' : 'auto',
+        pinned: Boolean(record?.pinned || record?.sourceType === 'archived'),
       }))
       .filter((record) => record.runId && record.sourceStoryId)
   );
 
   const appendCompletedRunToProgress = (progressData: any, record: FateCompletionRecord) => {
     const previous = getCompletedRunRecords(progressData).filter((item) => item.runId !== record.runId);
+    const merged = [record, ...previous].sort((a, b) => Date.parse(b.completedAt || '') - Date.parse(a.completedAt || ''));
+    const pinnedRecords = merged.filter((item) => item.pinned || item.sourceType === 'archived');
+    const autoRecords = merged.filter((item) => !item.pinned && item.sourceType !== 'archived').slice(0, 3);
     return {
       ...(progressData || {}),
-      completedRuns: [record, ...previous].slice(0, 12),
+      completedRuns: [...pinnedRecords, ...autoRecords],
     };
   };
 
@@ -3520,6 +3534,8 @@ export default function App() {
         summary: String(chapter.summary || chapter.text || '').slice(0, 520),
       })).filter((chapter) => chapter.chapterNum > 0),
       completedAt,
+      sourceType: 'auto',
+      pinned: false,
     };
   };
 
@@ -5292,7 +5308,7 @@ export default function App() {
     try {
       setShowLeaveGameModal(false);
       if (options.discardCloudProgress) {
-        await markCurrentRunAbandoned();
+        void markCurrentRunAbandoned();
       }
       const shouldRestoreStorySelectScroll = gameState === 'PLAYING';
       resetToHome();
@@ -5472,6 +5488,9 @@ export default function App() {
     if (!user || !db) return;
     let launchProgress: number | null = null;
     try {
+      launchProgress = startStoryLaunchProgress();
+      setStoryLaunchOverlay({ progress: 10, status: isEnglish ? 'Preparing fate line...' : '正在准备命运线...' });
+      setIsLoadingStories(true);
       if (gameState === 'STORY_SELECT') {
         storySelectScrollYRef.current = window.scrollY;
       }
@@ -5485,8 +5504,6 @@ export default function App() {
         }
       }
 
-      launchProgress = startStoryLaunchProgress();
-      setIsLoadingStories(true);
       let cartridge = await getCachedStoryCartridge(storyId, expectedStory);
       if (cartridge) {
         setStoryLaunchOverlay({ progress: 34, status: isEnglish ? 'Local story archive loaded...' : '已读取本机故事档案...' });
@@ -5603,17 +5620,15 @@ export default function App() {
       .join('；');
     const endingLabel = inheritedEndingDisplayLabel(record, requirement);
     const bridge = [
-      '【继承前情】',
-      `本次续作继承自前作《${stripBookTitle(record.storyTitle || requirement?.sourceTitle || '前作')}》的命运线。`,
-      `前作结局：${endingLabel}。`,
-      branchNames.length ? `关键支线：${branchNames.join('、')}。` : '',
-      branchDetails.length ? `支线要素：${branchDetails.join('；')}。` : '',
-      bridgeSummary ? `接续摘要：${bridgeSummary.slice(0, 220)}。` : '',
-      previousArc ? `前作概况：${previousArc.slice(0, 720)}。` : '',
-      record.storyConclusion ? `前作余波：${String(record.storyConclusion).slice(0, 520)}。` : '',
-      statusLines ? `人物状态：${statusLines}。` : '',
-      repairRules.length ? `继承硬设定：${repairRules.join('；')}。` : '',
-      requirement?.continuityTitle ? `续作会以「${requirement.continuityTitle}」作为接续锚点，并在开场后逐步回到本作既定轨道。` : '续作会在开场后逐步回到本作既定轨道。',
+      `前作《${stripBookTitle(record.storyTitle || requirement?.sourceTitle || '前作')}》留下的命运并没有停在终章。${endingLabel}已经成为这段续作开始前无法抹去的事实。`,
+      branchNames.length ? `那些曾经被拨动的支线仍在暗处延伸，尤其是${branchNames.join('、')}，它们让人物的选择、伤痕与牵挂都带着前作的余温。` : '',
+      branchDetails.length ? `必须被记住的支线余波包括：${branchDetails.join('；')}。` : '',
+      bridgeSummary ? `这条命运线通向续作时，最重要的接续脉络是：${bridgeSummary.slice(0, 220)}。` : '',
+      previousArc ? `前作一路走来的轮廓仍然压在此刻之后：${previousArc.slice(0, 720)}。` : '',
+      record.storyConclusion ? `终章之后的余波仍在发酵：${String(record.storyConclusion).slice(0, 520)}。` : '',
+      statusLines ? `众人的状态也因此改变：${statusLines}。` : '',
+      repairRules.length ? `而这段续作必须遵守的继承硬设定是：${repairRules.join('；')}。` : '',
+      requirement?.continuityTitle ? `于是，续作从「${requirement.continuityTitle}」这个接续锚点重新启程。` : '于是，续作从这条已经被玩家走出的命运线重新启程。',
     ].filter(Boolean).join('\n');
     return {
       ...chapter,
@@ -5626,6 +5641,10 @@ export default function App() {
     try {
       const baseBlueprint = buildBlueprintFromCartridge(cartridge);
       const originalChapterOne = asSafeArray<any>(baseBlueprint.chapters).find((chapter) => Number(chapter.chapter_num) === 1) || baseBlueprint.chapters?.[0] || {};
+      const originalOpeningSize = appLanguage === 'en-US'
+        ? String(originalChapterOne?.text || '').trim().split(/\s+/).filter(Boolean).length
+        : String(originalChapterOne?.text || '').replace(/\s+/g, '').length;
+      const inheritedOpeningTargetWordCount = Math.min(1600, Math.max(1000, targetWordCount, Math.round(originalOpeningSize * 0.9)));
       let inheritedChapterOne = buildInheritedFirstChapterText(originalChapterOne, record, requirement);
       try {
         setStoryLaunchOverlay({ progress: 88, status: isEnglish ? 'Binding fate lines...' : '正在衔接命运...' });
@@ -5639,7 +5658,7 @@ export default function App() {
               selectedEndingTitle: inheritedEndingDisplayLabel(record, requirement),
             },
             requirement,
-            targetWordCount,
+            targetWordCount: inheritedOpeningTargetWordCount,
             language: appLanguage,
           }),
         }, 55000);
@@ -5690,16 +5709,56 @@ export default function App() {
   const resumeStoryPlay = async (storyId: string, progressData: any) => {
     if (!user || !db) return;
     try {
+      setPendingProgressToLoad(null);
+      setStoryLaunchOverlay({ progress: 16, status: isEnglish ? 'Restoring fate line...' : '正在继承命运线...' });
       const cartridge = progressData.cartridge || await getCachedStoryCartridge(storyId) || await getStoryCartridge(db as any, storyId);
       if (!cartridge) {
         throw new Error('story-not-found-or-denied');
       }
       await cacheStoryCartridge(storyId, cartridge);
       applyStoryCartridgeForPlay(storyId, cartridge, progressData);
-      setPendingProgressToLoad(null);
     } catch (e) {
       console.error(e);
       showError("恢复故事进度失败");
+    } finally {
+      window.setTimeout(() => setStoryLaunchOverlay(null), 180);
+    }
+  };
+
+  const startFreshFromPendingProgress = async () => {
+    const pendingProgress = pendingProgressToLoad;
+    if (!pendingProgress) return;
+    setPendingProgressToLoad(null);
+    setStoryLaunchOverlay({ progress: 12, status: isEnglish ? 'Preparing a new fate line...' : '正在准备新的命运线...' });
+    setIsLoadingStories(true);
+    try {
+      const cartridge = pendingProgress.data?.cartridge;
+      if (cartridge) {
+        setStoryLaunchOverlay({ progress: 36, status: isEnglish ? 'Checking sequel requirements...' : '正在检查续作前置条件...' });
+        const sequelGate = await evaluateSequelGate({ ...cartridge, meta: { ...(cartridge.meta || {}), id: pendingProgress.id } });
+        if (!sequelGate.allowed) {
+          setSequelGateModal(sequelGate.modal);
+          return;
+        }
+        if ('eligibleRecords' in sequelGate && Array.isArray(sequelGate.eligibleRecords) && sequelGate.eligibleRecords.length > 0) {
+          setPendingSequelInheritance({
+            storyId: pendingProgress.id,
+            cartridge,
+            progressData: pendingProgress.data,
+            requirement: (sequelGate as any).requirement,
+            records: sequelGate.eligibleRecords as FateCompletionRecord[],
+          });
+          return;
+        }
+      }
+      setStoryLaunchOverlay({ progress: 82, status: isEnglish ? 'Entering story...' : '正在进入故事...' });
+      await startNewStoryPlay(pendingProgress.id, pendingProgress.data?.cartridge, pendingProgress.data);
+    } catch (error) {
+      console.error('[pending-progress:start-fresh]', error);
+      showError(isEnglish ? 'Unable to start a new fate line.' : '无法开始新的命运线。');
+    } finally {
+      setIsLoadingStories(false);
+      window.setTimeout(() => setStoryLaunchOverlay(null), 180);
     }
   };
 
@@ -7746,31 +7805,7 @@ export default function App() {
               </button>
               <button
                 type="button"
-                onClick={async () => {
-                  const pendingProgress = pendingProgressToLoad;
-                  setPendingProgressToLoad(null);
-                  if (pendingProgress) {
-                    const cartridge = pendingProgress.data?.cartridge;
-                    if (cartridge) {
-                      const sequelGate = await evaluateSequelGate({ ...cartridge, meta: { ...(cartridge.meta || {}), id: pendingProgress.id } });
-                      if (!sequelGate.allowed) {
-                        setSequelGateModal(sequelGate.modal);
-                        return;
-                      }
-                      if ('eligibleRecords' in sequelGate && Array.isArray(sequelGate.eligibleRecords) && sequelGate.eligibleRecords.length > 0) {
-                        setPendingSequelInheritance({
-                          storyId: pendingProgress.id,
-                          cartridge,
-                          progressData: pendingProgress.data,
-                          requirement: (sequelGate as any).requirement,
-                          records: sequelGate.eligibleRecords as FateCompletionRecord[],
-                        });
-                        return;
-                      }
-                    }
-                    startNewStoryPlay(pendingProgress.id, pendingProgress.data?.cartridge, pendingProgress.data);
-                  }
-                }}
+                onClick={() => { void startFreshFromPendingProgress(); }}
                 className="w-full rounded-2xl bg-zinc-900 py-4 text-sm font-bold text-zinc-400"
               >
                 开始新干涉
@@ -7824,7 +7859,12 @@ export default function App() {
                   className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-left transition-colors hover:border-indigo-400/45 hover:bg-indigo-500/10 active:scale-[0.99]"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="font-black text-zinc-100">{inheritedEndingDisplayLabel(record, pendingSequelInheritance.requirement)}</div>
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <div className="font-black text-zinc-100">{inheritedEndingDisplayLabel(record, pendingSequelInheritance.requirement)}</div>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${record.sourceType === 'archived' ? 'bg-amber-500/15 text-amber-200' : 'bg-zinc-800 text-zinc-400'}`}>
+                        {record.sourceType === 'archived' ? '收藏命运' : '自动记录'}
+                      </span>
+                    </div>
                     <div className="text-[10px] font-black uppercase tracking-[0.16em] text-zinc-500">
                       {record.completedAt ? new Date(record.completedAt).toLocaleString() : '完成记录'}
                     </div>
@@ -11171,7 +11211,7 @@ export default function App() {
               <Heart className={`h-4 w-4 ${hasOptimisticStoryAction('like', activeStoryId) ? 'fill-current' : ''}`} /> {tr('点赞', 'Like')}
             </button>
             <button type="button" onClick={() => handleStoryInteraction('favorite')} className={`${semanticButtonClass(hasOptimisticStoryAction('favorite', activeStoryId) ? 'secondary' : 'ghost', { compact: true })} ${hasOptimisticStoryAction('favorite', activeStoryId) ? 'text-amber-200' : ''}`}>
-              <Bookmark className={`h-4 w-4 ${hasOptimisticStoryAction('favorite', activeStoryId) ? 'fill-current' : ''}`} /> {tr('收藏', 'Favorite')}
+              <Bookmark className={`h-4 w-4 ${hasOptimisticStoryAction('favorite', activeStoryId) ? 'fill-current' : ''}`} /> {tr('收藏原作', 'Favorite original')}
             </button>
             <button type="button" onClick={handleShareStory} disabled={isSharing || !blueprint} className={semanticButtonClass('secondary', { compact: true })}>
               {isSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />} {tr('分享', 'Share')}
@@ -13165,7 +13205,7 @@ export default function App() {
                       <Heart className={`h-5 w-5 ${hasOptimisticStoryAction('like', activeStoryId) ? 'fill-current text-pink-300' : ''}`} /> {tr('点赞', 'Like')}
                     </button>
                     <button onClick={() => { setIsActionMenuOpen(false); handleStoryInteraction('favorite'); }} className={semanticMenuButtonClass('ghost')}>
-                      <Bookmark className={`h-5 w-5 ${hasOptimisticStoryAction('favorite', activeStoryId) ? 'fill-current text-amber-300' : ''}`} /> {tr('收藏', 'Favorite')}
+                      <Bookmark className={`h-5 w-5 ${hasOptimisticStoryAction('favorite', activeStoryId) ? 'fill-current text-amber-300' : ''}`} /> {tr('收藏原作', 'Favorite original')}
                     </button>
                     <button
                       onClick={() => {

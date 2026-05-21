@@ -88,14 +88,14 @@ Original sequel Chapter 1 prototype:
 Title: ${originalChapter.title || 'Chapter 1'}
 Summary: ${originalChapter.summary || ''}
 Text:
-${String(originalChapter.text || '').slice(0, 3000)}
+${String(originalChapter.text || '').slice(0, 5000)}
 
 Inherited previous fate record:
 Previous story: ${record.storyTitle || requirement.sourceTitle || 'previous story'}
 Ending: ${record.selectedEndingTitle || requirement.endingName || record.selectedEndingId || record.endingDomain || 'specified ending'}
 Ending domain: ${record.endingDomain || requirement.endingDomain || 'middle'}
 Conclusion / aftermath:
-${String(record.storyConclusion || '').slice(0, 1600)}
+${String(record.storyConclusion || '').slice(0, 2400)}
 
 Previous story chapter arc:
 ${chapterSummaries.map((chapter: any) => `Chapter ${chapter.chapterNum || chapter.chapter_num}: ${chapter.title || ''} — ${chapter.summary || ''}`).join('\n')}
@@ -117,8 +117,11 @@ Requirements:
 3. Use the previous ending and branches as facts before the sequel begins.
 4. If inherited facts conflict with the sequel prototype, smooth the conflict in Chapter 1 without breaking the sequel's core premise.
 5. Preserve the sequel's intended Chapter 1 events where possible.
-6. Target about ${args.targetWordCount} English words, 6-10 paragraphs.
-7. Plain prose only: no HTML, Markdown, <mark>, system terms, or meta commentary.
+6. Target about ${args.targetWordCount} English words, 8-12 paragraphs. Do not return a short bridge note, outline, or recap.
+7. Open inside an actual scene with concrete action, atmosphere, character movement, and natural dialogue where suitable.
+8. Weave inherited facts through what characters notice, avoid, remember, decide, or fear. Do not dump all inherited facts in one explanatory paragraph.
+9. Preserve and expand the sequel prototype's intended hook. The result should feel publishable as Chapter 1.
+10. Plain prose only: no HTML, Markdown, <mark>, system terms, or meta commentary.
 
 Return strict JSON only.`;
   }
@@ -144,14 +147,14 @@ ${characters.map((character: any) => `${character.id}：${character.name}——$
 标题：${originalChapter.title || '第一章'}
 摘要：${originalChapter.summary || ''}
 正文：
-${String(originalChapter.text || '').slice(0, 3000)}
+${String(originalChapter.text || '').slice(0, 5000)}
 
 继承的前作命运记录：
 前作：${record.storyTitle || requirement.sourceTitle || '前作'}
 前作结局：${record.selectedEndingTitle || requirement.endingName || record.selectedEndingId || record.endingDomain || '指定结局'}
 结局域：${record.endingDomain || requirement.endingDomain || 'middle'}
 结局余波 / 结语：
-${String(record.storyConclusion || '').slice(0, 1600)}
+${String(record.storyConclusion || '').slice(0, 2400)}
 
 前作章节概况：
 ${chapterSummaries.map((chapter: any) => `第${chapter.chapterNum || chapter.chapter_num}章：${chapter.title || ''}——${chapter.summary || ''}`).join('\n')}
@@ -173,8 +176,11 @@ ${repairRules.map((rule: any) => `- ${rule.rule || rule.text || rule}`).join('\n
 3. 前作指定结局与支线必须被视为续作开始前已经发生的事实。
 4. 若继承事实与续作原第一章原型冲突，必须在第一章内圆润处理，不破坏续作核心主轴。
 5. 尽量保留续作原第一章应有的主要事件、氛围和钩子。
-6. 字数约 ${args.targetWordCount}，拆成 6-10 段。
-7. 正文只能是纯文本，不得出现 HTML、Markdown、<mark>、系统术语或元叙事解释。
+6. 字数约 ${args.targetWordCount}，拆成 8-12 段。不要输出短短的接续说明、剧情提纲或前情摘要。
+7. 开篇必须落在真实场景里，要有具体行动、氛围、人物反应，适合时加入自然对白。
+8. 继承来的前作事实应通过人物的观察、回避、记忆、选择或恐惧自然渗入情节，不要把所有资料堆成一段说明。
+9. 保留并扩写续作原第一章本应有的钩子与主要事件，让结果像一章可以正式发布的正文。
+10. 正文只能是纯文本，不得出现 HTML、Markdown、<mark>、系统术语或元叙事解释。
 
 请严格输出 JSON。`;
 }
@@ -192,7 +198,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const originalChapter = req.body?.originalChapter;
     const fateRecord = req.body?.fateRecord;
     const requirement = req.body?.requirement;
-    const targetWordCount = Math.min(1200, Math.max(500, Number(req.body?.targetWordCount) || 800));
+    const targetWordCount = Math.min(1600, Math.max(900, Number(req.body?.targetWordCount) || 1100));
 
     if (!blueprint || !originalChapter || !fateRecord) {
       return res.status(400).json({ error: '继承开场参数不完整。', code: 'INHERITED_OPENING_BAD_REQUEST' });
@@ -220,7 +226,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     const text = ensureParagraphing((data as any)?.text || '');
-    if (text.length < 120) {
+    const minTextLength = language === 'en-US' ? 1800 : 700;
+    if (text.length < minTextLength) {
       return res.status(502).json({ error: 'AI 返回的继承开场内容不完整，请重试。', code: 'AI_RESPONSE_INVALID' });
     }
 
