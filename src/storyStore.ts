@@ -179,6 +179,7 @@ const normalizeSharedStoryRecord = (record: any): SharedStoryRecord => ({
   chapterCount: Number(record?.chapterCount || record?.meta?.chapterCount || 0),
   cardExcerpt: record?.cardExcerpt || record?.meta?.cardExcerpt || '',
   allowAdaptation: Boolean(record?.allowAdaptation ?? record?.meta?.allowAdaptation),
+  fateRecord: record?.fateRecord || record?.fate_record || null,
   createdAt: record?.createdAt || '',
   updatedAt: record?.updatedAt || '',
   visibility: record?.visibility || record?.meta?.visibility || 'unlisted',
@@ -254,6 +255,7 @@ export type SharedStoryRecord = {
   chapterCount?: number;
   cardExcerpt?: string;
   allowAdaptation?: boolean;
+  fateRecord?: Record<string, any> | null;
   createdAt: string;
   updatedAt: string;
   visibility: 'private' | 'unlisted';
@@ -970,6 +972,7 @@ export async function createSharedStoryRecord(db: Firestore, args: {
   visibility?: 'private' | 'unlisted';
   snapshotKind?: 'intervened' | 'saved_run';
   contentHash?: string;
+  fateRecord?: Record<string, any> | null;
 }) {
   if (useSupabaseStories()) {
     return storyApi<string>('createSharedStoryRecord', { args }, { auth: true });
@@ -1002,6 +1005,7 @@ export async function createSharedStoryRecord(db: Firestore, args: {
     chapterCount: countReadyChapters(args.chapters),
     cardExcerpt: buildCardExcerpt(args.main_axis, args.chapters),
     allowAdaptation: Boolean(args.allowAdaptation),
+    fateRecord: args.fateRecord || null,
     createdAt: now,
     updatedAt: now,
     visibility: args.visibility || 'unlisted',

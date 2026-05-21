@@ -2424,6 +2424,15 @@ export default function App() {
     const provenance = await resolveActiveStoryProvenance();
     const cleanChapters = getCleanCurrentRunChapters();
     const contentHash = hashStoryChapters(cleanChapters);
+    const shouldSaveInheritanceRecord = Boolean(activeStoryId && (storyConclusion || interventionsLeft <= 0));
+    const archivedFateRecord = shouldSaveInheritanceRecord
+      ? createFateCompletionRecord({
+          runId: `${activeStoryId}:archive:${contentHash}`,
+          storyConclusion: storyConclusion || '',
+          sourceType: 'archived',
+          pinned: true,
+        })
+      : null;
     const shareId = await createStorySnapshot(db as any, {
       authorId: user.uid,
       authorName: getUserAuthorName(user),
@@ -2443,6 +2452,7 @@ export default function App() {
       visibility,
       snapshotKind,
       contentHash,
+      fateRecord: archivedFateRecord,
     });
     const sharedRecord = {
       id: shareId,
@@ -2466,23 +2476,18 @@ export default function App() {
       chapterCount: getReadyChapterCount(cleanChapters),
       cardExcerpt: getStoryCardExcerpt(blueprint.main_axis || '', cleanChapters),
       allowAdaptation: getActiveStoryAllowAdaptation(),
+      fateRecord: archivedFateRecord,
       visibility,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
     setMySharedStories((prev) => [sharedRecord, ...prev.filter((story: any) => story.id !== shareId)]);
-    if (activeStoryId && (storyConclusion || interventionsLeft <= 0)) {
-      const completionRecord = createFateCompletionRecord({
-        runId: shareId,
-        storyConclusion: storyConclusion || '',
-        sourceType: 'archived',
-        pinned: true,
-      });
-      void saveCompletedRunRecord(completionRecord, {
+    if (archivedFateRecord) {
+      await saveCompletedRunRecord(archivedFateRecord, {
         ...buildCurrentRunSnapshot(),
         storyConclusion,
         interventionsLeft,
-      }).catch((error) => console.warn('[completion-record:snapshot]', error));
+      });
     }
     return { shareId, sharedRecord, cleanChapters };
   };
@@ -3539,6 +3544,33 @@ export default function App() {
     };
   };
 
+  const getArchivedFateRecordsForStory = (sourceStoryId: string): FateCompletionRecord[] => (
+    asSafeArray<any>(mySharedStories)
+      .filter((story) => (
+        story?.archiveKind !== 'favorite' &&
+        String(story?.sourceStoryId || '') === String(sourceStoryId || '') &&
+        story?.fateRecord
+      ))
+      .map((story) => ({
+        ...story.fateRecord,
+        runId: String(story.fateRecord?.runId || story.id || ''),
+        sourceStoryId: String(story.fateRecord?.sourceStoryId || story.sourceStoryId || sourceStoryId),
+        storyTitle: String(story.fateRecord?.storyTitle || story.title || '前作命运线'),
+        endingDomain: ['left', 'right', 'middle'].includes(story.fateRecord?.endingDomain) ? story.fateRecord.endingDomain : 'middle',
+        selectedEndingId: String(story.fateRecord?.selectedEndingId || 'default'),
+        unlockedBranchIds: asSafeArray<string>(story.fateRecord?.unlockedBranchIds),
+        unlockedBranches: asSafeArray<any>(story.fateRecord?.unlockedBranches),
+        historicallyUnlockedBranchIds: asSafeArray<string>(story.fateRecord?.historicallyUnlockedBranchIds),
+        characterStatuses: story.fateRecord?.characterStatuses || {},
+        storyConclusion: String(story.fateRecord?.storyConclusion || ''),
+        chapterSummaries: asSafeArray<any>(story.fateRecord?.chapterSummaries),
+        completedAt: String(story.fateRecord?.completedAt || story.updatedAt || story.createdAt || ''),
+        sourceType: 'archived' as const,
+        pinned: true,
+      }))
+      .filter((record) => record.runId && record.sourceStoryId)
+  );
+
   const evaluateSequelGate = async (cartridge: any) => {
     if (!user || !db) return { allowed: true as const };
     const requirement = await resolveSequelRequirement(cartridge?.meta);
@@ -3601,7 +3633,15 @@ export default function App() {
       sourceProgress?.storyConclusion ||
       Number(sourceProgress?.interventionsLeft ?? 3) <= 0
     );
-    const records = getCompletedRunRecords(sourceProgress);
+    const recordMap = new Map<string, FateCompletionRecord>();
+    [...getCompletedRunRecords(sourceProgress), ...getArchivedFateRecordsForStory(requirement.sourceStoryId)].forEach((record) => {
+      if (!record?.runId) return;
+      const existing = recordMap.get(record.runId);
+      if (!existing || record.sourceType === 'archived') {
+        recordMap.set(record.runId, record);
+      }
+    });
+    const records = Array.from(recordMap.values());
     const eligibleRecords = records.filter((record) => {
       const branchIds = new Set((record.unlockedBranchIds || []).map(String));
       const branchesOk = requirement.requiredBranchIds.every((id) => branchIds.has(id));
