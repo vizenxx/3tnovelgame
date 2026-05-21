@@ -1317,6 +1317,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           endingId: bp.continuityNode?.endingId || bp.seriesSelection?.endingId || args.endingId || '',
           endingTitle: bp.continuityNode?.legacyState?.ending?.title || '',
           endingDomain: bp.continuityNode?.endingDomain || '',
+          bridgeSummary: bp.continuityNode?.bridgeSummary || '',
+          repairRules: bp.continuityNode?.repairRules || [],
+          sequelSeedPrompt: bp.continuityNode?.sequelSeedPrompt || bp.seriesSelection?.hardSettings || '',
+          previousStorySummary: bp.continuityNode?.legacyState?.chapterArc || [],
+          previousCharacters: bp.continuityNode?.legacyState?.characters || [],
           requiredBranchIds: asArray(bp.continuityNode?.requiredBranchIds || bp.seriesSelection?.requiredBranchIds || args.requiredBranchIds),
           requiredBranches: asArray(bp.continuityNode?.legacyState?.branches).map((branch: any) => ({
             id: branch.id || '',
