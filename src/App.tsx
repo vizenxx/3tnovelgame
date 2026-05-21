@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp, Download, Sun, Moon, Search, GitBranch, Bell, BarChart3 } from 'lucide-react';
+import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp, Download, Sun, Moon, Search, GitBranch, Bell, BarChart3, WifiOff } from 'lucide-react';
 import { auth, db, firebaseInitError } from './firebase';
 import { createEmptyStory, createSharedStoryRecord, createStorySnapshot, adaptBlueprintToStory, createStoryBranch, deleteAllNotifications, deleteNotification, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, deleteSeriesWorld, favoriteStory, unfavoriteStory, followAuthor, getAppSettings, getAuthorFollowState, getPushConfig, getSharedStoryRecord, getStoryCartridge, getStoryMeta, getUserProgress, incrementShareMetric, incrementStoryMetric, likeStory, unlikeStory, listAuthorStories, listContinuityNodes, listFollowedAuthors, listMySeriesWorlds, listMySharedStories, listMyStories, listNotifications, listPublicStories, markNotificationsRead, refundCoverGenerationUsage, reportStory, reserveCoverGenerationUsage, saveAppSettings, saveContinuityNode, savePushSubscription, saveSeriesWorld, saveStoryMainlineBundle, saveStoryMeta, saveUserProgress, unfollowAuthor, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch, type ContinuityNodeRecord, type SeriesWorldRecord } from './storyStore';
 import { branchEffectiveWeight, isBranchUnlockedByHistory, normalizeEndingBias } from './storyCartridge';
@@ -116,6 +116,20 @@ type SeriesSelectionState = {
   requiredBranchIds: string[];
   endingId: string;
   hardSettings: string;
+};
+
+type SequelGateModalState = {
+  storyId: string;
+  sourceStoryId: string;
+  sourceTitle: string;
+  missingBranches: Array<{ id: string; name: string }>;
+  missingEnding?: { id: string; name: string };
+};
+
+type ConnectivityDrawerState = {
+  tone: 'offline' | 'weak' | 'stale' | 'error';
+  title: string;
+  detail?: string;
 };
 
 const safeModalBackdropClass = "fixed inset-0 flex items-center justify-center overflow-y-auto overscroll-contain px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]";
@@ -1072,6 +1086,100 @@ const InlineSyncState = ({
       </button>
     )}
   </div>
+);
+
+const SkeletonBlock = ({ className = '' }: { className?: string }) => (
+  <div className={`animate-pulse rounded-2xl bg-gradient-to-r from-white/[0.04] via-white/[0.08] to-white/[0.04] ${className}`} />
+);
+
+const StoryCardSkeleton = () => (
+  <div className="story-library-card p-4">
+    <div className="flex gap-4">
+      <div className="w-28 shrink-0 space-y-3 sm:w-32">
+        <SkeletonBlock className="h-28 w-28 rounded-3xl sm:h-32 sm:w-32" />
+        <div className="grid gap-2">
+          <SkeletonBlock className="h-5" />
+          <SkeletonBlock className="h-5" />
+          <SkeletonBlock className="h-5" />
+        </div>
+      </div>
+      <div className="min-w-0 flex-1 space-y-3">
+        <SkeletonBlock className="h-7 w-3/4" />
+        <SkeletonBlock className="h-4 w-1/2" />
+        <SkeletonBlock className="h-4 w-full" />
+        <SkeletonBlock className="h-4 w-5/6" />
+        <div className="flex gap-2">
+          <SkeletonBlock className="h-6 w-16 rounded-lg" />
+          <SkeletonBlock className="h-6 w-20 rounded-lg" />
+        </div>
+        <div className="grid grid-cols-2 gap-2 pt-2">
+          <SkeletonBlock className="h-10 rounded-xl" />
+          <SkeletonBlock className="h-10 rounded-xl" />
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+const ListSkeleton = ({ count = 6, compact = false }: { count?: number; compact?: boolean }) => (
+  <div className={compact ? 'grid gap-3' : 'grid gap-6 sm:grid-cols-2 lg:grid-cols-3'}>
+    {Array.from({ length: count }).map((_, index) => (
+      compact ? (
+        <div key={index} className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
+          <SkeletonBlock className="h-5 w-2/3" />
+          <SkeletonBlock className="mt-3 h-4 w-full" />
+          <SkeletonBlock className="mt-2 h-4 w-4/5" />
+        </div>
+      ) : (
+        <StoryCardSkeleton key={index} />
+      )
+    ))}
+  </div>
+);
+
+const ConnectivityDrawer = ({
+  state,
+  onRetry,
+  onHome,
+  onDismiss,
+}: {
+  state: ConnectivityDrawerState | null;
+  onRetry: () => void;
+  onHome: () => void;
+  onDismiss: () => void;
+}) => (
+  <AnimatePresence>
+    {state && (
+      <motion.div
+        initial={{ y: 120, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 120, opacity: 0 }}
+        className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-[6200] mx-auto max-w-2xl rounded-[1.5rem] border border-white/10 bg-zinc-950/92 p-4 shadow-2xl shadow-black/40 backdrop-blur-xl"
+      >
+        <div className="flex items-start gap-3">
+          <div className={`rounded-full p-2 ${state.tone === 'offline' ? 'bg-rose-500/15 text-rose-200' : state.tone === 'error' ? 'bg-amber-500/15 text-amber-200' : 'bg-indigo-500/15 text-indigo-200'}`}>
+            {state.tone === 'offline' ? <WifiOff className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-black text-zinc-100">{state.title}</div>
+            {state.detail && <p className="mt-1 text-xs font-semibold leading-relaxed text-zinc-400">{state.detail}</p>}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button type="button" onClick={onRetry} className={semanticButtonClass('primary', { compact: true })}>
+                <RefreshCcw className="h-4 w-4" />
+                重试同步
+              </button>
+              <button type="button" onClick={onHome} className={semanticButtonClass('secondary', { compact: true })}>
+                回到首页
+              </button>
+              <button type="button" onClick={onDismiss} className={semanticButtonClass('ghost', { compact: true })}>
+                继续浏览
+              </button>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    )}
+  </AnimatePresence>
 );
 
 const countChars = (text: string) => text?.trim()?.length || 0;
@@ -2085,6 +2193,10 @@ export default function App() {
   const archiveRefreshInFlightRef = useRef<Promise<void> | null>(null);
   const fetchingChapterRef = useRef<number | null>(null);
   const [backgroundGeneratingChapter, setBackgroundGeneratingChapter] = useState<number | null>(null);
+  const [isOnline, setIsOnline] = useState(() => typeof navigator === 'undefined' ? true : navigator.onLine !== false);
+  const [connectivityDismissedAt, setConnectivityDismissedAt] = useState(0);
+  const [manualConnectivityNotice, setManualConnectivityNotice] = useState<ConnectivityDrawerState | null>(null);
+  const [sequelGateModal, setSequelGateModal] = useState<SequelGateModalState | null>(null);
 
   // World State system
   const [canonicalWorldState, setCanonicalWorldState] = useState<any>(null);
@@ -2126,6 +2238,18 @@ export default function App() {
     document.documentElement.style.colorScheme = appTheme;
     window.localStorage?.setItem('app-theme', appTheme);
   }, [appTheme]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const syncOnlineState = () => setIsOnline(navigator.onLine !== false);
+    syncOnlineState();
+    window.addEventListener('online', syncOnlineState);
+    window.addEventListener('offline', syncOnlineState);
+    return () => {
+      window.removeEventListener('online', syncOnlineState);
+      window.removeEventListener('offline', syncOnlineState);
+    };
+  }, []);
 
   useEffect(() => {
     const brightness = Math.max(0.7, Math.min(1, readingTextOpacity));
@@ -2416,6 +2540,10 @@ export default function App() {
     return Boolean(activeStoryMeta?.allowAdaptation);
   };
 
+  const isAdaptCurrentStoryUnavailable = () => (
+    isLoadingStories || !user || !blueprint
+  );
+
   const canAdaptReadonlyStory = (meta: any) => {
     if (!user || !meta) return false;
     if (meta.authorId === user.uid || meta.originalAuthorId === user.uid) return true;
@@ -2520,7 +2648,7 @@ export default function App() {
   };
 
   const refundCoverGenerationQuota = async () => {
-    if (!db || !user) return;
+    if (!db || !user) return [];
     const dateKey = todayUsageKey();
     await refundCoverGenerationUsage(db as any, user.uid, dateKey);
     return;
@@ -3087,6 +3215,112 @@ export default function App() {
     setStoryListSyncState((prev) => updateStoryListSegmentState(prev, segment, status, error));
   };
 
+  const buildEndingProgressSnapshot = (value = endingValue, feedback: any = uiFeedback, completed = false) => {
+    const endingDomain = endingDomainFromValue(Number(value || 0));
+    const selectedEndingId = String(
+      feedback?.selectedEndingId ||
+      feedback?.endingId ||
+      feedback?.selectedEnding ||
+      (endingDomain === 'middle' ? 'default' : endingDomain)
+    );
+    return {
+      endingDomain,
+      selectedEndingId,
+      finalEndingId: selectedEndingId,
+      ...(completed ? { completedAt: new Date().toISOString() } : {}),
+    };
+  };
+
+  const findStoryListItemById = (storyId?: string) => {
+    if (!storyId) return null;
+    return [...asSafeArray(publicStories), ...asSafeArray(myStories), ...asSafeArray(mySharedStories)]
+      .find((story: any) => String(story?.id || story?.storyId || story?.sourceStoryId) === String(storyId)) || null;
+  };
+
+  const getSequelRequirementFromMeta = (meta?: any) => {
+    const constraints = meta?.seriesConstraints || meta?.series_constraints || {};
+    const requiredBranchIds = asSafeArray<string>(
+      constraints.requiredBranchIds ||
+      constraints.required_branch_ids ||
+      constraints.continuityRequiredBranchIds
+    ).map(String).filter(Boolean);
+    const sourceStoryId = String(
+      constraints.sourceStoryId ||
+      constraints.source_story_id ||
+      meta?.sourceStoryId ||
+      ''
+    ).trim();
+    const endingId = String(
+      constraints.endingId ||
+      constraints.requiredEndingId ||
+      constraints.continuityEndingId ||
+      ''
+    ).trim();
+    const isSequel = meta?.seriesRole === 'sequel' || Boolean(meta?.continuityNodeId || constraints.continuityNodeId || sourceStoryId);
+    if (!isSequel || !sourceStoryId || (!requiredBranchIds.length && !endingId)) return null;
+    const requiredBranchDetails = asSafeArray<any>(
+      constraints.requiredBranches ||
+      constraints.selectedBranches ||
+      constraints.continuityBranches
+    );
+    return {
+      sourceStoryId,
+      sourceTitle: constraints.sourceTitle || constraints.sourceStoryTitle || findStoryListItemById(sourceStoryId)?.title || '前作',
+      endingId,
+      endingName: constraints.endingTitle || constraints.requiredEndingTitle || endingId,
+      requiredBranchIds,
+      requiredBranches: requiredBranchDetails,
+    };
+  };
+
+  const evaluateSequelGate = async (cartridge: any) => {
+    if (!user || !db) return { allowed: true as const };
+    const requirement = getSequelRequirementFromMeta(cartridge?.meta);
+    if (!requirement) return { allowed: true as const };
+    let sourceProgress: any = null;
+    try {
+      sourceProgress = await getUserProgress(db as any, user.uid, requirement.sourceStoryId);
+    } catch (error) {
+      console.warn('[sequel-gate:progress]', error);
+      return {
+        allowed: false as const,
+        modal: {
+          storyId: cartridge?.meta?.id || '',
+          sourceStoryId: requirement.sourceStoryId,
+          sourceTitle: requirement.sourceTitle,
+          missingBranches: requirement.requiredBranchIds.map((id) => ({ id, name: requirement.requiredBranches.find((branch: any) => String(branch?.id) === id)?.name || id })),
+          missingEnding: requirement.endingId ? { id: requirement.endingId, name: requirement.endingName || requirement.endingId } : undefined,
+        },
+      };
+    }
+    const historicalIds = new Set(
+      asSafeArray<any>(sourceProgress?.historicallyUnlockedBranches || sourceProgress?.unlockedBranches)
+        .map((branch) => String(typeof branch === 'string' ? branch : branch?.id || ''))
+        .filter(Boolean)
+    );
+    const missingBranches = requirement.requiredBranchIds
+      .filter((id) => !historicalIds.has(id))
+      .map((id) => ({ id, name: requirement.requiredBranches.find((branch: any) => String(branch?.id) === id)?.name || id }));
+    const progressDomain = String(sourceProgress?.endingDomain || endingDomainFromValue(Number(sourceProgress?.endingValue || 0)));
+    const progressEndingId = String(sourceProgress?.selectedEndingId || sourceProgress?.finalEndingId || (progressDomain === 'middle' ? 'default' : progressDomain));
+    const requiredEndingId = requirement.endingId;
+    const endingMatches = !requiredEndingId ||
+      requiredEndingId === progressEndingId ||
+      requiredEndingId === progressDomain ||
+      endingDomainFromId(requiredEndingId) === progressDomain;
+    if (missingBranches.length === 0 && endingMatches) return { allowed: true as const };
+    return {
+      allowed: false as const,
+      modal: {
+        storyId: cartridge?.meta?.id || '',
+        sourceStoryId: requirement.sourceStoryId,
+        sourceTitle: requirement.sourceTitle,
+        missingBranches,
+        missingEnding: endingMatches ? undefined : { id: requiredEndingId, name: requirement.endingName || requiredEndingId },
+      },
+    };
+  };
+
   const buildCurrentRunSnapshot = () => ({
     userId: user?.uid,
     storyId: activeStoryId,
@@ -3109,6 +3343,7 @@ export default function App() {
     currentChapters: chapters,
     changeHighlights,
     uiFeedback,
+    ...buildEndingProgressSnapshot(endingValue, uiFeedback, Boolean(storyConclusion || interventionsLeft <= 0)),
     savedLocallyAt: Date.now(),
   });
 
@@ -3219,6 +3454,7 @@ export default function App() {
       if (segmentErrors.length === 2 && !cached?.value) {
         const message = '作品库同步失败，请稍后重试。';
         setStoryListLoadError(message);
+        setManualConnectivityNotice({ tone: 'error', title: '作品库同步失败', detail: message });
         showError(message);
         return false;
       }
@@ -3230,6 +3466,7 @@ export default function App() {
             ? '部分作品列表同步失败，已保留可用内容。'
             : null;
       setStoryListLoadError(partialMessage);
+      if (partialMessage) setManualConnectivityNotice({ tone: 'weak', title: '部分作品列表同步失败', detail: partialMessage });
       if (partialMessage) showError(partialMessage);
       return segmentErrors.length < 2;
     } catch (error: any) {
@@ -4181,6 +4418,7 @@ export default function App() {
         currentChapters: chapters,
         changeHighlights,
         uiFeedback,
+        ...buildEndingProgressSnapshot(endingValue, uiFeedback, Boolean(storyConclusion || interventionsLeft <= 0)),
       });
       await resetGame();
     } catch (e) {
@@ -4252,19 +4490,46 @@ export default function App() {
   };
 
   const handleAdaptCurrentStory = async () => {
-    if (!user || !db || !blueprint) return;
+    if (!user) {
+      showError('请先登录，再进行一键改编。');
+      return;
+    }
+    if (!db || !blueprint) {
+      showError('当前没有可改编的故事。');
+      return;
+    }
     if (!canAdaptCurrentStory()) {
       showError('原作者尚未开放这篇作品的一键改编权限。');
       return;
     }
     try {
       setIsLoadingStories(true);
+      const blueprintAny = blueprint as any;
+      const fallbackSeries = !blueprintAny.seriesContext && quickSeriesBindingId
+        ? seriesWorlds.find((series) => series.id === quickSeriesBindingId) || null
+        : null;
+      const adaptContinuityNode = blueprintAny.continuityNode || null;
+      const adaptSeriesContext = blueprintAny.seriesContext
+        || buildAppliedSeriesContext(fallbackSeries, quickSeriesSelection, adaptContinuityNode)
+        || null;
+      const rawContinuityNodeId = String(adaptContinuityNode?.id || '');
+      const continuityNodeId = rawContinuityNodeId && !rawContinuityNodeId.startsWith('anchor:')
+        ? rawContinuityNodeId
+        : null;
+      const adaptedBlueprint = {
+        ...blueprintAny,
+        seriesContext: adaptSeriesContext,
+        continuityNode: adaptContinuityNode,
+        seriesSelection: blueprintAny.seriesSelection || (adaptSeriesContext ? quickSeriesSelection : null),
+      };
       const storyId = await adaptBlueprintToStory(db as any, {
         authorId: user.uid,
         authorName: getUserAuthorName(user),
-        blueprint,
+        blueprint: adaptedBlueprint,
         chapters: toDefaultArtstyleChapters(chapters),
         tags: normalizeTagList((blueprint.tags && blueprint.tags.length > 0 ? blueprint.tags : selectedThemes) || []),
+        seriesId: adaptSeriesContext?.id || null,
+        continuityNodeId,
       });
       await refreshStories({ force: true });
       await selectAuthoringStory(storyId);
@@ -4816,6 +5081,13 @@ export default function App() {
         showError(getFriendlyServerError(progressError, '云端进度暂时无法读取，已先开启原始故事。'));
       }
       
+      setStoryLaunchOverlay({ progress: 82, status: isEnglish ? 'Checking sequel requirements...' : '正在检查续作前置条件...' });
+      const sequelGate = await evaluateSequelGate({ ...cartridge, meta: { ...(cartridge.meta || {}), id: storyId } });
+      if (!sequelGate.allowed) {
+        setSequelGateModal(sequelGate.modal);
+        return;
+      }
+
       const canResumeProgress =
         progressData &&
         Number(progressData.interventionsLeft ?? 0) > 0 &&
@@ -4894,6 +5166,7 @@ export default function App() {
       const rows = await listMySeriesWorlds(db as any, 50);
       setSeriesWorlds(rows);
       if (!selectedSeriesId && rows[0]?.id) setSelectedSeriesId(rows[0].id);
+      return rows;
     } catch (error) {
       console.error(error);
       showError(tr('世界观设定同步失败。', 'Failed to sync world settings.'));
@@ -5469,6 +5742,16 @@ export default function App() {
       showError('无法载入该作品。');
       return;
     }
+    const cartridgeSeriesId = String(cartridge.meta?.seriesId || '');
+    if (cartridgeSeriesId) {
+      if (!seriesWorlds.some((series) => series.id === cartridgeSeriesId)) {
+        await loadSeriesWorlds();
+      }
+      setSelectedSeriesId(cartridgeSeriesId);
+      if (cartridge.meta?.seriesRole === 'sequel' && cartridge.meta?.continuityNodeId) {
+        void loadContinuityNodesForSeries(cartridgeSeriesId);
+      }
+    }
     setAuthoringStoryId(storyId);
     setAuthoringCartridge(cartridge);
     setAuthoringCustomTagsInput((cartridge.meta?.tags || []).join('，'));
@@ -6019,6 +6302,7 @@ export default function App() {
           currentChapters: nextChapters,
           changeHighlights: nextChangeHighlights,
           uiFeedback: result?.uiFeedback || uiFeedback,
+          ...buildEndingProgressSnapshot(nextEndingValue, result?.uiFeedback || uiFeedback, nextIntervenedChapters.length >= 3),
         };
         void saveUserProgress(db as any, user.uid, activeStoryId, progressPayload).catch((error) => {
           console.warn('[progress:auto-save-after-intervention]', error);
@@ -6243,8 +6527,17 @@ export default function App() {
       }
 
       const result = await response.json();
-      setStoryConclusion(result.text || result.conclusion || '');
+      const conclusionText = result.text || result.conclusion || '';
+      setStoryConclusion(conclusionText);
       setShowSummaryModal(true);
+      if (db && user) {
+        void saveUserProgress(db as any, user.uid, activeStoryId, {
+          ...buildCurrentRunSnapshot(),
+          storyConclusion: conclusionText,
+          interventionsLeft,
+          ...buildEndingProgressSnapshot(endingValue, uiFeedback, true),
+        }).catch((error) => console.warn('[progress:save-final-ending]', error));
+      }
       try {
         await incrementStoryCounter(activeStoryId, 'interventionCount');
       } catch (counterError) {
@@ -7305,6 +7598,7 @@ export default function App() {
     const storyId = story?.id || story?.storyId || story?.sourceStoryId;
     const isLiked = hasStoryCardAction('like', story);
     const isFavorited = hasStoryCardAction('favorite', story);
+    const sequelRequirement = getSequelRequirementFromMeta(story);
     return (
       <motion.div
         key={storyId || story.id}
@@ -7349,6 +7643,11 @@ export default function App() {
                 </span>
               ))}
             </div>
+            {sequelRequirement && (
+              <div className="mb-3 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs font-black text-amber-100">
+                续作：需完成前作条件
+              </div>
+            )}
             <div className="mt-auto grid gap-2 sm:grid-cols-2">
               <button type="button" onClick={() => setStoryDetailStory(story)} className={`${semanticButtonClass('secondary', { fullWidth: true, compact: true })} text-sm`}>
                 <BookOpen className="h-4 w-4" />
@@ -7370,6 +7669,7 @@ export default function App() {
     const tags = storyDetailStory ? getStoryTags(storyDetailStory) : [];
     const title = storyDetailStory ? formatBookTitle(getStoryTitle(storyDetailStory)) : '';
     const detailStoryId = storyDetailStory?.id || storyDetailStory?.storyId || storyDetailStory?.sourceStoryId;
+    const detailSequelRequirement = storyDetailStory ? getSequelRequirementFromMeta(storyDetailStory) : null;
     const handlePlayFromDetail = () => {
       const targetStoryId = detailStoryId;
       if (!targetStoryId) return;
@@ -7477,6 +7777,14 @@ export default function App() {
                 <div className="mt-5 max-h-[40vh] overflow-y-auto rounded-3xl border border-zinc-800/60 bg-zinc-900/25 p-4 text-base leading-relaxed text-zinc-300">
                   {getStoryMainAxis(storyDetailStory) || '这部作品暂时还没有填写完整介绍。'}
                 </div>
+                {detailSequelRequirement && (
+                  <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4 text-sm leading-relaxed text-amber-100">
+                    <div className="font-black">续作前置条件</div>
+                    <p className="mt-1 text-amber-100/80">
+                      干涉前需先完成《{stripBookTitle(detailSequelRequirement.sourceTitle || '前作')}》的指定结局与支线。
+                    </p>
+                  </div>
+                )}
                 <div className="mt-5 grid gap-3">
                   <button type="button" onClick={handlePlayFromDetail} className={semanticButtonClass('primary', { fullWidth: true })}>
                     <Sparkles className="h-4 w-4" />
@@ -7506,6 +7814,85 @@ export default function App() {
       </AnimatePresence>
     );
   };
+
+  const renderSequelGateModal = () => (
+    <AnimatePresence>
+      {sequelGateModal && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className={`${safeModalBackdropClass} z-[5600] bg-black/70 backdrop-blur-md`}
+        >
+          <motion.div
+            initial={{ y: 16, opacity: 0, scale: 0.97 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: 10, opacity: 0, scale: 0.98 }}
+            className="app-modal-surface app-modal-safe-height w-full max-w-lg overflow-y-auto rounded-[2rem] p-6"
+          >
+            <div className="flex items-start gap-3">
+              <div className="rounded-full bg-amber-500/15 p-3 text-amber-200">
+                <Lock className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-xl font-black text-white">续作尚未解锁</h3>
+                <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+                  这部续作需要先在《{stripBookTitle(sequelGateModal.sourceTitle || '前作')}》完成指定前置情节，才可继承记录并干涉命运。
+                </p>
+              </div>
+            </div>
+            <div className="mt-5 space-y-3 rounded-3xl border border-white/10 bg-white/[0.03] p-4">
+              {sequelGateModal.missingEnding && (
+                <div>
+                  <div className="text-xs font-black uppercase tracking-[0.16em] text-zinc-500">需要结局</div>
+                  <div className="mt-1 text-sm font-bold text-zinc-200">{sequelGateModal.missingEnding.name}</div>
+                </div>
+              )}
+              {sequelGateModal.missingBranches.length > 0 && (
+                <div>
+                  <div className="text-xs font-black uppercase tracking-[0.16em] text-zinc-500">需要支线</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {sequelGateModal.missingBranches.map((branch) => (
+                      <span key={branch.id} className="rounded-full border border-indigo-400/20 bg-indigo-500/10 px-3 py-1 text-xs font-black text-indigo-100">
+                        {branch.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+              <button
+                type="button"
+                onClick={() => {
+                  const sourceStoryId = sequelGateModal.sourceStoryId;
+                  setSequelGateModal(null);
+                  void startStoryPlay(sourceStoryId);
+                }}
+                className={semanticButtonClass('primary', { fullWidth: true })}
+              >
+                前往前作
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const sourceStory = findStoryListItemById(sequelGateModal.sourceStoryId);
+                  if (sourceStory) setStoryDetailStory(sourceStory);
+                  setSequelGateModal(null);
+                }}
+                className={semanticButtonClass('secondary', { fullWidth: true })}
+              >
+                查看详情
+              </button>
+              <button type="button" onClick={() => setSequelGateModal(null)} className={semanticButtonClass('ghost', { fullWidth: true })}>
+                关闭
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
 
   const getVisibleStoryLibraryItems = () => {
     const source = storyLibraryTab === 'mine' ? myStories : publicStories;
@@ -7709,11 +8096,8 @@ export default function App() {
             </button>
           </div>
         </div>
-        {isLoadingStories ? (
-          <InlineSyncState
-            title={isEnglish ? 'Syncing story library' : '正在同步作品库'}
-            detail={isEnglish ? 'Public works and owned works load separately. Slow sections keep the current usable content.' : '公开作品和我的作品会分段读取，任何一段较慢时都会保留当前可用内容。'}
-          />
+        {isLoadingStories && visibleStories.length === 0 ? (
+          <ListSkeleton count={6} />
         ) : storyListLoadError && visibleStories.length === 0 ? (
           <InlineSyncState
             tone="error"
@@ -8094,16 +8478,10 @@ export default function App() {
               onAction={() => refreshArchiveStories({ force: true })}
             />
           ) : isArchiveSyncing && archiveStories.length === 0 ? (
-            <InlineSyncState
-              title={isEnglish ? 'Syncing fate archive' : '正在同步命运收藏馆'}
-              detail={isEnglish ? 'Reading favorited originals and saved fate lines. On weak networks, local cache is restored first.' : '正在读取收藏原作和收藏命运。弱网时会先尝试恢复本机缓存。'}
-            />
+            <ListSkeleton count={6} />
           ) : archiveTab === 'authors' ? (
             followedAuthorsLoading && visibleFollowedAuthors.length === 0 ? (
-              <InlineSyncState
-                title={isEnglish ? 'Syncing followed authors' : '正在同步追踪作者'}
-                detail={isEnglish ? 'Reading the followed author list.' : '正在读取已追踪作者列表。'}
-              />
+              <ListSkeleton count={3} />
             ) : visibleFollowedAuthors.length === 0 ? (
               <InlineSyncState
                 tone="empty"
@@ -10147,7 +10525,7 @@ export default function App() {
                 <RefreshCcw className="h-4 w-4" /> {tr('重新生成', 'Regenerate')}
               </button>
             )}
-            <button type="button" onClick={handleAdaptCurrentStory} disabled={!canAdaptCurrentStory() || isLoadingStories} className={semanticButtonClass('secondary', { compact: true })}>
+            <button type="button" onClick={handleAdaptCurrentStory} disabled={isAdaptCurrentStoryUnavailable()} className={semanticButtonClass('secondary', { compact: true })}>
               {isLoadingStories ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
               {canAdaptCurrentStory() ? tr('一键改编', 'Adapt') : tr('未开放改编', 'Adaptation unavailable')}
             </button>
@@ -10586,10 +10964,7 @@ export default function App() {
               </button>
             </div>
             {notificationLoading && notificationItems.length === 0 ? (
-              <div className="flex items-center justify-center gap-2 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-8 text-sm font-black text-zinc-400">
-                <Loader2 className="h-5 w-5 animate-spin" />
-                {isEnglish ? 'Loading notifications...' : '正在读取通知...'}
-              </div>
+              <ListSkeleton count={4} compact />
             ) : notificationItems.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/30 p-8 text-center text-sm font-semibold text-zinc-500">
                 {tr('暂时没有新的通知。', 'No new notifications yet.')}
@@ -12040,7 +12415,7 @@ export default function App() {
                         <RefreshCcw className="h-5 w-5" /> {tr('重新生成', 'Regenerate')}
                       </button>
                     )}
-                    <button onClick={() => { setIsActionMenuOpen(false); handleAdaptCurrentStory(); }} disabled={!canAdaptCurrentStory() || isLoadingStories} className={semanticMenuButtonClass('secondary')}>
+                    <button onClick={() => { setIsActionMenuOpen(false); handleAdaptCurrentStory(); }} disabled={isAdaptCurrentStoryUnavailable()} className={semanticMenuButtonClass('secondary')}>
                       <Wand2 className="h-5 w-5" /> {canAdaptCurrentStory() ? tr('一键改编', 'Adapt') : tr('未开放改编', 'Adaptation unavailable')}
                     </button>
                     <button onClick={() => { setIsActionMenuOpen(false); restartCurrentStory(); }} className={semanticMenuButtonClass('ghost')}>
@@ -12198,10 +12573,46 @@ export default function App() {
     </AnimatePresence>
   );
 
+  const segmentError = (['archive', 'mine', 'public'] as StoryListSegment[])
+    .map((segment) => storyListSyncState?.[segment])
+    .find((segment) => segment?.status === 'error');
+  const computedConnectivityState: ConnectivityDrawerState | null = !isOnline
+    ? {
+        tone: 'offline',
+        title: isEnglish ? 'Offline mode' : '当前处于离线状态',
+        detail: isEnglish ? 'Available cached stories can still be read. Cloud actions will resume after reconnecting.' : '仍可阅读本机缓存内容；需要云端的操作会在网络恢复后再继续。',
+      }
+    : manualConnectivityNotice
+      ? manualConnectivityNotice
+      : segmentError
+        ? {
+            tone: 'error',
+            title: isEnglish ? 'Some content failed to sync' : '部分内容同步失败',
+            detail: segmentError.error || (isEnglish ? 'Cached content is kept on screen. Retry when the connection is stable.' : '页面会保留可用缓存；网络稳定后可重试同步。'),
+          }
+        : null;
+  const connectivityDrawerState = computedConnectivityState && Date.now() - connectivityDismissedAt > 60000
+    ? computedConnectivityState
+    : null;
+
   return (
     <div data-theme={appTheme} className="min-h-screen bg-zinc-950 text-zinc-100 selection:bg-indigo-500/30 selection:text-indigo-200">
       <GlobalError errorMsg={errorMsg} />
       {installGuideModal}
+      <ConnectivityDrawer
+        state={connectivityDrawerState}
+        onRetry={() => {
+          setConnectivityDismissedAt(0);
+          setManualConnectivityNotice(null);
+          void refreshStories({ force: true });
+          if (gameState === 'ARCHIVE') void refreshArchiveStories({ force: true });
+        }}
+        onHome={() => {
+          setConnectivityDismissedAt(Date.now());
+          resetToHome();
+        }}
+        onDismiss={() => setConnectivityDismissedAt(Date.now())}
+      />
       
       {!isSessionHydrated ? (
         <StartupShell message={startupMessage} title={t('app.name')} subtitle={t('startup.default')} />
@@ -12249,6 +12660,7 @@ export default function App() {
           {actionMenuOverlay}
           {storyInfoPanel}
           {renderStoryDetailModal()}
+          {renderSequelGateModal()}
           {renderAuthorProfileModal()}
           {renderNotificationCenter()}
           {renderShareComposer()}

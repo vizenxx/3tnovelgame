@@ -1045,7 +1045,16 @@ export async function updateSharedStoryVisibility(
   } as any);
 }
 
-export async function adaptBlueprintToStory(db: Firestore, args: { authorId: string; authorName?: string; blueprint: any; chapters: any[]; conclusionText?: string; tags?: string[] }) {
+export async function adaptBlueprintToStory(db: Firestore, args: {
+  authorId: string;
+  authorName?: string;
+  blueprint: any;
+  chapters: any[];
+  conclusionText?: string;
+  tags?: string[];
+  seriesId?: string | null;
+  continuityNodeId?: string | null;
+}) {
   if (useSupabaseStories()) {
     return storyApi<string>('adaptBlueprintToStory', { args }, { auth: true, timeoutMs: 30000, stage: '一键改编' });
   }
@@ -1092,6 +1101,17 @@ export async function adaptBlueprintToStory(db: Firestore, args: { authorId: str
       selectedCharacterCards: bp.seriesContext?.selectedCharacterCards || [],
       continuityTitle: bp.continuityNode?.title || '',
       continuityNodeId: bp.continuityNode?.id || null,
+      sourceStoryId: bp.continuityNode?.sourceStoryId || bp.seriesSelection?.sourceStoryId || null,
+      sourceTitle: bp.continuityNode?.legacyState?.sourceTitle || '',
+      endingId: bp.continuityNode?.endingId || bp.seriesSelection?.endingId || '',
+      endingTitle: bp.continuityNode?.legacyState?.ending?.title || '',
+      endingDomain: bp.continuityNode?.endingDomain || '',
+      requiredBranchIds: asArray(bp.continuityNode?.requiredBranchIds || bp.seriesSelection?.requiredBranchIds),
+      requiredBranches: asArray(bp.continuityNode?.legacyState?.branches).map((branch: any) => ({
+        id: branch.id || '',
+        name: branch.name || branch.title || branch.id || '',
+        desc: branch.desc || branch.description || '',
+      })),
     },
     createdAt: now,
     updatedAt: now,
