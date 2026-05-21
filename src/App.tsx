@@ -5623,60 +5623,68 @@ export default function App() {
   };
 
   const startSequelWithInheritedRecord = async (storyId: string, cartridge: any, progressData: any, record: FateCompletionRecord, requirement: any) => {
-    const baseBlueprint = buildBlueprintFromCartridge(cartridge);
-    const originalChapterOne = asSafeArray<any>(baseBlueprint.chapters).find((chapter) => Number(chapter.chapter_num) === 1) || baseBlueprint.chapters?.[0] || {};
-    let inheritedChapterOne = buildInheritedFirstChapterText(originalChapterOne, record, requirement);
     try {
-      setStoryLaunchOverlay({ progress: 88, status: isEnglish ? 'Rewriting sequel opening...' : '正在融合前作命运线并重写续作开场...' });
-      const response = await apiFetch('/api/ai?action=generate-inherited-opening', {
-        method: 'POST',
-        body: JSON.stringify({
-          blueprint: baseBlueprint,
-          originalChapter: originalChapterOne,
-          fateRecord: {
-            ...record,
-            selectedEndingTitle: inheritedEndingDisplayLabel(record, requirement),
-          },
-          requirement,
-          targetWordCount,
-          language: appLanguage,
-        }),
-      }, 90000);
-      if (!response.ok) throw new Error(await readErrorMessage(response));
-      const rewritten = await response.json();
-      inheritedChapterOne = {
-        ...originalChapterOne,
-        ...rewritten,
-        chapter_num: 1,
-        text: rewritten.text || inheritedChapterOne.text,
-        summary: rewritten.summary || inheritedChapterOne.summary,
-        present_characters: Array.isArray(rewritten.present_characters) ? rewritten.present_characters : originalChapterOne.present_characters || [],
+      const baseBlueprint = buildBlueprintFromCartridge(cartridge);
+      const originalChapterOne = asSafeArray<any>(baseBlueprint.chapters).find((chapter) => Number(chapter.chapter_num) === 1) || baseBlueprint.chapters?.[0] || {};
+      let inheritedChapterOne = buildInheritedFirstChapterText(originalChapterOne, record, requirement);
+      try {
+        setStoryLaunchOverlay({ progress: 88, status: isEnglish ? 'Binding fate lines...' : '正在衔接命运...' });
+        const response = await apiFetch('/api/ai?action=generate-inherited-opening', {
+          method: 'POST',
+          body: JSON.stringify({
+            blueprint: baseBlueprint,
+            originalChapter: originalChapterOne,
+            fateRecord: {
+              ...record,
+              selectedEndingTitle: inheritedEndingDisplayLabel(record, requirement),
+            },
+            requirement,
+            targetWordCount,
+            language: appLanguage,
+          }),
+        }, 55000);
+        if (!response.ok) throw new Error(await readErrorMessage(response));
+        const rewritten = await response.json();
+        inheritedChapterOne = {
+          ...originalChapterOne,
+          ...rewritten,
+          chapter_num: 1,
+          text: rewritten.text || inheritedChapterOne.text,
+          summary: rewritten.summary || inheritedChapterOne.summary,
+          present_characters: Array.isArray(rewritten.present_characters) ? rewritten.present_characters : originalChapterOne.present_characters || [],
+        };
+      } catch (error) {
+        console.warn('[inherited-opening:rewrite-fallback]', error);
+        showError('继承开场生成暂时失败，已使用本机接续文本进入续作。');
+      }
+      const inheritedChapters = asSafeArray<any>(baseBlueprint.chapters).map((chapter) =>
+        Number(chapter.chapter_num) === 1 ? inheritedChapterOne : chapter
+      );
+      const inheritedProgress = {
+        ...(progressData || {}),
+        interventionsLeft: 3,
+        currentChapters: inheritedChapters,
+        naturalChapters: inheritedChapters,
+        initialNaturalChapters: inheritedChapters,
+        inheritedFromStoryId: record.sourceStoryId,
+        inheritedRunId: record.runId,
+        inheritedEndingId: record.selectedEndingId,
+        inheritedBranchIds: record.unlockedBranchIds,
+        inheritedFateRecord: record,
+        inheritancePatchApplied: true,
       };
+      setStoryLaunchOverlay({ progress: 96, status: isEnglish ? 'Opening the sequel...' : '命运已衔接，正在入场...' });
+      await saveUserProgress(db as any, user!.uid, storyId, inheritedProgress).catch((error) => {
+        console.warn('[progress:save-inherited-sequel]', error);
+      });
+      applyStoryCartridgeForPlay(storyId, cartridge, inheritedProgress);
+      showError('已继承前作命运线，续作开场已按该记录调整。');
     } catch (error) {
-      console.warn('[inherited-opening:rewrite-fallback]', error);
-      showError('继承开场生成暂时失败，已使用本机接续文本进入续作。');
+      console.error('[inherited-sequel:start]', error);
+      showError('续作继承失败，请稍后重试。');
+    } finally {
+      window.setTimeout(() => setStoryLaunchOverlay(null), 180);
     }
-    const inheritedChapters = asSafeArray<any>(baseBlueprint.chapters).map((chapter) =>
-      Number(chapter.chapter_num) === 1 ? inheritedChapterOne : chapter
-    );
-    const inheritedProgress = {
-      ...(progressData || {}),
-      interventionsLeft: 3,
-      currentChapters: inheritedChapters,
-      naturalChapters: inheritedChapters,
-      initialNaturalChapters: inheritedChapters,
-      inheritedFromStoryId: record.sourceStoryId,
-      inheritedRunId: record.runId,
-      inheritedEndingId: record.selectedEndingId,
-      inheritedBranchIds: record.unlockedBranchIds,
-      inheritedFateRecord: record,
-      inheritancePatchApplied: true,
-    };
-    await saveUserProgress(db as any, user!.uid, storyId, inheritedProgress).catch((error) => {
-      console.warn('[progress:save-inherited-sequel]', error);
-    });
-    applyStoryCartridgeForPlay(storyId, cartridge, inheritedProgress);
-    showError('已继承前作命运线，续作开场已按该记录调整。');
   };
 
   const resumeStoryPlay = async (storyId: string, progressData: any) => {
