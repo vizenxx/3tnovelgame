@@ -5259,10 +5259,41 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, [isRecoveringInvalidGameState]);
 
-  const resetGame = async () => {
+  const markCurrentRunAbandoned = async () => {
+    if (!user || !db || !activeStoryId) return;
+    try {
+      let existingProgress: any = null;
+      try {
+        existingProgress = await getUserProgress(db as any, user.uid, activeStoryId);
+      } catch (error) {
+        console.warn('[progress:load-before-abandon]', error);
+      }
+      await saveUserProgress(db as any, user.uid, activeStoryId, {
+        ...(existingProgress || {}),
+        userId: user.uid,
+        storyId: activeStoryId,
+        abandonedAt: new Date().toISOString(),
+        interventionsLeft: 0,
+        historicallyUnlockedBranches,
+        unlockedBranches: [],
+        currentChapters: [],
+        naturalChapters: [],
+        initialNaturalChapters: [],
+        interventionHistory: [],
+        storyConclusion: null,
+      });
+    } catch (error) {
+      console.warn('[progress:abandon-run]', error);
+    }
+  };
+
+  const resetGame = async (options: { discardCloudProgress?: boolean } = {}) => {
     if (!user || !db) return;
     try {
       setShowLeaveGameModal(false);
+      if (options.discardCloudProgress) {
+        await markCurrentRunAbandoned();
+      }
       const shouldRestoreStorySelectScroll = gameState === 'PLAYING';
       resetToHome();
       setSelectedThemes([]);
@@ -5319,6 +5350,21 @@ export default function App() {
       if (!cartridge) {
         showError(isEnglish ? 'Story reload failed. Returned to the library.' : '重新加载故事失败，已返回作品库。');
         await resetGame();
+        return;
+      }
+      const sequelGate = await evaluateSequelGate({ ...cartridge, meta: { ...(cartridge.meta || {}), id: storyId } });
+      if (!sequelGate.allowed) {
+        setSequelGateModal(sequelGate.modal);
+        return;
+      }
+      if ('eligibleRecords' in sequelGate && Array.isArray(sequelGate.eligibleRecords) && sequelGate.eligibleRecords.length > 0) {
+        setPendingSequelInheritance({
+          storyId,
+          cartridge,
+          progressData: { historicallyUnlockedBranches: preservedHistoricalBranches },
+          requirement: (sequelGate as any).requirement,
+          records: sequelGate.eligibleRecords as FateCompletionRecord[],
+        });
         return;
       }
       applyStoryCartridgeForPlay(storyId, cartridge, { historicallyUnlockedBranches: preservedHistoricalBranches }); // fresh run, account history preserved
@@ -5481,7 +5527,8 @@ export default function App() {
       const canResumeProgress =
         progressData &&
         Number(progressData.interventionsLeft ?? 0) > 0 &&
-        !progressData.storyConclusion;
+        !progressData.storyConclusion &&
+        !progressData.abandonedAt;
 
       if (canResumeProgress) {
         setStoryLaunchOverlay({ progress: 100, status: isEnglish ? 'Restorable fate line found' : '发现可继承的命运线' });
@@ -7574,7 +7621,7 @@ export default function App() {
               </button>
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   confirmationModal.onConfirm();
                   setConfirmationModal(prev => ({ ...prev, isOpen: false }));
                 }}
@@ -7691,10 +7738,28 @@ export default function App() {
               </button>
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   const pendingProgress = pendingProgressToLoad;
                   setPendingProgressToLoad(null);
                   if (pendingProgress) {
+                    const cartridge = pendingProgress.data?.cartridge;
+                    if (cartridge) {
+                      const sequelGate = await evaluateSequelGate({ ...cartridge, meta: { ...(cartridge.meta || {}), id: pendingProgress.id } });
+                      if (!sequelGate.allowed) {
+                        setSequelGateModal(sequelGate.modal);
+                        return;
+                      }
+                      if ('eligibleRecords' in sequelGate && Array.isArray(sequelGate.eligibleRecords) && sequelGate.eligibleRecords.length > 0) {
+                        setPendingSequelInheritance({
+                          storyId: pendingProgress.id,
+                          cartridge,
+                          progressData: pendingProgress.data,
+                          requirement: (sequelGate as any).requirement,
+                          records: sequelGate.eligibleRecords as FateCompletionRecord[],
+                        });
+                        return;
+                      }
+                    }
                     startNewStoryPlay(pendingProgress.id, pendingProgress.data?.cartridge, pendingProgress.data);
                   }
                 }}
@@ -7818,7 +7883,7 @@ export default function App() {
               {interventionsLeft > 0 && (
                 <button
                   type="button"
-                  onClick={resetGame}
+                  onClick={() => resetGame({ discardCloudProgress: true })}
                   className="w-full rounded-2xl bg-rose-500 py-4 text-sm font-black text-white shadow-lg shadow-rose-500/20"
                 >
                   放弃干涉并返回
@@ -7842,7 +7907,7 @@ export default function App() {
               </button>
               <button
                 type="button"
-                onClick={resetGame}
+                onClick={() => resetGame({ discardCloudProgress: true })}
                 className="w-full rounded-2xl bg-zinc-900 py-4 text-sm font-bold text-zinc-400"
               >
                 确认返回
