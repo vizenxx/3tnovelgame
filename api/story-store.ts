@@ -69,8 +69,13 @@ const SHARED_CARD_SELECT = [
   'created_at',
   'updated_at',
 ].join(',');
+const SHARED_CARD_LEGACY_SELECT = SHARED_CARD_SELECT
+  .split(',')
+  .filter((field) => field !== 'fate_record')
+  .join(',');
 const asArray = (value: any) => Array.isArray(value) ? value : [];
 const asInt = (value: any, fallback = 0) => Number.isFinite(Number(value)) ? Math.round(Number(value)) : fallback;
+const isMissingFateRecordColumn = (error: unknown) => /fate_record|schema cache|column/i.test(String((error as any)?.message || error || ''));
 const guestName = (uid: string) => `游客+${String(uid || '').slice(0, 6).toUpperCase()}`;
 
 class StoryStoreHttpError extends Error {
@@ -669,10 +674,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (action === 'listMySharedStories') {
       const authUser = await requireUser(req, res);
       if (!authUser) return;
+      const fetchSharedRows = async (select: string) => supabaseRequest<any[]>('shared_stories', {
+        query: { author_id: `eq.${authUser.uid}`, select, order: 'updated_at.desc', limit: body.pageSize || 50 },
+        timeoutMs: STORY_CARD_TIMEOUT_MS,
+      });
       const [rows, favoriteRows] = await Promise.all([
-        supabaseRequest<any[]>('shared_stories', {
-          query: { author_id: `eq.${authUser.uid}`, select: SHARED_CARD_SELECT, order: 'updated_at.desc', limit: body.pageSize || 50 },
-          timeoutMs: STORY_CARD_TIMEOUT_MS,
+        fetchSharedRows(SHARED_CARD_SELECT).catch((error) => {
+          if (isMissingFateRecordColumn(error)) return fetchSharedRows(SHARED_CARD_LEGACY_SELECT);
+          throw error;
         }),
         supabaseRequest<any[]>('story_favorites', {
           query: { user_id: `eq.${authUser.uid}`, select: 'story_id,created_at', order: 'created_at.desc', limit: body.pageSize || 50 },
@@ -1217,7 +1226,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return res.status(200).json(existing.id);
         }
       }
-      const [created] = await supabaseInsert<any[]>('shared_stories', [payload]);
+      const insertSharedStory = async (row: Record<string, any>) => supabaseInsert<any[]>('shared_stories', [row]);
+      const [created] = await insertSharedStory(payload).catch((error) => {
+        if (!isMissingFateRecordColumn(error)) throw error;
+        const { fate_record, ...legacyPayload } = payload;
+        return insertSharedStory(legacyPayload);
+      });
       return res.status(200).json(created.id);
     }
 
