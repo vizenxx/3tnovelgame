@@ -1768,6 +1768,8 @@ export default function App() {
   const [seriesSourceStoryId, setSeriesSourceStoryId] = useState('');
   const [quickContinuitySourceStory, setQuickContinuitySourceStory] = useState<any | null>(null);
   const [quickContinuityLoading, setQuickContinuityLoading] = useState(false);
+  const [authoringContinuitySourceStory, setAuthoringContinuitySourceStory] = useState<any | null>(null);
+  const [authoringContinuityLoading, setAuthoringContinuityLoading] = useState(false);
   const [quickSeriesSelection, setQuickSeriesSelection] = useState<SeriesSelectionState>({
     baselineRuleIds: [],
     characterIds: [],
@@ -3402,6 +3404,65 @@ export default function App() {
     };
   };
 
+  const buildSeriesCarryoverFromMeta = (meta?: any) => {
+    const constraints = meta?.seriesConstraints || meta?.series_constraints || {};
+    const seriesId = meta?.seriesId || meta?.series_id || null;
+    const seriesTitle = constraints.seriesTitle || meta?.seriesTitle || '';
+    const sourceStoryId = constraints.sourceStoryId || constraints.source_story_id || null;
+    const endingId = constraints.endingId || constraints.requiredEndingId || '';
+    const requiredBranchIds = asSafeArray<string>(constraints.requiredBranchIds || constraints.required_branch_ids);
+    const continuityNodeId = meta?.continuityNodeId || meta?.continuity_node_id || constraints.continuityNodeId || null;
+    const hasSeries = Boolean(seriesId || seriesTitle);
+    const hasContinuity = Boolean(sourceStoryId || endingId || requiredBranchIds.length || continuityNodeId);
+    return {
+      seriesContext: hasSeries ? {
+        id: seriesId || '',
+        title: seriesTitle || '',
+        pitch: '',
+        genreTags: constraints.genreTags || meta?.tags || [],
+        worldBible: {
+          baselineRules: constraints.selectedBaselineRules || [],
+          characterPool: constraints.selectedCharacterCards || [],
+        },
+        visibility: 'private',
+      } : null,
+      continuityNode: hasContinuity ? {
+        id: continuityNodeId || (sourceStoryId && endingId ? `anchor:${sourceStoryId}:${endingId}:${requiredBranchIds.join('-')}` : ''),
+        seriesId: seriesId || '',
+        sourceStoryId,
+        title: constraints.continuityTitle || constraints.endingTitle || '继承条件',
+        endingDomain: constraints.endingDomain || endingDomainFromId(endingId),
+        endingId,
+        requiredBranchIds,
+        optionalBranchIds: [],
+        bridgeSummary: constraints.bridgeSummary || '',
+        legacyState: {
+          sourceTitle: constraints.sourceTitle || '',
+          ending: { id: endingId, title: constraints.endingTitle || endingId },
+          branches: constraints.requiredBranches || [],
+          chapterArc: constraints.previousStorySummary || [],
+          characters: constraints.previousCharacters || [],
+        },
+        repairRules: constraints.repairRules || [],
+        sequelSeedPrompt: constraints.sequelSeedPrompt || '',
+        visibility: 'private',
+        createdBy: meta?.authorId || meta?.author_id || '',
+        createdAt: meta?.createdAt || meta?.created_at || '',
+        updatedAt: meta?.updatedAt || meta?.updated_at || '',
+      } as ContinuityNodeRecord : null,
+      seriesSelection: hasSeries ? {
+        baselineRuleIds: asSafeArray<string>(constraints.baselineRuleIds),
+        characterIds: asSafeArray<string>(constraints.characterIds),
+        useContinuity: hasContinuity,
+        sourceStoryId: sourceStoryId || '',
+        continuityNodeId: continuityNodeId || '',
+        requiredBranchIds,
+        endingId,
+        hardSettings: constraints.sequelSeedPrompt || asSafeArray<any>(constraints.repairRules).map((rule) => rule?.rule || rule?.text || rule).filter(Boolean).join('\n'),
+      } as SeriesSelectionState : null,
+    };
+  };
+
   const resolveSequelRequirement = async (meta?: any) => {
     const direct = getSequelRequirementFromMeta(meta);
     if (direct) return direct;
@@ -3952,6 +4013,80 @@ export default function App() {
   }, [quickSeriesSelection.sourceStoryId, db]);
 
   useEffect(() => {
+    if (gameState !== 'AUTHORING' || !authoringCartridge?.meta?.seriesId || authoringCartridge?.meta?.seriesRole !== 'sequel' || !db) {
+      setAuthoringContinuitySourceStory(null);
+      return;
+    }
+    const sourceStoryId = String(authoringCartridge.meta?.seriesConstraints?.sourceStoryId || '');
+    if (!sourceStoryId) {
+      setAuthoringContinuitySourceStory(null);
+      return;
+    }
+    let cancelled = false;
+    setAuthoringContinuityLoading(true);
+    getStoryCartridge(db as any, sourceStoryId)
+      .then((story) => {
+        if (cancelled) return;
+        setAuthoringContinuitySourceStory(story);
+        const branchIds = new Set(asSafeArray<any>(story?.branches).map((branch) => String(branch.id || '')).filter(Boolean));
+        const endingIds = new Set(asSafeArray<any>(story?.endings).map((ending) => String(ending.id || '')).filter(Boolean));
+        setAuthoringCartridge((prev: any) => {
+          if (!prev) return prev;
+          const constraints = prev.meta?.seriesConstraints || {};
+          const requiredBranchIds = asSafeArray<string>(constraints.requiredBranchIds).filter((id) => branchIds.has(id));
+          const endingId = constraints.endingId && endingIds.has(String(constraints.endingId)) ? constraints.endingId : '';
+          const previousStorySummary = asSafeArray<any>(story?.chapters)
+            .sort((a, b) => Number(a.chapter_num || a.chapterNum || 0) - Number(b.chapter_num || b.chapterNum || 0))
+            .map((chapter) => ({
+              chapterNum: Number(chapter.chapter_num || chapter.chapterNum || 0),
+              title: chapter.title || '',
+              summary: chapter.summary || String(chapter.text || '').slice(0, 260),
+            }))
+            .filter((chapter) => chapter.chapterNum || chapter.summary);
+          const previousCharacters = asSafeArray<any>(story?.meta?.characters || (story as any)?.characters)
+            .map((character) => ({
+              id: character.id || '',
+              name: character.name || '',
+              desc: character.desc || character.description || '',
+            }))
+            .filter((character) => character.name || character.desc);
+          return {
+            ...prev,
+            meta: {
+              ...prev.meta,
+              seriesConstraints: {
+                ...constraints,
+                requiredBranchIds,
+                requiredBranches: asSafeArray<any>(story?.branches).filter((branch) => requiredBranchIds.includes(String(branch.id || ''))).map((branch) => ({
+                  id: String(branch.id || ''),
+                  name: branch.name || branch.title || branch.id || '',
+                  desc: branch.desc || branch.description || '',
+                })),
+                endingId,
+                endingTitle: asSafeArray<any>(story?.endings).find((ending) => String(ending.id || '') === endingId)?.title || '',
+                previousStorySummary,
+                previousCharacters,
+              },
+            },
+          };
+        });
+      })
+      .catch((error) => {
+        console.error(error);
+        if (!cancelled) {
+          setAuthoringContinuitySourceStory(null);
+          showError(tr('前作资料读取失败。', 'Failed to load previous story data.'));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setAuthoringContinuityLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [gameState, authoringCartridge?.meta?.seriesId, authoringCartridge?.meta?.seriesRole, authoringCartridge?.meta?.seriesConstraints?.sourceStoryId, db]);
+
+  useEffect(() => {
     if (gameState !== 'SERIES_WORLD_EDIT' || !selectedSeriesId) return;
     const selected = seriesWorlds.find((series) => series.id === selectedSeriesId);
     if (selected) {
@@ -4040,6 +4175,7 @@ export default function App() {
     }
     try {
       setIsLoadingStories(true);
+      const carryover = buildSeriesCarryoverFromMeta(readonlyStoryData.meta);
       const blueprint = {
         title: stripBookTitle(readonlyStoryData.meta.title || '未命名故事'),
         main_axis: readonlyStoryData.meta.main_axis || '（无主轴记录）',
@@ -4056,6 +4192,9 @@ export default function App() {
         left_mainline_default: 40,
         right_mainline_default: 40,
         endingBias: { leftBaseWeight: 40, rightBaseWeight: 40 },
+        seriesContext: carryover.seriesContext,
+        continuityNode: carryover.continuityNode,
+        seriesSelection: carryover.seriesSelection,
       };
       const resetArtstyleChapters = toDefaultArtstyleChapters(readonlyStoryData.chapters);
       const storyId = await adaptBlueprintToStory(db as any, {
@@ -4064,6 +4203,10 @@ export default function App() {
         blueprint,
         chapters: resetArtstyleChapters,
         tags: readonlyStoryData.meta.tags || [],
+        seriesId: carryover.seriesContext?.id || readonlyStoryData.meta.seriesId || null,
+        continuityNodeId: carryover.continuityNode?.id && !String(carryover.continuityNode.id).startsWith('anchor:')
+          ? carryover.continuityNode.id
+          : null,
       });
       await refreshStories({ force: true });
       await selectAuthoringStory(storyId);
@@ -4734,11 +4877,13 @@ export default function App() {
     try {
       setIsLoadingStories(true);
       const blueprintAny = blueprint as any;
+      const metaCarryover = buildSeriesCarryoverFromMeta(activeStoryMeta);
       const fallbackSeries = !blueprintAny.seriesContext && quickSeriesBindingId
         ? seriesWorlds.find((series) => series.id === quickSeriesBindingId) || null
         : null;
-      const adaptContinuityNode = blueprintAny.continuityNode || null;
+      const adaptContinuityNode = blueprintAny.continuityNode || metaCarryover.continuityNode || null;
       const adaptSeriesContext = blueprintAny.seriesContext
+        || metaCarryover.seriesContext
         || buildAppliedSeriesContext(fallbackSeries, quickSeriesSelection, adaptContinuityNode)
         || null;
       const rawContinuityNodeId = String(adaptContinuityNode?.id || '');
@@ -4749,7 +4894,7 @@ export default function App() {
         ...blueprintAny,
         seriesContext: adaptSeriesContext,
         continuityNode: adaptContinuityNode,
-        seriesSelection: blueprintAny.seriesSelection || (adaptSeriesContext ? quickSeriesSelection : null),
+        seriesSelection: blueprintAny.seriesSelection || metaCarryover.seriesSelection || (adaptSeriesContext ? quickSeriesSelection : null),
       };
       const storyId = await adaptBlueprintToStory(db as any, {
         authorId: user.uid,
@@ -12185,6 +12330,9 @@ export default function App() {
                     const constraints = authoringCartridge.meta?.seriesConstraints || {};
                     const selectedRuleIds = asSafeArray<string>(constraints.baselineRuleIds);
                     const selectedCharacterIds = asSafeArray<string>(constraints.characterIds);
+                    const authoringSeriesStoryOptions = myStories.filter((story: any) => String(story?.id || '') !== String(authoringStoryId || '') && String(story?.seriesId || story?.series_id || story?.meta?.seriesId || story?.meta?.series_id || '') === String(authoringCartridge.meta?.seriesId || ''));
+                    const authoringContinuityBranches = asSafeArray<any>(authoringContinuitySourceStory?.branches);
+                    const authoringContinuityEndings = asSafeArray<any>(authoringContinuitySourceStory?.endings);
                     const updateSeriesConstraints = (patch: Record<string, any>) => setAuthoringCartridge((prev: any) => ({
                       ...prev,
                       meta: {
@@ -12195,6 +12343,31 @@ export default function App() {
                         },
                       },
                     }));
+                    const updateAuthoringSourceStory = (sourceStoryId: string) => {
+                      const sourceStory = authoringSeriesStoryOptions.find((story: any) => String(story.id || '') === sourceStoryId);
+                      setAuthoringCartridge((prev: any) => ({
+                        ...prev,
+                        meta: {
+                          ...prev.meta,
+                          continuityNodeId: null,
+                          seriesConstraints: {
+                            ...(prev.meta?.seriesConstraints || {}),
+                            continuityNodeId: '',
+                            continuityTitle: '',
+                            sourceStoryId: sourceStoryId || '',
+                            sourceTitle: sourceStory ? getStoryTitle(sourceStory) : '',
+                            endingId: '',
+                            endingTitle: '',
+                            endingDomain: '',
+                            requiredBranchIds: [],
+                            requiredBranches: [],
+                            bridgeSummary: '',
+                            previousStorySummary: [],
+                            previousCharacters: [],
+                          },
+                        },
+                      }));
+                    };
                     return (
                       <>
                         <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/40 p-4">
@@ -12298,39 +12471,126 @@ export default function App() {
                           )}
                         </div>
                         <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/40 p-4">
-                          <div className="mb-3 text-sm font-black text-white">{tr('继承节点', 'Continuity node')}</div>
-                          <div className="grid gap-3 sm:grid-cols-2">
-                            <select
-                              value={authoringCartridge.meta?.seriesRole || 'main'}
-                              onChange={(event) => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, seriesRole: event.target.value } }))}
-                              className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm text-zinc-200 outline-none"
-                            >
-                              <option value="main">{tr('第一部 / 正篇', 'First installment')}</option>
-                              <option value="sequel">{tr('续作', 'Sequel')}</option>
-                              <option value="side">{tr('外传', 'Side story')}</option>
-                            </select>
-                            <select
-                              value={authoringCartridge.meta?.continuityNodeId || ''}
-                              onChange={(event) => setAuthoringCartridge((prev: any) => ({
-                                ...prev,
-                                meta: {
-                                  ...prev.meta,
-                                  continuityNodeId: event.target.value || null,
-                                  seriesConstraints: {
-                                    ...(prev.meta?.seriesConstraints || {}),
-                                    continuityNodeId: event.target.value || '',
-                                    continuityTitle: continuityNodes.find((node) => node.id === event.target.value)?.title || '',
-                                  },
-                                },
-                              }))}
-                              className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm text-zinc-200 outline-none"
-                            >
-                              <option value="">{tr('不使用继承节点', 'No continuity node')}</option>
-                              {continuityNodes.map((node) => (
-                                <option key={node.id} value={node.id}>{node.title}</option>
-                              ))}
-                            </select>
+                          <div className="mb-3">
+                            <div className="text-sm font-black text-white">{tr('续作开启条件', 'Sequel unlock conditions')}</div>
+                            <p className="mt-1 text-xs leading-relaxed text-zinc-500">{tr('如果本作是续作，可指定需要先完成哪一部前作、哪一个结局，以及哪些支线，玩家才可以干涉本作。', 'If this work is a sequel, choose the previous story, ending, and branches required before players can interfere with it.')}</p>
                           </div>
+                          <select
+                            value={authoringCartridge.meta?.seriesRole || 'main'}
+                            onChange={(event) => setAuthoringCartridge((prev: any) => ({
+                              ...prev,
+                              meta: {
+                                ...prev.meta,
+                                seriesRole: event.target.value,
+                                ...(event.target.value !== 'sequel' ? { continuityNodeId: null } : {}),
+                              },
+                            }))}
+                            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm text-zinc-200 outline-none"
+                          >
+                            <option value="main">{tr('第一部 / 正篇', 'First installment')}</option>
+                            <option value="sequel">{tr('续作', 'Sequel')}</option>
+                            <option value="side">{tr('外传', 'Side story')}</option>
+                          </select>
+                          {authoringCartridge.meta?.seriesRole === 'sequel' && (
+                            <div className="mt-4 space-y-4">
+                              <select
+                                value={constraints.sourceStoryId || ''}
+                                onChange={(event) => updateAuthoringSourceStory(event.target.value)}
+                                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm text-zinc-200 outline-none"
+                              >
+                                <option value="">{tr('选择前作', 'Choose previous story')}</option>
+                                {authoringSeriesStoryOptions.map((story: any) => (
+                                  <option key={story.id} value={story.id}>{getStoryTitle(story)}</option>
+                                ))}
+                              </select>
+                              {authoringSeriesStoryOptions.length === 0 && (
+                                <p className="text-xs leading-relaxed text-zinc-500">{tr('该世界观下还没有其他作品可作为前作。', 'No other work in this world setting can be used as the previous story yet.')}</p>
+                              )}
+                              {authoringContinuityLoading && (
+                                <div className="flex items-center gap-2 text-xs font-bold text-indigo-200"><Loader2 className="h-3.5 w-3.5 animate-spin" />{tr('正在读取前作支线与结局...', 'Loading previous branches and endings...')}</div>
+                              )}
+                              {constraints.sourceStoryId && !authoringContinuityLoading && (
+                                <div className="grid gap-4">
+                                  <div>
+                                    <div className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-zinc-500">{tr('可开启续作的前作支线', 'Required previous-story branches')}</div>
+                                    {authoringContinuityBranches.length === 0 ? (
+                                      <p className="text-xs leading-relaxed text-zinc-500">{tr('该前作没有可选择的支线。', 'This previous story has no selectable branches.')}</p>
+                                    ) : (
+                                      <div className="grid gap-2 sm:grid-cols-2">
+                                        {authoringContinuityBranches.map((branch: any) => {
+                                          const branchId = String(branch.id || '');
+                                          const checked = asSafeArray<string>(constraints.requiredBranchIds).includes(branchId);
+                                          return (
+                                            <label key={branchId} className="flex items-start gap-2 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 text-xs text-zinc-300">
+                                              <input
+                                                type="checkbox"
+                                                checked={checked}
+                                                onChange={(event) => {
+                                                  const currentIds = asSafeArray<string>(constraints.requiredBranchIds);
+                                                  const nextIds = event.target.checked
+                                                    ? [...new Set([...currentIds, branchId])]
+                                                    : currentIds.filter((id) => id !== branchId);
+                                                  updateSeriesConstraints({
+                                                    requiredBranchIds: nextIds,
+                                                    requiredBranches: authoringContinuityBranches.filter((item) => nextIds.includes(String(item.id || ''))).map((item) => ({
+                                                      id: String(item.id || ''),
+                                                      name: item.name || item.title || item.id || '',
+                                                      desc: item.desc || item.description || '',
+                                                    })),
+                                                  });
+                                                }}
+                                                className="mt-1 accent-indigo-500"
+                                              />
+                                              <span>
+                                                <span className="block font-bold text-zinc-100">{branch.name || branch.title || branchId}</span>
+                                                {(branch.desc || branch.description) && <span className="mt-1 block leading-relaxed text-zinc-500">{branch.desc || branch.description}</span>}
+                                              </span>
+                                            </label>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div>
+                                    <div className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-zinc-500">{tr('可开启续作的前作结局', 'Required previous-story ending')}</div>
+                                    <div className="grid gap-2 sm:grid-cols-3">
+                                      {authoringContinuityEndings.map((ending: any) => {
+                                        const endingId = String(ending.id || '');
+                                        return (
+                                          <label key={endingId} className="flex items-start gap-2 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 text-xs text-zinc-300">
+                                            <input
+                                              type="radio"
+                                              name="authoring-continuity-ending"
+                                              checked={constraints.endingId === endingId}
+                                              onChange={() => updateSeriesConstraints({
+                                                endingId,
+                                                endingTitle: ending.title || endingId,
+                                                endingDomain: endingDomainFromId(endingId),
+                                              })}
+                                              className="mt-1 accent-indigo-500"
+                                            />
+                                            <span className="font-bold text-zinc-100">{ending.title || endingId}</span>
+                                          </label>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                  <textarea
+                                    value={constraints.sequelSeedPrompt || asSafeArray<any>(constraints.repairRules).map((rule) => rule?.rule || rule?.text || rule).filter(Boolean).join('\n')}
+                                    onChange={(event) => {
+                                      const lines = event.target.value.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+                                      updateSeriesConstraints({
+                                        sequelSeedPrompt: event.target.value,
+                                        repairRules: lines.map((rule) => ({ rule })),
+                                      });
+                                    }}
+                                    placeholder={tr('继承硬设定：一行一条，例如「前作中阵亡的人物不能无解释复活」。', 'Continuity hard rules: one per line, e.g. dead characters cannot return without explanation.')}
+                                    className="authoring-resizable-textarea min-h-[120px] w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-200 outline-none focus:border-indigo-500"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </>
                     );
