@@ -8469,7 +8469,7 @@ export default function App() {
             <div className="mb-2 text-sm font-bold text-zinc-400/85">
               <AuthorNameButton authorId={story.authorId || story.meta?.authorId} authorName={getStoryAuthorName(story)} />
             </div>
-            <p className="mb-3 line-clamp-3 text-[0.98rem] leading-relaxed text-zinc-300/85 transition-colors group-hover:text-zinc-200">
+            <p className="story-library-desc-fade mb-3 text-[0.98rem] leading-relaxed text-zinc-300/85 transition-colors group-hover:text-zinc-200">
               {getStoryMainAxis(story)}
             </p>
             <div className="mb-3 flex min-w-0 flex-wrap gap-1.5">
