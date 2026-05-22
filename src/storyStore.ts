@@ -1181,7 +1181,7 @@ export async function adaptBlueprintToStory(db: Firestore, args: {
       side: b.side === 'left' ? 'left' : 'right',
       tier: b.score >= 5 ? 'large' : b.score >= 3 ? 'large' : b.score >= 2 ? 'medium' : 'small',
       name: b.name || '未命名支线',
-      hint: b.hint || '',
+      hint: '',
       desc: b.desc || b.sceneText || '',
       common: false,
       trigger: b.trigger || { type: 'single', single: { chapterNum: 2, charId: normalizedChars[0].id, action: 'bless' } },

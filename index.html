@@ -58,10 +58,9 @@
         text-align: center;
         /* warm literary dark background */
         background:
-          radial-gradient(ellipse 70% 50% at 50% 38%, rgba(99, 118, 240, 0.07) 0%, transparent 65%),
-          radial-gradient(ellipse 55% 40% at 50% 42%, rgba(205, 155, 90, 0.04) 0%, transparent 60%),
-          radial-gradient(ellipse 100% 60% at 50% 100%, rgba(30, 20, 10, 0.5) 0%, transparent 70%),
-          linear-gradient(180deg, #07070c 0%, #050508 60%, #080604 100%);
+          radial-gradient(ellipse 72% 48% at 50% 34%, rgba(129, 140, 248, 0.09) 0%, transparent 66%),
+          radial-gradient(ellipse 60% 42% at 50% 58%, rgba(176, 132, 72, 0.055) 0%, transparent 68%),
+          linear-gradient(180deg, #08080d 0%, #050507 58%, #080705 100%);
       }
 
       /* subtle paper-grain noise overlay */
@@ -99,13 +98,13 @@
       .boot-mark::before {
         content: "";
         position: absolute;
-        inset: -28px;
+        inset: -34px;
         border-radius: 50%;
         background: radial-gradient(
           circle,
-          rgba(99, 118, 240, 0.2) 0%,
-          rgba(180, 130, 70, 0.07) 45%,
-          transparent 70%
+          rgba(129, 140, 248, 0.22) 0%,
+          rgba(176, 132, 72, 0.06) 42%,
+          transparent 72%
         );
         animation: boot-glow-pulse 3.2s ease-in-out infinite;
       }
@@ -118,28 +117,15 @@
         height: 120px;
         object-fit: contain;
         filter:
-          drop-shadow(0 0 22px rgba(129, 140, 248, 0.5))
-          drop-shadow(0 0 60px rgba(99, 118, 240, 0.2))
-          drop-shadow(0 8px 28px rgba(0, 0, 0, 0.55));
+          drop-shadow(0 0 18px rgba(129, 140, 248, 0.42))
+          drop-shadow(0 0 48px rgba(99, 118, 240, 0.16))
+          drop-shadow(0 10px 30px rgba(0, 0, 0, 0.48));
         animation: boot-icon-in 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
       }
 
       /* sweeping light band — clipped to circle */
       .boot-mark::after {
-        content: "";
-        position: absolute;
-        inset: 0;
-        z-index: 2;
-        clip-path: circle(50% at 50% 50%);
-        background: linear-gradient(
-          115deg,
-          transparent 25%,
-          rgba(255, 255, 255, 0.18) 48%,
-          rgba(255, 255, 255, 0.06) 52%,
-          transparent 70%
-        );
-        animation: boot-sweep 2.8s cubic-bezier(0.4, 0, 0.2, 1) 0.8s infinite;
-        pointer-events: none;
+        display: none;
       }
 
       /* ── Text block ────────────────────────────────────────── */

@@ -14,6 +14,7 @@ export type RuntimeBranchLike = StoryBranchDoc & {
   condition_chapter?: number;
   score?: number;
   is_hidden?: boolean;
+  hidden?: boolean;
 };
 
 export type StoryRunDecision = {

@@ -12,6 +12,18 @@ export function buildQuickStoryBlueprintPrompt(args: {
 }) {
   const isSingleEnding = args.endingMode === 'single';
   const isEnglish = args.language === 'en-US';
+  const branchRulesInstruction = isEnglish
+    ? `Branch design hard rules:
+1. Single-ending stories still need branches, but those branches must not guide left/right ending domains or create mutually exclusive finales. They change route, cost, clues, relationships, revealed meaning, and how naturally the same finale is reached.
+2. Branch name must be a short branch title, never just a character name. Branch desc must be a concrete plot change, hidden implication, and branch meaning; it must not repeat the hint.
+3. Hints belong to triggerGroups, not to the branch itself. If a branch has multiple trigger groups, each condition group must have its own hint.`
+    : `支线设计硬规则：
+1. 单一结局也必须有支线，但支线不需要导向左/右结局域，也不参与左右结局域引导；它们只改变抵达同一终局的路径、代价、线索、人物关系、理解和收束自然度。
+2. 支线 name 必须是简短支线标题，不能只是角色名；desc 必须写具体情节变化、隐藏内幕和支线意义，不要与提示词重复。
+3. 提示词必须放在 triggerGroups 的每个条件组里，而不是放在支线本身上；多条件支线必须每个条件各有自己的 hint。`;
+  args.customOutline = args.customOutline
+    ? `${args.customOutline}\n\n${branchRulesInstruction}`
+    : branchRulesInstruction;
   const selectedBaselineRules = Array.isArray(args.seriesContext?.selectedBaselineRules)
     ? args.seriesContext.selectedBaselineRules
     : [];
@@ -80,6 +92,7 @@ Sequel continuity hard requirements:
 Known themes: ${Array.isArray(args.selectedThemes) && args.selectedThemes.length > 0 ? args.selectedThemes.join(', ') : 'none'}.
 Player story request / outline: ${args.customOutline ? args.customOutline : 'none'}.
 ${seriesInstruction}${continuityInstruction}${continuityHardInstruction}
+${branchRulesInstruction}
 Narrative person hard constraint: ${buildNarrativePersonInstruction(args.narrativePerson, 'blueprint', args.language)}
 Ending structure hard constraint: ${isSingleEnding
   ? 'Single ending. No matter how players later interfere, the finale must naturally converge on the same core ending. Branches and interventions may change the route, cost, understanding, and relationships, but must not create mutually exclusive finales.'
@@ -106,11 +119,11 @@ Output requirements:
 6. Each character desc must be a concrete 12-28 word English description containing at least two of: role, motive, contradiction.
 7. Set endingMode to ${isSingleEnding ? '"single"' : '"dual"'}; also keep left_mainline_default and right_mainline_default (0-100) for compatibility.
 8. The endings array must still output 3 items for compatibility: normal=default, good=left, bad=right. ${isSingleEnding ? 'All three must converge on the same core finale, with only route, cost, and understanding differing.' : 'All three should be coherent chapter-seven ending directions.'}
-9. Plan 6-10 branch fate points. ${isSingleEnding ? 'Branches may have directional weight, but must not lead to mutually exclusive finales; they should change route, cost, and revealed meaning.' : 'Split them roughly between left and right. Branch events must work with the left/right mainline math.'}
-10. Each branch must include a hint of 4-12 English words for subtle UI foreshadowing without exposing the full trigger.
-11. condition_char must use an existing character ID; condition_chapter must be an integer from 2 to 6; condition_action must be bless or curse.
-12. desc must clearly state the concrete story change and hidden implication when that branch happens.
-13. name must be a branch name, not a paragraph of background.
+9. Plan 6-10 branch fate points. ${isSingleEnding ? 'Single-ending stories still need branches. They must not guide toward left/right ending domains or mutually exclusive finales; they should change route, cost, clues, relationships, revealed meaning, and how naturally the same finale is reached.' : 'Split them roughly between left and right. Branch events must work with the left/right mainline math.'}
+10. A branch is an individual story event setup. name must be a short branch title such as "The Glass Debt" or "The Locked Letter"; it must never be only a character name.
+11. desc must clearly state the concrete story change, hidden implication, and why this branch matters. It must not simply repeat the hint.
+12. Put hint on each trigger condition, not on the branch itself. If a branch has multiple triggerGroups, each trigger group should have its own 4-12 English word hint.
+13. condition_char must use an existing character ID; condition_chapter must be an integer from 2 to 6; condition_action must be bless or curse. Also output triggerGroups mirroring these fields, with hint on each group.
 14. chapter titles/summaries must fit the requested narrative person and avoid forcing viewpoint shifts.
 
 Return strict JSON only. Do not include metadata. Reference chapter length: ${args.targetWordCount} words.`;

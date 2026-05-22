@@ -6575,9 +6575,9 @@ export default function App() {
         is_hidden: branchForm.isHidden,
         endingId: branchForm.endingId || undefined,
         name: branchForm.name || '未命名支线',
-        hint: branchForm.hint || `留意${branchForm.name || '支线变化'}`,
         desc: branchForm.sceneText.slice(0, 80) || branchForm.name || '支线',
         common: false,
+        hint: '',
         trigger: normalizeBranchConditionsForStorage(branchConditions)[0],
         triggerGroups: normalizeBranchConditionsForStorage(branchConditions),
         inject: {
@@ -11638,16 +11638,15 @@ export default function App() {
               showError(tr('请先填写支线名。', 'Please enter a branch name first.'));
               return;
             }
-            const combinedHint = branchConditions.map(c => c.hint || '').filter(Boolean).join('；') || `留意${branchForm.name}`;
             const payload = {
               side: branchForm.side,
               tier: normalizeBranchTier(branchForm.tier),
               is_hidden: branchForm.isHidden,
               endingId: branchForm.endingId || undefined,
               name: branchForm.name,
-              hint: combinedHint,
               desc: branchForm.sceneText.slice(0, 80) || branchForm.name,
               common: false,
+              hint: '',
               trigger: normalizeBranchConditionsForStorage(branchConditions)[0],
               triggerGroups: normalizeBranchConditionsForStorage(branchConditions),
               inject: { mustHappen: branchForm.sceneText ? [branchForm.sceneText] : [], mustReveal: [], mustChange: [], hidden: branchForm.isHidden, endingId: branchForm.endingId || undefined },

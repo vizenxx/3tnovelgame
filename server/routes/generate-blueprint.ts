@@ -69,8 +69,36 @@ const blueprintSchema = {
           desc: { type: Type.STRING },
           is_hidden: { type: Type.BOOLEAN },
           hint: { type: Type.STRING },
+          triggerGroups: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                type: { type: Type.STRING, description: 'single or count' },
+                hint: { type: Type.STRING, description: 'Hint for this exact trigger condition.' },
+                single: {
+                  type: Type.OBJECT,
+                  properties: {
+                    chapterNum: { type: Type.INTEGER },
+                    charId: { type: Type.STRING },
+                    action: { type: Type.STRING },
+                  },
+                },
+                count: {
+                  type: Type.OBJECT,
+                  properties: {
+                    charId: { type: Type.STRING },
+                    action: { type: Type.STRING },
+                    minCount: { type: Type.INTEGER },
+                    upToChapterNum: { type: Type.INTEGER },
+                  },
+                },
+              },
+              required: ['type', 'hint'],
+            },
+          },
         },
-        required: ['id', 'name', 'score', 'side', 'condition_char', 'condition_action', 'condition_chapter', 'desc', 'is_hidden', 'hint'],
+        required: ['id', 'name', 'score', 'side', 'condition_char', 'condition_action', 'condition_chapter', 'desc', 'is_hidden'],
       },
     },
   },
@@ -153,6 +181,65 @@ function normalizeBlueprint(raw: any, requestedEndingMode: 'single' | 'dual' = '
     ];
   }
 
+  const characterIds = characters.map((character: any) => character.id);
+  const characterNames = new Set(characters.map((character: any) => String(character.name || '').trim()).filter(Boolean));
+  const normalizeGeneratedTriggerGroups = (branch: any, index: number) => {
+    const fallbackCharId = characterIds[index % Math.max(1, characterIds.length)] || 'c1';
+    const rawGroups = Array.isArray(branch?.triggerGroups)
+      ? branch.triggerGroups
+      : Array.isArray(branch?.trigger_groups)
+        ? branch.trigger_groups
+        : [];
+    const groups = rawGroups.slice(0, 3).map((group: any) => {
+      const type = group?.type === 'count' ? 'count' : 'single';
+      const hint = String(group?.hint || branch?.hint || '').trim();
+      if (type === 'count') {
+        const count = group?.count || {};
+        return {
+          type: 'count',
+          count: {
+            charId: String(count.charId || count.char_id || branch?.condition_char || fallbackCharId),
+            action: String(count.action || branch?.condition_action) === 'curse' ? 'curse' : 'bless',
+            minCount: Math.max(1, Number(count.minCount || count.min_count) || 1),
+            upToChapterNum: Math.min(6, Math.max(2, Number(count.upToChapterNum || count.up_to_chapter_num || branch?.condition_chapter) || 6)),
+          },
+          hint,
+        };
+      }
+      const single = group?.single || {};
+      return {
+        type: 'single',
+        single: {
+          chapterNum: Math.min(6, Math.max(2, Number(single.chapterNum || single.chapter_num || branch?.condition_chapter) || 2)),
+          charId: String(single.charId || single.char_id || branch?.condition_char || fallbackCharId),
+          action: String(single.action || branch?.condition_action) === 'curse' ? 'curse' : 'bless',
+        },
+        hint,
+      };
+    }).filter((group: any) => {
+      const target = group.type === 'count' ? group.count : group.single;
+      return target?.charId && characterIds.includes(target.charId);
+    });
+    if (groups.length > 0) return groups;
+    return [{
+      type: 'single',
+      single: {
+        chapterNum: Math.min(6, Math.max(2, Number(branch?.condition_chapter) || 2)),
+        charId: String(branch?.condition_char || fallbackCharId),
+        action: String(branch?.condition_action) === 'curse' ? 'curse' : 'bless',
+      },
+      hint: String(branch?.hint || '命运有细微回声').trim(),
+    }];
+  };
+  const normalizeGeneratedBranchName = (branch: any, index: number) => {
+    const rawName = String(branch?.name || '').trim();
+    if (rawName && !characterNames.has(rawName)) return rawName.slice(0, 24);
+    const desc = String(branch?.desc || branch?.sceneText || '').replace(/\s+/g, ' ').trim();
+    const derived = desc.split(/[。！？!?.,，；;]/)[0]?.trim();
+    if (derived && !characterNames.has(derived)) return derived.slice(0, 18);
+    return `支线 ${index + 1}`;
+  };
+
   let branches = Array.isArray(raw.branches)
     ? raw.branches.slice(0, 10).map((branch: any, index: number) => ({
         id: String(branch?.id || `b_${index + 1}`).trim(),
@@ -195,6 +282,22 @@ function normalizeBlueprint(raw: any, requestedEndingMode: 'single' | 'dual' = '
       },
     ])).slice(0, 6);
   }
+  branches = branches.map((branch: any, index: number) => {
+    const rawBranch = Array.isArray(raw.branches) ? raw.branches[index] || branch : branch;
+    const triggerGroups = normalizeGeneratedTriggerGroups(rawBranch, index);
+    return {
+      ...branch,
+      name: normalizeGeneratedBranchName(rawBranch, index),
+      condition_char: triggerGroups[0]?.single?.charId || triggerGroups[0]?.count?.charId || branch.condition_char,
+      condition_action: triggerGroups[0]?.single?.action || triggerGroups[0]?.count?.action || branch.condition_action,
+      condition_chapter: triggerGroups[0]?.single?.chapterNum || triggerGroups[0]?.count?.upToChapterNum || branch.condition_chapter,
+      hint: '',
+      trigger: triggerGroups[0],
+      triggerGroups,
+      sceneText: String(rawBranch?.sceneText || rawBranch?.desc || branch.desc || '').trim(),
+      inject: rawBranch?.inject || { mustHappen: rawBranch?.desc ? [String(rawBranch.desc).trim()] : [], mustReveal: [], mustChange: [] },
+    };
+  });
 
   return {
     ...raw,
