@@ -1739,6 +1739,11 @@ export default function App() {
   const resetToHome = () => {
     resetNavigationTo('STORY_SELECT');
   };
+  const scrollToTopAfterViewChange = () => {
+    if (typeof window === 'undefined') return;
+    window.setTimeout(() => window.scrollTo({ top: 0, behavior: 'auto' }), 0);
+    window.setTimeout(() => window.scrollTo({ top: 0, behavior: 'auto' }), 80);
+  };
   const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
   const [globalLoadingMessage, setGlobalLoadingMessage] = useState<string | null>(null);
   const [globalLoadingDetail, setGlobalLoadingDetail] = useState<string | null>(null);
@@ -5535,6 +5540,7 @@ export default function App() {
     setDeltaWorldStateByChapter(progressData?.deltaWorldStateByChapter || {});
     setUiFeedback(progressData?.uiFeedback || { leftProgress: 0, rightProgress: 0, endingLabel: '均衡道' });
     navigateTo('PLAYING');
+    scrollToTopAfterViewChange();
   };
 
   const startStoryPlay = async (storyId: string) => {
@@ -6308,6 +6314,7 @@ export default function App() {
       setQuickEndingMode(activeGenerationInput.endingMode);
       setQuickEndingBias(activeGenerationInput.endingBias);
       navigateTo('PLAYING', { replace: true });
+      scrollToTopAfterViewChange();
     } catch (error) {
       console.error(error);
       const detail = error instanceof Error && error.message
