@@ -1929,6 +1929,8 @@ export default function App() {
   const [profileCurrentPassword, setProfileCurrentPassword] = useState('');
   const [profileNewPassword, setProfileNewPassword] = useState('');
   const [isAccountCenterOpen, setIsAccountCenterOpen] = useState(false);
+  const [accountCenterMode, setAccountCenterMode] = useState<'personal' | 'settings'>('personal');
+  const [isCreationDockOpen, setIsCreationDockOpen] = useState(false);
   const [showLeaveGameModal, setShowLeaveGameModal] = useState(false);
   const [pendingProgressToLoad, setPendingProgressToLoad] = useState<{ id: string, data: any } | null>(null);
 
@@ -4459,11 +4461,24 @@ export default function App() {
     setArchiveReturnTarget(returnTarget);
     setIsActionMenuOpen(false);
     setIsAccountCenterOpen(false);
+    setIsCreationDockOpen(false);
     setArchiveChoiceStoryId(null);
     markStoryListSegment('archive', 'loading');
     navigateTo('ARCHIVE');
     void refreshArchiveStories({ force: true });
     void refreshFollowedAuthors();
+  };
+
+  const openPersonalCenter = () => {
+    setAccountCenterMode('personal');
+    setIsCreationDockOpen(false);
+    setIsAccountCenterOpen(true);
+  };
+
+  const openSystemSettings = () => {
+    setAccountCenterMode('settings');
+    setIsCreationDockOpen(false);
+    setIsAccountCenterOpen(true);
   };
 
   const leaveArchiveView = () => {
@@ -8799,15 +8814,14 @@ export default function App() {
     const languagePublicCount = publicStories.filter((story) => storyMatchesLanguage(story, appLanguage)).length;
     const languageMineCount = myStories.filter((story) => storyMatchesLanguage(story, appLanguage)).length;
     return (
-    <div className="story-library-page mx-auto max-w-7xl px-5 pb-12 pt-[max(3rem,calc(env(safe-area-inset-top)+3rem))] sm:px-6 lg:px-8">
-      <div className="story-library-hero relative mb-10 overflow-hidden p-5 sm:p-7 lg:p-8">
+    <div className="story-library-page mx-auto max-w-7xl px-5 pb-32 pt-[max(3rem,calc(env(safe-area-inset-top)+3rem))] sm:px-6 lg:px-8">
+      <div className="story-library-hero relative mb-10 p-2 sm:p-4 lg:p-6">
         <div
           className="absolute right-4 top-4 rounded-full border border-zinc-800/70 bg-zinc-950/45 px-2.5 py-1 text-[10px] font-black tracking-[0.12em] text-zinc-500 backdrop-blur-md"
           title={APP_BUILD_LABEL || APP_VERSION_LABEL}
         >
           {APP_VERSION_LABEL}
         </div>
-        <div className="flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
         <div className="max-w-3xl">
           <div className="story-library-eyebrow mb-4">
             <Sparkles className="h-3.5 w-3.5" />
@@ -8820,40 +8834,6 @@ export default function App() {
           <p className="mt-5 max-w-2xl text-base font-medium leading-relaxed text-zinc-400 sm:text-lg">
             {t('library.subtitle')}
           </p>
-        </div>
-        <div className="flex flex-wrap gap-3 lg:justify-end">
-          {!isStandaloneMode && (
-            <button
-              type="button"
-              onClick={handleInstallApp}
-              className={semanticButtonClass('ghost', { compact: true })}
-            >
-              <Download className="h-4 w-4" />
-              {t('auth.install')}
-            </button>
-          )}
-          <button
-            onClick={() => navigateTo('THEME_SELECTION')}
-            className={semanticButtonClass('primary', { compact: true })}
-          >
-            <Wand2 className="h-4 w-4" />
-            {t('library.create')}
-          </button>
-          <button
-            onClick={() => enterAuthoring()}
-            className={semanticButtonClass('secondary', { compact: true })}
-          >
-            <Sparkles className="h-4 w-4" />
-            {t('library.authoring')}
-          </button>
-          <button
-            onClick={() => void openSeriesWorldCreateView()}
-            className={semanticButtonClass('ghost', { compact: true })}
-          >
-            <GitBranch className="h-4 w-4" />
-            {tr('创建世界观设定', 'Create World Setting')}
-          </button>
-        </div>
         </div>
       </div>
 
@@ -10492,6 +10472,7 @@ export default function App() {
     { label: tr('追踪作者', 'Followed authors'), value: followedAuthors.length },
     { label: tr('我的作品', 'My works'), value: myStories.length },
   ];
+  const isSystemSettingsMode = accountCenterMode === 'settings';
 
   const accountCenterModal = (
     <AnimatePresence>
@@ -10512,8 +10493,12 @@ export default function App() {
           >
             <div className="mb-6 flex items-center justify-between">
               <div>
-                <div className="text-xs font-black uppercase tracking-[0.24em] text-zinc-500">{tr('个人中心', 'Account Center')}</div>
-                <div className="mt-1 text-2xl font-black text-white">{getUserAuthorName(user)}</div>
+                <div className="text-xs font-black uppercase tracking-[0.24em] text-zinc-500">
+                  {isSystemSettingsMode ? tr('系统设置', 'System Settings') : tr('个人中心', 'Account Center')}
+                </div>
+                <div className="mt-1 text-2xl font-black text-white">
+                  {isSystemSettingsMode ? tr('系统设置', 'System Settings') : getUserAuthorName(user)}
+                </div>
                 <div className="text-sm text-zinc-500">{user?.email || tr('游客账号', 'Guest account')}</div>
                 {user?.isAnonymous && (
                   <div className="mt-3 max-w-xl rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-50/80">
@@ -10526,6 +10511,7 @@ export default function App() {
               </button>
             </div>
 
+            {!isSystemSettingsMode && (
             <section className="mb-6 rounded-[1.5rem] border border-indigo-300/15 bg-indigo-500/10 p-5">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
@@ -10545,14 +10531,17 @@ export default function App() {
                 ))}
               </div>
             </section>
+            )}
 
             <div className="grid gap-6 lg:grid-cols-2">
-              <section className="rounded-[1.5rem] border border-zinc-800 bg-zinc-900/30 p-5">
+              <section className={`rounded-[1.5rem] border border-zinc-800 bg-zinc-900/30 p-5 ${isSystemSettingsMode ? 'lg:col-span-2' : ''}`}>
                 <div className="mb-4 flex items-center gap-2 text-lg font-black text-white">
                   <Settings className="h-5 w-5 text-indigo-300" />
-                  {tr('账号设置', 'Account Settings')}
+                  {isSystemSettingsMode ? tr('系统设置', 'System Settings') : tr('个人资料', 'Profile')}
                 </div>
                 <div className="space-y-3">
+                  {isSystemSettingsMode && (
+                    <>
                   <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
                     <div className="mb-3 flex items-center justify-between gap-3">
                       <div>
@@ -10643,6 +10632,10 @@ export default function App() {
                       </div>
                     </div>
                   </div>
+                    </>
+                  )}
+                  {!isSystemSettingsMode && (
+                    <>
                   <input
                     value={profileDisplayName}
                     onChange={(event) => setProfileDisplayName(event.target.value)}
@@ -10690,9 +10683,12 @@ export default function App() {
                     <LogOut className="h-4 w-4" />
                     {tr('登出', 'Log out')}
                   </button>
+                    </>
+                  )}
                 </div>
               </section>
 
+              {!isSystemSettingsMode && (
               <section className="rounded-[1.5rem] border border-zinc-800 bg-zinc-900/30 p-5">
                 <div className="mb-4 flex items-center gap-2 text-lg font-black text-white">
                   <Archive className="h-5 w-5 text-indigo-300" />
@@ -10712,8 +10708,9 @@ export default function App() {
                   </button>
                 </div>
               </section>
+              )}
 
-              {isAdminUser && (
+              {isSystemSettingsMode && isAdminUser && (
                 <section className="rounded-[1.5rem] border border-amber-500/25 bg-amber-500/10 p-5 lg:col-span-2">
                   <div className="mb-4 flex items-center gap-2 text-lg font-black text-white">
                     <Settings className="h-5 w-5 text-amber-300" />
@@ -11114,11 +11111,11 @@ export default function App() {
         )}
         <button
           type="button"
-          onClick={() => setIsAccountCenterOpen(true)}
-          aria-label={tr('打开个人中心', 'Open account center')}
+          onClick={openSystemSettings}
+          aria-label={tr('打开系统设置', 'Open system settings')}
           className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950/80 text-zinc-200 transition-colors hover:border-zinc-600 hover:text-white backdrop-blur-md"
         >
-          <UserIcon className="h-5 w-5" />
+          <Settings className="h-5 w-5" />
         </button>
         {notificationBellButton('md')}
         <button
@@ -11134,25 +11131,101 @@ export default function App() {
 
   const accountEntryButton = user && gameState !== 'PLAYING' ? (
     <div className="fixed right-4 top-[max(1rem,env(safe-area-inset-top))] z-[2100] flex items-center gap-2 sm:right-6">
-      <button
-        type="button"
-        onClick={() => openArchiveView('STORY_SELECT')}
-        aria-label={tr('打开命运收藏馆', 'Open fate archive')}
-        className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950/85 text-zinc-200 transition-colors hover:border-zinc-600 hover:text-white backdrop-blur-md"
-      >
-        <Archive className="h-5 w-5" />
-      </button>
       {notificationBellButton('sm')}
       <button
         type="button"
-        onClick={() => setIsAccountCenterOpen(true)}
-        aria-label={tr('打开个人中心', 'Open account center')}
+        onClick={openSystemSettings}
+        aria-label={tr('打开系统设置', 'Open system settings')}
         className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950/85 text-zinc-200 transition-colors hover:border-zinc-600 hover:text-white backdrop-blur-md"
       >
-        <UserIcon className="h-5 w-5" />
+        <Settings className="h-5 w-5" />
       </button>
     </div>
   ) : null;
+
+  const shouldShowPrimaryBottomDock = Boolean(user && !['PLAYING', 'READONLY_STORY', 'GENERATING_BLUEPRINT', 'SUMMARY'].includes(gameState));
+  const primaryBottomDock = shouldShowPrimaryBottomDock && typeof document !== 'undefined'
+    ? createPortal(
+      <div className="pointer-events-none fixed inset-x-0 bottom-[max(0.85rem,calc(env(safe-area-inset-bottom)+0.7rem))] z-[2600] flex justify-center px-4">
+        <AnimatePresence>
+          {isCreationDockOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: 12, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 12, scale: 0.97 }}
+              className="pointer-events-auto absolute bottom-20 w-[min(92vw,28rem)] rounded-[1.6rem] border border-zinc-800/80 bg-zinc-950/95 p-3 shadow-2xl shadow-black/40 backdrop-blur-xl"
+            >
+              <div className="grid gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCreationDockOpen(false);
+                    navigateTo('THEME_SELECTION');
+                  }}
+                  className={semanticMenuButtonClass('primary')}
+                >
+                  <Wand2 className="h-4 w-4" />
+                  {tr('快速生成故事', 'Quick story')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCreationDockOpen(false);
+                    void openSeriesWorldCreateView();
+                  }}
+                  className={semanticMenuButtonClass('ghost')}
+                >
+                  <GitBranch className="h-4 w-4" />
+                  {tr('创建世界观', 'Create world setting')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCreationDockOpen(false);
+                    void enterAuthoring();
+                  }}
+                  className={semanticMenuButtonClass('ghost')}
+                >
+                  <PenSquare className="h-4 w-4" />
+                  {tr('作者后台', 'Author studio')}
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        <div className="pointer-events-auto grid w-[min(92vw,30rem)] grid-cols-3 overflow-hidden rounded-[1.65rem] border border-zinc-800/80 bg-zinc-950/88 p-1 shadow-2xl shadow-black/35 backdrop-blur-xl">
+          <button
+            type="button"
+            onClick={() => {
+              setIsCreationDockOpen(false);
+              resetToHome();
+            }}
+            className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-[1.2rem] px-2 text-[11px] font-black transition-all active:scale-[0.98] ${gameState === 'STORY_SELECT' ? 'bg-zinc-100 text-zinc-950' : 'text-zinc-400 hover:bg-zinc-900/80 hover:text-zinc-100'}`}
+          >
+            <BookOpen className="h-4 w-4" />
+            {tr('作品首页', 'Library')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsCreationDockOpen((prev) => !prev)}
+            className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-[1.2rem] px-2 text-[11px] font-black transition-all active:scale-[0.98] ${isCreationDockOpen || ['THEME_SELECTION', 'AUTHORING', 'SERIES_WORLD_GENERATE', 'SERIES_WORLD_EDIT', 'SERIES_WORLD_LIST'].includes(gameState) ? 'bg-indigo-400/18 text-indigo-100' : 'text-zinc-400 hover:bg-zinc-900/80 hover:text-zinc-100'}`}
+          >
+            <Sparkles className="h-4 w-4" />
+            {tr('创作工台', 'Create')}
+          </button>
+          <button
+            type="button"
+            onClick={openPersonalCenter}
+            className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-[1.2rem] px-2 text-[11px] font-black text-zinc-400 transition-all hover:bg-zinc-900/80 hover:text-zinc-100 active:scale-[0.98]"
+          >
+            <UserIcon className="h-4 w-4" />
+            {tr('个人中心', 'Profile')}
+          </button>
+        </div>
+      </div>,
+      document.body
+    )
+    : null;
 
   const floatingInterventionPanel = blueprint && gameState === 'PLAYING' && typeof document !== 'undefined'
     ? createPortal(
@@ -13708,6 +13781,7 @@ export default function App() {
           {renderPlayingQuickNav()}
           {renderScrollToTopButton()}
           {accountEntryButton}
+          {primaryBottomDock}
           {floatingInterventionPanel}
           {actionMenuOverlay}
           {storyInfoPanel}

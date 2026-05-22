@@ -172,9 +172,10 @@
       .boot-progress-wrap {
         position: fixed;
         bottom: max(40px, calc(env(safe-area-inset-bottom) + 30px));
-        left: 50%;
-        transform: translateX(-50%);
-        width: min(240px, 64vw);
+        right: 0;
+        left: 0;
+        width: min(240px, calc(100vw - 48px));
+        margin-inline: auto;
         display: flex;
         flex-direction: column;
         align-items: center;

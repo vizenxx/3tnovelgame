@@ -202,13 +202,10 @@ html[data-theme="light"] {
 }
 
 .story-library-hero {
-  border: 1px solid var(--app-shell-border-soft);
-  border-radius: 2.4rem;
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--app-surface) 72%, transparent), transparent 62%),
-    radial-gradient(circle at 16% 0%, color-mix(in srgb, var(--app-accent) 16%, transparent), transparent 32%),
-    color-mix(in srgb, var(--app-soft-black) 44%, transparent);
-  box-shadow: var(--app-shadow-soft);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .story-library-eyebrow {
@@ -1276,10 +1273,11 @@ body,
 /* ── Progress ── */
 .app-boot-progress-wrap {
   position: fixed;
-  left: 50%;
   bottom: max(40px, calc(env(safe-area-inset-bottom) + 30px));
-  transform: translateX(-50%);
-  width: min(240px, 64vw);
+  right: 0;
+  left: 0;
+  width: min(240px, calc(100vw - 48px));
+  margin-inline: auto;
   display: flex;
   flex-direction: column;
   align-items: center;
