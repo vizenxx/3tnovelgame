@@ -8500,22 +8500,25 @@ export default function App() {
             <div className="mb-2 text-sm font-bold text-zinc-400/85">
               <AuthorNameButton authorId={story.authorId || story.meta?.authorId} authorName={getStoryAuthorName(story)} />
             </div>
-            <p className="story-library-desc-fade mb-3 text-[0.98rem] leading-relaxed text-zinc-300/85 transition-colors group-hover:text-zinc-200">
-              {getStoryMainAxis(story)}
-            </p>
-            <div className="mb-3 flex min-w-0 flex-wrap gap-1.5">
+            {/* Middle zone: flexes to fill remaining space, shrinks when needed */}
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <p className="story-library-desc-fade mb-2 flex-1 text-[0.98rem] leading-relaxed text-zinc-300/85 transition-colors group-hover:text-zinc-200">
+                {getStoryMainAxis(story)}
+              </p>
+              {sequelRequirement && (
+                <div className="mb-2 shrink-0 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs font-black text-amber-100">
+                  续作：需完成前作条件
+                </div>
+              )}
+            </div>
+            <div className="mb-3 flex min-w-0 shrink-0 flex-wrap gap-1.5">
               {(tags.length > 0 ? tags.slice(0, 3) : ['未标签']).map((tag: string) => (
                 <span key={tag} className="rounded-lg border border-indigo-400/15 bg-indigo-500/10 px-2.5 py-1 text-[11px] font-black text-indigo-200">
                   {tag}
                 </span>
               ))}
             </div>
-            {sequelRequirement && (
-              <div className="mb-3 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs font-black text-amber-100">
-                续作：需完成前作条件
-              </div>
-            )}
-            <div className="mt-auto grid gap-2 sm:grid-cols-2">
+            <div className="shrink-0 grid gap-2 sm:grid-cols-2">
               <button type="button" onClick={() => setStoryDetailStory(story)} className={`${semanticButtonClass('secondary', { fullWidth: true, compact: true })} text-sm`}>
                 <BookOpen className="h-4 w-4" />
                 {t('library.details')}
