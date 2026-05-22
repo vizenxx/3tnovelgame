@@ -44,11 +44,11 @@ const first = evaluateStoryRunAfterIntervention({
 assert.equal(first.unlockedBranches.length, 1);
 assert.equal(first.newlyUnlockedBranches[0]?.id, 'branch-bless-c1-ch2');
 assert.equal(first.historicallyUnlockedBranches.length, 1);
-assert.equal(first.endingDelta, 7);
-assert.equal(first.newEndingValue, 7);
+assert.equal(first.endingDelta, 2.5);
+assert.equal(first.newEndingValue, 2.5);
 assert.equal(first.endingDomain, 'middle');
-assert.equal(first.leftPool, 2);
-assert.equal(first.rightPool, 1);
+assert.equal(first.leftPool, 60);
+assert.equal(first.rightPool, 60);
 assert.equal(first.shouldWarnAboutRewriteRisk, false);
 
 const rewriteEarlier = evaluateStoryRunAfterIntervention({
@@ -62,8 +62,36 @@ const rewriteEarlier = evaluateStoryRunAfterIntervention({
 
 assert.equal(rewriteEarlier.shouldWarnAboutRewriteRisk, true);
 assert.equal(rewriteEarlier.unlockedBranches.some((branch) => branch.id === 'branch-curse-c2-count'), true);
-assert.equal(rewriteEarlier.endingDelta, -7);
-assert.equal(rewriteEarlier.newEndingValue, -7);
+assert.equal(rewriteEarlier.endingDelta, -4.5);
+assert.equal(rewriteEarlier.newEndingValue, -4.5);
+
+const branchesWithHidden = [
+  ...branches,
+  {
+    id: 'branch-hidden-medium',
+    side: 'left',
+    tier: 'medium',
+    hidden: true,
+    trigger: {
+      type: 'single',
+      single: { chapterNum: 4, charId: 'c1', action: 'bless' },
+    },
+  }
+] as any;
+
+const hiddenTest = evaluateStoryRunAfterIntervention({
+  branches: branchesWithHidden,
+  history: [],
+  previousUnlockedBranches: [],
+  previousHistoricalBranches: [],
+  intervention: { chapterNum: 4, charId: 'c1', action: 'bless' },
+  previousIntervenedChapters: [],
+});
+
+assert.equal(hiddenTest.unlockedBranches.length, 1);
+assert.equal(hiddenTest.newlyUnlockedBranches[0]?.id, 'branch-hidden-medium');
+assert.equal(hiddenTest.endingDelta, 3.5);
+assert.equal(hiddenTest.newEndingValue, 3.5);
 
 assert.equal(
   areStoryChaptersEquivalent(

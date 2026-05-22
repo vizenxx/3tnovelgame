@@ -37,11 +37,14 @@ export function branchBaseWeight(tier?: RuntimeBranchLike['tier']): number {
 
 export function branchEffectiveWeight(branch: RuntimeBranchLike): number {
   const score = Number(branch.score);
-  if (Number.isFinite(score) && score > 0 && score <= 4) {
-    return Math.max(1, Math.min(4, Math.round(score)));
+  let base = 1;
+  if (Number.isFinite(score) && score > 0) {
+    base = score;
+  } else {
+    base = branchBaseWeight(branch.tier);
   }
-  const hiddenBonus = branch.tier === 'hidden' || branch.is_hidden || branch.hidden || branch.inject?.hidden ? 1 : 0;
-  return branchBaseWeight(branch.tier) + hiddenBonus;
+  const isHidden = branch.tier === 'hidden' || !!branch.is_hidden || !!branch.hidden || !!branch.inject?.hidden;
+  return base + (isHidden ? 0.5 : 0);
 }
 
 export function normalizeEndingBiasDisplay(input?: Partial<EndingBias> | { left?: number; right?: number } | null): EndingBias {
@@ -77,20 +80,13 @@ export function endingDomainForValue(value: number): EndingDomain {
   return 'middle';
 }
 
-function deterministicNoise(args: {
-  chapterNum: number;
-  charId: string;
-  action: InterventionAction;
-  historyLength: number;
-  leftPool: number;
-  rightPool: number;
-}) {
-  const seed = `${args.chapterNum}:${args.charId}:${args.action}:${args.historyLength}:${args.leftPool}:${args.rightPool}`;
+function seededRandom(seed: string): number {
   let hash = 0;
-  for (let index = 0; index < seed.length; index += 1) {
-    hash = ((hash << 5) - hash + seed.charCodeAt(index)) | 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = ((hash << 5) - hash + seed.charCodeAt(i)) | 0;
   }
-  return ((Math.abs(hash) % 300) / 100) - 1.5;
+  const unsigned = hash >>> 0;
+  return unsigned / 4294967296;
 }
 
 function branchEndingId(branch: RuntimeBranchLike, domain: EndingDomain) {
@@ -139,32 +135,65 @@ export function calculateEndingMechanics(args: {
   endingMode?: 'single' | 'dual';
 }) {
   const endingBias = normalizeEndingBias(args.endingBias);
-  const leftBranchPool = args.unlockedBranches
-    .filter((branch) => branch.side === 'left')
-    .reduce((sum, branch) => sum + branchEffectiveWeight(branch), 0);
-  const rightBranchPool = args.unlockedBranches
-    .filter((branch) => branch.side === 'right')
-    .reduce((sum, branch) => sum + branchEffectiveWeight(branch), 0);
-  const leftPool = endingBias.leftBaseWeight + leftBranchPool;
-  const rightPool = endingBias.rightBaseWeight + rightBranchPool;
-  const poolTotal = Math.max(1, leftPool + rightPool);
-  const directionalExpectation = ((leftPool - rightPool) / poolTotal) * 5;
+  const displayBias = normalizeEndingBiasDisplay(args.endingBias);
+  const leftMainline = displayBias.leftBaseWeight;
+  const rightMainline = displayBias.rightBaseWeight;
 
-  const newlyLeftExclusive = args.newlyUnlockedBranches
-    .filter((branch) => branch.side === 'left')
-    .reduce((sum, branch) => sum + (branchEffectiveWeight(branch) / Math.max(leftPool, 1)) * 10, 0);
-  const newlyRightExclusive = args.newlyUnlockedBranches
-    .filter((branch) => branch.side === 'right')
-    .reduce((sum, branch) => sum + (branchEffectiveWeight(branch) / Math.max(rightPool, 1)) * 10, 0);
-  const exclusivePull = newlyLeftExclusive - newlyRightExclusive;
-  const noise = deterministicNoise({
-    ...args.intervention,
-    historyLength: args.historyLength,
-    leftPool,
-    rightPool,
-  });
-  const endingDelta = Math.max(-7, Math.min(7, directionalExpectation + exclusivePull + noise));
-  const newEndingValue = clampEndingValue(args.currentEndingValue + endingDelta);
+  const leftPool = 100 - leftMainline;
+  const rightPool = 100 - rightMainline;
+
+  const leftSublines = args.allBranches.filter((branch) => branch.side === 'left');
+  const rightSublines = args.allBranches.filter((branch) => branch.side === 'right');
+
+  const leftTotalWeight = leftSublines.reduce((sum, branch) => sum + branchEffectiveWeight(branch), 0);
+  const rightTotalWeight = rightSublines.reduce((sum, branch) => sum + branchEffectiveWeight(branch), 0);
+
+  let directEVChange = 0;
+  for (const branch of args.newlyUnlockedBranches) {
+    let val = 0.5;
+    if (branch.tier === 'medium') {
+      val = 1.0;
+    } else if (branch.tier === 'large') {
+      val = 1.5;
+    }
+    const isHidden = branch.tier === 'hidden' || !!branch.is_hidden || !!branch.hidden || !!branch.inject?.hidden;
+    if (isHidden) {
+      val += 0.5;
+    }
+    if (branch.side === 'left') {
+      directEVChange += val;
+    } else if (branch.side === 'right') {
+      directEVChange -= val;
+    }
+  }
+
+  const leftTriggeredProb = leftSublines
+    .filter((b) => args.unlockedBranches.some((ub) => ub.id === b.id))
+    .reduce((sum, branch) => sum + (branchEffectiveWeight(branch) / (leftTotalWeight || 1)) * leftPool, 0);
+
+  const rightTriggeredProb = rightSublines
+    .filter((b) => args.unlockedBranches.some((ub) => ub.id === b.id))
+    .reduce((sum, branch) => sum + (branchEffectiveWeight(branch) / (rightTotalWeight || 1)) * rightPool, 0);
+
+  const leftSuccessRate = leftMainline + leftTriggeredProb;
+  const rightSuccessRate = rightMainline + rightTriggeredProb;
+
+  const seed = `${args.intervention.chapterNum}:${args.intervention.charId}:${args.intervention.action}:${args.historyLength}`;
+  const leftRand = seededRandom(seed + ':left_success');
+  const rightRand = seededRandom(seed + ':right_success');
+  const leftChangeRand = seededRandom(seed + ':left_change');
+  const rightChangeRand = seededRandom(seed + ':right_change');
+
+  const leftSuccess = leftRand * 100 < leftSuccessRate;
+  const rightSuccess = rightRand * 100 < rightSuccessRate;
+
+  const leftChange = leftSuccess ? Math.floor(leftChangeRand * 5) + 1 : 0;
+  const rightChange = rightSuccess ? Math.floor(rightChangeRand * 5) + 1 : 0;
+
+  const endingDeltaRaw = directEVChange + leftChange - rightChange;
+  const newEndingValue = clampEndingValue(args.currentEndingValue + endingDeltaRaw);
+  const endingDelta = Math.round((newEndingValue - args.currentEndingValue) * 100) / 100;
+
   const endingDomain = endingDomainForValue(newEndingValue);
   const previousDomain = endingDomainForValue(args.currentEndingValue);
   const selectedEndingId = selectEndingForDomain({
