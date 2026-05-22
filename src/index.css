@@ -1180,8 +1180,10 @@ body,
   position: relative;
   z-index: 1;
   display: flex;
+  min-height: 52dvh;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 28px;
   animation: app-boot-text-in 1s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
@@ -1228,21 +1230,19 @@ body,
     drop-shadow(0 8px 28px rgba(0, 0, 0, 0.55));
 }
 
-/* sweeping light band across icon */
+/* sweeping light band — clipped to circle so no hard rectangular edges */
 .app-boot-mark::after {
   content: "";
   position: absolute;
-  top: -10%;
-  left: -30%;
-  width: 160%;
-  height: 120%;
+  inset: 0;
   z-index: 2;
+  clip-path: circle(50% at 50% 50%);
   background: linear-gradient(
     115deg,
-    transparent 30%,
-    rgba(255, 255, 255, 0.12) 50%,
-    rgba(255, 255, 255, 0.04) 54%,
-    transparent 68%
+    transparent 25%,
+    rgba(255, 255, 255, 0.18) 48%,
+    rgba(255, 255, 255, 0.06) 52%,
+    transparent 70%
   );
   animation: app-boot-sweep 2.8s cubic-bezier(0.4, 0, 0.2, 1) 0.8s infinite;
   pointer-events: none;
