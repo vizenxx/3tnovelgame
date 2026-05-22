@@ -1156,99 +1156,206 @@ body,
   overflow: hidden;
   padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
   text-align: center;
-  background:
-    radial-gradient(circle at 50% 18%, rgba(99, 118, 240, 0.08), transparent 32%),
-    radial-gradient(circle at 88% 78%, rgba(235, 94, 118, 0.05), transparent 28%),
-    linear-gradient(180deg, #0a0a0f 0%, #050508 100%);
   color: #c5c6cb;
+  /* warm literary dark — matches static splash */
+  background:
+    radial-gradient(ellipse 70% 50% at 50% 38%, rgba(99, 118, 240, 0.07) 0%, transparent 65%),
+    radial-gradient(ellipse 55% 40% at 50% 42%, rgba(205, 155, 90, 0.04) 0%, transparent 60%),
+    radial-gradient(ellipse 100% 60% at 50% 100%, rgba(30, 20, 10, 0.5) 0%, transparent 70%),
+    linear-gradient(180deg, #07070c 0%, #050508 60%, #080604 100%);
+}
+
+/* paper-grain noise overlay */
+.app-boot-screen::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.035'/%3E%3C/svg%3E");
+  background-size: 256px 256px;
+  pointer-events: none;
+  opacity: 0.6;
 }
 
 .app-boot-cover-main {
+  position: relative;
+  z-index: 1;
   display: flex;
-  min-height: 52dvh;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 18px;
+  gap: 28px;
+  animation: app-boot-text-in 1s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-.app-boot-label {
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: #71717a;
-}
-
+/* ── Icon ── */
 .app-boot-mark {
   position: relative;
-  display: grid;
-  place-items: center;
-  width: 88px;
-  height: 88px;
-  border-radius: 30px;
-  border: 1px solid rgba(99, 118, 240, 0.18);
-  background:
-    radial-gradient(circle at 32% 24%, rgba(255, 255, 255, 0.08), transparent 22%),
-    linear-gradient(135deg, rgba(99, 118, 240, 0.15), rgba(235, 94, 118, 0.08));
-  box-shadow: 0 20px 70px rgba(99, 102, 241, 0.12);
-  animation: app-boot-float 2.6s ease-in-out infinite;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 148px;
+  height: 148px;
+  /* no box, no border, no border-radius */
+  background: none;
+  border: none;
+  box-shadow: none;
+  animation: none;
+}
+
+/* warm radial glow behind icon */
+.app-boot-mark::before {
+  content: "";
+  position: absolute;
+  inset: -28px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(99, 118, 240, 0.2) 0%,
+    rgba(180, 130, 70, 0.07) 45%,
+    transparent 70%
+  );
+  animation: app-boot-glow-pulse 3.2s ease-in-out infinite;
 }
 
 .app-boot-mark img {
-  width: 56px;
-  height: 56px;
+  position: relative;
+  z-index: 1;
+  width: 120px;
+  height: 120px;
   object-fit: contain;
+  filter:
+    drop-shadow(0 0 22px rgba(129, 140, 248, 0.5))
+    drop-shadow(0 0 60px rgba(99, 118, 240, 0.2))
+    drop-shadow(0 8px 28px rgba(0, 0, 0, 0.55));
+}
+
+/* sweeping light band across icon */
+.app-boot-mark::after {
+  content: "";
+  position: absolute;
+  top: -10%;
+  left: -30%;
+  width: 160%;
+  height: 120%;
+  z-index: 2;
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.12) 50%,
+    rgba(255, 255, 255, 0.04) 54%,
+    transparent 68%
+  );
+  animation: app-boot-sweep 2.8s cubic-bezier(0.4, 0, 0.2, 1) 0.8s infinite;
+  pointer-events: none;
+}
+
+/* ── Text ── */
+.app-boot-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-boot-label {
+  font-size: 10.5px;
+  font-weight: 900;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: #5a5a6a;
+  font-family: "Outfit", sans-serif;
 }
 
 .app-boot-title {
-  font-size: clamp(36px, 9vw, 58px);
+  font-size: clamp(38px, 10vw, 62px);
   line-height: 1;
   font-weight: 900;
-  letter-spacing: -0.04em;
-  color: #e4e5e7;
-  text-shadow: 0 18px 48px rgba(0, 0, 0, 0.38);
+  letter-spacing: -0.045em;
+  color: #dedfe3;
+  text-shadow:
+    0 0 48px rgba(129, 140, 248, 0.2),
+    0 2px 0 rgba(0, 0, 0, 0.6),
+    0 16px 40px rgba(0, 0, 0, 0.45);
+  font-family: "Outfit", "Noto Sans SC", sans-serif;
 }
 
-.app-boot-subtitle {
-  max-width: 360px;
-  font-size: 13px;
-  line-height: 1.6;
-  color: #a1a1aa;
+.app-boot-tagline {
+  margin-top: 4px;
+  color: #3e3e4a;
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  font-family: "Plus Jakarta Sans", "Noto Sans SC", sans-serif;
 }
 
+/* ── Progress ── */
 .app-boot-progress-wrap {
   position: fixed;
   left: 50%;
-  bottom: max(42px, calc(env(safe-area-inset-bottom) + 32px));
+  bottom: max(40px, calc(env(safe-area-inset-bottom) + 30px));
   transform: translateX(-50%);
-  width: min(280px, 72vw);
+  width: min(240px, 64vw);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  z-index: 10;
+  animation: app-boot-text-in 1s cubic-bezier(0.16, 1, 0.3, 1) 0.5s both;
 }
 
+/* thin 1px literary rule */
 .app-boot-progress {
-  height: 4px;
-  overflow: hidden;
+  width: 100%;
+  height: 1px;
+  overflow: visible;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  background: rgba(24, 24, 27, 0.72);
-  box-shadow: inset 0 1px 8px rgba(0, 0, 0, 0.3);
+  border: none;
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: none;
 }
 
 .app-boot-progress-fill {
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #818cf8, #c084fc, #fb7185);
+  background: linear-gradient(90deg,
+    rgba(80, 95, 200, 0.5),
+    rgba(160, 120, 60, 0.55) 60%,
+    rgba(80, 95, 200, 0.4)
+  );
   transition: width 220ms ease-out;
+  position: relative;
+}
+
+/* glint dot at leading edge */
+.app-boot-progress-fill::after {
+  content: "";
+  position: absolute;
+  right: -1px;
+  top: -2px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(180, 160, 110, 0.9);
+  box-shadow: 0 0 6px 2px rgba(160, 130, 80, 0.5);
 }
 
 .app-boot-percent {
-  margin-top: 10px;
+  margin-top: 0;
   font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 0.22em;
-  color: #71717a;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: #3a3a46;
+  font-family: "Outfit", sans-serif;
+  font-variant-numeric: tabular-nums;
 }
 
+.app-boot-subtitle {
+  max-width: 360px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #3a3a48;
+}
+
+/* ── Light theme ── */
 html[data-theme="light"] .app-boot-screen {
   background:
     radial-gradient(circle at 50% 18%, rgba(79, 95, 187, 0.17), transparent 34%),
@@ -1262,14 +1369,22 @@ html[data-theme="light"] .app-boot-title {
   text-shadow: none;
 }
 
-@keyframes app-boot-float {
-  0%, 100% {
-    transform: translateY(0) rotate(0deg);
-  }
+/* ── Keyframes ── */
+@keyframes app-boot-text-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
 
-  50% {
-    transform: translateY(-8px) rotate(3deg);
-  }
+@keyframes app-boot-glow-pulse {
+  0%, 100% { opacity: 0.65; transform: scale(1);   }
+  50%       { opacity: 1;    transform: scale(1.1); }
+}
+
+@keyframes app-boot-sweep {
+  0%   { transform: translateX(-80%); opacity: 0; }
+  12%  { opacity: 1; }
+  88%  { opacity: 1; }
+  100% { transform: translateX(80%);  opacity: 0; }
 }
 
 * {
