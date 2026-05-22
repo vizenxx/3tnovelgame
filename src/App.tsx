@@ -8330,7 +8330,7 @@ export default function App() {
 
   const renderStoryStats = (
     story: any,
-    variant: 'card' | 'detail',
+    variant: 'card' | 'detail' | 'compact-row',
     actions?: {
       storyId?: string;
       onLike?: () => void;
@@ -8339,6 +8339,37 @@ export default function App() {
     }
   ) => {
     const stats = getStoryStats(story);
+    if (variant === 'compact-row') {
+      return (
+        <div className="story-compact-stats-row flex flex-wrap gap-x-3.5 gap-y-1.5 py-1">
+          {stats.map((stat) => {
+            const Icon = stat.icon;
+            const onClick = stat.key === 'like' ? actions?.onLike : stat.key === 'favorite' ? actions?.onFavorite : stat.key === 'share' ? actions?.onShare : undefined;
+            return (
+              <button
+                key={stat.key}
+                type="button"
+                onClick={onClick}
+                disabled={!onClick}
+                data-active={stat.active ? 'true' : undefined}
+                data-tone={stat.tone}
+                className={`story-compact-stat flex items-center gap-1 text-[11px] font-semibold transition-all active:scale-95 disabled:pointer-events-none ${
+                  stat.active && stat.tone === 'like'
+                    ? 'text-pink-400'
+                    : stat.active && stat.tone === 'favorite'
+                    ? 'text-amber-400'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                <Icon className={`h-3.5 w-3.5 shrink-0 ${stat.active ? 'fill-current' : ''}`} />
+                <span className="font-heading tracking-wide">{stat.value}</span>
+              </button>
+            );
+          })}
+        </div>
+      );
+    }
+
     if (variant === 'card') {
       return (
         <div className="story-card-stat-list">
@@ -8439,11 +8470,11 @@ export default function App() {
       <motion.div
         key={storyId || story.id}
         whileHover={{ y: -4, scale: 1.01 }}
-        className={`story-library-card group p-4 transition-all ${
+        className={`story-library-card group p-4 transition-all flex flex-col h-full justify-between ${
           isLiked ? 'ring-1 ring-pink-500/18' : isFavorited ? 'ring-1 ring-amber-500/18' : ''
         }`}
       >
-        <div className="relative flex gap-4">
+        <div className="relative flex gap-4 flex-1">
           <div className="w-28 shrink-0 sm:w-32">
             <button type="button" onClick={() => setStoryDetailStory(story)} className="story-library-cover h-28 w-28 cursor-pointer transition-all hover:ring-2 hover:ring-indigo-400/70 hover:ring-offset-2 hover:ring-offset-zinc-950 sm:h-32 sm:w-32">
               {coverUrl ? (
@@ -8454,22 +8485,22 @@ export default function App() {
                 </div>
               )}
             </button>
-            {renderStoryStats(story, 'card', {
-              storyId,
-              onLike: () => handleStoryInteraction('like', storyId, story),
-              onFavorite: () => handleStoryInteraction('favorite', storyId, story),
-              onShare: () => void shareStoryCardWithFeedback(story),
-            })}
           </div>
           <div className="flex min-w-0 flex-1 flex-col">
             {renderStoryBiasBar(story)}
             <h3 className="mb-1 whitespace-normal break-words text-[1.45rem] font-black leading-tight text-white transition-colors group-hover:text-indigo-200 sm:text-2xl">
               {formatBookTitle(getStoryTitle(story))}
             </h3>
-            <div className="mb-2 text-sm font-bold text-zinc-400/85">
+            <div className="mb-1 text-sm font-bold text-zinc-400/85">
               <AuthorNameButton authorId={story.authorId || story.meta?.authorId} authorName={getStoryAuthorName(story)} />
             </div>
-            <p className="story-library-desc-fade mb-3 text-[0.98rem] leading-relaxed text-zinc-300/85 transition-colors group-hover:text-zinc-200">
+            {renderStoryStats(story, 'compact-row', {
+              storyId,
+              onLike: () => handleStoryInteraction('like', storyId, story),
+              onFavorite: () => handleStoryInteraction('favorite', storyId, story),
+              onShare: () => void shareStoryCardWithFeedback(story),
+            })}
+            <p className="story-library-desc-fade mb-3 mt-2 text-[0.98rem] leading-relaxed text-zinc-300/85 transition-colors group-hover:text-zinc-200">
               {getStoryMainAxis(story)}
             </p>
             <div className="mb-3 flex min-w-0 flex-wrap gap-1.5">
