@@ -8492,7 +8492,7 @@ export default function App() {
               onShare: () => void shareStoryCardWithFeedback(story),
             })}
           </div>
-          <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
             {renderStoryBiasBar(story)}
             <h3 className="mb-1 whitespace-normal break-words text-[1.45rem] font-black leading-tight text-white transition-colors group-hover:text-indigo-200 sm:text-2xl">
               {formatBookTitle(getStoryTitle(story))}
@@ -8500,7 +8500,7 @@ export default function App() {
             <div className="mb-2 text-sm font-bold text-zinc-400/85">
               <AuthorNameButton authorId={story.authorId || story.meta?.authorId} authorName={getStoryAuthorName(story)} />
             </div>
-            <p className="story-library-desc-fade mb-3 max-h-[3rem] sm:max-h-[4.5rem] text-[0.98rem] leading-relaxed text-zinc-300/85 transition-colors group-hover:text-zinc-200">
+            <p className="story-library-desc-fade mb-3 text-[0.98rem] leading-relaxed text-zinc-300/85 transition-colors group-hover:text-zinc-200">
               {getStoryMainAxis(story)}
             </p>
             <div className="mb-3 flex min-w-0 flex-wrap gap-1.5">
