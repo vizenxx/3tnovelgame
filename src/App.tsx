@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp, Download, Sun, Moon, Search, GitBranch, Bell, BarChart3, WifiOff } from 'lucide-react';
+import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp, Download, Sun, Moon, Search, GitBranch, Trophy, Bell, BarChart3, WifiOff } from 'lucide-react';
 import { auth, db, firebaseInitError } from './firebase';
 import { createEmptyStory, createSharedStoryRecord, createStorySnapshot, adaptBlueprintToStory, createStoryBranch, deleteAllNotifications, deleteNotification, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, deleteSeriesWorld, favoriteStory, unfavoriteStory, followAuthor, getAppSettings, getAuthorFollowState, getPushConfig, getSharedStoryRecord, getStoryCartridge, getStoryMeta, getUserProgress, incrementShareMetric, incrementStoryMetric, likeStory, unlikeStory, listAuthorStories, listContinuityNodes, listFollowedAuthors, listMySeriesWorlds, listMySharedStories, listMyStories, listNotifications, listPublicStories, markNotificationsRead, refundCoverGenerationUsage, reportStory, reserveCoverGenerationUsage, saveAppSettings, saveContinuityNode, savePushSubscription, saveSeriesWorld, saveStoryMainlineBundle, saveStoryMeta, saveUserProgress, unfollowAuthor, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch, type ContinuityNodeRecord, type SeriesWorldRecord } from './storyStore';
 import { branchEffectiveWeight, isBranchUnlockedByHistory, normalizeEndingBias } from './storyCartridge';
@@ -1431,6 +1431,13 @@ const getStoryFavoriteCount = (story: any) => Number(story?.favoriteCount ?? sto
 const getStoryShareCount = (story: any) => Number(story?.shareCount ?? story?.meta?.shareCount ?? 0);
 const getStoryBranchCount = (story: any) => Number(story?.branchCount ?? story?.meta?.branchCount ?? story?.branches?.length ?? story?.meta?.branches?.length ?? 0);
 const getStoryUnlockedBranchCount = (story: any) => Number(story?.unlockedBranchCount ?? story?.meta?.unlockedBranchCount ?? 0);
+const getStoryEndingCount = (story: any) => {
+  const count = Number(story?.endingCount ?? story?.meta?.endingCount ?? story?.endings?.length ?? story?.meta?.endings?.length ?? 0);
+  if (count > 0) return count;
+  const mode = story?.endingMode ?? story?.meta?.endingMode;
+  return mode === 'single' ? 1 : 3;
+};
+const getStoryUnlockedEndingCount = (story: any) => Number(story?.unlockedEndingCount ?? story?.meta?.unlockedEndingCount ?? 0);
 const getStoryUpdatedMs = (story: any) => {
   const value = story?.updatedAt?.toDate?.() || story?.updatedAt || story?.createdAt?.toDate?.() || story?.createdAt;
   const ms = value instanceof Date ? value.getTime() : Date.parse(String(value || ''));
@@ -8316,6 +8323,7 @@ export default function App() {
       { key: 'share', label: '分享', value: getStoryShareCount(story), icon: ExternalLink },
       { key: 'intervention', label: '干涉', value: getStoryInterventionCount(story), icon: Sparkles },
       { key: 'branches', label: '支线', value: `${getStoryUnlockedBranchCount(story)}/${getStoryBranchCount(story) || 0}`, icon: GitBranch },
+      { key: 'endings', label: '结局', value: `${getStoryUnlockedEndingCount(story)}/${getStoryEndingCount(story) || 0}`, icon: Trophy },
       { key: 'words', label: '均字', detailLabel: '均字', value: getStoryAverageChapterWords(story) || '未知', valueSuffix: ' 字', icon: BookOpen },
     ];
   };

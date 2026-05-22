@@ -164,7 +164,7 @@ async function enrichStoryActionState(items: any[], userId?: string | null) {
     .filter(Boolean)));
   if (storyIds.length === 0) return items;
   const inFilter = `in.(${storyIds.join(',')})`;
-  const [likeRows, favoriteRows, branchRows, progressRows] = await Promise.all([
+  const [likeRows, favoriteRows, branchRows, progressRows, endingRows] = await Promise.all([
     userId ? supabaseRequest<any[]>('story_likes', { query: { user_id: `eq.${userId}`, story_id: inFilter, select: 'story_id' }, timeoutMs: STORY_LIST_ENRICH_TIMEOUT_MS }).catch((error) => {
       console.warn('[story-store] list likes enrichment skipped:', error?.message || error);
       return [];
@@ -181,6 +181,10 @@ async function enrichStoryActionState(items: any[], userId?: string | null) {
       console.warn('[story-store] list progress enrichment skipped:', error?.message || error);
       return [];
     }) : Promise.resolve([]),
+    supabaseRequest<any[]>('story_endings', { query: { story_id: inFilter, select: 'story_id,id' }, timeoutMs: STORY_LIST_ENRICH_TIMEOUT_MS }).catch((error) => {
+      console.warn('[story-store] list endings enrichment skipped:', error?.message || error);
+      return [];
+    }),
   ]);
   const likedIds = new Set(likeRows.map((row) => String(row.story_id || '')));
   const favoritedIds = new Set(favoriteRows.map((row) => String(row.story_id || '')));
@@ -196,12 +200,26 @@ async function enrichStoryActionState(items: any[], userId?: string | null) {
     const ids = new Set(historical.map((branch: any) => String(branch?.id || '')).filter(Boolean));
     if (storyId) unlockedCountByStory.set(storyId, ids.size);
   });
+  const endingCountByStory = new Map<string, number>();
+  endingRows.forEach((row) => {
+    const storyId = String(row.story_id || '');
+    if (storyId) endingCountByStory.set(storyId, (endingCountByStory.get(storyId) || 0) + 1);
+  });
+  const unlockedEndingCountByStory = new Map<string, number>();
+  progressRows.forEach((row) => {
+    const storyId = String(row.story_id || '');
+    const completedRuns = asArray(row.payload?.completedRuns);
+    const endingIds = new Set(completedRuns.map((run: any) => String(run?.selectedEndingId || run?.finalEndingId || 'default')).filter(Boolean));
+    if (storyId) unlockedEndingCountByStory.set(storyId, endingIds.size);
+  });
   return items.map((item) => ({
     ...item,
     likedByMe: likedIds.has(String(item.sourceStoryId || item.id || '')),
     favoritedByMe: favoritedIds.has(String(item.sourceStoryId || item.id || '')),
     branchCount: branchCountByStory.get(String(item.sourceStoryId || item.id || '')) || item.branchCount || 0,
     unlockedBranchCount: unlockedCountByStory.get(String(item.sourceStoryId || item.id || '')) || item.unlockedBranchCount || 0,
+    endingCount: endingCountByStory.get(String(item.sourceStoryId || item.id || '')) || item.endingCount || (item.endingMode === 'single' ? 1 : 3),
+    unlockedEndingCount: unlockedEndingCountByStory.get(String(item.sourceStoryId || item.id || '')) || item.unlockedEndingCount || 0,
   }));
 }
 
