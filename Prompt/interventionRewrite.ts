@@ -132,7 +132,7 @@ Invisible intervention writing rules:
 5. If active branches do not conflict, weave their events, setups, and foreshadowing together. If they conflict, preserve traces of prior events where possible, but let the newest branch lead the direction.
 
 Requirements:
-1. Rewrite only chapters in the ripple range: chapter ${rewriteRange.startChapter} to chapter ${rewriteRange.endChapter}. The system keeps all chapters outside this range.
+1. Batch generation rule: return the full rewritten text for chapter ${args.safeChapterNum} only. If the ripple range reaches later chapters, do not write their full prose now; return them in future_outlines with chapter_num, summary, reason, and word_target so the app can generate them one by one in the background.
 2. Word count is a hard quality requirement. Use these per-chapter targets based on the original chapter length:
 ${wordTargetLines || `Chapter ${rewriteRange.startChapter}: target ${args.targetWordCount} words; ideal ${Math.round(args.targetWordCount * 0.93)}-${Math.round(args.targetWordCount * 1.07)}; hard range ${Math.round(args.targetWordCount * 0.85)}-${Math.round(args.targetWordCount * 1.15)}.`}
 3. Preserve unaffected passages, scene rhythm, and paragraph proportions whenever possible. Do not rewrite for novelty. Change only what the ripple, branch, character state, or continuity requires.
@@ -178,7 +178,7 @@ ${(!args.worldStatePrompt.includes('故事基准') && args.endingProto) ? `作�
 5. 若多个当前有效支线不冲突，必须尽量把各支线的事件、设定、伏笔都融入故事；若支线情节冲突，必须尽可能保留前次情节的痕迹与因果，但以后次/本次新触发支线为主导决定新的走向。
 
 要求：
-1. 只重写涟漪范围内的章节：第 ${rewriteRange.startChapter} 章到第 ${rewriteRange.endChapter} 章；范围外章节由系统保留原文，不要输出。
+1. 分批生成规则：本次只返回第 ${args.safeChapterNum} 章的完整重写正文。如果涟漪范围影响到后续章节，不要现在写它们的完整正文；请放到 future_outlines，每项包含 chapter_num、summary、reason、word_target，让 App 在后台逐章生成。
 2. 字数是硬性质量要求。每个被重写章节都必须参考原章节字数，尽量维持相近长度：
 ${wordTargetLines || `第${rewriteRange.startChapter}章：目标 ${args.targetWordCount} 字；理想 ${Math.round(args.targetWordCount * 0.93)}-${Math.round(args.targetWordCount * 1.07)}；硬性范围 ${Math.round(args.targetWordCount * 0.85)}-${Math.round(args.targetWordCount * 1.15)}。`}
 3. 尽量保留未受影响的段落、场景节奏、铺垫和稳定事件，不要为了“看起来重写”而重写；只调整涟漪、支线、角色状态、结局导向或连续性真正需要改变的部分。

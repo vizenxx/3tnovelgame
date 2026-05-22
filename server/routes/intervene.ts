@@ -108,6 +108,25 @@ function normalizeChangeHighlights(raw: any, chapters: any[]) {
     .slice(0, 12);
 }
 
+function normalizeFutureOutlines(raw: any, rewriteStartChapter: number, rewriteEndChapter: number, chapterWordTargets: Record<number, number>) {
+  return (Array.isArray(raw) ? raw : [])
+    .map((item: any) => {
+      const chapterNum = asNumber(item?.chapter_num ?? item?.chapterNum, 0);
+      return {
+        chapter_num: chapterNum,
+        summary: stripGeneratedMarkup(item?.summary || item?.outline || '').trim(),
+        reason: stripGeneratedMarkup(item?.reason || '').trim(),
+        word_target: chapterWordTargets[chapterNum] || undefined,
+      };
+    })
+    .filter((item) => (
+      item.chapter_num > rewriteStartChapter &&
+      item.chapter_num <= rewriteEndChapter &&
+      item.summary.length >= 8
+    ))
+    .slice(0, 6);
+}
+
 function normalizeHistoryItem(item: any): InterventionHistoryItem | null {
   const chapterNum = asNumber(item?.chapterNum ?? item?.chapter_num, 0);
   const charId = String(item?.charId ?? item?.condition_char ?? '').trim();
@@ -236,6 +255,20 @@ const rewriteSchema = {
         required: ['chapter_num', 'quote'],
       },
       description: '供前端临时高亮的变化摘录，正文自身必须保持纯文本',
+    },
+    future_outlines: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          chapter_num: { type: Type.INTEGER },
+          summary: { type: Type.STRING },
+          reason: { type: Type.STRING },
+          word_target: { type: Type.INTEGER },
+        },
+        required: ['chapter_num', 'summary'],
+      },
+      description: 'Affected later chapters to regenerate after the current chapter returns.',
     },
   },
   required: ['chapters', 'character_updates'],
@@ -394,7 +427,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     aiData.chapters = aiData.chapters.map((chapter: any) => {
       const normalized = normalizeChapter(chapter);
-      if (normalized.chapter_num >= safeChapterNum && normalized.chapter_num <= rewriteEndChapter) {
+      if (normalized.chapter_num === safeChapterNum) {
         const text = ensureParagraphing(normalized.text, { minParas: 6, maxParas: 10 });
         const chapterTargetWordCount = chapterWordTargets[normalized.chapter_num] || safeTargetWordCount;
         assertProseQuality(text, {
@@ -411,17 +444,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     const returnedChapterNums = new Set(aiData.chapters.map((chapter: any) => chapter.chapter_num));
-    const missingChapterNums = safeChapters
-      .filter((chapter: any) => chapter.chapter_num >= safeChapterNum && chapter.chapter_num <= rewriteEndChapter && !returnedChapterNums.has(chapter.chapter_num))
-      .map((chapter: any) => chapter.chapter_num);
-    if (missingChapterNums.length > 0) {
-      throw new Error(`Gemini response missed rewritten chapters: ${missingChapterNums.join(', ')}`);
+    if (!returnedChapterNums.has(safeChapterNum)) {
+      throw new Error(`Gemini response missed current rewritten chapter: ${safeChapterNum}`);
     }
 
     if (!Array.isArray(aiData.character_updates)) {
       aiData.character_updates = [];
     }
     aiData.change_highlights = normalizeChangeHighlights(aiData.change_highlights, aiData.chapters);
+    aiData.future_outlines = normalizeFutureOutlines(aiData.future_outlines, safeChapterNum, rewriteEndChapter, chapterWordTargets);
 
     const leftProgress = Math.min(100, Math.max(0, (newEndingValue / 25) * 100));
     const rightProgress = Math.min(100, Math.max(0, (-newEndingValue / 25) * 100));

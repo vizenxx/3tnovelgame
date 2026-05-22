@@ -6334,7 +6334,6 @@ export default function App() {
     if (
       gameState !== 'PLAYING' ||
       !blueprint ||
-      interventionsLeft < 3 ||
       isRewriting ||
       activeInterventionOverlay ||
       !user ||
@@ -6344,7 +6343,7 @@ export default function App() {
     }
 
     const missingChapter = chapters
-      .filter((chapter) => Number(chapter.chapter_num) > 3)
+      .filter((chapter) => Number(chapter.chapter_num) > 1)
       .sort((a, b) => Number(a.chapter_num) - Number(b.chapter_num))
       .find((chapter) => !isChapterTextReady(chapter));
 
@@ -6369,7 +6368,7 @@ export default function App() {
             blueprint,
             currentChapters: chapters,
             targetChapterNum: missingChapter.chapter_num,
-            targetWordCount,
+            targetWordCount: Number((missingChapter as any).word_target) || targetWordCount,
             narrativePerson: blueprint.narrative_person || narrativePerson,
             language: appLanguage,
           }),
@@ -6381,7 +6380,7 @@ export default function App() {
         }
 
         setChapters((prev) => {
-          if (interventionsLeft < 3) return prev;
+          const shouldUpdateQuickDraft = interventionsLeft >= 3;
           const nextChapters = ensureSevenChapterShells(prev).map((chapter) => (
             chapter.chapter_num === missingChapter.chapter_num
               ? {
@@ -6390,18 +6389,21 @@ export default function App() {
                   summary: chapterData.summary || chapter.summary,
                   present_characters: Array.isArray(chapterData.present_characters) ? chapterData.present_characters : chapter.present_characters,
                   text: stripGeneratedMarkup(chapterData.text),
+                  word_target: undefined,
                 }
               : chapter
           ));
           setNaturalChapters(nextChapters as any);
-          setInitialNaturalChapters(nextChapters.map((chapter: any) => ({
-            ...chapter,
-            present_characters: Array.isArray(chapter.present_characters) ? [...chapter.present_characters] : [],
-          })) as any);
-          setLocalCache(quickGenerationDraftCacheKey(), {
-            signature: quickGenerationDraftSignatureRef.current || quickGenerationSignature(),
-            blueprint: { ...blueprint, chapters: nextChapters },
-          }).catch(() => {});
+          if (shouldUpdateQuickDraft) {
+            setInitialNaturalChapters(nextChapters.map((chapter: any) => ({
+              ...chapter,
+              present_characters: Array.isArray(chapter.present_characters) ? [...chapter.present_characters] : [],
+            })) as any);
+            setLocalCache(quickGenerationDraftCacheKey(), {
+              signature: quickGenerationDraftSignatureRef.current || quickGenerationSignature(),
+              blueprint: { ...blueprint, chapters: nextChapters },
+            }).catch(() => {});
+          }
           return nextChapters as any;
         });
       } catch (error) {
@@ -6413,7 +6415,7 @@ export default function App() {
     };
 
     void generateRemainingChapter();
-  }, [gameState, blueprint, chapters, interventionsLeft, isRewriting, activeInterventionOverlay, user, db, targetWordCount, narrativePerson]);
+  }, [gameState, blueprint, chapters, interventionsLeft, isRewriting, activeInterventionOverlay, user, db, targetWordCount, narrativePerson, appLanguage]);
 
   const enterAuthoring = async () => {
     navigateTo('AUTHORING');
@@ -6902,12 +6904,32 @@ export default function App() {
             text: stripGeneratedMarkup(chapter.text || previous.text || ''),
           });
         });
-        const mergedChapters = (chapters || []).map((chapter) => rewrittenByNum.get(chapter.chapter_num) || chapter);
+        let mergedChapters = (chapters || []).map((chapter) => rewrittenByNum.get(chapter.chapter_num) || chapter);
         rewrittenByNum.forEach((chapter, chapterNum) => {
           if (!previousByNum.has(chapterNum)) {
             mergedChapters.push(chapter);
           }
         });
+        const futureOutlines = Array.isArray(aiData.future_outlines) ? aiData.future_outlines : [];
+        if (futureOutlines.length > 0) {
+          const outlineByNum = new Map<number, any>();
+          futureOutlines.forEach((outline: any) => {
+            const outlineChapterNum = Number(outline?.chapter_num ?? outline?.chapterNum);
+            if (Number.isFinite(outlineChapterNum) && outlineChapterNum > chapterNum) {
+              outlineByNum.set(outlineChapterNum, outline);
+            }
+          });
+          mergedChapters = ensureSevenChapterShells(mergedChapters as any).map((chapter: any) => {
+            const outline = outlineByNum.get(Number(chapter.chapter_num));
+            if (!outline) return chapter;
+            return {
+              ...chapter,
+              summary: String(outline.summary || chapter.summary || ''),
+              text: '',
+              word_target: Number(outline.word_target) || undefined,
+            };
+          });
+        }
         mergedChapters.sort((a: any, b: any) => a.chapter_num - b.chapter_num);
         nextChapters = mergedChapters as any;
         setChapters(nextChapters as any);
