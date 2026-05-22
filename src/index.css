@@ -456,37 +456,43 @@ html[data-theme="light"] {
   }
 }
 
-.app-button-primary {
-  background: linear-gradient(135deg, var(--app-accent) 0%, #4f63e0 100%);
+.app-semantic-button.app-button-primary {
+  background: linear-gradient(135deg, var(--app-accent) 0%, #4f63e0 100%) !important;
   color: #ffffff !important;
   border: 1px solid rgba(255, 255, 255, 0.12) !important;
   box-shadow: 
     0 4px 12px rgba(99, 118, 240, 0.2),
     0 12px 24px rgba(99, 118, 240, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15);
-  transition: border-color 0.25s cubic-bezier(0.16, 1, 0.3, 1), background 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
-.app-button-primary:hover {
-  background: linear-gradient(135deg, #7488ff 0%, #5266e6 100%);
+.app-semantic-button.app-button-primary:hover {
+  background: linear-gradient(135deg, #7488ff 0%, #5266e6 100%) !important;
   box-shadow: 
     0 6px 16px rgba(99, 118, 240, 0.32),
     0 16px 32px rgba(99, 118, 240, 0.14),
-    inset 0 1px 0 rgba(255, 255, 255, 0.25);
-  transform: translateY(-2px);
+    inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+  transform: translateY(-2px) !important;
 }
 
-.app-button-secondary,
+.app-semantic-button.app-button-primary:active {
+  transform: translateY(0) scale(0.98) !important;
+}
+
+.app-semantic-button.app-button-secondary,
+button.app-icon-secondary,
 .app-icon-secondary {
   border: 1px solid rgba(255, 255, 255, 0.035) !important;
   background: rgba(255, 255, 255, 0.015) !important;
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px) !important;
   color: var(--app-readable-text) !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.01);
-  transition: border-color 0.25s cubic-bezier(0.16, 1, 0.3, 1), background 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.01) !important;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
-.app-button-secondary:hover,
+.app-semantic-button.app-button-secondary:hover,
+button.app-icon-secondary:hover,
 .app-icon-secondary:hover {
   border-color: rgba(99, 118, 240, 0.25) !important;
   background: rgba(255, 255, 255, 0.04) !important;
@@ -494,11 +500,18 @@ html[data-theme="light"] {
   box-shadow: 
     0 8px 20px rgba(0, 0, 0, 0.35),
     0 0 12px rgba(99, 118, 240, 0.04),
-    inset 0 1px 0 rgba(255, 255, 255, 0.03);
-  transform: translateY(-2px);
+    inset 0 1px 0 rgba(255, 255, 255, 0.03) !important;
+  transform: translateY(-2px) !important;
 }
 
-.app-button-ghost,
+.app-semantic-button.app-button-secondary:active,
+button.app-icon-secondary:active,
+.app-icon-secondary:active {
+  transform: translateY(0) scale(0.98) !important;
+}
+
+.app-semantic-button.app-button-ghost,
+button.app-icon-ghost,
 .app-icon-ghost {
   border: 1px solid transparent !important;
   background: transparent !important;
@@ -506,15 +519,23 @@ html[data-theme="light"] {
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
-.app-button-ghost:hover,
+.app-semantic-button.app-button-ghost:hover,
+button.app-icon-ghost:hover,
 .app-icon-ghost:hover {
   background: rgba(255, 255, 255, 0.02) !important;
   border-color: rgba(255, 255, 255, 0.025) !important;
   color: var(--app-readable-text) !important;
-  transform: translateY(-1px);
+  transform: translateY(-1px) !important;
 }
 
-.app-button-danger,
+.app-semantic-button.app-button-ghost:active,
+button.app-icon-ghost:active,
+.app-icon-ghost:active {
+  transform: translateY(0) scale(0.98) !important;
+}
+
+.app-semantic-button.app-button-danger,
+button.app-icon-danger,
 .app-icon-danger {
   border: 1px solid rgba(244, 63, 94, 0.15) !important;
   background: rgba(244, 63, 94, 0.04) !important;
@@ -522,13 +543,20 @@ html[data-theme="light"] {
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
-.app-button-danger:hover,
+.app-semantic-button.app-button-danger:hover,
+button.app-icon-danger:hover,
 .app-icon-danger:hover {
   border-color: rgba(244, 63, 94, 0.35) !important;
   background: rgba(244, 63, 94, 0.08) !important;
   color: #ffe4e6 !important;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(244, 63, 94, 0.1);
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 20px rgba(244, 63, 94, 0.1) !important;
+}
+
+.app-semantic-button.app-button-danger:active,
+button.app-icon-danger:active,
+.app-icon-danger:active {
+  transform: translateY(0) scale(0.98) !important;
 }
 
 .app-semantic-button {
@@ -1002,6 +1030,8 @@ body {
   min-width: 320px;
   min-height: 100vh;
   overscroll-behavior-y: none;
+  font-family: "Plus Jakarta Sans", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: var(--app-text);
   background:
     radial-gradient(circle at 18% 0%, var(--app-brand-aura), transparent 32%),
     radial-gradient(circle at 92% 84%, var(--app-brand-warm), transparent 30%),
