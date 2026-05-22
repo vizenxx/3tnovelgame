@@ -6,6 +6,7 @@ import { getRequestLogContext, logGenerationError, logGenerationInfo } from '../
 import { buildInterventionRewritePrompt, buildInterventionWorldStatePrompt } from '../../Prompt/interventionRewrite.js';
 import { branchEffectiveWeight, calculateEndingMechanics, normalizeEndingBias } from '../_endingMechanics.js';
 import { generationLanguageInstruction, normalizeGenerationLanguage } from '../_language.js';
+import { assertProseQuality } from '../_generationQuality.js';
 
 export const maxDuration = 60;
 
@@ -386,7 +387,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     aiData.chapters = aiData.chapters.map((chapter: any) => {
       const normalized = normalizeChapter(chapter);
       if (normalized.chapter_num >= safeChapterNum && normalized.chapter_num <= rewriteEndChapter) {
-        return { ...normalized, text: ensureParagraphing(normalized.text, { minParas: 6, maxParas: 10 }) };
+        const text = ensureParagraphing(normalized.text, { minParas: 6, maxParas: 10 });
+        assertProseQuality(text, {
+          label: `rewritten chapter ${normalized.chapter_num}`,
+          targetWordCount: safeTargetWordCount,
+          minRatio: normalized.chapter_num === safeChapterNum ? 0.45 : 0.35,
+          minUnits: normalized.chapter_num === safeChapterNum ? 260 : 180,
+          minParagraphs: 4,
+        });
+        return { ...normalized, text };
       }
       return normalized;
     });
@@ -436,6 +445,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const message = error instanceof Error ? error.message : String(error);
     if (message.includes('GEMINI_QUOTA_EXHAUSTED')) {
       return res.status(429).json({ error: 'AI 额度暂时用尽，多个 API key 都已触发限制，请更换 key 或稍后再试。', code: 'GEMINI_QUOTA_EXHAUSTED' });
+    }
+    if (message.includes('AI_RESPONSE_INVALID') || message.includes('JSON')) {
+      return res.status(502).json({ error: 'AI 返回的干涉章节内容不完整，请重新干涉一次。', code: 'AI_RESPONSE_INVALID' });
     }
     return sendInternalError(res, '干涉处理失败', error);
   }

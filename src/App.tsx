@@ -2226,6 +2226,7 @@ export default function App() {
   const hasLoadedInitialStoryListRef = useRef(false);
   const archiveRefreshInFlightRef = useRef<Promise<void> | null>(null);
   const fetchingChapterRef = useRef<number | null>(null);
+  const quickGenerationDraftSignatureRef = useRef<string | null>(null);
   const [backgroundGeneratingChapter, setBackgroundGeneratingChapter] = useState<number | null>(null);
   const [isOnline, setIsOnline] = useState(() => typeof navigator === 'undefined' ? true : navigator.onLine !== false);
   const [connectivityDismissedAt, setConnectivityDismissedAt] = useState(0);
@@ -3252,6 +3253,18 @@ export default function App() {
     if (expectedUpdatedAt && cachedUpdatedAt && expectedUpdatedAt !== cachedUpdatedAt) return null;
     if (expectedVersion && cachedVersion && expectedVersion !== cachedVersion) return null;
     return cached.value;
+  };
+
+  const getAnyCachedStoryCartridge = async (storyId: string) => {
+    const cached = await getLocalCache<any>(storyCartridgeCacheKey(storyId));
+    return cached?.value || null;
+  };
+
+  const revalidateStoryCartridgeInBackground = (storyId: string) => {
+    if (!db) return;
+    void getStoryCartridge(db as any, storyId)
+      .then((fresh) => cacheStoryCartridge(storyId, fresh))
+      .catch((error) => console.warn('[story-cartridge:revalidate]', storyId, error));
   };
 
   const cacheStoryCartridge = async (storyId: string, cartridge: any) => {
@@ -5549,6 +5562,14 @@ export default function App() {
         setStoryLaunchOverlay({ progress: 34, status: isEnglish ? 'Local story archive loaded...' : '已读取本机故事档案...' });
       }
       if (!cartridge) {
+        const staleCartridge = await getAnyCachedStoryCartridge(storyId);
+        if (staleCartridge) {
+          cartridge = staleCartridge;
+          setStoryLaunchOverlay({ progress: 34, status: isEnglish ? 'Opening local story while checking cloud...' : '已先打开本机故事档案，并在后台校验云端版本...' });
+          revalidateStoryCartridgeInBackground(storyId);
+        }
+      }
+      if (!cartridge) {
         try {
           setStoryLaunchOverlay({ progress: 28, status: isEnglish ? 'Connecting to cloud story archive...' : '正在连接云端故事档案...' });
           cartridge = await getStoryCartridge(db as any, storyId);
@@ -6190,6 +6211,7 @@ export default function App() {
 
     try {
       const draftSignature = hasOverrideInput && overrideSignature ? overrideSignature : quickGenerationSignature();
+      quickGenerationDraftSignatureRef.current = draftSignature;
       const cachedDraft = await getLocalCache<any>(quickGenerationDraftCacheKey());
       let data = cachedDraft?.value?.signature === draftSignature && cachedDraft.value?.blueprint
         ? cachedDraft.value.blueprint
@@ -6285,7 +6307,6 @@ export default function App() {
       setNarrativePerson(activeGenerationInput.narrativePerson);
       setQuickEndingMode(activeGenerationInput.endingMode);
       setQuickEndingBias(activeGenerationInput.endingBias);
-      await deleteLocalCache(quickGenerationDraftCacheKey());
       navigateTo('PLAYING', { replace: true });
     } catch (error) {
       console.error(error);
@@ -6322,6 +6343,10 @@ export default function App() {
 
     if (!missingChapter) {
       setBackgroundGeneratingChapter(null);
+      if (!activeStoryId && quickGenerationDraftSignatureRef.current) {
+        quickGenerationDraftSignatureRef.current = null;
+        deleteLocalCache(quickGenerationDraftCacheKey()).catch(() => {});
+      }
       return;
     }
     if (fetchingChapterRef.current === missingChapter.chapter_num) return;
@@ -6367,7 +6392,7 @@ export default function App() {
             present_characters: Array.isArray(chapter.present_characters) ? [...chapter.present_characters] : [],
           })) as any);
           setLocalCache(quickGenerationDraftCacheKey(), {
-            signature: quickGenerationSignature(),
+            signature: quickGenerationDraftSignatureRef.current || quickGenerationSignature(),
             blueprint: { ...blueprint, chapters: nextChapters },
           }).catch(() => {});
           return nextChapters as any;

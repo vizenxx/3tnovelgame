@@ -5,6 +5,7 @@ import { generateGeminiJsonWithFallback, parseGeminiJson } from '../_gemini.js';
 import { getRequestLogContext, logGenerationError, logGenerationInfo } from '../_log.js';
 import { buildChapterContinuationPrompt, buildChapterWorldStatePrompt } from '../../Prompt/chapterContinuation.js';
 import { generationLanguageInstruction, normalizeGenerationLanguage } from '../_language.js';
+import { assertProseQuality } from '../_generationQuality.js';
 
 export const maxDuration = 60;
 
@@ -195,6 +196,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })}`;
 
     const data = await generateChapterWithFallback(prompt, safeTargetChapterNum, logContext);
+    assertProseQuality(data.text, {
+      label: `chapter ${safeTargetChapterNum}`,
+      targetWordCount: safeTargetWordCount,
+      minRatio: 0.5,
+      minUnits: 240,
+      minParagraphs: 4,
+    });
 
     logGenerationInfo(logContext, 'success', { chapterNum: data.chapter_num, textLength: data.text.length });
     return res.status(200).json(data);

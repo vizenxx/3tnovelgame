@@ -4,6 +4,7 @@ import { requireFirebaseAuth, sendInternalError, sendMethodNotAllowed } from '..
 import { generateGeminiJsonWithFallback, parseGeminiJson } from '../_gemini.js';
 import { generationLanguageInstruction, normalizeGenerationLanguage, type GenerationLanguage } from '../_language.js';
 import { getRequestLogContext, logGenerationError, logGenerationInfo } from '../_log.js';
+import { assertProseQuality } from '../_generationQuality.js';
 
 export const maxDuration = 60;
 
@@ -226,10 +227,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     const text = ensureParagraphing((data as any)?.text || '');
-    const minTextLength = language === 'en-US' ? 1800 : 700;
-    if (text.length < minTextLength) {
-      return res.status(502).json({ error: 'AI 返回的继承开场内容不完整，请重试。', code: 'AI_RESPONSE_INVALID' });
-    }
+    assertProseQuality(text, {
+      label: 'inherited opening',
+      targetWordCount,
+      minRatio: 0.55,
+      minUnits: 600,
+      minParagraphs: 5,
+    });
 
     logGenerationInfo(logContext, 'success', { model, keyIndex, textLength: text.length });
     return res.status(200).json({
@@ -248,6 +252,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     if (message.includes('API key') || message.includes('API_KEY_INVALID')) {
       return res.status(503).json({ error: 'AI 服务配置未完成，无法重写续作开场。', code: 'AI_CONFIG_MISSING' });
+    }
+    if (message.includes('AI_RESPONSE_INVALID') || message.includes('JSON')) {
+      return res.status(502).json({ error: 'AI 返回的继承开场内容不完整，请重试。', code: 'AI_RESPONSE_INVALID' });
     }
     return sendInternalError(res, '生成继承开场失败', error);
   }

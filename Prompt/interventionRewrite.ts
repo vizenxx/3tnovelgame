@@ -1,3 +1,31 @@
+const compactText = (value: unknown, max = 260) => String(value || '').replace(/\s+/g, ' ').trim().slice(0, max);
+
+const chapterBrief = (chapter: any, isEnglish: boolean) => {
+  const num = chapter?.chapter_num || chapter?.chapterNum || '?';
+  const summary = compactText(chapter?.summary || chapter?.text, 260);
+  return isEnglish ? `Chapter ${num}: ${summary}` : `第${num}章：${summary}`;
+};
+
+const compactSeriesContext = (seriesContext: any, continuityNode: any) => ({
+  title: seriesContext?.title,
+  selectedBaselineRules: (seriesContext?.selectedBaselineRules || []).slice(0, 12).map((rule: any) => ({
+    id: rule?.id,
+    text: compactText(rule?.text || rule?.rule || rule?.description || rule, 220),
+    tags: Array.isArray(rule?.tags) ? rule.tags.slice(0, 5) : [],
+  })),
+  selectedCharacterCards: (seriesContext?.selectedCharacterCards || []).slice(0, 10).map((card: any) => ({
+    id: card?.id,
+    name: card?.name,
+    role: compactText(card?.role || card?.desc || card?.description, 160),
+    tags: Array.isArray(card?.tags) ? card.tags.slice(0, 5) : [],
+  })),
+  continuityNode: continuityNode ? {
+    title: continuityNode.title,
+    bridgeSummary: compactText(continuityNode.bridgeSummary, 500),
+    repairRules: (continuityNode.repairRules || []).slice(0, 8).map((rule: any) => compactText(rule?.rule || rule?.text || rule, 180)),
+  } : null,
+});
+
 export function buildInterventionWorldStatePrompt(args: {
   blueprint: any;
   worldState?: any;
@@ -45,9 +73,11 @@ ${args.worldState.endingDirection && args.worldState.endingDirection !== 'neutra
 ${String(args.prevChapterText || '').substring(0, 400)}`;
   }
 
-  return isEnglish
-    ? `Previous plot recap: ${args.safeChapters.filter((chapter: any) => chapter.chapter_num < args.safeChapterNum).map((chapter: any) => `Chapter ${chapter.chapter_num}: ${chapter.text}`).join('\n\n')}`
-    : `前置剧情摘要：${args.safeChapters.filter((chapter: any) => chapter.chapter_num < args.safeChapterNum).map((chapter: any) => `第${chapter.chapter_num}章：${chapter.text}`).join('\n\n')}`;
+  if (!isEnglish) {
+    return `前置剧情摘要：\n${args.safeChapters.filter((chapter: any) => chapter.chapter_num < args.safeChapterNum).map((chapter: any) => chapterBrief(chapter, false)).join('\n')}`;
+  }
+
+  return `Previous plot recap:\n${args.safeChapters.filter((chapter: any) => chapter.chapter_num < args.safeChapterNum).map((chapter: any) => chapterBrief(chapter, true)).join('\n')}`;
 }
 
 export function buildInterventionRewritePrompt(args: {
@@ -74,16 +104,7 @@ export function buildInterventionRewritePrompt(args: {
   const continuityNode = args.blueprint?.continuityNode;
   const seriesBlock = seriesContext ? `
 ${isEnglish ? 'Applied world setting constraints' : '套用的世界观设定约束'}:
-${JSON.stringify({
-  title: seriesContext.title,
-  selectedBaselineRules: seriesContext.selectedBaselineRules || [],
-  selectedCharacterCards: seriesContext.selectedCharacterCards || [],
-  continuityNode: continuityNode ? {
-    title: continuityNode.title,
-    bridgeSummary: continuityNode.bridgeSummary,
-    repairRules: continuityNode.repairRules,
-  } : null,
-}, null, 2)}
+${JSON.stringify(compactSeriesContext(seriesContext, continuityNode), null, 2)}
 ` : '';
   if (isEnglish) {
     return `You are an English-language interactive fiction engine. The player has interfered with fate in chapter ${args.safeChapterNum}.
@@ -101,7 +122,7 @@ Fate math result:
 - Ripple rewrite range: chapter ${rewriteRange.startChapter} to chapter ${rewriteRange.endChapter}; reason: ${rewriteRange.reason}
 
 Chapter outline overview:
-${args.safeChapters.map((chapter: any) => `Chapter ${chapter.chapter_num}: ${chapter.summary || String(chapter.text || '').substring(0, 80)}`).join('\n')}
+${args.safeChapters.map((chapter: any) => chapterBrief(chapter, true)).join('\n')}
 
 Intervention parameter: target character [${args.targetCharacterName}], polarity [${args.actionLabel}]. This is a system parameter, not a fact characters should perceive.
 Fate tendency value before → after: ${args.currentEndingValue} → ${args.newEndingValue}. ${isSingleEnding ? 'This work uses a single-ending structure: the value may affect route, cost, relationships, and interpretation, but must not create a mutually exclusive finale.' : 'Higher values lean toward the left/order ending; lower values lean toward the right/chaos ending.'}
@@ -144,7 +165,7 @@ ${seriesBlock}
 - 涟漪重写范围：第 ${rewriteRange.startChapter} 章到第 ${rewriteRange.endChapter} 章；原因：${rewriteRange.reason}
 
 各章情节概况（大纲）：
-${args.safeChapters.map((chapter: any) => `第${chapter.chapter_num}章：${chapter.summary || String(chapter.text || '').substring(0, 80)}`).join('\n')}
+${args.safeChapters.map((chapter: any) => chapterBrief(chapter, false)).join('\n')}
 
 命运扰动参数：目标角色【${args.targetCharacterName}】，扰动极性【${args.actionLabel}】。这是系统层参数，不是角色可直接感知的事实。
 命运倾向值（干涉前→干涉后）：${args.currentEndingValue} → ${args.newEndingValue}。${isSingleEnding ? '本作品为单一结局结构：该数值只能影响抵达终局的过程、代价、人物关系和认知变化，严禁导向互斥结局；第7章必须聪明地圆回同一个核心结局。' : '数值越大越偏向秩序/左结局，越小越偏向混沌/右结局。'}
