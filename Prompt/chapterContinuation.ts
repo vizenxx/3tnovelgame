@@ -61,6 +61,10 @@ export function buildChapterContinuationPrompt(args: {
 }) {
   const isSingleEnding = args.blueprint?.endingMode === 'single' || args.blueprint?.ending_mode === 'single';
   const isEnglish = args.language === 'en-US';
+  const idealMin = Math.round(args.targetWordCount * 0.93);
+  const idealMax = Math.round(args.targetWordCount * 1.07);
+  const hardMin = Math.round(args.targetWordCount * 0.85);
+  const hardMax = Math.round(args.targetWordCount * 1.15);
   const seriesContext = args.blueprint?.seriesContext;
   const continuityNode = args.blueprint?.continuityNode;
   const seriesBlock = seriesContext ? `
@@ -97,7 +101,7 @@ Task: Write the full prose for chapter ${args.targetChapterNum}.
 Requirements:
 1. Continue directly from prior events and preserve the established style.
 2. Set chapter_num to ${args.targetChapterNum}.
-3. Target about ${args.targetWordCount} English words.
+3. Word count is a hard quality requirement: target ${args.targetWordCount} English words, ideal ${idealMin}-${idealMax}, hard range ${hardMin}-${hardMax}. Do not return a short outline or an overlong chapter.
 4. Split the prose into 6-10 paragraphs, each 2-4 sentences, separated by two newline characters.
 5. Maintain character logic and relationships established in the blueprint.
 6. Preserve continuity with future outline notes; do not introduce a contradiction that breaks later chapters.
@@ -124,7 +128,7 @@ ${(!args.worldStatePrompt.includes('故事基准') && args.endingProto) ? `作�
 要求（必须绝对服从）：
 1. 必须顺接前文剧情，延续文风。
 2. 章节号必须设置为 ${args.targetChapterNum}。
-3. 每章字数在 ${args.targetWordCount} 左右。
+3. 字数是硬性质量要求：目标 ${args.targetWordCount} 字，理想范围 ${idealMin}-${idealMax}，硬性范围 ${hardMin}-${hardMax}。不得输出短提纲，也不要明显超长。
 4. 全文必须拆成 6-10 段，每段 2-4 句，段落之间用两个换行符。段落之间要自然衔接，避免跳跃叙述。
 5. 必须严格遵守小说大纲/主轴和各角色的性格设定，人物互动必须符合前期建立的逻辑关系。
 6. 必须与“后续章节走向备忘”中的主线发展保持严密的铺垫和连贯性，不能在当前章引入与后续大纲冲突的设定。

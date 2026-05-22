@@ -199,7 +199,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     assertProseQuality(data.text, {
       label: `chapter ${safeTargetChapterNum}`,
       targetWordCount: safeTargetWordCount,
-      minRatio: 0.5,
+      minRatio: 0.85,
+      maxRatio: 1.15,
       minUnits: 240,
       minParagraphs: 4,
     });

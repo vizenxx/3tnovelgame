@@ -3,6 +3,8 @@ type ProseQualityOptions = {
   targetWordCount?: number;
   minRatio?: number;
   minUnits?: number;
+  maxRatio?: number;
+  maxUnits?: number;
   minParagraphs?: number;
 };
 
@@ -44,6 +46,10 @@ export function assertProseQuality(text: string, options: ProseQualityOptions) {
   const units = countProseUnits(clean);
   if (minUnits > 0 && units < minUnits) {
     throw new Error(`AI_RESPONSE_INVALID: ${options.label} is too short (${units}/${minUnits}).`);
+  }
+  const maxUnits = Math.max(options.maxUnits ?? 0, targetWordCount > 0 ? Math.ceil(targetWordCount * (options.maxRatio ?? 0)) : 0);
+  if (maxUnits > 0 && units > maxUnits) {
+    throw new Error(`AI_RESPONSE_INVALID: ${options.label} is too long (${units}/${maxUnits}).`);
   }
 
   const minParagraphs = options.minParagraphs ?? 0;

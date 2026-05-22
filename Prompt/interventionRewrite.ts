@@ -64,6 +64,7 @@ export function buildInterventionRewritePrompt(args: {
   endingProto?: any;
   endingMechanics?: any;
   targetWordCount: number;
+  chapterWordTargets?: Record<number, number>;
   language?: 'zh-CN' | 'en-US' | string;
 }) {
   const isSingleEnding = args.blueprint?.endingMode === 'single' || args.blueprint?.ending_mode === 'single';
@@ -72,6 +73,19 @@ export function buildInterventionRewritePrompt(args: {
   const isEnglish = args.language === 'en-US';
   const seriesContext = args.blueprint?.seriesContext;
   const continuityNode = args.blueprint?.continuityNode;
+  const wordTargetLines = Object.entries(args.chapterWordTargets || {})
+    .sort(([a], [b]) => Number(a) - Number(b))
+    .map(([chapterNum, target]) => {
+      const safeTarget = Math.max(200, Math.round(Number(target) || args.targetWordCount));
+      const idealMin = Math.round(safeTarget * 0.93);
+      const idealMax = Math.round(safeTarget * 1.07);
+      const hardMin = Math.round(safeTarget * 0.85);
+      const hardMax = Math.round(safeTarget * 1.15);
+      return isEnglish
+        ? `Chapter ${chapterNum}: target ${safeTarget} words; ideal ${idealMin}-${idealMax}; hard range ${hardMin}-${hardMax}.`
+        : `第${chapterNum}章：目标 ${safeTarget} 字；理想 ${idealMin}-${idealMax}；硬性范围 ${hardMin}-${hardMax}。`;
+    })
+    .join('\n');
   const seriesBlock = seriesContext ? `
 ${isEnglish ? 'Applied world setting constraints' : '套用的世界观设定约束'}:
 ${JSON.stringify({
@@ -119,13 +133,16 @@ Invisible intervention writing rules:
 
 Requirements:
 1. Rewrite only chapters in the ripple range: chapter ${rewriteRange.startChapter} to chapter ${rewriteRange.endChapter}. The system keeps all chapters outside this range.
-2. Each rewritten chapter should be about ${args.targetWordCount} English words.
-3. Each chapter must be split into 6-10 paragraphs, each 2-4 sentences, separated by two newline characters.
-4. Prose must be plain text. Never output HTML, Markdown, XML, code tags, <mark>, </mark>, or highlight brackets.
-5. All changes caused by this intervention must be written naturally into the story. Highlighting is handled by the frontend, not by prose tags.
-6. Also output change_highlights for temporary frontend highlighting: each item has chapter_num, quote, reason. quote must be an exact plain-text phrase already present in that chapter, with no tags.
-7. Even if no branch triggers, the ripple range must contain a perceptible shift and must not simply copy old prose.
-8. Use idiomatic English fiction style and natural English punctuation.
+2. Word count is a hard quality requirement. Use these per-chapter targets based on the original chapter length:
+${wordTargetLines || `Chapter ${rewriteRange.startChapter}: target ${args.targetWordCount} words; ideal ${Math.round(args.targetWordCount * 0.93)}-${Math.round(args.targetWordCount * 1.07)}; hard range ${Math.round(args.targetWordCount * 0.85)}-${Math.round(args.targetWordCount * 1.15)}.`}
+3. Preserve unaffected passages, scene rhythm, and paragraph proportions whenever possible. Do not rewrite for novelty. Change only what the ripple, branch, character state, or continuity requires.
+4. Even for a large ripple, keep the original chapter's necessary setup and stable events unless the new branch/ending direction directly contradicts them.
+5. Each chapter must be split into 6-10 paragraphs, each 2-4 sentences, separated by two newline characters.
+6. Prose must be plain text. Never output HTML, Markdown, XML, code tags, <mark>, </mark>, or highlight brackets.
+7. All changes caused by this intervention must be written naturally into the story. Highlighting is handled by the frontend, not by prose tags.
+8. Also output change_highlights for temporary frontend highlighting: each item has chapter_num, quote, reason. quote must be an exact plain-text phrase already present in that chapter, with no tags.
+9. Even if no branch triggers, the ripple range must contain a perceptible shift and must not simply copy old prose.
+10. Use idiomatic English fiction style and natural English punctuation.
 
 Return strict JSON only. Do not include metadata.`;
   }
@@ -161,12 +178,16 @@ ${(!args.worldStatePrompt.includes('故事基准') && args.endingProto) ? `作�
 5. 若多个当前有效支线不冲突，必须尽量把各支线的事件、设定、伏笔都融入故事；若支线情节冲突，必须尽可能保留前次情节的痕迹与因果，但以后次/本次新触发支线为主导决定新的走向。
 
 要求：
-1. 只重写涟漪范围内的章节：第 ${rewriteRange.startChapter} 章到第 ${rewriteRange.endChapter} 章，每章字数约 ${args.targetWordCount} 字；范围外章节由系统保留原文，不要输出。
-2. 每一章的正文必须拆成 6-10 段，每段 2-4 句，段落之间用两个换行符。
-3. 正文必须是纯文本叙事，严禁输出 HTML、Markdown、XML 或任何代码式标签；不要使用 <mark>、</mark>、【高亮】 等标记包住变化内容。
-4. 所有因本次干涉直接或间接导致的变化，必须自然写进叙事本身；高亮与差异展示由前端处理，不要把标记写入故事正文。
-5. 另外输出 change_highlights 数组，用于前端临时高亮变化处：每项包含 chapter_num、quote、reason；quote 必须是对应章节正文中已经出现的原句或短句，严禁包含任何标签。
-6. 即使未触发支线，也必须让涟漪范围内的章节出现可感知偏移，不能复制旧正文。
+1. 只重写涟漪范围内的章节：第 ${rewriteRange.startChapter} 章到第 ${rewriteRange.endChapter} 章；范围外章节由系统保留原文，不要输出。
+2. 字数是硬性质量要求。每个被重写章节都必须参考原章节字数，尽量维持相近长度：
+${wordTargetLines || `第${rewriteRange.startChapter}章：目标 ${args.targetWordCount} 字；理想 ${Math.round(args.targetWordCount * 0.93)}-${Math.round(args.targetWordCount * 1.07)}；硬性范围 ${Math.round(args.targetWordCount * 0.85)}-${Math.round(args.targetWordCount * 1.15)}。`}
+3. 尽量保留未受影响的段落、场景节奏、铺垫和稳定事件，不要为了“看起来重写”而重写；只调整涟漪、支线、角色状态、结局导向或连续性真正需要改变的部分。
+4. 即使是大涟漪，也要保留原章节中仍然成立的必要铺垫和稳定事件；只有与新支线/新结局导向直接冲突的内容才需要改写、删减或补强。
+5. 每一章的正文必须拆成 6-10 段，每段 2-4 句，段落之间用两个换行符。
+6. 正文必须是纯文本叙事，严禁输出 HTML、Markdown、XML 或任何代码式标签；不要使用 <mark>、</mark>、【高亮】 等标记包住变化内容。
+7. 所有因本次干涉直接或间接导致的变化，必须自然写进叙事本身；高亮与差异展示由前端处理，不要把标记写入故事正文。
+8. 另外输出 change_highlights 数组，用于前端临时高亮变化处：每项包含 chapter_num、quote、reason；quote 必须是对应章节正文中已经出现的原句或短句，严禁包含任何标签。
+9. 即使未触发支线，也必须让涟漪范围内的章节出现可感知偏移，不能复制旧正文。
 
 请严格按 JSON 输出，不要包含元数据。`;
 }

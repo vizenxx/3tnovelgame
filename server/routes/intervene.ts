@@ -6,7 +6,7 @@ import { getRequestLogContext, logGenerationError, logGenerationInfo } from '../
 import { buildInterventionRewritePrompt, buildInterventionWorldStatePrompt } from '../../Prompt/interventionRewrite.js';
 import { branchEffectiveWeight, calculateEndingMechanics, normalizeEndingBias } from '../_endingMechanics.js';
 import { generationLanguageInstruction, normalizeGenerationLanguage } from '../_language.js';
-import { assertProseQuality } from '../_generationQuality.js';
+import { assertProseQuality, countProseUnits } from '../_generationQuality.js';
 
 export const maxDuration = 60;
 
@@ -360,6 +360,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       language,
     });
 
+    const rewriteEndChapter = Math.min(7, Math.max(safeChapterNum, asNumber(endingMechanics.rewriteRange?.endChapter, 7)));
+    const chapterWordTargets: Record<number, number> = {};
+    safeChapters
+      .filter((chapter: any) => chapter.chapter_num >= safeChapterNum && chapter.chapter_num <= rewriteEndChapter)
+      .forEach((chapter: any) => {
+        const originalUnits = countProseUnits(String(chapter?.text || ''));
+        chapterWordTargets[chapter.chapter_num] = originalUnits > 120 ? originalUnits : safeTargetWordCount;
+      });
+
     const prompt = `${generationLanguageInstruction(language)}\n\n${buildInterventionRewritePrompt({
       blueprint,
       safeChapterNum,
@@ -374,6 +383,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       endingProto,
       endingMechanics,
       targetWordCount: safeTargetWordCount,
+      chapterWordTargets,
       language,
     })}`;
 
@@ -382,16 +392,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       throw new Error('Gemini response missed chapters array.');
     }
 
-    const rewriteEndChapter = Math.min(7, Math.max(safeChapterNum, asNumber(endingMechanics.rewriteRange?.endChapter, 7)));
-
     aiData.chapters = aiData.chapters.map((chapter: any) => {
       const normalized = normalizeChapter(chapter);
       if (normalized.chapter_num >= safeChapterNum && normalized.chapter_num <= rewriteEndChapter) {
         const text = ensureParagraphing(normalized.text, { minParas: 6, maxParas: 10 });
+        const chapterTargetWordCount = chapterWordTargets[normalized.chapter_num] || safeTargetWordCount;
         assertProseQuality(text, {
           label: `rewritten chapter ${normalized.chapter_num}`,
-          targetWordCount: safeTargetWordCount,
-          minRatio: normalized.chapter_num === safeChapterNum ? 0.45 : 0.35,
+          targetWordCount: chapterTargetWordCount,
+          minRatio: 0.8,
+          maxRatio: 1.25,
           minUnits: normalized.chapter_num === safeChapterNum ? 260 : 180,
           minParagraphs: 4,
         });
