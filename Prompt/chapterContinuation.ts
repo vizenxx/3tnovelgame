@@ -1,33 +1,5 @@
 import { buildNarrativePersonInstruction } from './narrativePerson.js';
 
-const compactText = (value: unknown, max = 260) => String(value || '').replace(/\s+/g, ' ').trim().slice(0, max);
-
-const compactSeriesContext = (seriesContext: any, continuityNode: any) => ({
-  title: seriesContext?.title,
-  selectedBaselineRules: (seriesContext?.selectedBaselineRules || []).slice(0, 12).map((rule: any) => ({
-    id: rule?.id,
-    text: compactText(rule?.text || rule?.rule || rule?.description || rule, 220),
-    tags: Array.isArray(rule?.tags) ? rule.tags.slice(0, 5) : [],
-  })),
-  selectedCharacterCards: (seriesContext?.selectedCharacterCards || []).slice(0, 10).map((card: any) => ({
-    id: card?.id,
-    name: card?.name,
-    role: compactText(card?.role || card?.desc || card?.description, 160),
-    tags: Array.isArray(card?.tags) ? card.tags.slice(0, 5) : [],
-  })),
-  continuityNode: continuityNode ? {
-    title: continuityNode.title,
-    bridgeSummary: compactText(continuityNode.bridgeSummary, 500),
-    repairRules: (continuityNode.repairRules || []).slice(0, 8).map((rule: any) => compactText(rule?.rule || rule?.text || rule, 180)),
-  } : null,
-});
-
-const chapterBrief = (chapter: any, isEnglish: boolean) => {
-  const num = chapter?.chapter_num || chapter?.chapterNum || '?';
-  const summary = compactText(chapter?.summary || chapter?.text, 220);
-  return isEnglish ? `[${num}] ${summary}` : `【${num}】${summary}`;
-};
-
 export function buildChapterWorldStatePrompt(args: {
   worldState?: any;
   endingProto?: any;
@@ -70,11 +42,9 @@ ${args.worldState.endingDirection && args.worldState.endingDirection !== 'neutra
 ${String(args.prevChapterText || '').substring(0, 400)}`;
   }
 
-  if (!isEnglish) {
-    return `历史剧情回忆：\n${(args.historyChapters || []).map((chapter: any) => chapterBrief(chapter, false)).join('\n')}`;
-  }
-
-  return `Story history recap:\n${(args.historyChapters || []).map((chapter: any) => chapterBrief(chapter, true)).join('\n')}`;
+  return isEnglish
+    ? `Story history recap: ${(args.historyChapters || []).map((chapter: any) => `[${chapter.chapter_num}] ${String(chapter.text || '').substring(0, 200)}...`).join('\n')}`
+    : `历史剧情回忆：${(args.historyChapters || []).map((chapter: any) => `[${chapter.chapter_num}] ${String(chapter.text || '').substring(0, 200)}...`).join('\n')}`;
 }
 
 export function buildChapterContinuationPrompt(args: {
@@ -95,19 +65,31 @@ export function buildChapterContinuationPrompt(args: {
   const continuityNode = args.blueprint?.continuityNode;
   const seriesBlock = seriesContext ? `
 ${isEnglish ? 'Applied world setting constraints' : '套用的世界观设定约束'}:
-${JSON.stringify(compactSeriesContext(seriesContext, continuityNode), null, 2)}
+${JSON.stringify({
+  title: seriesContext.title,
+  pitch: seriesContext.pitch,
+  selectedBaselineRules: seriesContext.selectedBaselineRules || [],
+  selectedCharacterCards: seriesContext.selectedCharacterCards || [],
+  ironLaws: seriesContext.ironLaws,
+  timelineNotes: seriesContext.timelineNotes,
+  continuityNode: continuityNode ? {
+    title: continuityNode.title,
+    bridgeSummary: continuityNode.bridgeSummary,
+    repairRules: continuityNode.repairRules,
+  } : null,
+}, null, 2)}
 ` : '';
   if (isEnglish) {
     return `You are the prose engine for an English-language interactive fiction game.
 Story premise: ${args.blueprint.main_axis}
 Narrative person: ${buildNarrativePersonInstruction(args.narrativePerson || args.blueprint.narrative_person, 'chapter', args.language)}
-Characters: ${args.blueprint.characters.map((character: any) => `${character.id}:${character.name}(${compactText(character.desc, 140)})`).join('; ')}
+Characters: ${args.blueprint.characters.map((character: any) => `${character.id}:${character.name}(${character.desc})`).join('; ')}
 Ending structure: ${isSingleEnding ? 'Single ending. Later chapters may change the route, but the finale should naturally converge on the same core ending.' : 'Branching endings. Current compatibility slots are default / left / right, with future expansion possible.'}
 ${seriesBlock}
 ${args.worldStatePrompt}
 Current chapter outline: ${args.outlineSummary}
 ${args.futureOutlines ? `Future outline notes:\n${args.futureOutlines}` : ''}
-${args.defaultText ? `Author default mainline text (chapter ${args.targetChapterNum}, priority reference):\n${compactText(args.defaultText, 900)}` : ''}
+${args.defaultText ? `Author default mainline text (chapter ${args.targetChapterNum}, priority reference):\n${String(args.defaultText).substring(0, 1200)}` : ''}
 ${(!args.worldStatePrompt.includes('Story baseline') && args.endingProto) ? `Author ending prototypes:\n- default: ${String(args.endingProto.default || '').substring(0, 400)}\n- left: ${String(args.endingProto.left || '').substring(0, 400)}\n- right: ${String(args.endingProto.right || '').substring(0, 400)}` : ''}
 
 Task: Write the full prose for chapter ${args.targetChapterNum}.
@@ -128,13 +110,13 @@ Return strict JSON Schema only. Do not include image prompts or meta-comments.`;
   return `你是一个互动小说引擎的织梦者。
 小说大纲/主轴：${args.blueprint.main_axis}
 叙事人称：${buildNarrativePersonInstruction(args.narrativePerson || args.blueprint.narrative_person, 'chapter', args.language)}
-角色列表：${args.blueprint.characters.map((character: any) => `${character.id}:${character.name}(${compactText(character.desc, 140)})`).join('; ')}
+角色列表：${args.blueprint.characters.map((character: any) => `${character.id}:${character.name}(${character.desc})`).join('; ')}
 结局结构：${isSingleEnding ? '单一结局。后续章节必须允许过程变化，但终章需要自然收束到同一个核心结局。' : '多线结局。当前使用默认/左/右三结局，未来可扩展为更多结局。'}
 ${seriesBlock}
 ${args.worldStatePrompt}
 当前章节大纲指引：${args.outlineSummary}
 ${args.futureOutlines ? `后续章节走向备忘：\n${args.futureOutlines}` : ''}
-${args.defaultText ? `作者默认主线原文（第${args.targetChapterNum}章，作为优先参考原型）：\n${compactText(args.defaultText, 900)}` : ''}
+${args.defaultText ? `作者默认主线原文（第${args.targetChapterNum}章，作为优先参考原型）：\n${String(args.defaultText).substring(0, 1200)}` : ''}
 ${(!args.worldStatePrompt.includes('故事基准') && args.endingProto) ? `作者结局原型：\n- default: ${String(args.endingProto.default || '').substring(0, 400)}\n- left: ${String(args.endingProto.left || '').substring(0, 400)}\n- right: ${String(args.endingProto.right || '').substring(0, 400)}` : ''}
 
 任务：续写第 ${args.targetChapterNum} 章全文内容。
