@@ -1513,6 +1513,35 @@ function triggerPreview(args: {
   return `触发条件预览：在第${chap}章结算时，「${nameOf(args.countCharId)}」被「${actLabel(args.countAction)}」的累计次数 ≥ ${Math.max(1, Number(args.minCount || 1))} 则触发。`;
 }
 
+function formatTriggerCondition(tg: any, characters: any[], isEnglish: boolean) {
+  if (!tg) return '';
+  const nameOf = (id: string) => characters.find(c => c.id === id)?.name || id || (isEnglish ? '(Unknown Character)' : '（未知角色）');
+  
+  if (tg.type === 'single' || (!tg.type && tg.single)) {
+    const single = tg.single || {};
+    const chap = single.chapterNum || 2;
+    const charName = nameOf(single.charId);
+    const act = isEnglish
+      ? (single.action === 'curse' ? 'Hardship' : 'Bless')
+      : (single.action === 'curse' ? '磨难' : '庇佑');
+    return isEnglish
+      ? `Ch. ${chap}: Apply "${act}" to ${charName}`
+      : `第${chap}章，对「${charName}」施加「${act}」`;
+  } else if (tg.type === 'count' || (!tg.type && tg.count)) {
+    const count = tg.count || {};
+    const chap = count.upToChapterNum || 6;
+    const charName = nameOf(count.charId);
+    const act = isEnglish
+      ? (count.action === 'curse' ? 'Hardship' : 'Bless')
+      : (count.action === 'curse' ? '磨难' : '庇佑');
+    const minC = count.minCount || 1;
+    return isEnglish
+      ? `By Ch. ${chap}: Cumulative "${act}" on ${charName} ≥ ${minC} times`
+      : `第${chap}章及以前，对「${charName}」累计施加「${act}」的次数 ≥ ${minC} 次`;
+  }
+  return '';
+}
+
 type ConditionForm = {
   kind: 'single' | 'count';
   singleChapterNum: number;
@@ -1522,6 +1551,7 @@ type ConditionForm = {
   countAction: 'bless' | 'curse';
   minCount: number;
   upToChapterNum: number;
+  hint?: string;
 };
 
 type ParsedImportCondition = {
@@ -2219,6 +2249,7 @@ export default function App() {
       countAction: 'bless',
       minCount: 1,
       upToChapterNum: 6,
+      hint: '',
     },
   ]);
   const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
@@ -2847,6 +2878,7 @@ export default function App() {
               charId: condition.singleCharId || '',
               action: condition.singleAction,
             },
+            hint: condition.hint || '',
           }
         : {
             type: 'count' as const,
@@ -2856,6 +2888,7 @@ export default function App() {
               minCount: Math.max(1, condition.minCount),
               upToChapterNum: Math.max(2, Math.min(6, condition.upToChapterNum)),
             },
+            hint: condition.hint || '',
           }
     )
   );
@@ -6426,7 +6459,7 @@ export default function App() {
     await loadSeriesWorlds();
   };
 
-  const selectAuthoringStory = async (storyId: string) => {
+  const selectAuthoringStory = async (storyId: string, options?: { keepTab?: boolean; keepBranchSelection?: boolean }) => {
     if (!db) return;
     const cartridge = await getStoryCartridge(db as any, storyId);
     if (!cartridge) {
@@ -6447,9 +6480,13 @@ export default function App() {
     setAuthoringCartridge(cartridge);
     setAuthoringCustomTagsInput((cartridge.meta?.tags || []).join('，'));
     setAuthoringImportText('');
-    setSelectedBranchId(null);
-    setExpandedBranchId(null);
-    setAuthoringTab('settings');
+    if (!options?.keepBranchSelection) {
+      setSelectedBranchId(null);
+      setExpandedBranchId(null);
+    }
+    if (!options?.keepTab) {
+      setAuthoringTab('settings');
+    }
     markAuthoringSaved(cartridge);
   };
 
@@ -10943,6 +10980,25 @@ export default function App() {
                               </div>
                               <div className="text-xs leading-relaxed text-zinc-500">{visibleDesc}</div>
                               {canRevealBranchContent && (
+                                <div className="mt-2.5 rounded-xl border border-zinc-800 bg-zinc-950/40 p-2.5 space-y-1">
+                                  <div className="text-[10px] font-black text-indigo-400 uppercase tracking-wider">
+                                    {tr('解锁方法：', 'Unlock Method: ')}
+                                  </div>
+                                  <div className="text-[11px] text-zinc-400 space-y-0.5">
+                                    {(() => {
+                                      const triggers = branch.triggerGroups || (branch.trigger ? [branch.trigger] : []);
+                                      if (triggers.length === 0) return <div className="italic text-zinc-650">{tr('无判定条件', 'No trigger conditions')}</div>;
+                                      return triggers.map((tg: any, tIdx: number) => (
+                                        <div key={tIdx} className="flex items-start gap-1">
+                                          <span className="text-zinc-600">•</span>
+                                          <span>{formatTriggerCondition(tg, blueprint.characters || [], isEnglish)}</span>
+                                        </div>
+                                      ));
+                                    })()}
+                                  </div>
+                                </div>
+                              )}
+                              {canRevealBranchContent && (
                                 <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-black">
                                   <span className="rounded-full bg-zinc-800 px-2 py-1 text-zinc-300">
                                     {branch.side === 'left' ? tr('左向支线', 'Left branch') : tr('右向支线', 'Right branch')}
@@ -11213,11 +11269,37 @@ export default function App() {
                             </div>
                             <div className="grid w-full gap-3 sm:grid-cols-2 lg:grid-cols-3">
                               {availableCharacters.map((char) => {
-                                const branchHints = (blueprint.branches || [])
-                                  .filter((branch) => branch.condition_chapter === chapter.chapter_num && branch.condition_char === char.id)
-                                  .map((branch) => branch.hint)
-                                  .filter((hint): hint is string => Boolean(hint))
-                                  .slice(0, 2);
+                                  const branchHints = Array.from(new Set(
+                                    (blueprint.branches || []).flatMap((branch) => {
+                                      const triggers = branch.triggerGroups || (branch.trigger ? [branch.trigger] : []);
+                                      if (triggers.length === 0) {
+                                        if (branch.condition_chapter === chapter.chapter_num && branch.condition_char === char.id && branch.hint) {
+                                          return [branch.hint];
+                                        }
+                                        return [];
+                                      }
+                                      const matched: string[] = [];
+                                      for (const tg of triggers) {
+                                        let isMatch = false;
+                                        if (tg.type === 'single' || (!tg.type && tg.single)) {
+                                          const s = tg.single || {};
+                                          if (s.chapterNum === chapter.chapter_num && s.charId === char.id) {
+                                            isMatch = true;
+                                          }
+                                        } else if (tg.type === 'count' || (!tg.type && tg.count)) {
+                                          const c = tg.count || {};
+                                          if (c.charId === char.id && chapter.chapter_num <= (c.upToChapterNum || 6)) {
+                                            isMatch = true;
+                                          }
+                                        }
+                                        if (isMatch) {
+                                          const h = tg.hint || branch.hint;
+                                          if (h) matched.push(h);
+                                        }
+                                      }
+                                      return matched;
+                                    })
+                                  )).filter(Boolean).slice(0, 2);
 
                                 return (
                                   <div key={char.id} className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
@@ -11393,9 +11475,8 @@ export default function App() {
           {tr('取消', 'Cancel')}
         </button>
       </div>
-      <div className="grid gap-3 md:grid-cols-2">
-        <input value={branchForm.name} onChange={(event) => setBranchForm((prev) => ({ ...prev, name: event.target.value }))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" placeholder={tr('支线名', 'Branch name')} />
-        <input value={branchForm.hint} onChange={(event) => setBranchForm((prev) => ({ ...prev, hint: event.target.value }))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" placeholder={tr('提示短句', 'Hint line')} />
+      <div>
+        <input value={branchForm.name} onChange={(event) => setBranchForm((prev) => ({ ...prev, name: event.target.value }))} className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" placeholder={tr('支线名', 'Branch name')} />
       </div>
       <div className="grid gap-3 md:grid-cols-2">
         <select value={branchForm.side} onChange={(event) => setBranchForm((prev) => ({ ...prev, side: event.target.value as 'left' | 'right' }))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500">
@@ -11452,26 +11533,41 @@ export default function App() {
                 </button>
               )}
             </div>
-            <div className="grid gap-3 md:grid-cols-4">
-              <select value={condition.kind} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, kind: event.target.value as 'single' | 'count' } : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500">
+            <div className="flex flex-wrap items-center gap-3">
+              <select value={condition.kind} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, kind: event.target.value as 'single' | 'count' } : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500 min-w-[120px]">
                 <option value="single">{tr('单次判定', 'Single check')}</option>
                 <option value="count">{tr('累计判定', 'Cumulative check')}</option>
               </select>
-              <select value={condition.kind === 'single' ? condition.singleChapterNum : condition.upToChapterNum} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? (condition.kind === 'single' ? { ...item, singleChapterNum: Number(event.target.value) } : { ...item, upToChapterNum: Number(event.target.value) }) : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500">
+              <select value={condition.kind === 'single' ? condition.singleChapterNum : condition.upToChapterNum} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? (condition.kind === 'single' ? { ...item, singleChapterNum: Number(event.target.value) } : { ...item, upToChapterNum: Number(event.target.value) }) : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500 min-w-[100px]">
                 {chapterOptions.map((chapterNum) => <option key={chapterNum} value={chapterNum}>{isEnglish ? `Chapter ${chapterNum}` : `第${chapterNum}章`}</option>)}
               </select>
-              <select value={condition.kind === 'single' ? condition.singleCharId : condition.countCharId} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? (condition.kind === 'single' ? { ...item, singleCharId: event.target.value } : { ...item, countCharId: event.target.value }) : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500">
+              <select value={condition.kind === 'single' ? condition.singleCharId : condition.countCharId} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? (condition.kind === 'single' ? { ...item, singleCharId: event.target.value } : { ...item, countCharId: event.target.value }) : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500 min-w-[140px]">
                 <option value="">{tr('选择角色', 'Choose character')}</option>
                 {normalizeCharacters(authoringCartridge?.meta?.characters || []).map((character: any) => <option key={character.id} value={character.id}>{character.name}</option>)}
               </select>
               {condition.kind === 'single' ? (
-                <select value={condition.singleAction} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, singleAction: event.target.value as 'bless' | 'curse' } : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500">
+                <select value={condition.singleAction} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, singleAction: event.target.value as 'bless' | 'curse' } : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500 min-w-[100px]">
                   <option value="bless">{tr('庇佑', 'Bless')}</option>
                   <option value="curse">{tr('磨难', 'Hardship')}</option>
                 </select>
               ) : (
-                <input type="number" min={1} value={condition.minCount} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, minCount: Math.max(1, Number(event.target.value) || 1) } : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500" placeholder={tr('累计次数', 'Count')} />
+                <>
+                  <select value={condition.countAction} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, countAction: event.target.value as 'bless' | 'curse' } : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500 min-w-[100px]">
+                    <option value="bless">{tr('庇佑', 'Bless')}</option>
+                    <option value="curse">{tr('磨难', 'Hardship')}</option>
+                  </select>
+                  <input type="number" min={1} value={condition.minCount} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, minCount: Math.max(1, Number(event.target.value) || 1) } : item))} className="w-24 rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500" placeholder={tr('累计次数', 'Count')} />
+                </>
               )}
+            </div>
+            <div>
+              <input
+                type="text"
+                value={condition.hint || ''}
+                onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, hint: event.target.value } : item))}
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-2 text-sm text-white outline-none focus:border-indigo-500"
+                placeholder={tr('提示（可选，在触发条件中设置，多条件时可针对不同条件设置提示）', 'Hint (optional, set in trigger conditions. Multi-conditions can have different hints)')}
+              />
             </div>
             <div className="text-xs text-indigo-300">
               {triggerPreview({
@@ -11500,13 +11596,14 @@ export default function App() {
               showError(tr('请先填写支线名。', 'Please enter a branch name first.'));
               return;
             }
+            const combinedHint = branchConditions.map(c => c.hint || '').filter(Boolean).join('；') || `留意${branchForm.name}`;
             const payload = {
               side: branchForm.side,
               tier: normalizeBranchTier(branchForm.tier),
               is_hidden: branchForm.isHidden,
               endingId: branchForm.endingId || undefined,
               name: branchForm.name,
-              hint: branchForm.hint || `留意${branchForm.name}`,
+              hint: combinedHint,
               desc: branchForm.sceneText.slice(0, 80) || branchForm.name,
               common: false,
               trigger: normalizeBranchConditionsForStorage(branchConditions)[0],
@@ -11516,13 +11613,12 @@ export default function App() {
             } as any;
             if (isNew) {
               const newId = await createStoryBranch(db as any, authoringStoryId, payload);
-              await selectAuthoringStory(authoringStoryId);
+              await selectAuthoringStory(authoringStoryId, { keepTab: true, keepBranchSelection: false });
               setExpandedBranchId(null);
               showError(tr('支线已创建。', 'Branch created.'));
             } else {
               await upsertStoryBranch(db as any, authoringStoryId, branchForm.id, payload);
-              await selectAuthoringStory(authoringStoryId);
-              setExpandedBranchId(null);
+              await selectAuthoringStory(authoringStoryId, { keepTab: true, keepBranchSelection: true });
               showError(tr('支线已保存。', 'Branch saved.'));
             }
           }}
@@ -13123,6 +13219,7 @@ export default function App() {
                             countAction: 'bless',
                             minCount: 1,
                             upToChapterNum: 6,
+                            hint: '',
                           }]);
                         }}
                         className={semanticButtonClass('secondary', { compact: true })}
@@ -13179,8 +13276,11 @@ export default function App() {
                                     hint: branch.hint || '',
                                     sceneText: branch.sceneText || '',
                                   });
-                                  setBranchConditions((branch.triggerGroups && branch.triggerGroups.length > 0)
-                                    ? branch.triggerGroups.map((group: any) => group.type === 'count'
+                                  const rawGroups = (branch.triggerGroups && branch.triggerGroups.length > 0)
+                                    ? branch.triggerGroups
+                                    : (branch.trigger ? [branch.trigger] : []);
+                                  setBranchConditions(rawGroups.length > 0
+                                    ? rawGroups.map((group: any) => group.type === 'count'
                                       ? {
                                           kind: 'count',
                                           singleChapterNum: 2,
@@ -13190,6 +13290,7 @@ export default function App() {
                                           countAction: group.count?.action || 'bless',
                                           minCount: group.count?.minCount || 1,
                                           upToChapterNum: group.count?.upToChapterNum || 6,
+                                          hint: group.hint || '',
                                         }
                                       : {
                                           kind: 'single',
@@ -13200,6 +13301,7 @@ export default function App() {
                                           countAction: 'bless',
                                           minCount: 1,
                                           upToChapterNum: 6,
+                                          hint: group.hint || '',
                                         })
                                     : [{
                                         kind: 'single',
@@ -13210,6 +13312,7 @@ export default function App() {
                                         countAction: 'bless',
                                         minCount: 1,
                                         upToChapterNum: 6,
+                                        hint: branch.hint || '',
                                       }]
                                   );
                                 }}
