@@ -208,6 +208,7 @@ html[data-theme="light"] .authoring-tab-button.is-active {
     grid-template-columns: none;
     -webkit-mask-image: linear-gradient(to right, black 82%, transparent 98%);
     mask-image: linear-gradient(to right, black 82%, transparent 98%);
+    padding-right: 2.5rem;
   }
 
   .authoring-tab-button {

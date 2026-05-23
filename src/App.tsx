@@ -8854,18 +8854,8 @@ export default function App() {
     return (
     <div className="story-library-page mx-auto max-w-7xl px-5 pb-[calc(8.5rem+env(safe-area-inset-bottom))] pt-[max(3rem,calc(env(safe-area-inset-top)+3rem))] sm:px-6 lg:px-8">
       <div className="story-library-hero relative mb-10 p-2 sm:p-4 lg:p-6">
-        <div
-          className="absolute right-4 top-4 rounded-full border border-zinc-800/70 bg-zinc-950/45 px-2.5 py-1 text-[10px] font-black tracking-[0.12em] text-zinc-500 backdrop-blur-md"
-          title={APP_BUILD_LABEL || APP_VERSION_LABEL}
-        >
-          {APP_VERSION_LABEL}
-        </div>
         <div className="max-w-3xl">
-          <div className="story-library-eyebrow mb-4">
-            <Sparkles className="h-3.5 w-3.5" />
-            {t('library.eyebrow')}
-          </div>
-          <h2 className="story-library-title text-4xl font-black leading-[0.95] sm:text-5xl lg:text-6xl">
+          <h2 className="story-library-title text-4xl font-black leading-[1.15] sm:text-5xl lg:text-6xl">
             {t('library.titleA')}<br />
             <span className="story-library-title-accent">{t('library.titleB')}</span>
           </h2>
