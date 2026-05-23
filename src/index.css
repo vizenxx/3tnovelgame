@@ -1405,7 +1405,8 @@ body,
   animation: app-boot-glow-pulse 3.2s ease-in-out infinite;
 }
 
-.app-boot-mark img {
+.app-boot-mark img,
+.app-boot-logo-svg {
   position: relative;
   z-index: 1;
   width: 120px;

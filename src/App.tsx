@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp, Download, Sun, Moon, Search, GitBranch, Trophy, Bell, BarChart3, WifiOff } from 'lucide-react';
+import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, ChevronRight, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp, Download, Sun, Moon, Search, GitBranch, Trophy, Bell, BarChart3, WifiOff } from 'lucide-react';
 import { auth, db, firebaseInitError } from './firebase';
 import { createEmptyStory, createSharedStoryRecord, createStorySnapshot, adaptBlueprintToStory, createStoryBranch, deleteAllNotifications, deleteNotification, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, deleteSeriesWorld, favoriteStory, unfavoriteStory, followAuthor, getAppSettings, getAuthorFollowState, getPushConfig, getSharedStoryRecord, getStoryCartridge, getStoryMeta, getUserProgress, incrementShareMetric, incrementStoryMetric, likeStory, unlikeStory, listAuthorStories, listContinuityNodes, listFollowedAuthors, listMySeriesWorlds, listMySharedStories, listMyStories, listNotifications, listPublicStories, markNotificationsRead, refundCoverGenerationUsage, reportStory, reserveCoverGenerationUsage, saveAppSettings, saveContinuityNode, savePushSubscription, saveSeriesWorld, saveStoryMainlineBundle, saveStoryMeta, saveUserProgress, unfollowAuthor, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch, type ContinuityNodeRecord, type SeriesWorldRecord } from './storyStore';
 import { branchEffectiveWeight, isBranchUnlockedByHistory, normalizeEndingBias } from './storyCartridge';
@@ -1934,6 +1934,8 @@ export default function App() {
   const [profileNewPassword, setProfileNewPassword] = useState('');
   const [isAccountCenterOpen, setIsAccountCenterOpen] = useState(false);
   const [isEditNameModalOpen, setIsEditNameModalOpen] = useState(false);
+  const [isEditBioModalOpen, setIsEditBioModalOpen] = useState(false);
+  const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
   const [accountCenterMode, setAccountCenterMode] = useState<'personal' | 'settings'>('personal');
   const [isCreationDockOpen, setIsCreationDockOpen] = useState(false);
   const [showLeaveGameModal, setShowLeaveGameModal] = useState(false);
@@ -10565,27 +10567,8 @@ export default function App() {
           <div className="mb-6 flex items-center justify-between">
             <div>
               <div className="text-xs font-black uppercase tracking-[0.24em] text-zinc-500">
-                {isSystemSettingsMode ? tr('系统设置', 'System Settings') : tr('个人中心', 'Account Center')}
+                {tr('个人中心', 'Account Center')}
               </div>
-              <div className="mt-1 flex items-center gap-2 text-2xl font-black text-white">
-                <span>{getUserAuthorName(user)}</span>
-                {!user?.isAnonymous && (
-                  <button
-                    type="button"
-                    onClick={() => setIsEditNameModalOpen(true)}
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-600 hover:text-white transition-all active:scale-95"
-                    title={tr('修改名称', 'Edit name')}
-                  >
-                    <PenSquare className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
-              <div className="text-sm text-zinc-500">{user?.email || tr('游客账号', 'Guest account')}</div>
-              {user?.isAnonymous && (
-                <div className="mt-3 max-w-xl rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-50/80">
-                  {GUEST_RETENTION_NOTICE}
-                </div>
-              )}
             </div>
             <button
               type="button"
@@ -10595,6 +10578,77 @@ export default function App() {
             >
               <ChevronLeft className="h-5 w-5" />
             </button>
+          </div>
+        )}
+
+        {!isSystemSettingsMode && (
+          <div className="mb-6 rounded-2xl border border-zinc-800/60 bg-zinc-900/10 p-5 space-y-4">
+            {/* 名字与Email */}
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="flex items-center gap-2 text-2xl font-black text-white">
+                  <span>{getUserAuthorName(user)}</span>
+                  {!user?.isAnonymous && (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditNameModalOpen(true)}
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-600 hover:text-white transition-all active:scale-95"
+                      title={tr('修改名称', 'Edit name')}
+                    >
+                      <PenSquare className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+                <div className="mt-1 text-sm text-zinc-500">{user?.email || tr('游客账号', 'Guest account')}</div>
+              </div>
+            </div>
+
+            {/* 游客提示 */}
+            {user?.isAnonymous && (
+              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-50/80">
+                {GUEST_RETENTION_NOTICE}
+              </div>
+            )}
+
+            {/* 个性签名 */}
+            <div className="border-t border-zinc-800/40 pt-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-bold text-zinc-500 mb-1">{tr('个人签名', 'Bio')}</div>
+                  <div 
+                    onClick={() => setIsEditBioModalOpen(true)}
+                    className="text-sm text-zinc-300 hover:text-white cursor-pointer transition-colors line-clamp-3 italic leading-relaxed"
+                  >
+                    {myBio.trim() ? `「 ${myBio} 」` : tr('点击设置您的个性签名...', 'Click to set your bio...')}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsEditBioModalOpen(true)}
+                  className="shrink-0 inline-flex h-7 w-7 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-600 hover:text-white transition-all active:scale-95"
+                  title={tr('修改签名', 'Edit bio')}
+                >
+                  <PenSquare className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* 安全设置与修改密码入口 (非游客账号) */}
+            {!user?.isAnonymous && (
+              <div className="border-t border-zinc-800/40 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setIsSecurityModalOpen(true)}
+                  className="w-full flex items-center justify-between rounded-xl border border-zinc-800/60 bg-zinc-900/40 px-4 py-3 text-sm text-zinc-300 hover:border-zinc-700 hover:text-white transition-all active:scale-[0.99]"
+                >
+                  <div className="flex items-center gap-2">
+                    <Lock className="h-4 w-4 text-zinc-400" />
+                    <span>{tr('账户安全设置', 'Account Security Settings')}</span>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-zinc-500" />
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -10627,12 +10681,6 @@ export default function App() {
 
         <div className="space-y-6">
           <section className="p-0">
-            {!isSystemSettingsMode && (
-              <div className="mb-4 flex items-center gap-2 text-lg font-black text-white">
-                <Settings className="h-5 w-5 text-indigo-300" />
-                {tr('个人资料', 'Profile')}
-              </div>
-            )}
             <div className="space-y-3">
               {isSystemSettingsMode && (
                 <div className="overflow-hidden rounded-2xl border border-zinc-800/60">
@@ -10702,7 +10750,7 @@ export default function App() {
                       <div>
                         <div className="text-sm font-black text-zinc-100">{tr('手机通知', 'Mobile notifications')}</div>
                         <div className="mt-1 text-xs leading-relaxed text-zinc-500">
-                          {tr('接收作者更新、作品互动和系统提醒。若曾在系统弹窗中拒绝，需要到浏览器或手机设置里重新允许。', 'Receive author updates, story interactions, and system reminders. If blocked before, re-enable it in browser or phone settings.')}
+                          {tr('接收作者更新、作品互动 and 系统提醒。若曾在系统弹窗中拒绝，需要到浏览器或手机设置里重新允许。', 'Receive author updates, story interactions, and system reminders. If blocked before, re-enable it in browser or phone settings.')}
                         </div>
                       </div>
                       <Bell className="h-5 w-5 text-indigo-300" />
@@ -10730,75 +10778,17 @@ export default function App() {
                 </div>
               )}
               {!isSystemSettingsMode && (
-                <div className="space-y-4">
-                  {/* 个人资料卡片 */}
-                  <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/10 p-5 space-y-4">
-                    <div>
-                      <div className="text-sm font-black text-white">{tr('个人签名', 'Personal Bio')}</div>
-                      <div className="mt-1 text-xs text-zinc-500">{tr('用于展示在您的作者档案中，告诉大家关于您的一两件事（最多120字）。', 'Displayed on your author profile to tell others a bit about yourself (max 120 chars).')}</div>
-                      <textarea
-                        value={editingBio}
-                        onChange={(e) => setEditingBio(e.target.value)}
-                        placeholder={tr('写点什么向别人介绍自己吧...', 'Write something to introduce yourself...')}
-                        maxLength={120}
-                        className="mt-3 w-full h-20 resize-none rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleUpdateBio}
-                        disabled={bioSaving || editingBio.trim() === myBio.trim()}
-                        className={`${semanticButtonClass('secondary', { compact: true, fullWidth: true })} mt-2`}
-                      >
-                        {bioSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                        {tr('更新签名', 'Update signature')}
-                      </button>
-                    </div>
-
-                    {!user?.isAnonymous && (
-                      <div className="border-t border-zinc-800/60 pt-4 space-y-3">
-                        <div>
-                          <div className="text-sm font-black text-white">{tr('安全设置', 'Security Settings')}</div>
-                          <div className="mt-1 text-xs text-zinc-500">{tr('修改账户登录密码或重置密码。', 'Change account password or send reset email.')}</div>
-                        </div>
-                        <input
-                          type="password"
-                          value={profileCurrentPassword}
-                          onChange={(event) => setProfileCurrentPassword(event.target.value)}
-                          placeholder={tr('当前密码', 'Current password')}
-                          className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
-                        />
-                        <input
-                          type="password"
-                          value={profileNewPassword}
-                          onChange={(event) => setProfileNewPassword(event.target.value)}
-                          placeholder={tr('新密码（至少 6 位）', 'New password (at least 6 characters)')}
-                          className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
-                        />
-                        <button type="button" onClick={handleUpdateAccountPassword} className={semanticButtonClass('secondary', { compact: true, fullWidth: true })}>
-                          <Lock className="h-4 w-4" />
-                          {tr('确认修改密码', 'Confirm change password')}
-                        </button>
-                        <button type="button" onClick={() => handlePasswordResetForEmail(user?.email || '')} className={semanticButtonClass('ghost', { compact: true, fullWidth: true })}>
-                          <Mail className="h-4 w-4" />
-                          {tr('发送重设密码邮件', 'Send reset email')}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* 登出按钮独立在外 */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (mode === 'modal') setIsAccountCenterOpen(false);
-                      handleLogout();
-                    }}
-                    className={semanticButtonClass('danger', { fullWidth: true })}
-                  >
-                    <LogOut className="h-4 w-4" />
-                    {tr('退出登录', 'Log out')}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (mode === 'modal') setIsAccountCenterOpen(false);
+                    handleLogout();
+                  }}
+                  className={semanticButtonClass('danger', { fullWidth: true })}
+                >
+                  <LogOut className="h-4 w-4" />
+                  {tr('退出登录', 'Log out')}
+                </button>
               )}
             </div>
           </section>
@@ -10940,6 +10930,137 @@ export default function App() {
                   {tr('确认修改', 'Save')}
                 </button>
               </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
+  const renderEditBioModal = () => (
+    <AnimatePresence>
+      {isEditBioModalOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[6100] flex items-center justify-center bg-black/70 px-4 backdrop-blur-md"
+          onClick={() => setIsEditBioModalOpen(false)}
+        >
+          <motion.div
+            initial={{ y: 16, opacity: 0, scale: 0.97 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: 12, opacity: 0, scale: 0.98 }}
+            className="w-full max-w-md rounded-[2rem] border border-zinc-800 bg-zinc-950 p-6 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-xl font-black text-white">{tr('修改个性签名', 'Edit Bio')}</h3>
+                <p className="mt-1 text-xs text-zinc-500">{tr('用于展示在您的作者档案中，告诉大家关于您的一两件事（最多120字）。', 'Displayed on your author profile to tell others a bit about yourself (max 120 chars).')}</p>
+              </div>
+              <button type="button" onClick={() => setIsEditBioModalOpen(false)} className={semanticIconButtonClass('ghost')} aria-label={tr('关闭', 'Close')}>
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <textarea
+                value={editingBio}
+                onChange={(e) => setEditingBio(e.target.value)}
+                placeholder={tr('写点什么向别人介绍自己吧...', 'Write something to introduce yourself...')}
+                maxLength={120}
+                className="w-full h-28 resize-none rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+              />
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setIsEditBioModalOpen(false)} className={semanticButtonClass('secondary', { fullWidth: true })}>
+                  {tr('取消', 'Cancel')}
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await handleUpdateBio();
+                    setIsEditBioModalOpen(false);
+                  }}
+                  className={semanticButtonClass('primary', { fullWidth: true })}
+                >
+                  {tr('确认修改', 'Save')}
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
+  const renderSecurityModal = () => (
+    <AnimatePresence>
+      {isSecurityModalOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[6100] flex items-center justify-center bg-black/70 px-4 backdrop-blur-md"
+          onClick={() => setIsSecurityModalOpen(false)}
+        >
+          <motion.div
+            initial={{ y: 16, opacity: 0, scale: 0.97 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: 12, opacity: 0, scale: 0.98 }}
+            className="w-full max-w-md rounded-[2rem] border border-zinc-800 bg-zinc-950 p-6 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-xl font-black text-white">{tr('修改账户密码', 'Security Settings')}</h3>
+                <p className="mt-1 text-xs text-zinc-500">{tr('修改账户登录密码或发送密码重设邮件。', 'Change account password or send reset email.')}</p>
+              </div>
+              <button type="button" onClick={() => setIsSecurityModalOpen(false)} className={semanticIconButtonClass('ghost')} aria-label={tr('关闭', 'Close')}>
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <input
+                type="password"
+                value={profileCurrentPassword}
+                onChange={(event) => setProfileCurrentPassword(event.target.value)}
+                placeholder={tr('当前密码', 'Current password')}
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+              />
+              <input
+                type="password"
+                value={profileNewPassword}
+                onChange={(event) => setProfileNewPassword(event.target.value)}
+                placeholder={tr('新密码（至少 6 位）', 'New password (at least 6 characters)')}
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+              />
+              <button
+                type="button"
+                onClick={async () => {
+                  await handleUpdateAccountPassword();
+                  if (!profileNewPassword) {
+                    setIsSecurityModalOpen(false);
+                  }
+                }}
+                className={semanticButtonClass('secondary', { fullWidth: true })}
+              >
+                <Lock className="h-4 w-4" />
+                {tr('确认修改密码', 'Confirm change password')}
+              </button>
+              
+              <div className="border-t border-zinc-800/60 my-2"></div>
+              
+              <button
+                type="button"
+                onClick={async () => {
+                  await handlePasswordResetForEmail(user?.email || '');
+                  setIsSecurityModalOpen(false);
+                }}
+                className={semanticButtonClass('ghost', { fullWidth: true })}
+              >
+                <Mail className="h-4 w-4" />
+                {tr('发送重设密码邮件', 'Send reset email')}
+              </button>
             </div>
           </motion.div>
         </motion.div>
@@ -13999,6 +14120,8 @@ export default function App() {
           {renderShareComposer()}
           {accountCenterModal}
           {renderEditNameModal()}
+          {renderEditBioModal()}
+          {renderSecurityModal()}
           {renderOnboardingGuide()}
           {renderPushPermissionPrompt()}
           {renderConfirmationModal()}
