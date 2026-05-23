@@ -47,7 +47,7 @@ import {
 } from 'firebase/firestore';
 
 // --- Types ---
-type GameState = 'STORY_SELECT' | 'AUTHORING' | 'THEME_SELECTION' | 'SERIES_WORLD_LIST' | 'SERIES_WORLD_GENERATE' | 'SERIES_WORLD_EDIT' | 'GENERATING_BLUEPRINT' | 'PLAYING' | 'SUMMARY' | 'READONLY_STORY' | 'ARCHIVE';
+type GameState = 'STORY_SELECT' | 'AUTHORING' | 'THEME_SELECTION' | 'SERIES_WORLD_LIST' | 'SERIES_WORLD_GENERATE' | 'SERIES_WORLD_EDIT' | 'GENERATING_BLUEPRINT' | 'PLAYING' | 'SUMMARY' | 'READONLY_STORY' | 'ARCHIVE' | 'ACCOUNT_CENTER';
 type NarrativePerson = 'first' | 'second' | 'third';
 type EndingMode = 'single' | 'dual';
 type AppTheme = 'dark' | 'light';
@@ -4472,7 +4472,7 @@ export default function App() {
   const openPersonalCenter = () => {
     setAccountCenterMode('personal');
     setIsCreationDockOpen(false);
-    setIsAccountCenterOpen(true);
+    navigateTo('ACCOUNT_CENTER');
   };
 
   const openSystemSettings = () => {
@@ -10473,6 +10473,271 @@ export default function App() {
     { label: tr('我的作品', 'My works'), value: myStories.length },
   ];
   const isSystemSettingsMode = accountCenterMode === 'settings';
+  const renderAccountCenterContent = (mode: 'page' | 'modal' = 'modal') => (
+    <>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <div className="text-xs font-black uppercase tracking-[0.24em] text-zinc-500">
+            {isSystemSettingsMode ? tr('系统设置', 'System Settings') : tr('个人中心', 'Account Center')}
+          </div>
+          <div className="mt-1 text-2xl font-black text-white">
+            {isSystemSettingsMode ? tr('系统设置', 'System Settings') : getUserAuthorName(user)}
+          </div>
+          <div className="text-sm text-zinc-500">{user?.email || tr('游客账号', 'Guest account')}</div>
+          {user?.isAnonymous && (
+            <div className="mt-3 max-w-xl rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-50/80">
+              {GUEST_RETENTION_NOTICE}
+            </div>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => mode === 'page' ? goBack('STORY_SELECT') : setIsAccountCenterOpen(false)}
+          className={semanticIconButtonClass('ghost')}
+          aria-label={tr('返回', 'Back')}
+        >
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+      </div>
+
+      {!isSystemSettingsMode && (
+      <section className="mb-6">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <div className="text-lg font-black text-white">{tr('我的资产', 'My Library')}</div>
+            <div className="mt-1 text-xs leading-relaxed text-zinc-500">
+              {tr('收藏、命运线、追踪和创作集中查看，方便快速找到相关内容。', 'Favorites, fate lines, follows, and works are gathered here for quick access.')}
+            </div>
+          </div>
+          <BarChart3 className="h-5 w-5 text-indigo-200" />
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {accountAssetStats.map((item) => (
+            <div key={item.label} className="rounded-2xl border border-zinc-800/80 bg-zinc-950/50 p-4">
+              <div className="text-2xl font-black text-white">{item.value}</div>
+              <div className="mt-1 text-xs font-bold text-zinc-500">{item.label}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+      )}
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <section className={isSystemSettingsMode ? 'rounded-[1.5rem] border border-zinc-800 bg-zinc-900/30 p-5 lg:col-span-2' : 'p-0'}>
+          <div className="mb-4 flex items-center gap-2 text-lg font-black text-white">
+            <Settings className="h-5 w-5 text-indigo-300" />
+            {isSystemSettingsMode ? tr('系统设置', 'System Settings') : tr('个人资料', 'Profile')}
+          </div>
+          <div className="space-y-3">
+            {isSystemSettingsMode && (
+              <>
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-black text-zinc-100">{t('language.switch')}</div>
+                  <div className="mt-1 text-xs leading-relaxed text-zinc-500">
+                    {appLanguage === 'en-US'
+                      ? 'This setting is saved on this device until it is changed here again.'
+                      : '语言设置会保存在当前设备，之后默认沿用，直到回到这里再次改变。'}
+                  </div>
+                </div>
+                <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1 text-xs font-black text-zinc-300">
+                  {appLanguage === 'zh-CN' ? t('language.zh') : t('language.en')}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {(['zh-CN', 'en-US'] as AppLanguage[]).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => setAppLanguage(option)}
+                    className={`rounded-xl border px-3 py-2 text-sm font-black transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
+                      appLanguage === option
+                        ? 'border-indigo-400 bg-indigo-500/15 text-indigo-100'
+                        : 'border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
+                    }`}
+                  >
+                    {option === 'zh-CN' ? t('language.zh') : t('language.en')}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-black text-zinc-100">{tr('界面主题', 'Theme')}</div>
+                  <div className="mt-1 text-xs leading-relaxed text-zinc-500">
+                    {tr('浅色主题使用柔和低疲劳配色，暗色主题保留原本氛围。', 'Light theme uses softer low-fatigue colors; dark theme keeps the original atmosphere.')}
+                  </div>
+                </div>
+                {appTheme === 'light' ? <Sun className="h-5 w-5 text-amber-500" /> : <Moon className="h-5 w-5 text-indigo-300" />}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { value: 'dark' as const, label: tr('暗色', 'Dark') },
+                  { value: 'light' as const, label: tr('浅色', 'Light') },
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setAppTheme(option.value)}
+                    className={`rounded-xl border px-3 py-2 text-sm font-black transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
+                      appTheme === option.value
+                        ? 'border-indigo-400 bg-indigo-500/15 text-indigo-100'
+                        : 'border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-black text-zinc-100">{tr('手机通知', 'Mobile notifications')}</div>
+                  <div className="mt-1 text-xs leading-relaxed text-zinc-500">
+                    {tr('接收作者更新、作品互动和系统提醒。若曾在系统弹窗中拒绝，需要到浏览器或手机设置里重新允许。', 'Receive author updates, story interactions, and system reminders. If blocked before, re-enable it in browser or phone settings.')}
+                  </div>
+                </div>
+                <Bell className="h-5 w-5 text-indigo-300" />
+              </div>
+              <button type="button" onClick={enablePushNotifications} disabled={pushSubscribeBusy} className={semanticButtonClass('secondary', { fullWidth: true })}>
+                {pushSubscribeBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
+                {tr('开启手机通知', 'Enable mobile notifications')}
+              </button>
+            </div>
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-black text-zinc-100">{tr('版本', 'Version')}</div>
+                  <div className="mt-1 text-xs leading-relaxed text-zinc-500">
+                    {tr('用于确认当前安装的 App 是否已经更新。', 'Use this to confirm whether the installed app is up to date.')}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm font-black text-indigo-200">{APP_VERSION_LABEL}</div>
+                  {APP_BUILD_LABEL && <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-600">{APP_BUILD_LABEL}</div>}
+                </div>
+              </div>
+            </div>
+              </>
+            )}
+            {!isSystemSettingsMode && (
+              <>
+            <input
+              value={profileDisplayName}
+              onChange={(event) => setProfileDisplayName(event.target.value)}
+              placeholder={tr('显示名称', 'Display name')}
+              className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+            />
+            <button type="button" onClick={handleUpdateProfileDisplayName} className={semanticButtonClass('secondary', { fullWidth: true })}>
+              <PenSquare className="h-4 w-4" />
+              {tr('更新名称', 'Update name')}
+            </button>
+            {!user?.isAnonymous && (
+              <>
+                <input
+                  type="password"
+                  value={profileCurrentPassword}
+                  onChange={(event) => setProfileCurrentPassword(event.target.value)}
+                  placeholder={tr('当前密码', 'Current password')}
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                />
+                <input
+                  type="password"
+                  value={profileNewPassword}
+                  onChange={(event) => setProfileNewPassword(event.target.value)}
+                  placeholder={tr('新密码（至少 6 位）', 'New password (at least 6 characters)')}
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                />
+                <button type="button" onClick={handleUpdateAccountPassword} className={semanticButtonClass('ghost', { fullWidth: true })}>
+                  <Lock className="h-4 w-4" />
+                  {tr('修改密码', 'Change password')}
+                </button>
+                <button type="button" onClick={() => handlePasswordResetForEmail(user?.email || '')} className={semanticButtonClass('ghost', { fullWidth: true })}>
+                  <Mail className="h-4 w-4" />
+                  {tr('发送重设邮件', 'Send reset email')}
+                </button>
+              </>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                if (mode === 'modal') setIsAccountCenterOpen(false);
+                handleLogout();
+              }}
+              className={semanticButtonClass('danger', { fullWidth: true })}
+            >
+              <LogOut className="h-4 w-4" />
+              {tr('登出', 'Log out')}
+            </button>
+              </>
+            )}
+          </div>
+        </section>
+
+        {!isSystemSettingsMode && (
+        <section className="p-0">
+          <div className="mb-4 flex items-center gap-2 text-lg font-black text-white">
+            <Archive className="h-5 w-5 text-indigo-300" />
+            {t('archive.title')}
+          </div>
+          <div className="space-y-3">
+            <div className="text-sm text-zinc-400">
+              {tr('收藏命运和分享记录现在集中在独立页面管理。', 'Saved fate lines and share records are managed on a separate page.')}
+            </div>
+            <button
+              type="button"
+              onClick={() => openArchiveView('ACCOUNT_CENTER')}
+              className={semanticButtonClass('secondary', { fullWidth: true })}
+            >
+              <Archive className="h-4 w-4" />
+              {tr('打开命运收藏馆页', 'Open fate archive')}
+            </button>
+          </div>
+        </section>
+        )}
+
+        {isSystemSettingsMode && isAdminUser && (
+          <section className="rounded-[1.5rem] border border-amber-500/25 bg-amber-500/10 p-5 lg:col-span-2">
+            <div className="mb-4 flex items-center gap-2 text-lg font-black text-white">
+              <Settings className="h-5 w-5 text-amber-300" />
+              管理目录
+            </div>
+            <div className="space-y-4 rounded-2xl border border-amber-500/20 bg-zinc-950/60 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="text-sm font-black text-white">AI 图片生成功能</div>
+                  <div className="mt-1 text-xs leading-relaxed text-zinc-500">
+                    关闭时，普通用户不会看到封面 AI 生成入口；管理员自己始终保留最新功能入口。
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAdminFeatureDraft((prev) => ({ ...prev, coverGenerationEnabled: !prev.coverGenerationEnabled }))}
+                  className={adminFeatureDraft.coverGenerationEnabled ? semanticButtonClass('primary', { compact: true }) : semanticButtonClass('ghost', { compact: true })}
+                >
+                  {adminFeatureDraft.coverGenerationEnabled ? <Check className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+                  {adminFeatureDraft.coverGenerationEnabled ? '已开放给所有用户' : '仅管理员可见'}
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={handleSaveAdminSettings}
+                disabled={isSavingAdminSettings}
+                className={semanticButtonClass('secondary', { fullWidth: true })}
+              >
+                {isSavingAdminSettings ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                保存管理设置
+              </button>
+            </div>
+          </section>
+        )}
+      </div>
+    </>
+  );
+
 
   const accountCenterModal = (
     <AnimatePresence>
@@ -10492,265 +10757,17 @@ export default function App() {
             className={`${isSystemSettingsMode ? 'max-h-[82dvh]' : 'max-h-[calc(100dvh-9rem)]'} w-full max-w-4xl overflow-y-auto rounded-[2rem] border border-zinc-800 bg-zinc-950 p-6 shadow-2xl`}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="mb-6 flex items-center justify-between">
-              <div>
-                <div className="text-xs font-black uppercase tracking-[0.24em] text-zinc-500">
-                  {isSystemSettingsMode ? tr('系统设置', 'System Settings') : tr('个人中心', 'Account Center')}
-                </div>
-                <div className="mt-1 text-2xl font-black text-white">
-                  {isSystemSettingsMode ? tr('系统设置', 'System Settings') : getUserAuthorName(user)}
-                </div>
-                <div className="text-sm text-zinc-500">{user?.email || tr('游客账号', 'Guest account')}</div>
-                {user?.isAnonymous && (
-                  <div className="mt-3 max-w-xl rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-50/80">
-                    {GUEST_RETENTION_NOTICE}
-                  </div>
-                )}
-              </div>
-              <button type="button" onClick={() => setIsAccountCenterOpen(false)} className={semanticIconButtonClass('ghost')} aria-label={tr('返回', 'Back')}>
-                <ChevronLeft className="h-5 w-5" />
-              </button>
-            </div>
-
-            {!isSystemSettingsMode && (
-            <section className="mb-6">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-lg font-black text-white">{tr('我的资产', 'My Library')}</div>
-                  <div className="mt-1 text-xs leading-relaxed text-zinc-500">
-                    {tr('收藏、命运线、追踪和创作集中查看，方便快速找到相关内容。', 'Favorites, fate lines, follows, and works are gathered here for quick access.')}
-                  </div>
-                </div>
-                <BarChart3 className="h-5 w-5 text-indigo-200" />
-              </div>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {accountAssetStats.map((item) => (
-                  <div key={item.label} className="rounded-2xl border border-zinc-800/80 bg-zinc-950/50 p-4">
-                    <div className="text-2xl font-black text-white">{item.value}</div>
-                    <div className="mt-1 text-xs font-bold text-zinc-500">{item.label}</div>
-                  </div>
-                ))}
-              </div>
-            </section>
-            )}
-
-            <div className="grid gap-6 lg:grid-cols-2">
-              <section className={isSystemSettingsMode ? 'rounded-[1.5rem] border border-zinc-800 bg-zinc-900/30 p-5 lg:col-span-2' : 'p-0'}>
-                <div className="mb-4 flex items-center gap-2 text-lg font-black text-white">
-                  <Settings className="h-5 w-5 text-indigo-300" />
-                  {isSystemSettingsMode ? tr('系统设置', 'System Settings') : tr('个人资料', 'Profile')}
-                </div>
-                <div className="space-y-3">
-                  {isSystemSettingsMode && (
-                    <>
-                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-black text-zinc-100">{t('language.switch')}</div>
-                        <div className="mt-1 text-xs leading-relaxed text-zinc-500">
-                          {appLanguage === 'en-US'
-                            ? 'This setting is saved on this device until it is changed here again.'
-                            : '语言设置会保存在当前设备，之后默认沿用，直到回到这里再次改变。'}
-                        </div>
-                      </div>
-                      <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1 text-xs font-black text-zinc-300">
-                        {appLanguage === 'zh-CN' ? t('language.zh') : t('language.en')}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {(['zh-CN', 'en-US'] as AppLanguage[]).map((option) => (
-                        <button
-                          key={option}
-                          type="button"
-                          onClick={() => setAppLanguage(option)}
-                          className={`rounded-xl border px-3 py-2 text-sm font-black transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
-                            appLanguage === option
-                              ? 'border-indigo-400 bg-indigo-500/15 text-indigo-100'
-                              : 'border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
-                          }`}
-                        >
-                          {option === 'zh-CN' ? t('language.zh') : t('language.en')}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-black text-zinc-100">{tr('界面主题', 'Theme')}</div>
-                        <div className="mt-1 text-xs leading-relaxed text-zinc-500">
-                          {tr('浅色主题使用柔和低疲劳配色，暗色主题保留原本氛围。', 'Light theme uses softer low-fatigue colors; dark theme keeps the original atmosphere.')}
-                        </div>
-                      </div>
-                      {appTheme === 'light' ? <Sun className="h-5 w-5 text-amber-500" /> : <Moon className="h-5 w-5 text-indigo-300" />}
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {[
-                        { value: 'dark' as const, label: tr('暗色', 'Dark') },
-                        { value: 'light' as const, label: tr('浅色', 'Light') },
-                      ].map((option) => (
-                        <button
-                          key={option.value}
-                          type="button"
-                          onClick={() => setAppTheme(option.value)}
-                          className={`rounded-xl border px-3 py-2 text-sm font-black transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
-                            appTheme === option.value
-                              ? 'border-indigo-400 bg-indigo-500/15 text-indigo-100'
-                              : 'border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
-                          }`}
-                        >
-                          {option.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-black text-zinc-100">{tr('手机通知', 'Mobile notifications')}</div>
-                        <div className="mt-1 text-xs leading-relaxed text-zinc-500">
-                          {tr('接收作者更新、作品互动和系统提醒。若曾在系统弹窗中拒绝，需要到浏览器或手机设置里重新允许。', 'Receive author updates, story interactions, and system reminders. If blocked before, re-enable it in browser or phone settings.')}
-                        </div>
-                      </div>
-                      <Bell className="h-5 w-5 text-indigo-300" />
-                    </div>
-                    <button type="button" onClick={enablePushNotifications} disabled={pushSubscribeBusy} className={semanticButtonClass('secondary', { fullWidth: true })}>
-                      {pushSubscribeBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
-                      {tr('开启手机通知', 'Enable mobile notifications')}
-                    </button>
-                  </div>
-                  <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-black text-zinc-100">{tr('版本', 'Version')}</div>
-                        <div className="mt-1 text-xs leading-relaxed text-zinc-500">
-                          {tr('用于确认当前安装的 App 是否已经更新。', 'Use this to confirm whether the installed app is up to date.')}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-sm font-black text-indigo-200">{APP_VERSION_LABEL}</div>
-                        {APP_BUILD_LABEL && <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-600">{APP_BUILD_LABEL}</div>}
-                      </div>
-                    </div>
-                  </div>
-                    </>
-                  )}
-                  {!isSystemSettingsMode && (
-                    <>
-                  <input
-                    value={profileDisplayName}
-                    onChange={(event) => setProfileDisplayName(event.target.value)}
-                    placeholder={tr('显示名称', 'Display name')}
-                    className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
-                  />
-                  <button type="button" onClick={handleUpdateProfileDisplayName} className={semanticButtonClass('secondary', { fullWidth: true })}>
-                    <PenSquare className="h-4 w-4" />
-                    {tr('更新名称', 'Update name')}
-                  </button>
-                  {!user?.isAnonymous && (
-                    <>
-                      <input
-                        type="password"
-                        value={profileCurrentPassword}
-                        onChange={(event) => setProfileCurrentPassword(event.target.value)}
-                        placeholder={tr('当前密码', 'Current password')}
-                        className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
-                      />
-                      <input
-                        type="password"
-                        value={profileNewPassword}
-                        onChange={(event) => setProfileNewPassword(event.target.value)}
-                        placeholder={tr('新密码（至少 6 位）', 'New password (at least 6 characters)')}
-                        className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
-                      />
-                      <button type="button" onClick={handleUpdateAccountPassword} className={semanticButtonClass('ghost', { fullWidth: true })}>
-                        <Lock className="h-4 w-4" />
-                        {tr('修改密码', 'Change password')}
-                      </button>
-                      <button type="button" onClick={() => handlePasswordResetForEmail(user?.email || '')} className={semanticButtonClass('ghost', { fullWidth: true })}>
-                        <Mail className="h-4 w-4" />
-                        {tr('发送重设邮件', 'Send reset email')}
-                      </button>
-                    </>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsAccountCenterOpen(false);
-                      handleLogout();
-                    }}
-                    className={semanticButtonClass('danger', { fullWidth: true })}
-                  >
-                    <LogOut className="h-4 w-4" />
-                    {tr('登出', 'Log out')}
-                  </button>
-                    </>
-                  )}
-                </div>
-              </section>
-
-              {!isSystemSettingsMode && (
-              <section className="p-0">
-                <div className="mb-4 flex items-center gap-2 text-lg font-black text-white">
-                  <Archive className="h-5 w-5 text-indigo-300" />
-                  {t('archive.title')}
-                </div>
-                <div className="space-y-3">
-                  <div className="text-sm text-zinc-400">
-                    {tr('收藏命运和分享记录现在集中在独立页面管理。', 'Saved fate lines and share records are managed on a separate page.')}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => openArchiveView('STORY_SELECT')}
-                    className={semanticButtonClass('secondary', { fullWidth: true })}
-                  >
-                    <Archive className="h-4 w-4" />
-                    {tr('打开命运收藏馆页', 'Open fate archive')}
-                  </button>
-                </div>
-              </section>
-              )}
-
-              {isSystemSettingsMode && isAdminUser && (
-                <section className="rounded-[1.5rem] border border-amber-500/25 bg-amber-500/10 p-5 lg:col-span-2">
-                  <div className="mb-4 flex items-center gap-2 text-lg font-black text-white">
-                    <Settings className="h-5 w-5 text-amber-300" />
-                    管理目录
-                  </div>
-                  <div className="space-y-4 rounded-2xl border border-amber-500/20 bg-zinc-950/60 p-4">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <div className="text-sm font-black text-white">AI 图片生成功能</div>
-                        <div className="mt-1 text-xs leading-relaxed text-zinc-500">
-                          关闭时，普通用户不会看到封面 AI 生成入口；管理员自己始终保留最新功能入口。
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setAdminFeatureDraft((prev) => ({ ...prev, coverGenerationEnabled: !prev.coverGenerationEnabled }))}
-                        className={adminFeatureDraft.coverGenerationEnabled ? semanticButtonClass('primary', { compact: true }) : semanticButtonClass('ghost', { compact: true })}
-                      >
-                        {adminFeatureDraft.coverGenerationEnabled ? <Check className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-                        {adminFeatureDraft.coverGenerationEnabled ? '已开放给所有用户' : '仅管理员可见'}
-                      </button>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleSaveAdminSettings}
-                      disabled={isSavingAdminSettings}
-                      className={semanticButtonClass('secondary', { fullWidth: true })}
-                    >
-                      {isSavingAdminSettings ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                      保存管理设置
-                    </button>
-                  </div>
-                </section>
-              )}
-            </div>
+            {renderAccountCenterContent('modal')}
           </motion.div>
         </motion.div>
       )}
     </AnimatePresence>
+  );
+
+  const renderAccountCenterView = () => (
+    <div className="mx-auto max-w-4xl px-6 pb-32 pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] lg:px-8">
+      {renderAccountCenterContent('page')}
+    </div>
   );
 
   const renderReadonlyStoryView = () => {
@@ -11217,7 +11234,7 @@ export default function App() {
           <button
             type="button"
             onClick={openPersonalCenter}
-            className="primary-bottom-dock-item"
+            className={`primary-bottom-dock-item ${gameState === 'ACCOUNT_CENTER' ? 'is-active' : ''}`}
           >
             <UserIcon className="h-4 w-4" />
             {tr('个人中心', 'Profile')}
@@ -12274,7 +12291,7 @@ export default function App() {
             </div>
           </div>
 
-          <div className="mb-6 flex gap-1 overflow-x-auto whitespace-nowrap rounded-2xl border border-zinc-800 bg-zinc-950/70 p-1">
+          <div className="mb-6 flex gap-1 overflow-x-auto whitespace-nowrap border-b border-zinc-800/70 pb-2">
             <button type="button" onClick={() => setAuthoringTab('settings')} className={`flex-1 flex min-h-12 flex-col items-center justify-center rounded-xl px-1 py-2 text-[10px] sm:text-[11px] font-black transition-colors ${authoringTab === 'settings' ? 'bg-indigo-600 text-white shadow-md' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'}`}>
               <Copy className="mb-1 h-4 w-4 shrink-0" />{tr('作品设置', 'Settings')}
             </button>
@@ -13759,6 +13776,7 @@ export default function App() {
       ) : (
         <>
           {gameState === 'STORY_SELECT' && renderStorySelectView()}
+          {gameState === 'ACCOUNT_CENTER' && renderAccountCenterView()}
           {gameState === 'ARCHIVE' && renderArchiveView()}
           {(gameState === 'SERIES_WORLD_LIST' || gameState === 'SERIES_WORLD_GENERATE' || gameState === 'SERIES_WORLD_EDIT') && renderSeriesWorldView()}
           {gameState === 'THEME_SELECTION' && renderThemeSelectionView()}
