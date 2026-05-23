@@ -1180,7 +1180,7 @@ const ConnectivityDrawer = ({
         initial={{ y: 120, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: 120, opacity: 0 }}
-        className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-[6200] mx-auto max-w-2xl rounded-[1.5rem] border border-white/10 bg-zinc-950/92 p-4 shadow-2xl shadow-black/40 backdrop-blur-xl"
+        className="fixed inset-x-3 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5.9rem)] z-[6200] mx-auto max-w-2xl rounded-[1.5rem] border border-white/10 bg-zinc-950/92 p-4 shadow-2xl shadow-black/40 backdrop-blur-xl"
       >
         <div className="flex items-start gap-3">
           <div className={`rounded-full p-2 ${state.tone === 'offline' ? 'bg-rose-500/15 text-rose-200' : state.tone === 'error' ? 'bg-amber-500/15 text-amber-200' : 'bg-indigo-500/15 text-indigo-200'}`}>
@@ -11146,14 +11146,14 @@ export default function App() {
   const shouldShowPrimaryBottomDock = Boolean(user && !['PLAYING', 'READONLY_STORY', 'GENERATING_BLUEPRINT', 'SUMMARY'].includes(gameState));
   const primaryBottomDock = shouldShowPrimaryBottomDock && typeof document !== 'undefined'
     ? createPortal(
-      <div className="pointer-events-none fixed inset-x-0 bottom-[max(0.85rem,calc(env(safe-area-inset-bottom)+0.7rem))] z-[2600] flex justify-center px-4">
+      <div className="primary-bottom-dock-wrap">
         <AnimatePresence>
           {isCreationDockOpen && (
             <motion.div
               initial={{ opacity: 0, y: 12, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 12, scale: 0.97 }}
-              className="pointer-events-auto absolute bottom-20 w-[min(92vw,28rem)] rounded-[1.6rem] border border-zinc-800/80 bg-zinc-950/95 p-3 shadow-2xl shadow-black/40 backdrop-blur-xl"
+              className="primary-bottom-dock-menu"
             >
               <div className="grid gap-2">
                 <button
@@ -11193,14 +11193,14 @@ export default function App() {
             </motion.div>
           )}
         </AnimatePresence>
-        <div className="pointer-events-auto grid w-[min(92vw,30rem)] grid-cols-3 overflow-hidden rounded-[1.65rem] border border-zinc-800/80 bg-zinc-950/88 p-1 shadow-2xl shadow-black/35 backdrop-blur-xl">
+        <div className="primary-bottom-dock-shell">
           <button
             type="button"
             onClick={() => {
               setIsCreationDockOpen(false);
               resetToHome();
             }}
-            className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-[1.2rem] px-2 text-[11px] font-black transition-all active:scale-[0.98] ${gameState === 'STORY_SELECT' ? 'bg-zinc-100 text-zinc-950' : 'text-zinc-400 hover:bg-zinc-900/80 hover:text-zinc-100'}`}
+            className={`primary-bottom-dock-item ${gameState === 'STORY_SELECT' ? 'is-active' : ''}`}
           >
             <BookOpen className="h-4 w-4" />
             {tr('作品首页', 'Library')}
@@ -11208,7 +11208,7 @@ export default function App() {
           <button
             type="button"
             onClick={() => setIsCreationDockOpen((prev) => !prev)}
-            className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-[1.2rem] px-2 text-[11px] font-black transition-all active:scale-[0.98] ${isCreationDockOpen || ['THEME_SELECTION', 'AUTHORING', 'SERIES_WORLD_GENERATE', 'SERIES_WORLD_EDIT', 'SERIES_WORLD_LIST'].includes(gameState) ? 'bg-indigo-400/18 text-indigo-100' : 'text-zinc-400 hover:bg-zinc-900/80 hover:text-zinc-100'}`}
+            className={`primary-bottom-dock-item ${isCreationDockOpen || ['THEME_SELECTION', 'AUTHORING', 'SERIES_WORLD_GENERATE', 'SERIES_WORLD_EDIT', 'SERIES_WORLD_LIST'].includes(gameState) ? 'is-active' : ''}`}
           >
             <Sparkles className="h-4 w-4" />
             {tr('创作工台', 'Create')}
@@ -11216,7 +11216,7 @@ export default function App() {
           <button
             type="button"
             onClick={openPersonalCenter}
-            className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-[1.2rem] px-2 text-[11px] font-black text-zinc-400 transition-all hover:bg-zinc-900/80 hover:text-zinc-100 active:scale-[0.98]"
+            className="primary-bottom-dock-item"
           >
             <UserIcon className="h-4 w-4" />
             {tr('个人中心', 'Profile')}
