@@ -12012,52 +12012,54 @@ export default function App() {
                 {tr('清空', 'Clear')}
               </button>
             </div>
-            {notificationLoading && notificationItems.length === 0 ? (
-              <ListSkeleton count={4} compact />
-            ) : notificationItems.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/30 p-8 text-center text-sm font-semibold text-zinc-500">
-                {tr('暂时没有新的通知。', 'No new notifications yet.')}
-              </div>
-            ) : (
-              <div className="grid max-h-[56vh] gap-3 overflow-y-auto pr-1">
-                {notificationItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className={`flex items-start gap-2 rounded-2xl border p-3 transition-colors hover:border-indigo-400/50 hover:bg-indigo-500/10 ${
-                      item.readAt ? 'border-zinc-800 bg-zinc-900/30' : 'border-indigo-400/30 bg-indigo-500/10'
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNotificationCenterOpen(false);
-                        if (item.storyId) void startStoryPlay(item.storyId);
-                      }}
-                      className="flex min-w-0 flex-1 items-start gap-3 text-left"
+            <div className="flex min-h-[420px] flex-col">
+              {notificationLoading && notificationItems.length === 0 ? (
+                <ListSkeleton count={4} compact />
+              ) : notificationItems.length === 0 ? (
+                <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/30 p-8 text-center text-sm font-semibold text-zinc-500">
+                  {tr('暂时没有新的通知。', 'No new notifications yet.')}
+                </div>
+              ) : (
+                <div className="grid max-h-[56vh] gap-3 overflow-y-auto pr-1">
+                  {notificationItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className={`flex items-start gap-2 rounded-2xl border p-3 transition-colors hover:border-indigo-400/50 hover:bg-indigo-500/10 ${
+                        item.readAt ? 'border-zinc-800 bg-zinc-900/30' : 'border-indigo-400/30 bg-indigo-500/10'
+                      }`}
                     >
-                      <div className="mt-0.5 rounded-full border border-white/10 bg-white/10 p-2">
-                        <Bell className="h-4 w-4 text-indigo-200" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="font-black text-zinc-100">{item.title || tr('新的通知', 'New notification')}</div>
-                        <div className="mt-1 text-xs font-semibold leading-relaxed text-zinc-400">{item.body || tr('有新的命运动态。', 'There is a new fate update.')}</div>
-                        <div className="mt-2 text-[10px] font-black uppercase tracking-[0.16em] text-zinc-600">
-                          {new Date(item.createdAt || Date.now()).toLocaleString()}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNotificationCenterOpen(false);
+                          if (item.storyId) void startStoryPlay(item.storyId);
+                        }}
+                        className="flex min-w-0 flex-1 items-start gap-3 text-left"
+                      >
+                        <div className="mt-0.5 rounded-full border border-white/10 bg-white/10 p-2">
+                          <Bell className="h-4 w-4 text-indigo-200" />
                         </div>
-                      </div>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void deleteNotificationItem(item.id)}
-                      className="shrink-0 rounded-full p-2 text-zinc-500 transition-colors hover:bg-rose-500/10 hover:text-rose-200 active:scale-95"
-                      aria-label={tr('删除通知', 'Delete notification')}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
+                        <div className="min-w-0 flex-1">
+                          <div className="font-black text-zinc-100">{item.title || tr('新的通知', 'New notification')}</div>
+                          <div className="mt-1 text-xs font-semibold leading-relaxed text-zinc-400">{item.body || tr('有新的命运动态。', 'There is a new fate update.')}</div>
+                          <div className="mt-2 text-[10px] font-black uppercase tracking-[0.16em] text-zinc-600">
+                            {new Date(item.createdAt || Date.now()).toLocaleString()}
+                          </div>
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void deleteNotificationItem(item.id)}
+                        className="shrink-0 rounded-full p-2 text-zinc-500 transition-colors hover:bg-rose-500/10 hover:text-rose-200 active:scale-95"
+                        aria-label={tr('删除通知', 'Delete notification')}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </motion.div>
         </motion.div>
       )}
