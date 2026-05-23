@@ -11254,7 +11254,7 @@ export default function App() {
           <button
             type="button"
             onClick={() => setIsCreationDockOpen((prev) => !prev)}
-            className={`primary-bottom-dock-item ${isCreationDockOpen || ['THEME_SELECTION', 'AUTHORING', 'SERIES_WORLD_GENERATE', 'SERIES_WORLD_EDIT', 'SERIES_WORLD_LIST'].includes(gameState) ? 'is-active' : ''}`}
+            className={`primary-bottom-dock-item is-default ${isCreationDockOpen || ['THEME_SELECTION', 'AUTHORING', 'SERIES_WORLD_GENERATE', 'SERIES_WORLD_EDIT', 'SERIES_WORLD_LIST'].includes(gameState) ? 'is-active' : ''}`}
           >
             <Sparkles className="h-4 w-4" />
             {tr('创作工台', 'Create')}
