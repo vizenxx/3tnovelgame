@@ -1180,7 +1180,7 @@ const ConnectivityDrawer = ({
         initial={{ y: 120, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: 120, opacity: 0 }}
-        className="fixed inset-x-3 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5.9rem)] z-[6200] mx-auto max-w-2xl rounded-[1.5rem] border border-white/10 bg-zinc-950/92 p-4 shadow-2xl shadow-black/40 backdrop-blur-xl"
+        className="fixed inset-x-3 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5.35rem)] z-[6200] mx-auto max-w-2xl rounded-[1.5rem] border border-white/10 bg-zinc-950/92 p-4 shadow-2xl shadow-black/40 backdrop-blur-xl"
       >
         <div className="flex items-start gap-3">
           <div className={`rounded-full p-2 ${state.tone === 'offline' ? 'bg-rose-500/15 text-rose-200' : state.tone === 'error' ? 'bg-amber-500/15 text-amber-200' : 'bg-indigo-500/15 text-indigo-200'}`}>
@@ -10481,14 +10481,15 @@ export default function App() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className={`${safeModalBackdropClass} z-[3200] bg-black/80 backdrop-blur-md`}
+          className={`${safeModalBackdropClass} ${isSystemSettingsMode ? 'z-[3200] bg-black/80' : 'z-[2400] bg-black/45'} backdrop-blur-md`}
+          style={!isSystemSettingsMode ? { paddingBottom: 'calc(max(1rem, env(safe-area-inset-bottom)) + 6.1rem)' } : undefined}
           onClick={() => setIsAccountCenterOpen(false)}
         >
           <motion.div
             initial={{ opacity: 0, y: 16, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 16, scale: 0.97 }}
-            className="max-h-[82dvh] w-full max-w-4xl overflow-y-auto rounded-[2rem] border border-zinc-800 bg-zinc-950 p-6 shadow-2xl"
+            className={`${isSystemSettingsMode ? 'max-h-[82dvh]' : 'max-h-[calc(100dvh-9rem)]'} w-full max-w-4xl overflow-y-auto rounded-[2rem] border border-zinc-800 bg-zinc-950 p-6 shadow-2xl`}
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-6 flex items-center justify-between">
@@ -10512,7 +10513,7 @@ export default function App() {
             </div>
 
             {!isSystemSettingsMode && (
-            <section className="mb-6 rounded-[1.5rem] border border-indigo-300/15 bg-indigo-500/10 p-5">
+            <section className="mb-6">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
                   <div className="text-lg font-black text-white">{tr('我的资产', 'My Library')}</div>
@@ -10534,7 +10535,7 @@ export default function App() {
             )}
 
             <div className="grid gap-6 lg:grid-cols-2">
-              <section className={`rounded-[1.5rem] border border-zinc-800 bg-zinc-900/30 p-5 ${isSystemSettingsMode ? 'lg:col-span-2' : ''}`}>
+              <section className={isSystemSettingsMode ? 'rounded-[1.5rem] border border-zinc-800 bg-zinc-900/30 p-5 lg:col-span-2' : 'p-0'}>
                 <div className="mb-4 flex items-center gap-2 text-lg font-black text-white">
                   <Settings className="h-5 w-5 text-indigo-300" />
                   {isSystemSettingsMode ? tr('系统设置', 'System Settings') : tr('个人资料', 'Profile')}
@@ -10689,12 +10690,12 @@ export default function App() {
               </section>
 
               {!isSystemSettingsMode && (
-              <section className="rounded-[1.5rem] border border-zinc-800 bg-zinc-900/30 p-5">
+              <section className="p-0">
                 <div className="mb-4 flex items-center gap-2 text-lg font-black text-white">
                   <Archive className="h-5 w-5 text-indigo-300" />
                   {t('archive.title')}
                 </div>
-                <div className="space-y-3 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
+                <div className="space-y-3">
                   <div className="text-sm text-zinc-400">
                     {tr('收藏命运和分享记录现在集中在独立页面管理。', 'Saved fate lines and share records are managed on a separate page.')}
                   </div>

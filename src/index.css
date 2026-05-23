@@ -846,7 +846,7 @@ html[data-theme="light"] .story-detail-stat[data-tone="favorite"]:hover {
   pointer-events: none;
   position: fixed;
   inset-inline: 0;
-  bottom: calc(max(0.85rem, env(safe-area-inset-bottom)) + 0.7rem);
+  bottom: calc(max(0.85rem, env(safe-area-inset-bottom)) + 0.2rem);
   z-index: 2600;
   display: flex;
   justify-content: center;
@@ -924,7 +924,7 @@ html[data-theme="light"] .story-detail-stat[data-tone="favorite"]:hover {
 .primary-bottom-dock-menu {
   pointer-events: auto;
   position: absolute;
-  bottom: 4.85rem;
+  bottom: 4.45rem;
   width: min(92vw, 28rem);
   border: 1px solid color-mix(in srgb, var(--app-shell-border) 64%, rgba(255,255,255,0.12));
   border-radius: 1.55rem;
@@ -997,7 +997,7 @@ html[data-theme="light"] .story-detail-stat[data-tone="favorite"]:hover {
 .app-scroll-top-button {
   position: fixed;
   right: 1rem;
-  bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 5.7rem);
+  bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 5.2rem);
   z-index: 1800;
 }
 
