@@ -1,0 +1,669 @@
+﻿diff --git a/src/App.tsx b/src/App.tsx
+index e141242..01d1d38 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -3,9 +3,38 @@ import { createPortal } from 'react-dom';
+ import { motion, AnimatePresence } from 'motion/react';
+ import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, ChevronRight, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp, Download, Sun, Moon, Search, GitBranch, Trophy, Bell, BarChart3, WifiOff } from 'lucide-react';
+ import { auth, db, firebaseInitError } from './firebase';
+-import { createEmptyStory, createSharedStoryRecord, createStorySnapshot, adaptBlueprintToStory, createStoryBranch, deleteAllNotifications, deleteNotification, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, deleteSeriesWorld, favoriteStory, unfavoriteStory, followAuthor, getAppSettings, getAuthorFollowState, getPushConfig, getSharedStoryRecord, getStoryCartridge, getStoryMeta, getUserProgress, incrementShareMetric, incrementStoryMetric, likeStory, unlikeStory, listAuthorStories, listContinuityNodes, listFollowedAuthors, listMySeriesWorlds, listMySharedStories, listMyStories, listNotifications, listPublicStories, markNotificationsRead, refundCoverGenerationUsage, reportStory, reserveCoverGenerationUsage, saveAppSettings, saveContinuityNode, savePushSubscription, saveSeriesWorld, saveStoryMainlineBundle, saveStoryMeta, saveUserProgress, unfollowAuthor, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch, type ContinuityNodeRecord, type SeriesWorldRecord } from './storyStore';
++import { createEmptyStory, createSharedStoryRecord, createStorySnapshot, adaptBlueprintToStory, createStoryBranch, deleteAllNotifications, deleteNotification, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, deleteSeriesWorld, favoriteStory, unfavoriteStory, followAuthor, getAppSettings, getAuthorFollowState, getPushConfig, getSharedStoryRecord, getStoryCartridge as getStoryCartridgeStore, getStoryMeta, getUserProgress as getUserProgressStore, incrementShareMetric, incrementStoryMetric, likeStory, unlikeStory, listAuthorStories, listContinuityNodes, listFollowedAuthors, listMySeriesWorlds, listMySharedStories, listMyStories, listNotifications, listPublicStories, markNotificationsRead, refundCoverGenerationUsage, reportStory, reserveCoverGenerationUsage, saveAppSettings, saveContinuityNode, savePushSubscription, saveSeriesWorld, saveStoryMainlineBundle, saveStoryMeta, saveUserProgress as saveUserProgressStore, unfollowAuthor, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch, type ContinuityNodeRecord, type SeriesWorldRecord } from './storyStore';
+ import { branchEffectiveWeight, isBranchUnlockedByHistory, normalizeEndingBias } from './storyCartridge';
+ import { deleteLocalCache, getLocalCache, setLocalCache } from './localCache';
++import {
++  TUTORIAL_CARTRIDGE_META,
++  TUTORIAL_CARTRIDGE_CONTENT,
++  getTutorialInterventionResult,
++  getTutorialEndingText
++} from './tutorialCartridge';
++
++const getUserProgress = async (db: any, uid: string, storyId: string) => {
++  if (storyId === 'tutorial-cartridge') {
++    const val = localStorage.getItem('tutorial-cartridge-progress');
++    return val ? JSON.parse(val) : null;
++  }
++  return getUserProgressStore(db, uid, storyId);
++};
++
++const saveUserProgress = async (db: any, uid: string, storyId: string, payload: any) => {
++  if (storyId === 'tutorial-cartridge') {
++    localStorage.setItem('tutorial-cartridge-progress', JSON.stringify(payload));
++    return;
++  }
++  return saveUserProgressStore(db, uid, storyId, payload);
++};
++
++const getStoryCartridge = async (db: any, storyId: string) => {
++  if (storyId === 'tutorial-cartridge') {
++    return TUTORIAL_CARTRIDGE_CONTENT;
++  }
++  return getStoryCartridgeStore(db, storyId);
++};
+ import { useAppNavigation } from './navigation/useAppNavigation';
+ import { evaluateStoryRunAfterIntervention } from './storyRunEngine';
+ import { createIdleStoryListSyncState, updateStoryListSegmentState, type StoryListSegment, type SyncStatus } from './storySyncTypes';
+@@ -1941,6 +1970,43 @@ export default function App() {
+   const [showLeaveGameModal, setShowLeaveGameModal] = useState(false);
+   const [pendingProgressToLoad, setPendingProgressToLoad] = useState<{ id: string, data: any } | null>(null);
+ 
++  const [dismissedHelpCards, setDismissedHelpCards] = useState<Record<string, boolean>>(() => {
++    try {
++      const val = localStorage.getItem('dismissed-help-cards');
++      return val ? JSON.parse(val) : {};
++    } catch {
++      return {};
++    }
++  });
++
++  const dismissHelpCard = (key: string) => {
++    setDismissedHelpCards(prev => {
++      const next = { ...prev, [key]: true };
++      localStorage.setItem('dismissed-help-cards', JSON.stringify(next));
++      return next;
++    });
++  };
++
++  const restoreHelpCards = () => {
++    setDismissedHelpCards({});
++    localStorage.removeItem('dismissed-help-cards');
++    setErrorMsg(isEnglish ? 'All onboarding helper cards have been restored!' : 'σ╖▓µêÉσèƒµüóσñìµëÇµ£ëµû░µëïσ╝òσ»╝σìíτëç∩╝ü');
++    setTimeout(() => setErrorMsg(null), 4000);
++  };
++
++  const [tourStep, setTourStep] = useState<number | null>(null);
++  const [helpSearch, setHelpSearch] = useState('');
++  const [isHelpDrawerOpen, setIsHelpDrawerOpen] = useState(false);
++
++  useEffect(() => {
++    if (gameState === 'AUTHORING' && authoringCartridge && localStorage.getItem('completed-authoring-tour') !== 'true') {
++      setTourStep(0);
++      setAuthoringTab('settings');
++    } else {
++      setTourStep(null);
++    }
++  }, [gameState, authoringCartridge]);
++
+ 
+   // Cartridge platform state
+   const [activeStoryId, setActiveStoryId] = useState<string | null>(null);
+@@ -3317,6 +3383,9 @@ export default function App() {
+   const getStoryListCache = async () => getLocalCache<{ pub: any[]; mine: any[]; shared: any[]; publicSort?: StoryLibrarySort }>(storyListCacheKey());
+ 
+   const getCachedStoryCartridge = async (storyId: string, expectedStory?: any) => {
++    if (storyId === 'tutorial-cartridge') {
++      return TUTORIAL_CARTRIDGE_CONTENT;
++    }
+     const cached = await getLocalCache<any>(storyCartridgeCacheKey(storyId));
+     if (!cached?.value) return null;
+     const expectedUpdatedAt = String(expectedStory?.updatedAt || '');
+@@ -3329,6 +3398,9 @@ export default function App() {
+   };
+ 
+   const getAnyCachedStoryCartridge = async (storyId: string) => {
++    if (storyId === 'tutorial-cartridge') {
++      return TUTORIAL_CARTRIDGE_CONTENT;
++    }
+     const cached = await getLocalCache<any>(storyCartridgeCacheKey(storyId));
+     return cached?.value || null;
+   };
+@@ -5618,7 +5690,7 @@ export default function App() {
+     setSelectedThemes(nextBlueprint.tags || []);
+     setChapters(baseChapters);
+     setChangeHighlights(progressData?.changeHighlights || {});
+-    setInterventionsLeft(progressData?.interventionsLeft ?? 3);
++    setInterventionsLeft(storyId === 'tutorial-cartridge' ? (progressData?.interventionsLeft ?? 1) : (progressData?.interventionsLeft ?? 3));
+     setEndingValue(progressData?.endingValue || 0);
+     setUnlockedBranches(normalizeUnlockedBranchesForBlueprint(progressData?.unlockedBranches || [], nextBlueprint));
+     setHistoricallyUnlockedBranches(historicalBranches);
+@@ -6968,33 +7040,43 @@ export default function App() {
+             'σæ╜Φ┐ÉΣ╣ïΦ╜«σ╖▓τ╗ÅΦ╜¼σè¿...',
+           ]);
+ 
+-      const response = await apiFetch('/api/ai?action=intervene', {
+-        method: 'POST',
+-        body: JSON.stringify({
+-          blueprint,
+-          chapters,
+-          chapterNum,
+-          charId,
+-          action,
+-          currentEndingValue: endingValue,
+-          currentUnlockedBranches: effectiveUnlockedBranches,
+-          targetWordCount,
+-          interventionHistory: [...interventionHistory, { chapterNum, charId, action }],
+-          worldState: buildWorldStateForPrompt(chapterNum, endingValue),
+-          language: appLanguage,
+-        })
+-      });
++      let result;
++      if (activeStoryId === 'tutorial-cartridge' || blueprint?.id === 'tutorial-cartridge') {
++        await new Promise((resolve) => setTimeout(resolve, 1500));
++        result = getTutorialInterventionResult(chapterNum, charId, action);
++        if (simulation) {
++          clearInterval(simulation);
++          simulation = null;
++        }
++      } else {
++        const response = await apiFetch('/api/ai?action=intervene', {
++          method: 'POST',
++          body: JSON.stringify({
++            blueprint,
++            chapters,
++            chapterNum,
++            charId,
++            action,
++            currentEndingValue: endingValue,
++            currentUnlockedBranches: effectiveUnlockedBranches,
++            targetWordCount,
++            interventionHistory: [...interventionHistory, { chapterNum, charId, action }],
++            worldState: buildWorldStateForPrompt(chapterNum, endingValue),
++            language: appLanguage,
++          })
++        });
+ 
+-      if (simulation) {
+-        clearInterval(simulation);
+-        simulation = null;
+-      }
++        if (simulation) {
++          clearInterval(simulation);
++          simulation = null;
++        }
+ 
+-      if (!response.ok) {
+-        throw new Error(await readErrorMessage(response));
+-      }
++        if (!response.ok) {
++          throw new Error(await readErrorMessage(response));
++        }
+ 
+-      const result = await response.json();
++        result = await response.json();
++      }
+       const aiData = result?.aiData || {};
+       
+       const newHistory = [...interventionHistory, { chapterNum, charId, action }];
+@@ -7338,27 +7420,37 @@ export default function App() {
+             'µ¡úσ£¿Θô¡σê╗σæ╜Φ┐ÉµÇ╗τ╗ô...',
+           ]);
+ 
+-      const response = await apiFetch('/api/ai?action=generate-summary', {
+-        method: 'POST',
+-        body: JSON.stringify({
+-          blueprint,
+-          endingValue,
+-          chapters,
+-          language: appLanguage,
+-        })
+-      });
++      let conclusionText;
++      if (activeStoryId === 'tutorial-cartridge' || blueprint?.id === 'tutorial-cartridge') {
++        await new Promise((resolve) => setTimeout(resolve, 1500));
++        conclusionText = getTutorialEndingText(endingValue);
++        if (simulation) {
++          clearInterval(simulation);
++          simulation = null;
++        }
++      } else {
++        const response = await apiFetch('/api/ai?action=generate-summary', {
++          method: 'POST',
++          body: JSON.stringify({
++            blueprint,
++            endingValue,
++            chapters,
++            language: appLanguage,
++          })
++        });
+ 
+-      if (simulation) {
+-        clearInterval(simulation);
+-        simulation = null;
+-      }
++        if (simulation) {
++          clearInterval(simulation);
++          simulation = null;
++        }
+ 
+-      if (!response.ok) {
+-        throw new Error(await readErrorMessage(response));
+-      }
++        if (!response.ok) {
++          throw new Error(await readErrorMessage(response));
++        }
+ 
+-      const result = await response.json();
+-      const conclusionText = result.text || result.conclusion || '';
++        const result = await response.json();
++        conclusionText = result.text || result.conclusion || '';
++      }
+       setStoryConclusion(conclusionText);
+       setShowSummaryModal(true);
+       if (db && user) {
+@@ -7527,6 +7619,29 @@ export default function App() {
+   const handleStoryInteraction = async (kind: 'like' | 'favorite' | 'report', targetId?: string, targetMeta?: any) => {
+     const idToUse = targetId || activeStoryId;
+     if (!idToUse || !db || !user) { if (!user) setIsAccountCenterOpen(true); return; }
++    if (idToUse === 'tutorial-cartridge') {
++      const wasActionActive = kind === 'like' || kind === 'favorite'
++        ? (targetMeta
++            ? hasStoryCardAction(kind, targetMeta)
++            : (idToUse === activeStoryId ? isCurrentStoryActive(kind) : hasOptimisticStoryAction(kind, idToUse)))
++        : false;
++      if (kind === 'like') {
++        const isActive = wasActionActive;
++        setStoryActionState('like', idToUse, !isActive);
++        applyStoryActionFlag('like', idToUse, !isActive);
++        applyStoryCountDelta(idToUse, 'likeCount', isActive ? -1 : 1);
++        showError(isActive ? 'σ╖▓σÅûµ╢êτé╣Φ╡₧πÇé' : 'σ╖▓τé╣Φ╡₧πÇé');
++      } else if (kind === 'favorite') {
++        const isActive = wasActionActive;
++        setStoryActionState('favorite', idToUse, !isActive);
++        applyStoryActionFlag('favorite', idToUse, !isActive);
++        applyStoryCountDelta(idToUse, 'favoriteCount', isActive ? -1 : 1);
++        showError(isActive ? 'σ╖▓σÅûµ╢êµö╢ΦùÅπÇé' : 'σ╖▓µö╢ΦùÅπÇé');
++      } else if (kind === 'report') {
++        showError('Σ╕ìΦâ╜Σ╕╛µèÑτ│╗τ╗ƒµòÖσ¡ªσìíσ╕ª∩╝ü');
++      }
++      return;
++    }
+     const wasActionActive = kind === 'like' || kind === 'favorite'
+       ? (targetMeta
+           ? hasStoryCardAction(kind, targetMeta)
+@@ -8427,7 +8542,10 @@ export default function App() {
+               <button
+                 key={stat.key}
+                 type="button"
+-                onClick={onClick}
++                onClick={(e) => {
++                  e.stopPropagation();
++                  onClick?.();
++                }}
+                 disabled={!onClick}
+                 data-active={stat.active ? 'true' : undefined}
+                 data-tone={stat.tone}
+@@ -8458,7 +8576,10 @@ export default function App() {
+               <button
+                 key={stat.key}
+                 type="button"
+-                onClick={onClick}
++                onClick={(e) => {
++                  e.stopPropagation();
++                  onClick?.();
++                }}
+                 disabled={!onClick}
+                 data-active={stat.active ? 'true' : undefined}
+                 data-tone={stat.tone}
+@@ -8497,7 +8618,10 @@ export default function App() {
+               <button
+                 key={stat.key}
+                 type="button"
+-                onClick={onClick}
++                onClick={(e) => {
++                  e.stopPropagation();
++                  onClick?.();
++                }}
+                 data-active={stat.active ? 'true' : undefined}
+                 data-tone={stat.tone}
+                 className="story-detail-stat group text-left transition-all active:scale-[0.98]"
+@@ -8548,13 +8672,14 @@ export default function App() {
+       <motion.div
+         key={storyId || story.id}
+         whileHover={{ y: -4, scale: 1.01 }}
+-        className={`story-library-card group p-4 transition-all ${
++        onClick={() => setStoryDetailStory(story)}
++        className={`story-library-card group p-4 transition-all cursor-pointer ${
+           isLiked ? 'ring-1 ring-pink-500/18' : isFavorited ? 'ring-1 ring-amber-500/18' : ''
+         }`}
+       >
+         <div className="relative flex gap-4">
+           <div className="w-28 shrink-0 sm:w-32">
+-            <button type="button" onClick={() => setStoryDetailStory(story)} className="story-library-cover h-28 w-28 cursor-pointer transition-all hover:ring-2 hover:ring-indigo-400/70 hover:ring-offset-2 hover:ring-offset-zinc-950 sm:h-32 sm:w-32">
++            <button type="button" onClick={(e) => { e.stopPropagation(); setStoryDetailStory(story); }} className="story-library-cover h-28 w-28 cursor-pointer transition-all hover:ring-2 hover:ring-indigo-400/70 hover:ring-offset-2 hover:ring-offset-zinc-950 sm:h-32 sm:w-32">
+               {coverUrl ? (
+                 <img src={coverUrl} alt={`${formatBookTitle(getStoryTitle(story))} σ░üΘ¥ó`} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+               ) : (
+@@ -8597,11 +8722,11 @@ export default function App() {
+               ))}
+             </div>
+             <div className="shrink-0 grid gap-2 sm:grid-cols-2">
+-              <button type="button" onClick={() => setStoryDetailStory(story)} className={`${semanticButtonClass('secondary', { fullWidth: true, compact: true })} text-sm`}>
++              <button type="button" onClick={(e) => { e.stopPropagation(); setStoryDetailStory(story); }} className={`${semanticButtonClass('secondary', { fullWidth: true, compact: true })} text-sm`}>
+                 <BookOpen className="h-4 w-4" />
+                 {t('library.details')}
+               </button>
+-              <button type="button" onClick={() => startStoryPlay(story.id)} className={`${semanticButtonClass('primary', { fullWidth: true, compact: true })} text-sm`}>
++              <button type="button" onClick={(e) => { e.stopPropagation(); startStoryPlay(story.id); }} className={`${semanticButtonClass('primary', { fullWidth: true, compact: true })} text-sm`}>
+                 <Sparkles className="h-4 w-4" />
+                 {t('library.intervene')}
+               </button>
+@@ -8845,7 +8970,13 @@ export default function App() {
+   );
+ 
+   const getVisibleStoryLibraryItems = () => {
+-    const source = storyLibraryTab === 'mine' ? myStories : publicStories;
++    let source = storyLibraryTab === 'mine' ? myStories : publicStories;
++    if (storyLibraryTab === 'public') {
++      const hasTutorial = source.some((s: any) => s.id === 'tutorial-cartridge');
++      if (!hasTutorial) {
++        source = [{ ...TUTORIAL_CARTRIDGE_META, id: 'tutorial-cartridge' }, ...source];
++      }
++    }
+     const keyword = storyLibrarySearch.trim().toLowerCase();
+     return [...source]
+       .filter((story: any) => {
+@@ -8856,6 +8987,8 @@ export default function App() {
+         return haystack.includes(keyword);
+       })
+       .sort((a: any, b: any) => {
++        if (a.id === 'tutorial-cartridge') return -1;
++        if (b.id === 'tutorial-cartridge') return 1;
+         if (storyLibrarySort === 'likes') return getStoryLikeCount(b) - getStoryLikeCount(a);
+         if (storyLibrarySort === 'interventions') return getStoryInterventionCount(b) - getStoryInterventionCount(a);
+         if (storyLibrarySort === 'favorites') return getStoryFavoriteCount(b) - getStoryFavoriteCount(a);
+@@ -9619,6 +9752,7 @@ export default function App() {
+             {pageDescription}
+           </p>
+         </div>
++        {isSeriesWorldGeneratePage && renderInlineHelp('world-generator', 'Σ╕ûτòîΦºéτöƒµêÉΣ╕ÄµÅÉσÅûµîçσ╝ò', 'σ£¿µ¡ñΘí╡Θ¥ó∩╝îΣ╜áσÅ»Σ╗ÑΦ«⌐AIΦç¬σè¿τöƒµêÉΣ╕ÇσÑùσà¿µû░τÜäΣ╕ûτòîΦºéΦô¥σ¢╛∩╝îµêûΦÇàΘÇÜΦ┐çµÅÉσÅûσ╖▓µ£ëµòàΣ║ïτÜäτ½áΦèéµ¥ÑµèôσÅûσà╢Σ╕¡τÜäΣ║║τë⌐Φ«╛σ«ÜπÇüΣ╕ûτòîµ│òσêÖπÇéτöƒµêÉσÑ╜τÜäΣ╕ûτòîΦºéσÅ»Σ╗Ñσ£¿σÉÄτ╗¡σê¢σ╗║πÇÄτ╗¡Σ╜£πÇÅµêûπÇÄµû░τ»çτ½áπÇÅµòàΣ║ïµù╢σ£¿Θ½ÿτ║ºΦ«╛τ╜«ΘçîσÑùτö¿πÇé')}
+ 
+         <div className="grid gap-6">
+           <section className="space-y-4">
+@@ -9732,6 +9866,7 @@ export default function App() {
+                   </button>
+                 </div>
+               </div>
++              {renderInlineHelp('world-editor', 'Σ╕ûτòîΦºéΣ╗ôσ║ôτ╝ûΦ╛æµîçσ╝ò', 'σ£¿µ¡ñτ╝ûΦ╛æΣ╕ûτòîΦºéτÜäσà│Θö«Φªüτ┤áπÇéσà╢Σ╕¡πÇÉΣ╕ûτòîσƒ║σçåΦºäσêÖπÇæµÿ»AIσê¢Σ╜£µòàΣ║ïµù╢τ╗¥σ»╣Θü╡σ«êτÜäΘôüσ╛ï∩╝êΣ╛ïσªé∩╝ÜΘ¡öµ│òσ£¿Φ┐ÖΣ╕¬Σ╕ûτòîΣ╕èσ╖▓Φó½τªüµ¡ó∩╝ë∩╝¢πÇÉΦºÆΦë▓σìíµ▒áπÇæσ¡ÿµö╛Φ»ÑΣ╕ûτòîΘçîτÖ╗σ£║τÜäΣ╕╗ΦªüΘàìΦºÆΣ╕ÄΦâîµÖ»∩╝¢πÇÉµòàΣ║ïσñºτ║▓Σ╕Äτ┤áµ¥ÉπÇæΦâ╜Σ╕║σÉÄτ╗¡Σ╜£σôüµÅÉΣ╛¢τ║┐τ┤óπÇéΣ┐«µö╣σ«îµêÉσÉÄ∩╝îσêçΦ«░τé╣σç╗µ£ÇΣ╕ïµû╣τÜäπÇÄΣ┐¥σ¡ÿΣ╕ûτòîΦºéπÇÅ∩╝îµëìΦâ╜Φ«⌐µö╣σè¿τöƒµòêπÇé')}
+               <div className="grid gap-3 sm:grid-cols-2">
+                 <input value={seriesForm.title || ''} onChange={(event) => setSeriesForm((prev) => ({ ...prev, title: event.target.value }))} placeholder={tr('Σ╕ûτòîΦºéΦ«╛σ«ÜσÉìτº░', 'World setting title')} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
+                 <input value={seriesGenreText} onChange={(event) => setSeriesForm((prev) => ({ ...prev, genreTags: event.target.value.split(/[,∩╝î]/).map((tag) => tag.trim()).filter(Boolean) }))} placeholder={tr('Θóÿµ¥Éµáçτ¡╛∩╝îΣ╗ÑΘÇùσÅ╖σêåΘÜö', 'Genre tags, comma-separated')} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
+@@ -10896,6 +11031,252 @@ export default function App() {
+     </AnimatePresence>
+   );
+ 
++  const renderInlineHelp = (key: string, title: string, content: React.ReactNode) => {
++    if (dismissedHelpCards[key]) return null;
++    return (
++      <motion.div
++        initial={{ opacity: 0, y: 10 }}
++        animate={{ opacity: 1, y: 0 }}
++        exit={{ opacity: 0, y: -10 }}
++        className="mb-6 flex gap-3 rounded-2xl border border-indigo-500/15 bg-indigo-500/5 p-4 text-sm text-indigo-200/90 shadow-[inset_0_1px_1px_rgba(99,102,241,0.05)] transition-all"
++      >
++        <Sparkles className="h-5 w-5 shrink-0 text-indigo-400" />
++        <div className="flex-1 leading-relaxed">
++          <div className="font-black text-indigo-100">{title}</div>
++          <div className="mt-1 text-xs text-indigo-200/80">{content}</div>
++        </div>
++        <button
++          type="button"
++          onClick={() => dismissHelpCard(key)}
++          className="h-8 w-8 shrink-0 rounded-lg border border-indigo-500/10 bg-indigo-500/10 text-indigo-300 hover:border-indigo-400/30 hover:text-white transition-all flex items-center justify-center focus-visible:ring-1 focus-visible:ring-indigo-400"
++          title={isEnglish ? "Dismiss" : "µêæτƒÑΘüôΣ║å"}
++          aria-label={isEnglish ? "Dismiss" : "µêæτƒÑΘüôΣ║å"}
++        >
++          <X className="h-4 w-4" />
++        </button>
++      </motion.div>
++    );
++  };
++
++  const renderTourOverlay = () => {
++    if (tourStep === null || !authoringCartridge) return null;
++
++    const steps = [
++      {
++        tab: 'settings',
++        title: 'τ¼¼Σ╕Çµ¡Ñ∩╝ÜΘàìτ╜«µòàΣ║ïσƒ║τíÇ (Settings)',
++        text: 'σ£¿Φ┐ÖΣ╕¬ΘÇëΘí╣σìíΣ╕ï∩╝îΣ╜áσÅ»Σ╗ÑΦ«╛τ╜«µòàΣ║ïµáçΘóÿπÇüΣ╕╗Φ╜┤∩╝êσªéΓÇ£Φç¬τö▒ VS σªÑσìÅΓÇ¥∩╝ëπÇüΘóÿµ¥Éµáçτ¡╛∩╝îΣ╗ÑσÅèµ╖╗σèáµêûΣ┐«µö╣µòàΣ║ïτÜäτÖ╗σ£║Σ║║τë⌐πÇéΣ║║τë⌐σìíµÿ»ΦºªσÅæσ╣▓µ╢ëτÜäσ«₧Σ╜ô∩╝îΦ»╖σèíσ┐àσàêσ£¿µ¡ñσñäΘàìτ╜«ΦºÆΦë▓πÇé',
++      },
++      {
++        tab: 'mainline',
++        title: 'τ¼¼Σ║îµ¡Ñ∩╝Üτ╝ûσåÖµ¡úσÅ▓Σ╕╗τ║┐ (Mainline)',
++        text: 'σ£¿Φ┐ÖΘçîτ╝ûσåÖµòàΣ║ïτÜäΣ╕╗τ║┐τ½áΦèé∩╝êτ¼¼ 1 σê░τ¼¼ 7 τ½á∩╝ëπÇéΦ┐Öµÿ»µò┤Σ╕¬Σ╕ûτòîτ║┐τÜäσƒ║τíÇµ₧╢µ₧äπÇéτ¼¼ 7 τ½áΦ┐ÿσÅ»Σ╗ÑΦ«╛τ╜«σÅîσÉæµ¿íσ╝ÅΣ╕ïτÜäσ╖ªσÇ╛/σÅ│σÇ╛τ╗êτ½áτ╗ôσ▒ÇσÉìτº░πÇé',
++      },
++      {
++        tab: 'branches',
++        title: 'τ¼¼Σ╕ëµ¡Ñ∩╝Üτ╝ûτ╗çσæ╜Φ┐Éσêåµö» (Branches & Rules)',
++        text: 'σ£¿µ¡ñσñäµ╖╗σèáσæ╜Φ┐Éµö»τ║┐ΦºäσêÖπÇéΣ╜áσÅ»Σ╗Ñτ╗æσ«ÜµƒÉΣ╕¬ΦºÆΦë▓σ£¿τë╣σ«Üτ½áΦèé∩╝êτ¼¼ 2-6 τ½á∩╝ëΘü¡Θüçσ║çΣ╜æ(Bless)µêûτú¿ΘÜ╛(Curse)Σ╜£Σ╕║ΦºªσÅæσÖ¿πÇéΣ╕ÇµùªΦºªσÅæ∩╝îσêåµö»τÜäµ│¿σàÑµ¥íΣ╗╢∩╝êmustHappen τ¡ë∩╝ëσ░åµö╣σåÖΣ╕ïµ╕╕τ½áΦèéτÜäµ¡úµûçΦ╡░σÉæπÇé',
++      },
++      {
++        tab: 'settings',
++        title: 'τ¼¼σ¢¢µ¡Ñ∩╝ÜΣ┐¥σ¡ÿσ╣╢σÅæσ╕â (Save & Publish)',
++        text: 'τ╝ûΦ╛æσ«îµëÇµ£ëΦºäσêÖΣ╕Äµûçµ£¼σÉÄ∩╝îΦ»╖Φ«░σ╛ùτé╣σç╗σÅ│Σ╕èΦºÆτÜäπÇÄΣ┐¥σ¡ÿµ¢┤µö╣πÇÅΣ╗ÑΣ┐¥σ¡ÿΦç│Σ║æτ½»πÇéσ╜ôΣ╜£σôüσ╝ÇσÅæσ«îµ»ò∩╝îΣ┐«µö╣σà╢σÅ»ΦºüµÇºΣ╕║ΓÇ£σà¼σ╝ÇΓÇ¥σì│σÅ»σÅæσ╕âσ£¿Σ╣ªσ║ôΣ╕¡∩╝ü',
++      }
++    ];
++
++    const currentStep = steps[tourStep];
++    if (!currentStep) return null;
++
++    const handleNext = () => {
++      if (tourStep < steps.length - 1) {
++        const nextStep = tourStep + 1;
++        setTourStep(nextStep);
++        setAuthoringTab(steps[nextStep].tab as any);
++      } else {
++        setTourStep(null);
++        localStorage.setItem('completed-authoring-tour', 'true');
++        showError('σÉæσ»╝σ«îµêÉ∩╝üτÑ¥Σ╜áσê¢Σ╜£µäëσ┐½∩╝ü');
++      }
++    };
++
++    const handleSkip = () => {
++      setTourStep(null);
++      localStorage.setItem('completed-authoring-tour', 'true');
++    };
++
++    return (
++      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-zinc-950/75 p-6 backdrop-blur-[2px]">
++        <motion.div
++          initial={{ scale: 0.95, opacity: 0 }}
++          animate={{ scale: 1, opacity: 1 }}
++          className="relative max-w-md rounded-[2rem] border border-indigo-500/25 bg-zinc-900/90 p-6 shadow-2xl backdrop-blur-md"
++        >
++          <div className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300">
++            <Sparkles className="h-3 w-3" />
++            σê¢Σ╜£ΦÇàσ╝òσ»╝ ({tourStep + 1} / {steps.length})
++          </div>
++          <h3 className="text-xl font-black text-white">{currentStep.title}</h3>
++          <p className="mt-3 text-sm leading-relaxed text-zinc-300">
++            {currentStep.text}
++          </p>
++          <div className="mt-6 flex justify-between gap-3">
++            <button
++              type="button"
++              onClick={handleSkip}
++              className={semanticButtonClass('ghost', { compact: true })}
++            >
++              Φ╖│Φ┐çσ╝òσ»╝
++            </button>
++            <button
++              type="button"
++              onClick={handleNext}
++              className={semanticButtonClass('primary', { compact: true })}
++            >
++              {tourStep === steps.length - 1 ? 'σ«îµêÉ' : 'Σ╕ïΣ╕Çµ¡Ñ'}
++            </button>
++          </div>
++        </motion.div>
++      </div>
++    );
++  };
++
++  const renderHelpFloatingButton = () => {
++    if (gameState === 'PLAYING' || gameState === 'GENERATING_BLUEPRINT' || tourStep !== null) return null;
++    return (
++      <button
++        type="button"
++        onClick={() => setIsHelpDrawerOpen(true)}
++        className="fixed bottom-[calc(max(0.85rem,env(safe-area-inset-bottom))+5rem)] right-8 z-[1500] flex h-12 w-12 items-center justify-center rounded-full border border-indigo-500/30 bg-zinc-950/80 text-indigo-300 shadow-2xl backdrop-blur-md transition-all hover:border-indigo-400 hover:text-white hover:scale-105 active:scale-95 animate-pulse"
++        title={isEnglish ? "Help Center" : "σ╕«σè⌐Σ╕¡σ┐â"}
++        aria-label={isEnglish ? "Help Center" : "σ╕«σè⌐Σ╕¡σ┐â"}
++      >
++        <span className="relative flex h-5 w-5 items-center justify-center">
++          <span className="relative text-lg font-black leading-none">?</span>
++        </span>
++      </button>
++    );
++  };
++
++  const renderHelpCenterDrawer = () => {
++    const qas = [
++      {
++        q: 'Σ╗ÇΣ╣êµÿ»σ╣▓µ╢ëσÇ╝∩╝êEnding Value∩╝ëΣ╕Äσæ╜Φ┐ÉΦ╡░σÉæ∩╝ƒ',
++        a: 'σ£¿σæ╜Φ┐ÉΘªåΣ╕¡∩╝îµ»ÅΣ╕ÇΘâ¿σÅîσÉæτ╗ôσ▒ÇτÜäΣ╜£σôüΘâ╜µ£ëπÇÉσ╖ªσÇ╛πÇæσÆîπÇÉσÅ│σÇ╛πÇæΣ╕ñµ¥íσ¢áµ₧£Φ╡░σÉæπÇéΣ╜áσ£¿τ¼¼ 2 Φç│τ¼¼ 6 τ½áΣ╕¡∩╝îσ»╣τÖ╗σ£║ΦºÆΦë▓µû╜σèáτÜäπÇîσ║çΣ╜æ (Bless)πÇìµêûπÇîτú¿ΘÜ╛ (Curse)πÇìΣ╝Üτ╗Öσæ╜Φ┐Éµ▒áµ│¿σàÑσüÅσÉæπÇéσ║çΣ╜æΣ╝Üσ░åΣ╕ûτòîτ║┐σÉæσ╖ªΣ╛ºσ╝òσè¿∩╝îΦÇîτú¿ΘÜ╛Σ╝Üσ░åΣ╕ûτòîτ║┐σÉæσÅ│Σ╛ºσ¥áΦÉ╜πÇéµ£Çτ╗êσ£¿τ¼¼ 7 τ½á∩╝îτ│╗τ╗ƒΣ╝Üµá╣µì«σüÅσÉæµÇ╗σÇ╝∩╝êσñºΣ║Äτ¡ëΣ║Ä15Σ╕║σ╖ªσÇ╛τ╗ôσ▒Ç∩╝îσ░ÅΣ║Äτ¡ëΣ║Ä-15Σ╕║σÅ│σÇ╛τ╗ôσ▒Ç∩╝îσà╢Σ╜ÖΣ╕║Σ╕¡Θù┤τ╗ôσ▒Ç∩╝ëΣ╕║Σ╜áµÄ¿µ╝öσç║Σ╕ìσÉîτÜäτ╗êτ½áµòàΣ║ïπÇé',
++        tags: 'σ╣▓µ╢ë σ║çΣ╜æ τú¿ΘÜ╛ σæ╜Φ┐ÉΦ╡░σÉæ τ╗ôσ▒Ç ending value bless curse'
++      },
++      {
++        q: 'µÇÄΣ╣êΦ«⌐µòàΣ║ïσêåµö»∩╝êBranch∩╝ëΦó½µêÉσèƒΦºúΘöü∩╝ƒ',
++        a: 'µ»ÅΣ╕¬σêåµö»Θâ╜µ£ëσà╢πÇÄΦºªσÅæµ¥íΣ╗╢πÇÅπÇéΦºªσÅæµ¥íΣ╗╢τö▒Σ╜£ΦÇàσ£¿σê¢Σ╜£µòàΣ║ïµù╢µîçσ«Ü∩╝êΣ╛ïσªé∩╝Üµ₧ùµÖôσ£¿τ¼¼ 2 τ½áΘü¡Θüçσ║çΣ╜æ∩╝ëπÇéσ╜ôΣ╜áσ£¿µ╕╕τÄ⌐Φ┐çτ¿ïΣ╕¡σüÜσç║Σ║åτ¼ªσÉêµ¥íΣ╗╢τÜäσ╣▓µ╢ëµù╢∩╝îΦ»Ñσêåµö»σ░▒Σ╝Üσì│µù╢ΦºúΘöüπÇéΦºúΘöüτÜäσêåµö»Σ╝ÜΘÇÜΦ┐çΓÇ£µ│¿σàÑσè¿Σ╜£∩╝êinject∩╝ëΓÇ¥σ╝║σê╢µö╣σåÖΣ╕ïµ╕╕τ½áΦèéτÜäµòàΣ║ïσåàσ«╣∩╝îσ▒òτñ║σç║Θ¥₧σÉîσ»╗σ╕╕τÜäσÄåσÅ▓τ╗åΦèéπÇéΣ╕ÇΣ║¢Θ½ÿΘÿ╢σêåµö»τöÜΦç│µ£ëπÇÄσñÜΘçìσ╣▓µ╢ëτ╗äσÉêµ¥íΣ╗╢πÇÅπÇé',
++        tags: 'σêåµö» ΦºúΘöü µ¥íΣ╗╢ ΦºªσÅæσÖ¿ µ│¿σàÑ σëºµâàµö╣σè¿ trigger inject'
++      },
++      {
++        q: 'σªéΣ╜òΣ╜┐τö¿Σ╕ûτòîΦºéΦ«╛σ«Ü∩╝êWorld Bible∩╝ëσê¢Σ╜£τ╗¡Σ╜£∩╝ƒ',
++        a: 'Σ╕ûτòîΦºéΣ╗ôσ║ôµÿ»σñÜΘâ¿Σ╜£σôüσà▒τö¿τÜäσ¢áµ₧£σƒ║σ║ºπÇéσ╜ôΣ╜áτöƒµêÉµêûµëïσè¿σê¢σ╗║Σ║åΣ╕ÇσÑùΣ╕ûτòîΦºé∩╝êσîàσÉ½Σ╕ûτòîσƒ║σçåΦºäσêÖπÇüΦºÆΦë▓σìíµ▒áσÆîµòàΣ║ïσñºτ║▓τ┤áµ¥É∩╝ëσÉÄ∩╝îΣ╜áσÅ»Σ╗Ñµû░σ╗║Σ╜£σôü∩╝îσ╣╢σ£¿πÇÄτ│╗σêù/Σ╕ûτòîΦºéΦ«╛τ╜«πÇÅΣ╕¡ΘÇëµï⌐Φ»ÑΣ╕ûτòîΦºéπÇéAI σ£¿τöƒµêÉµòàΣ║ïτ½áΦèéµù╢∩╝îΣ╝Üτ╗¥σ»╣Θü╡σ«êΣ╕ûτòîΦºéΣ╕¡τÜäπÇÉΣ╕ûτòîσƒ║σçåΦºäσêÖπÇæ∩╝êΣ╛ïσªé∩╝ÜΘ¡öµ│òσ£¿Φ┐ÖΣ╕¬Σ╕ûτòîΣ╕èσ╖▓Φó½τªüµ¡ó∩╝ë∩╝îσ╣╢Φç¬σè¿Σ╗ÄΦºÆΦë▓µ▒áΣ╕¡σ╝òσàÑΣ║║τë⌐πÇé',
++        tags: 'Σ╕ûτòîΦºé Σ╕ûτòîσƒ║σçå ΦºÆΦë▓µ▒á τ╗¡Σ╜£ σê¢Σ╜£ σê¢Σ╜£ΦÇà world bible rules'
++      },
++      {
++        q: 'τ╗¡Σ╜£µÿ»σªéΣ╜òΓÇ£τ╗ºµë┐σëìΣ╜£ΓÇ¥τ╗ôσ▒ÇσÆîΦ«╛σ«Üτè╢µÇüτÜä∩╝ƒ',
++        a: 'σ╜ôΣ╜áσ£¿σê¢Σ╜£ΦÇàσÉÄσÅ░Σ╕║Σ╕ÇΘâ¿Σ╜£σôüσï╛ΘÇëΣ║åπÇÄµ¡ñΣ╜£σôüµÿ»τ╗¡Σ╜£πÇÅ∩╝îσ╣╢σà│ΦüöΣ║åσëìΣ╜£µù╢∩╝îτ│╗τ╗ƒΣ╝Üσ£¿τ╗¡Σ╜£σ╝Çσºïµù╢Φç¬σè¿σ╗║τ½ïπÇÉσæ╜Φ┐Éτ╗ºµë┐ΦºäσêÖπÇæπÇéτ╗¡Σ╜£τÜäτ¼¼ 1 τ½áΣ╝ÜΘ¥ÖΘ╗ÿτ╗ºµë┐Σ╜áσ£¿σëìΣ╜£Σ╕¡Φ╡░σç║τÜäτ╗ôσ▒Çµûçµ£¼πÇüµ¢╛ΦºúΘöüτÜäσêåµö»Σ╗ÑσÅèΣ║║τë⌐τÜäµ¡╗µ┤╗σ¡ÿτòÖτè╢µÇüπÇéAI σ░åΦç¬σè¿σêåµ₧ÉΦ┐ÖΣ║¢σëìτ╜«σ¢áµ₧£∩╝îΣ╜£Σ╕║τ╗¡Σ╜£σ╝Çτ»çτÜäσëºµâàσëìσÑÅ∩╝îσ«₧τÄ░τ£ƒµ¡úτÜäσåàσ«╣Σ╝áµë┐πÇé',
++        tags: 'τ╗ºµë┐ τ╗¡Σ╜£ σëìΣ╜£ τ╗ôσ▒Ç Σ║║τë⌐τè╢µÇü σà│Φüö σæ╜Φ┐Éτ╗ºµë┐ inheritance sequel'
++      },
++      {
++        q: 'AI σ┐½ΘÇƒτöƒµêÉµòàΣ║ïτÜäµ╡üτ¿ïµÿ»µÇÄµá╖τÜä∩╝ƒ',
++        a: 'σ╜ôΣ╜áΦ╛ôσàÑµòàΣ║ïµáçΘóÿσÆîΣ╕╗Φ╜┤µªéσ┐╡σÉÄ∩╝îτ│╗τ╗ƒσ░åσàêΣ╕║Σ╜áτöƒµêÉΣ╕ÇΣ╗╜πÇÄΣ╕ûτòîτ║┐Φô¥σ¢╛ (Blueprint)πÇÅ∩╝îΘçîΘ¥óσîàσÉ½ 7 Σ╕¬τ½áΦèéτÜäσñºτ║▓µóùµªéπÇüσê¥σºïτÖ╗σ£║Σ║║τë⌐σÆîΦïÑσ╣▓Θóäτ╜«σêåµö»ΦºäσêÖπÇéσ£¿Φô¥σ¢╛σ╗║τ½ïσÉÄ∩╝îΣ╜áσÅ»Σ╗ÑΦç¬τö▒Φ░âµò┤σà╢τ½áΦèéµêûσêåµö»Φ«╛τ╜«πÇéτé╣σç╗πÇÄσ╝ÇσÅæ/σ╣▓µ╢ëπÇÅµù╢∩╝îτ│╗τ╗ƒσ░åµá╣µì«Σ╜áσ╜ôσëìτÜäΘàìτ╜«∩╝îµ╕▓µƒôσ╣╢σí½σààσëìσçáτ½á of σê¥σºïΣ╕╗σ╣▓µ¡úµûçπÇéσÉÄτ╗¡τÜäΘçìσåÖΣ╣ƒµÿ»σƒ║Σ║Äµ¡ñΦô¥σ¢╛ΘÇ╗Φ╛æσ▒òσ╝ÇτÜäπÇé',
++        tags: 'σ┐½ΘÇƒτöƒµêÉ Σ╕ûτòîΦô¥σ¢╛ σê¢Σ╜£ τ½áΦèéσñºτ║▓ ai µ╡üτ¿ï blueprint'
++      }
++    ];
++
++    const keyword = helpSearch.trim().toLowerCase();
++    const filteredQas = qas.filter(item => {
++      if (!keyword) return true;
++      return `${item.q}\n${item.a}\n${item.tags}`.toLowerCase().includes(keyword);
++    });
++
++    return (
++      <AnimatePresence>
++        {isHelpDrawerOpen && (
++          <div className="fixed inset-0 z-[6500] flex justify-end bg-zinc-950/60 backdrop-blur-[1px]">
++            <div className="absolute inset-0" onClick={() => setIsHelpDrawerOpen(false)} />
++            
++            <motion.div
++              initial={{ x: '100%' }}
++              animate={{ x: 0 }}
++              exit={{ x: '100%' }}
++              transition={{ type: 'tween', duration: 0.3, ease: 'easeOut' }}
++              className="relative z-10 flex h-full w-full flex-col border-l border-zinc-800 bg-zinc-900/95 p-6 shadow-2xl backdrop-blur-md sm:max-w-md"
++            >
++              <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
++                <div className="flex items-center gap-2">
++                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-400">
++                    <Sparkles className="h-4 w-4" />
++                  </div>
++                  <h2 className="text-lg font-black text-white">{tr('σæ╜Φ┐ÉΘªåσ╕«σè⌐Σ╕¡σ┐â', 'Help Center')}</h2>
++                </div>
++                <button
++                  type="button"
++                  onClick={() => setIsHelpDrawerOpen(false)}
++                  className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors"
++                  aria-label={isEnglish ? "Close Help Center" : "σà│Θù¡σ╕«σè⌐Σ╕¡σ┐â"}
++                >
++                  <X className="h-5 w-5" />
++                </button>
++              </div>
++
++              <div className="relative mt-4">
++                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
++                <input
++                  type="search"
++                  value={helpSearch}
++                  onChange={(event) => setHelpSearch(event.target.value)}
++                  placeholder={tr('µÉ£τ┤óµé¿µâ│τƒÑΘüôτÜäΦºäσêÖµêûσÉìΦ»ì...', 'Search terms, rules...')}
++                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950/60 py-2.5 pl-9 pr-4 text-xs font-semibold text-zinc-100 outline-none transition-colors focus:border-indigo-400/70"
++                />
++              </div>
++
++              <div className="mt-6 flex-1 overflow-y-auto pr-1 space-y-4 scrollbar-thin">
++                {filteredQas.length === 0 ? (
++                  <div className="py-12 text-center text-xs text-zinc-500">
++                    {tr('µ▓íµ£ëµë╛σê░σî╣ΘàìτÜäσåàσ«╣∩╝îµìóΣ╕¬Φ»ìΦ»òΦ»òσÉº∩╝ƒ', 'No matches found. Try another search term.')}
++                  </div>
++                ) : (
++                  filteredQas.map((qa, index) => (
++                    <div key={index} className="rounded-2xl border border-zinc-800/80 bg-zinc-950/20 p-4 transition-colors hover:border-zinc-800">
++                      <h3 className="text-sm font-black text-zinc-100 flex gap-2">
++                        <span className="text-indigo-400">Q:</span>
++                        {qa.q}
++                      </h3>
++                      <p className="mt-2 text-xs leading-relaxed text-zinc-400">
++                        {qa.a}
++                      </p>
++                    </div>
++                  ))
++                )}
++              </div>
++
++              {Object.keys(dismissedHelpCards).length > 0 && (
++                <div className="mt-4 shrink-0 px-2">
++                  <button
++                    type="button"
++                    onClick={restoreHelpCards}
++                    className="w-full rounded-xl border border-zinc-800 bg-zinc-950/40 py-2.5 text-xs font-semibold text-zinc-400 hover:border-indigo-500/30 hover:text-indigo-300 transition-colors"
++                  >
++                    {tr('µüóσñìµëÇµ£ëΦó½µèÿσÅáτÜäµòÖσ¡ªµÅÉτñ║', 'Restore All Dismissed Tips')}
++                  </button>
++                </div>
++              )}
++
++              <div className="mt-4 border-t border-zinc-800 pt-4 text-center">
++                <p className="text-[10px] text-zinc-600">
++                  {tr('σæ╜Φ┐ÉΘªåµëºΦíîσ«ÿΣ╕ôτö¿σ╖Ñσà╖Θ¢å ┬╖ τª╗τ║┐σ╝òσ»╝τëêµ£¼', 'Fate interference toolkit ┬╖ Offline version')}
++                </p>
++              </div>
++            </motion.div>
++          </div>
++        )}
++      </AnimatePresence>
++    );
++  };
++
+   const renderEditNameModal = () => (
+     <AnimatePresence>
+       {isEditNameModalOpen && (
+@@ -12181,7 +12562,10 @@ export default function App() {
+       {prefix}
+       <button
+         type="button"
+-        onClick={() => openAuthorProfile(authorId, authorName)}
++        onClick={(e) => {
++          e.stopPropagation();
++          openAuthorProfile(authorId, authorName);
++        }}
+         className="font-black text-zinc-300 underline decoration-zinc-700 underline-offset-4 transition-colors hover:text-indigo-200 hover:decoration-indigo-300"
+       >
+         {authorName || (authorId ? `µ╕╕σ«ó+${shortUserId(authorId)}` : 'µ£¬τƒÑΣ╜£ΦÇà')}
+@@ -12417,6 +12801,7 @@ export default function App() {
+     <div className="authoring-studio mx-auto max-w-5xl px-6 pb-[calc(7.5rem+env(safe-area-inset-bottom))] pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] lg:px-8">
+       {!authoringCartridge ? (
+         <>
++          {renderInlineHelp('authoring-list', 'σê¢Σ╜£ΦÇàσÉÄσÅ░µîçσ╝ò', 'µ¼óΦ┐Äµ¥Ñσê░σæ╜Φ┐ÉΘªåτÜäΣ╜£ΦÇàσ╖Ñσ¥èπÇéσ£¿Φ┐ÖΘçîΣ╜áσÅ»Σ╗Ñµû░σ╗║σìòτï¼τÜäσÅÖΣ║ïσìíσ╕ª∩╝îµêûΦÇàσ╗║τ½ïσ╣╢τ╗æσ«ÜΦç¬σ«ÜΣ╣ëτÜäΣ╕ûτòîΦºéΣ╜ôτ│╗πÇéΣ╜áσÅæσ╕âτÜäΣ╜£σôüσ░åσ▒òτñ║σ£¿σà¼σà▒Σ╣ªσ║ôΣ╕¡πÇéµò░µì«Θ¥óµ¥┐σÅ»Σ╗Ñσ╕«Σ╜áΦ»äΣ╝░σô¬Σ║¢σæ╜Φ┐ÉΦ╡░σÉæσÆîσêåµö»σÉ╕σ╝òΣ║åµ£ÇσñÜµëºΦíîσ«ÿτÜäσ╣▓µ╢ëπÇé')}
+           <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
+             <BackNavButton label={tr('Φ┐öσ¢₧Σ╕èΣ╕ÇΘí╡', 'Back')} onClick={() => goBack('STORY_SELECT')} />
+             <div className="flex flex-wrap gap-3">
+@@ -12577,6 +12962,7 @@ export default function App() {
+         </>
+       ) : (
+         <>
++          {renderInlineHelp('authoring-editor', 'µòàΣ║ïτ╝ûΦ╛æσÖ¿µîçσìù', 'Φ┐ÖΘçîµÿ»µòàΣ║ïτÜäµá╕σ┐âτ╝ûτ╗çσî║πÇéΣ╜áσÅ»Σ╗ÑΦ«╛τ╜«πÇÉΣ╜£σôüΦ«╛τ╜«πÇæΘçîτÜäΘóÿµ¥ÉΣ╕ÄτÖ╗σ£║Σ║║τë⌐∩╝îτ╝ûσåÖπÇÉΣ╕╗τ║┐σÆîτ╗ôσ▒ÇπÇæ∩╝êτ¼¼ 1 Φç│τ¼¼ 7 τ½áσƒ║τíÇµ¡úµûçΣ╕Äτ╗ôσ▒ÇσÉìτº░∩╝ëπÇéΘÇÜΦ┐çπÇÉΦºÆΦë▓σÆîµö»τ║┐πÇæΘÇëΘí╣σìí∩╝îΣ╜áσÅ»Σ╗ÑΘàìτ╜«ΓÇ£σæ╜Φ┐Éσêåµö»ΦºäσêÖΓÇ¥∩╝îΦ«╛σ«ÜτÄ⌐σ«╢µû╜σèáσ║çΣ╜æ∩╝êBless∩╝ëµêûτú¿ΘÜ╛∩╝êCurse∩╝ëµù╢Φó½ΦºúΘöü∩╝îσ╣╢µ│¿σàÑµö╣σè¿Φªåτ¢ûµîçσ«Üτ½áΦèé∩╝îσ╝òσ»╝σç║µê¬τä╢τ¢╕σ╝éτÜäτ╗êτ½áτ╗ôσ▒ÇπÇé')}
+           <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
+             <BackNavButton
+               label={tr('Φ┐öσ¢₧σêùΦí¿', 'Back to list')}
+@@ -14147,6 +14533,9 @@ export default function App() {
+           {renderBranchUnlockModal()}
+           {renderInterventionStatusNotice()}
+           {renderSummaryModal()}
++          {renderTourOverlay()}
++          {renderHelpCenterDrawer()}
++          {renderHelpFloatingButton()}
+           
+           <AnimatePresence>
+             {storyLaunchOverlay && (

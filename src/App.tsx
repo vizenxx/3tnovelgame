@@ -7,7 +7,6 @@ import { createEmptyStory, createSharedStoryRecord, createStorySnapshot, adaptBl
 import { branchEffectiveWeight, isBranchUnlockedByHistory, normalizeEndingBias } from './storyCartridge';
 import { deleteLocalCache, getLocalCache, setLocalCache } from './localCache';
 import {
-  TUTORIAL_CARTRIDGE_META,
   TUTORIAL_CARTRIDGE_CONTENT,
   getTutorialInterventionResult,
   getTutorialEndingText
@@ -8972,12 +8971,6 @@ export default function App() {
 
   const getVisibleStoryLibraryItems = () => {
     let source = storyLibraryTab === 'mine' ? myStories : publicStories;
-    if (storyLibraryTab === 'public') {
-      const hasTutorial = source.some((s: any) => s.id === 'tutorial-cartridge');
-      if (!hasTutorial) {
-        source = [{ ...TUTORIAL_CARTRIDGE_META, id: 'tutorial-cartridge' }, ...source];
-      }
-    }
     const keyword = storyLibrarySearch.trim().toLowerCase();
     return [...source]
       .filter((story: any) => {
@@ -8988,8 +8981,6 @@ export default function App() {
         return haystack.includes(keyword);
       })
       .sort((a: any, b: any) => {
-        if (a.id === 'tutorial-cartridge') return -1;
-        if (b.id === 'tutorial-cartridge') return 1;
         if (storyLibrarySort === 'likes') return getStoryLikeCount(b) - getStoryLikeCount(a);
         if (storyLibrarySort === 'interventions') return getStoryInterventionCount(b) - getStoryInterventionCount(a);
         if (storyLibrarySort === 'favorites') return getStoryFavoriteCount(b) - getStoryFavoriteCount(a);
@@ -10966,6 +10957,31 @@ export default function App() {
         </section>
         )}
 
+        {!isSystemSettingsMode && (
+          <section className="p-0">
+            <div className="mb-4 flex items-center gap-2 text-lg font-black text-white">
+              <BookOpen className="h-5 w-5 text-indigo-300" />
+              {tr('入门教学', 'Tutorial')}
+            </div>
+            <div className="space-y-3">
+              <div className="text-sm leading-relaxed text-zinc-400">
+                {tr('用一段短篇试玩熟悉阅读、干涉、结算与收藏命运的基本流程。', 'Try a short guided story to learn reading, intervention, endings, and saved fate lines.')}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (mode === 'modal') setIsAccountCenterOpen(false);
+                  void startStoryPlay('tutorial-cartridge');
+                }}
+                className={semanticButtonClass('secondary', { fullWidth: true })}
+              >
+                <Sparkles className="h-4 w-4" />
+                {tr('开始入门试玩', 'Start tutorial')}
+              </button>
+            </div>
+          </section>
+        )}
+
         {isSystemSettingsMode && isAdminUser && (
           <section className="rounded-[1.5rem] border border-amber-500/25 bg-amber-500/10 p-5 lg:col-span-2">
             <div className="mb-4 flex items-center gap-2 text-lg font-black text-white">
@@ -11085,14 +11101,50 @@ export default function App() {
       }
     ];
 
-    const currentStep = steps[tourStep];
+    const guidedSteps = [
+      {
+        tab: 'settings',
+        title: '第一步：整理作品门面',
+        text: '先确认作品名、简介、封面、标签、可见性与改编权限。这里决定读者在作品库看到什么，也决定作品是否公开、非公开链接访问，或只保留给作者自己。',
+        placement: 'right',
+      },
+      {
+        tab: 'series',
+        title: '第二步：套用世界观设定',
+        text: '如果作品属于长篇系列，可以在这里选择世界观设定、角色卡和继承条件。世界观负责约束“什么可以发生”，本作主线负责讲“这一次发生什么”。',
+        placement: 'right',
+      },
+      {
+        tab: 'mainline',
+        title: '第三步：编排主线与结局',
+        text: '在这里编辑七章基础正文和结局域。左、右结局域代表故事可能走向的两种倾向；作者可以设置它们的默认倾向，让读者大致理解作品的命运气质。',
+        placement: 'left',
+      },
+      {
+        tab: 'branches',
+        title: '第四步：设计角色与支线',
+        text: '支线条件决定玩家在某章、对某个角色行动时，可能触发怎样的隐藏情节、伏笔或转折。提示应该帮助玩家判断方向，但不需要揭开全部答案。',
+        placement: 'left',
+      },
+      {
+        tab: 'settings',
+        title: '第五步：保存与发布',
+        text: '确认内容后，使用“保存更改”。如果要让读者在首页发现作品，可把可见性设为公开；若只想给特定读者访问，可使用非公开链接。',
+        placement: 'right',
+      },
+    ];
+
+    const currentStep = guidedSteps[tourStep];
     if (!currentStep) return null;
+    const tourPlacementClass = currentStep.placement === 'left'
+      ? 'left-[max(1rem,env(safe-area-inset-left))] top-[max(5.5rem,calc(env(safe-area-inset-top)+4rem))]'
+      : 'right-[max(1rem,env(safe-area-inset-right))] top-[max(5.5rem,calc(env(safe-area-inset-top)+4rem))]';
 
     const handleNext = () => {
-      if (tourStep < steps.length - 1) {
+      if (tourStep < guidedSteps.length - 1) {
         const nextStep = tourStep + 1;
         setTourStep(nextStep);
-        setAuthoringTab(steps[nextStep].tab as any);
+        setAuthoringTab(guidedSteps[nextStep].tab as any);
       } else {
         setTourStep(null);
         localStorage.setItem('completed-authoring-tour', 'true');
@@ -11106,15 +11158,15 @@ export default function App() {
     };
 
     return (
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-zinc-950/75 p-6 backdrop-blur-[2px]">
+      <div className="pointer-events-none fixed inset-0 z-[9999] p-4">
         <motion.div
           initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          className="relative max-w-md rounded-[2rem] border border-indigo-500/25 bg-zinc-900/90 p-6 shadow-2xl backdrop-blur-md"
+          className={`pointer-events-auto fixed w-[min(24rem,calc(100vw-2rem))] ${tourPlacementClass} rounded-[2rem] border border-indigo-500/25 bg-zinc-900/92 p-5 shadow-2xl backdrop-blur-md`}
         >
           <div className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300">
             <Sparkles className="h-3 w-3" />
-            创作者引导 ({tourStep + 1} / {steps.length})
+            创作者引导 ({tourStep + 1} / {guidedSteps.length})
           </div>
           <h3 className="text-xl font-black text-white">{currentStep.title}</h3>
           <p className="mt-3 text-sm leading-relaxed text-zinc-300">
@@ -11133,7 +11185,7 @@ export default function App() {
               onClick={handleNext}
               className={semanticButtonClass('primary', { compact: true })}
             >
-              {tourStep === steps.length - 1 ? '完成' : '下一步'}
+              {tourStep === guidedSteps.length - 1 ? '完成' : '下一步'}
             </button>
           </div>
         </motion.div>
@@ -11187,8 +11239,36 @@ export default function App() {
       }
     ];
 
+    const safeHelpQas = [
+      {
+        q: '玩家应该怎样开始一部作品？',
+        a: '从作品库选择感兴趣的作品，点击“干涉命运”进入阅读。读到可干涉章节时，选择角色和行动；完成后可以继续阅读变化后的故事，并在结算后收藏命运或分享。',
+        tags: '玩家 作品库 干涉命运 阅读 收藏 分享',
+      },
+      {
+        q: '作者如何设计一部可玩的故事？',
+        a: '先在作品设置里整理标题、简介、封面、标签和可见性；再写好主线章节与结局域；最后在角色和支线里设置哪些角色、章节和条件会开启特殊情节。',
+        tags: '作者 作品设置 主线 结局 支线 角色',
+      },
+      {
+        q: '支线条件有什么作用？',
+        a: '支线条件用于告诉作品：玩家在某章对某个角色做出特定行动时，可以开启一段隐藏情节、伏笔、关系变化或结局铺垫。提示应该帮助玩家判断方向，但不需要剧透全部内容。',
+        tags: '支线 条件 提示 隐藏情节 伏笔',
+      },
+      {
+        q: '世界观设定怎样连接多部作品？',
+        a: '世界观设定像系列仓库，可以保存世界基准、角色卡池和情节素材。创作新作或续作时，作者可以勾选要套用的条目，让不同作品共享同一套世界规则和角色基础。',
+        tags: '世界观 系列 角色卡 世界基准 续作',
+      },
+      {
+        q: '续作的前置条件应该怎么设？',
+        a: '在系列设置里选择前作，再指定需要完成的结局和支线。这样玩家进入续作前，会先确认是否已经经历过对应前情；作者也可以补充继承硬设定，让续作开场衔接更自然。',
+        tags: '续作 前作 继承 结局 支线',
+      },
+    ];
+
     const keyword = helpSearch.trim().toLowerCase();
-    const filteredQas = qas.filter(item => {
+    const filteredQas = safeHelpQas.filter(item => {
       if (!keyword) return true;
       return `${item.q}\n${item.a}\n${item.tags}`.toLowerCase().includes(keyword);
     });
