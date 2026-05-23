@@ -10475,6 +10475,26 @@ export default function App() {
   const isSystemSettingsMode = accountCenterMode === 'settings';
   const renderAccountCenterContent = (mode: 'page' | 'modal' = 'modal') => (
     <>
+      {isSystemSettingsMode && (
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <div className="text-xs font-black uppercase tracking-[0.24em] text-zinc-500">
+              {tr('设置', 'Settings')}
+            </div>
+            <h2 className="mt-1 text-2xl font-black text-white">
+              {tr('系统设置', 'System Settings')}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={() => mode === 'page' ? goBack('STORY_SELECT') : setIsAccountCenterOpen(false)}
+            className={semanticIconButtonClass('ghost')}
+            aria-label={tr('关闭', 'Close')}
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+      )}
       {!isSystemSettingsMode && (
       <div className="mb-6 flex items-center justify-between">
         <div>
@@ -10534,98 +10554,102 @@ export default function App() {
           )}
           <div className="space-y-3">
             {isSystemSettingsMode && (
-              <>
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-sm font-black text-zinc-100">{t('language.switch')}</div>
-                  <div className="mt-1 text-xs leading-relaxed text-zinc-500">
-                    {appLanguage === 'en-US'
-                      ? 'This setting is saved on this device until it is changed here again.'
-                      : '语言设置会保存在当前设备，之后默认沿用，直到回到这里再次改变。'}
+              <div className="overflow-hidden rounded-2xl border border-zinc-800/60">
+                {/* 语言 */}
+                <div className="p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-black text-zinc-100">{t('language.switch')}</div>
+                      <div className="mt-1 text-xs leading-relaxed text-zinc-500">
+                        {appLanguage === 'en-US'
+                          ? 'This setting is saved on this device until it is changed here again.'
+                          : '语言设置会保存在当前设备，之后默认沿用，直到回到这里再次改变。'}
+                      </div>
+                    </div>
+                    <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1 text-xs font-black text-zinc-300">
+                      {appLanguage === 'zh-CN' ? t('language.zh') : t('language.en')}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(['zh-CN', 'en-US'] as AppLanguage[]).map((option) => (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => setAppLanguage(option)}
+                        className={`rounded-xl border px-3 py-2 text-sm font-black transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
+                          appLanguage === option
+                            ? 'border-indigo-400 bg-indigo-500/15 text-indigo-100'
+                            : 'border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
+                        }`}
+                      >
+                        {option === 'zh-CN' ? t('language.zh') : t('language.en')}
+                      </button>
+                    ))}
                   </div>
                 </div>
-                <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1 text-xs font-black text-zinc-300">
-                  {appLanguage === 'zh-CN' ? t('language.zh') : t('language.en')}
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {(['zh-CN', 'en-US'] as AppLanguage[]).map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    onClick={() => setAppLanguage(option)}
-                    className={`rounded-xl border px-3 py-2 text-sm font-black transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
-                      appLanguage === option
-                        ? 'border-indigo-400 bg-indigo-500/15 text-indigo-100'
-                        : 'border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
-                    }`}
-                  >
-                    {option === 'zh-CN' ? t('language.zh') : t('language.en')}
+                {/* 主题 */}
+                <div className="border-t border-zinc-800/60 p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-black text-zinc-100">{tr('界面主题', 'Theme')}</div>
+                      <div className="mt-1 text-xs leading-relaxed text-zinc-500">
+                        {tr('浅色主题使用柔和低疲劳配色，暗色主题保留原本氛围。', 'Light theme uses softer low-fatigue colors; dark theme keeps the original atmosphere.')}
+                      </div>
+                    </div>
+                    {appTheme === 'light' ? <Sun className="h-5 w-5 text-amber-500" /> : <Moon className="h-5 w-5 text-indigo-300" />}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { value: 'dark' as const, label: tr('暗色', 'Dark') },
+                      { value: 'light' as const, label: tr('浅色', 'Light') },
+                    ].map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setAppTheme(option.value)}
+                        className={`rounded-xl border px-3 py-2 text-sm font-black transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
+                          appTheme === option.value
+                            ? 'border-indigo-400 bg-indigo-500/15 text-indigo-100'
+                            : 'border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* 通知 */}
+                <div className="border-t border-zinc-800/60 p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-black text-zinc-100">{tr('手机通知', 'Mobile notifications')}</div>
+                      <div className="mt-1 text-xs leading-relaxed text-zinc-500">
+                        {tr('接收作者更新、作品互动和系统提醒。若曾在系统弹窗中拒绝，需要到浏览器或手机设置里重新允许。', 'Receive author updates, story interactions, and system reminders. If blocked before, re-enable it in browser or phone settings.')}
+                      </div>
+                    </div>
+                    <Bell className="h-5 w-5 text-indigo-300" />
+                  </div>
+                  <button type="button" onClick={enablePushNotifications} disabled={pushSubscribeBusy} className={semanticButtonClass('secondary', { fullWidth: true })}>
+                    {pushSubscribeBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
+                    {tr('开启手机通知', 'Enable mobile notifications')}
                   </button>
-                ))}
-              </div>
-            </div>
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-sm font-black text-zinc-100">{tr('界面主题', 'Theme')}</div>
-                  <div className="mt-1 text-xs leading-relaxed text-zinc-500">
-                    {tr('浅色主题使用柔和低疲劳配色，暗色主题保留原本氛围。', 'Light theme uses softer low-fatigue colors; dark theme keeps the original atmosphere.')}
+                </div>
+                {/* 版本 */}
+                <div className="border-t border-zinc-800/60 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-black text-zinc-100">{tr('版本', 'Version')}</div>
+                      <div className="mt-1 text-xs leading-relaxed text-zinc-500">
+                        {tr('用于确认当前安装的 App 是否已经更新。', 'Use this to confirm whether the installed app is up to date.')}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-black text-indigo-200">{APP_VERSION_LABEL}</div>
+                      {APP_BUILD_LABEL && <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-600">{APP_BUILD_LABEL}</div>}
+                    </div>
                   </div>
                 </div>
-                {appTheme === 'light' ? <Sun className="h-5 w-5 text-amber-500" /> : <Moon className="h-5 w-5 text-indigo-300" />}
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { value: 'dark' as const, label: tr('暗色', 'Dark') },
-                  { value: 'light' as const, label: tr('浅色', 'Light') },
-                ].map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => setAppTheme(option.value)}
-                    className={`rounded-xl border px-3 py-2 text-sm font-black transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
-                      appTheme === option.value
-                        ? 'border-indigo-400 bg-indigo-500/15 text-indigo-100'
-                        : 'border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-sm font-black text-zinc-100">{tr('手机通知', 'Mobile notifications')}</div>
-                  <div className="mt-1 text-xs leading-relaxed text-zinc-500">
-                    {tr('接收作者更新、作品互动和系统提醒。若曾在系统弹窗中拒绝，需要到浏览器或手机设置里重新允许。', 'Receive author updates, story interactions, and system reminders. If blocked before, re-enable it in browser or phone settings.')}
-                  </div>
-                </div>
-                <Bell className="h-5 w-5 text-indigo-300" />
-              </div>
-              <button type="button" onClick={enablePushNotifications} disabled={pushSubscribeBusy} className={semanticButtonClass('secondary', { fullWidth: true })}>
-                {pushSubscribeBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
-                {tr('开启手机通知', 'Enable mobile notifications')}
-              </button>
-            </div>
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-sm font-black text-zinc-100">{tr('版本', 'Version')}</div>
-                  <div className="mt-1 text-xs leading-relaxed text-zinc-500">
-                    {tr('用于确认当前安装的 App 是否已经更新。', 'Use this to confirm whether the installed app is up to date.')}
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-sm font-black text-indigo-200">{APP_VERSION_LABEL}</div>
-                  {APP_BUILD_LABEL && <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-600">{APP_BUILD_LABEL}</div>}
-                </div>
-              </div>
-            </div>
-              </>
             )}
             {!isSystemSettingsMode && (
               <>
