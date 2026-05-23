@@ -1078,7 +1078,7 @@ html[data-theme="light"] .story-detail-stat[data-tone="favorite"]:hover {
   z-index: 1801;
   display: flex;
   width: 12rem;
-  max-height: min(44dvh, 20rem);
+  max-height: min(75dvh, 28rem);
   flex-direction: column;
   gap: 0.25rem;
   overflow-y: auto;

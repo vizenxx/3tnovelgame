@@ -2033,6 +2033,24 @@ export default function App() {
   const [authoringFindCompact, setAuthoringFindCompact] = useState(false);
   const [authoringFindMatchIndex, setAuthoringFindMatchIndex] = useState(0);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.scrollTo({ top: 0, behavior: 'auto' });
+    const handleScrollReset = () => {
+      const scrollContainers = document.querySelectorAll('.overflow-y-auto, .overflow-y-scroll');
+      scrollContainers.forEach(container => {
+        container.scrollTop = 0;
+      });
+    };
+    handleScrollReset();
+    const t1 = setTimeout(handleScrollReset, 30);
+    const t2 = setTimeout(handleScrollReset, 100);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [gameState, archiveTab, authoringTab, activeStoryId]);
+
   type AuthoringFindMatch = {
     type: 'chapter' | 'ending' | 'character';
     id: string;
@@ -7261,6 +7279,11 @@ export default function App() {
     ));
   };
 
+  const isCurrentStoryActive = (kind: 'like' | 'favorite') => {
+    if (activeStoryMeta) return hasStoryCardAction(kind, activeStoryMeta);
+    return hasOptimisticStoryAction(kind, activeStoryId);
+  };
+
   const applyStoryCountDelta = (storyId: string, field: 'likeCount' | 'favoriteCount' | 'shareCount', delta: number) => {
     const patchStory = (story: any) => {
       if (!story || (story.id !== storyId && story.storyId !== storyId && story.sourceStoryId !== storyId)) return story;
@@ -7505,7 +7528,9 @@ export default function App() {
     const idToUse = targetId || activeStoryId;
     if (!idToUse || !db || !user) { if (!user) setIsAccountCenterOpen(true); return; }
     const wasActionActive = kind === 'like' || kind === 'favorite'
-      ? Boolean(hasOptimisticStoryAction(kind, idToUse) || (targetMeta && hasStoryCardAction(kind, targetMeta)))
+      ? (targetMeta
+          ? hasStoryCardAction(kind, targetMeta)
+          : (idToUse === activeStoryId ? isCurrentStoryActive(kind) : hasOptimisticStoryAction(kind, idToUse)))
       : false;
     try {
       if (kind === 'like') {
@@ -11581,7 +11606,7 @@ export default function App() {
   const renderPlayingView = () => (
     <div className="reading-page relative mx-auto max-w-4xl rounded-b-[2.5rem] px-6 pb-[calc(10.5rem+env(safe-area-inset-bottom))] pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] sm:px-8 sm:pb-[calc(8.5rem+env(safe-area-inset-bottom))]">
       {blueprint && (
-        <div className="mb-16 space-y-4 text-center">
+        <div className="mb-10 space-y-4 text-center">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -11610,7 +11635,7 @@ export default function App() {
         <ReadingTextControls />
       </div>
 
-      <div className="mx-auto max-w-3xl space-y-16">
+      <div className="mx-auto max-w-3xl space-y-10">
         {chapters.map((chapter, idx) => (
           <motion.section
             id={`chapter-${chapter.chapter_num}`}
@@ -11778,14 +11803,14 @@ export default function App() {
                   </div>
                 );
               })()}
-              {idx < chapters.length - 1 && <div className="reading-divider mt-12" />}
+              {idx < chapters.length - 1 && <div className="reading-divider mt-8" />}
             </div>
           </motion.section>
         ))}
       </div>
 
       {gameState === 'PLAYING' && intervenedChapters.length >= 3 && (
-        <div className="mt-24 text-center">
+        <div className="mt-12 text-center">
           <button
             onClick={() => handleGenerateSummary('auto_interventions')}
             className="group relative inline-flex items-center gap-3 rounded-2xl bg-white px-10 py-5 text-lg font-black text-black shadow-2xl transition-all hover:scale-105"
@@ -11796,7 +11821,7 @@ export default function App() {
         </div>
       )}
       {blueprint && (
-        <div className="app-card-quiet mt-16 rounded-3xl p-5">
+        <div className="app-card-quiet mt-10 rounded-3xl p-5">
           <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="text-sm font-black text-white">{formatBookTitle(blueprint.title)}</div>
@@ -11810,11 +11835,11 @@ export default function App() {
             <div className="text-xs text-zinc-600">{tr('平均每章', 'Avg. per chapter')} {getAverageChapterWords(chapters) || tr('未知', 'unknown')} {tr('字', 'words')}</div>
           </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <button type="button" onClick={() => handleStoryInteraction('like')} className={`${semanticButtonClass(hasOptimisticStoryAction('like', activeStoryId) ? 'secondary' : 'ghost', { compact: true })} ${hasOptimisticStoryAction('like', activeStoryId) ? 'text-pink-200' : ''}`}>
-              <Heart className={`h-4 w-4 ${hasOptimisticStoryAction('like', activeStoryId) ? 'fill-current' : ''}`} /> {tr('点赞', 'Like')}
+            <button type="button" onClick={() => handleStoryInteraction('like')} className={`${semanticButtonClass(isCurrentStoryActive('like') ? 'secondary' : 'ghost', { compact: true })} ${isCurrentStoryActive('like') ? 'text-pink-200' : ''}`}>
+              <Heart className={`h-4 w-4 ${isCurrentStoryActive('like') ? 'fill-current' : ''}`} /> {tr('点赞', 'Like')}
             </button>
-            <button type="button" onClick={() => handleStoryInteraction('favorite')} className={`${semanticButtonClass(hasOptimisticStoryAction('favorite', activeStoryId) ? 'secondary' : 'ghost', { compact: true })} ${hasOptimisticStoryAction('favorite', activeStoryId) ? 'text-amber-200' : ''}`}>
-              <Bookmark className={`h-4 w-4 ${hasOptimisticStoryAction('favorite', activeStoryId) ? 'fill-current' : ''}`} /> {tr('收藏原作', 'Favorite original')}
+            <button type="button" onClick={() => handleStoryInteraction('favorite')} className={`${semanticButtonClass(isCurrentStoryActive('favorite') ? 'secondary' : 'ghost', { compact: true })} ${isCurrentStoryActive('favorite') ? 'text-amber-200' : ''}`}>
+              <Bookmark className={`h-4 w-4 ${isCurrentStoryActive('favorite') ? 'fill-current' : ''}`} /> {tr('收藏原作', 'Favorite original')}
             </button>
             <button type="button" onClick={handleShareStory} disabled={isSharing || !blueprint} className={semanticButtonClass('secondary', { compact: true })}>
               {isSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />} {tr('分享', 'Share')}
@@ -11842,7 +11867,7 @@ export default function App() {
 
   const renderSummaryView = () => (
     <div className="mx-auto max-w-4xl px-6 pb-[calc(7.5rem+env(safe-area-inset-bottom))] pt-[max(7rem,calc(env(safe-area-inset-top)+6rem))] sm:px-8">
-      <div className="mb-16 text-center space-y-4">
+      <div className="mb-10 text-center space-y-4">
         <div className="inline-block rounded-full bg-amber-500/10 px-4 py-1 text-[10px] font-bold tracking-[0.2em] text-amber-500 uppercase">
           {tr('命运之卷已封存', 'Fate volume sealed')}
         </div>
@@ -11856,8 +11881,8 @@ export default function App() {
             <p className="text-sm font-bold text-zinc-500">{generationStatus}</p>
           </div>
         ) : (
-          <div className="space-y-12">
-            <section className="space-y-6">
+          <div className="space-y-8">
+            <section className="space-y-4">
               <div className="flex items-center gap-4">
                 <div className="h-px flex-1 bg-zinc-800" />
                 <h2 className="text-xs font-black uppercase tracking-[0.3em] text-zinc-500">时空回响</h2>
@@ -13829,11 +13854,11 @@ export default function App() {
                 <>
                   <section className="grid gap-2">
                     <div className="px-1 text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">{tr('作品互动', 'Story Actions')}</div>
-                    <button onClick={() => { setIsActionMenuOpen(false); handleStoryInteraction('like'); }} className={semanticMenuButtonClass('ghost')}>
-                      <Heart className={`h-5 w-5 ${hasOptimisticStoryAction('like', activeStoryId) ? 'fill-current text-pink-300' : ''}`} /> {tr('点赞', 'Like')}
+                    <button onClick={() => { setIsActionMenuOpen(false); handleStoryInteraction('like'); }} className={`${semanticMenuButtonClass('ghost')} ${isCurrentStoryActive('like') ? 'bg-zinc-900/60 text-pink-300' : ''}`}>
+                      <Heart className={`h-5 w-5 ${isCurrentStoryActive('like') ? 'fill-current text-pink-300' : ''}`} /> {tr('点赞', 'Like')}
                     </button>
-                    <button onClick={() => { setIsActionMenuOpen(false); handleStoryInteraction('favorite'); }} className={semanticMenuButtonClass('ghost')}>
-                      <Bookmark className={`h-5 w-5 ${hasOptimisticStoryAction('favorite', activeStoryId) ? 'fill-current text-amber-300' : ''}`} /> {tr('收藏原作', 'Favorite original')}
+                    <button onClick={() => { setIsActionMenuOpen(false); handleStoryInteraction('favorite'); }} className={`${semanticMenuButtonClass('ghost')} ${isCurrentStoryActive('favorite') ? 'bg-zinc-900/60 text-amber-300' : ''}`}>
+                      <Bookmark className={`h-5 w-5 ${isCurrentStoryActive('favorite') ? 'fill-current text-amber-300' : ''}`} /> {tr('收藏原作', 'Favorite original')}
                     </button>
                     <button
                       onClick={() => {
