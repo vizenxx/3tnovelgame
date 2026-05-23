@@ -49,7 +49,7 @@ export const StartupShell = ({
       <div className="app-boot-mark" aria-hidden="true">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="app-boot-logo-svg" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <defs>
-            <linearGradient id="flowing-purple-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <linearGradient id="flowing-purple-grad" x1="4" y1="4" x2="20" y2="20" gradientUnits="userSpaceOnUse">
               <stop offset="0%" stopColor="#818CF8">
                 <animate attributeName="stop-color" values="#818CF8; #C084FC; #6366F1; #818CF8" dur="4s" repeatCount="indefinite" />
               </stop>
