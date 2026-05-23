@@ -122,13 +122,13 @@ export interface StoryBranchDoc {
 export interface RuntimeBranch {
   id: string;
   name: string;
-  score: number; // 1/2/3/5
+  score?: number; // 1/2/3/5
   side: BranchSide;
-  condition_char: string;
-  condition_action: InterventionAction;
-  condition_chapter: number;
+  condition_char?: string;
+  condition_action?: InterventionAction;
+  condition_chapter?: number;
   desc: string;
-  is_hidden: boolean;
+  is_hidden?: boolean;
   hint?: string;
   // Extended for cartridge mode
   trigger?: BranchTrigger;

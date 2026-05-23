@@ -29,7 +29,7 @@ const saveUserProgress = async (db: any, uid: string, storyId: string, payload: 
   return saveUserProgressStore(db, uid, storyId, payload);
 };
 
-const getStoryCartridge = async (db: any, storyId: string) => {
+const getStoryCartridge = async (db: any, storyId: string): Promise<any> => {
   if (storyId === 'tutorial-cartridge') {
     return TUTORIAL_CARTRIDGE_CONTENT;
   }
@@ -1998,14 +1998,6 @@ export default function App() {
   const [helpSearch, setHelpSearch] = useState('');
   const [isHelpDrawerOpen, setIsHelpDrawerOpen] = useState(false);
 
-  useEffect(() => {
-    if (gameState === 'AUTHORING' && authoringCartridge && localStorage.getItem('completed-authoring-tour') !== 'true') {
-      setTourStep(0);
-      setAuthoringTab('settings');
-    } else {
-      setTourStep(null);
-    }
-  }, [gameState, authoringCartridge]);
 
 
   // Cartridge platform state
@@ -2098,6 +2090,15 @@ export default function App() {
   const [authoringFindEndingIds, setAuthoringFindEndingIds] = useState<string[]>([]);
   const [authoringFindCompact, setAuthoringFindCompact] = useState(false);
   const [authoringFindMatchIndex, setAuthoringFindMatchIndex] = useState(0);
+
+  useEffect(() => {
+    if (gameState === 'AUTHORING' && authoringCartridge && localStorage.getItem('completed-authoring-tour') !== 'true') {
+      setTourStep(0);
+      setAuthoringTab('settings');
+    } else {
+      setTourStep(null);
+    }
+  }, [gameState, authoringCartridge]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
