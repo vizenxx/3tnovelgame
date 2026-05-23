@@ -43,6 +43,7 @@ import {
 import { 
   doc, 
   setDoc, 
+  getDoc,
   serverTimestamp
 } from 'firebase/firestore';
 
@@ -1926,9 +1927,13 @@ export default function App() {
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [profileDisplayName, setProfileDisplayName] = useState('');
+  const [myBio, setMyBio] = useState('');
+  const [editingBio, setEditingBio] = useState('');
+  const [bioSaving, setBioSaving] = useState(false);
   const [profileCurrentPassword, setProfileCurrentPassword] = useState('');
   const [profileNewPassword, setProfileNewPassword] = useState('');
   const [isAccountCenterOpen, setIsAccountCenterOpen] = useState(false);
+  const [isEditNameModalOpen, setIsEditNameModalOpen] = useState(false);
   const [accountCenterMode, setAccountCenterMode] = useState<'personal' | 'settings'>('personal');
   const [isCreationDockOpen, setIsCreationDockOpen] = useState(false);
   const [showLeaveGameModal, setShowLeaveGameModal] = useState(false);
@@ -1976,6 +1981,7 @@ export default function App() {
   const [authorProfileLoading, setAuthorProfileLoading] = useState(false);
   const [authorProfileFollowing, setAuthorProfileFollowing] = useState(false);
   const [authorProfileBusy, setAuthorProfileBusy] = useState(false);
+  const [authorProfileBio, setAuthorProfileBio] = useState('');
   const [pushSubscribeBusy, setPushSubscribeBusy] = useState(false);
   const [showPushPermissionPrompt, setShowPushPermissionPrompt] = useState(false);
   const [notificationCenterOpen, setNotificationCenterOpen] = useState(false);
@@ -3969,6 +3975,8 @@ export default function App() {
       authorMetricSnapshotRef.current = new Map();
       authorPulseInitializedRef.current = false;
       setAuthorPulseNotifications([]);
+      setFollowedAuthors([]);
+      setMyBio('');
       return;
     }
 
@@ -4814,6 +4822,11 @@ export default function App() {
     const loadSessionOnce = async () => {
       const cachedRun = await getLocalCache<any>(activeRunCacheKey());
       if (cancelled) return;
+      void refreshFollowedAuthors();
+      const userDoc = await getDoc(doc(db as any, 'users', user.uid)).catch(() => null);
+      if (userDoc?.exists() && !cancelled) {
+        setMyBio(userDoc.data()?.bio || '');
+      }
       if (cachedRun?.value?.gameState === 'PLAYING') {
         await applyLocalRunSnapshot(cachedRun.value);
       } else {
@@ -5264,14 +5277,18 @@ export default function App() {
     setAuthorProfileTarget({ authorId, authorName: authorName || `游客+${shortUserId(authorId)}` });
     setAuthorProfileStories([]);
     setAuthorProfileLoading(true);
+    setAuthorProfileBio('');
     try {
       if (db) {
-        const [stories, followState] = await Promise.all([
+        const [stories, followState, userDoc] = await Promise.all([
           listAuthorStories(db as any, authorId, 50),
           user && authorId !== user.uid ? getAuthorFollowState(db as any, authorId) : Promise.resolve({ following: false }),
+          getDoc(doc(db as any, 'users', authorId)).catch(() => null),
         ]);
         setAuthorProfileStories(stories || []);
         setAuthorProfileFollowing(Boolean(followState?.following));
+        const bio = userDoc?.exists() ? (userDoc.data()?.bio || '') : '';
+        setAuthorProfileBio(bio);
       }
     } catch (error: any) {
       console.error(error);
@@ -6787,6 +6804,25 @@ export default function App() {
       setIsSavingAdminSettings(false);
     }
   };
+
+  const handleUpdateBio = async () => {
+    if (!user || !db) return;
+    try {
+      setBioSaving(true);
+      await setDoc(doc(db as any, 'users', user.uid), { bio: editingBio.trim() }, { merge: true });
+      setMyBio(editingBio.trim());
+      showError('个人签名更新成功！');
+    } catch (error: any) {
+      console.error(error);
+      showError(error?.message || '个人签名保存失败。');
+    } finally {
+      setBioSaving(false);
+    }
+  };
+
+  useEffect(() => {
+    setEditingBio(myBio);
+  }, [myBio, isAccountCenterOpen, gameState]);
 
   const handleUpdateProfileDisplayName = async () => {
     if (!auth?.currentUser || auth.currentUser.isAnonymous) {
@@ -10466,244 +10502,306 @@ export default function App() {
     </div>
   );
 
-  const accountAssetStats = [
-    { label: tr('收藏原作', 'Favorited originals'), value: mySharedStories.filter((story: any) => story.archiveKind === 'favorite').length },
-    { label: tr('收藏命运', 'Saved fate lines'), value: mySharedStories.filter((story: any) => story.archiveKind !== 'favorite').length },
-    { label: tr('追踪作者', 'Followed authors'), value: followedAuthors.length },
-    { label: tr('我的作品', 'My works'), value: myStories.length },
-  ];
   const isSystemSettingsMode = accountCenterMode === 'settings';
-  const renderAccountCenterContent = (mode: 'page' | 'modal' = 'modal') => (
-    <>
-      {isSystemSettingsMode && (
-        <div className="mb-6 flex items-center justify-between">
-          <div>
-            <div className="text-xs font-black uppercase tracking-[0.24em] text-zinc-500">
-              {tr('设置', 'Settings')}
-            </div>
-            <h2 className="mt-1 text-2xl font-black text-white">
-              {tr('系统设置', 'System Settings')}
-            </h2>
-          </div>
-          <button
-            type="button"
-            onClick={() => mode === 'page' ? goBack('STORY_SELECT') : setIsAccountCenterOpen(false)}
-            className={semanticIconButtonClass('ghost')}
-            aria-label={tr('关闭', 'Close')}
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-      )}
-      {!isSystemSettingsMode && (
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <div className="text-xs font-black uppercase tracking-[0.24em] text-zinc-500">
-            {isSystemSettingsMode ? tr('系统设置', 'System Settings') : tr('个人中心', 'Account Center')}
-          </div>
-          <div className="mt-1 text-2xl font-black text-white">
-            {isSystemSettingsMode ? tr('系统设置', 'System Settings') : getUserAuthorName(user)}
-          </div>
-          <div className="text-sm text-zinc-500">{user?.email || tr('游客账号', 'Guest account')}</div>
-          {user?.isAnonymous && (
-            <div className="mt-3 max-w-xl rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-50/80">
-              {GUEST_RETENTION_NOTICE}
-            </div>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={() => mode === 'page' ? goBack('STORY_SELECT') : setIsAccountCenterOpen(false)}
-          className={semanticIconButtonClass('ghost')}
-          aria-label={tr('返回', 'Back')}
-        >
-          <ChevronLeft className="h-5 w-5" />
-        </button>
-      </div>
-      )}
+  const renderAccountCenterContent = (mode: 'page' | 'modal' = 'modal') => {
+    const assetStats = [
+      {
+        label: tr('收藏原作', 'Favorited originals'),
+        value: mySharedStories.filter((story: any) => story.archiveKind === 'favorite').length,
+        onClick: () => {
+          setArchiveTab('favorite');
+          openArchiveView(mode === 'page' ? 'STORY_SELECT' : 'ACCOUNT_CENTER');
+        }
+      },
+      {
+        label: tr('收藏命运', 'Saved fate lines'),
+        value: mySharedStories.filter((story: any) => story.archiveKind !== 'favorite').length,
+        onClick: () => {
+          setArchiveTab('saved');
+          openArchiveView(mode === 'page' ? 'STORY_SELECT' : 'ACCOUNT_CENTER');
+        }
+      },
+      {
+        label: tr('追踪作者', 'Followed authors'),
+        value: followedAuthors.length,
+        onClick: () => {
+          setArchiveTab('authors');
+          openArchiveView(mode === 'page' ? 'STORY_SELECT' : 'ACCOUNT_CENTER');
+        }
+      },
+      {
+        label: tr('我的作品', 'My works'),
+        value: myStories.length,
+        onClick: () => {
+          setIsAccountCenterOpen(false);
+          void enterAuthoring();
+        }
+      },
+    ];
 
-      {!isSystemSettingsMode && (
-      <section className="mb-6">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div>
-            <div className="text-lg font-black text-white">{tr('我的资产', 'My Library')}</div>
-            <div className="mt-1 text-xs leading-relaxed text-zinc-500">
-              {tr('收藏、命运线、追踪和创作集中查看，方便快速找到相关内容。', 'Favorites, fate lines, follows, and works are gathered here for quick access.')}
-            </div>
-          </div>
-          <BarChart3 className="h-5 w-5 text-indigo-200" />
-        </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {accountAssetStats.map((item) => (
-            <div key={item.label} className="rounded-2xl border border-zinc-800/80 bg-zinc-950/50 p-4">
-              <div className="text-2xl font-black text-white">{item.value}</div>
-              <div className="mt-1 text-xs font-bold text-zinc-500">{item.label}</div>
-            </div>
-          ))}
-        </div>
-      </section>
-      )}
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className={isSystemSettingsMode ? 'lg:col-span-2' : 'p-0'}>
-          {!isSystemSettingsMode && (
-          <div className="mb-4 flex items-center gap-2 text-lg font-black text-white">
-            <Settings className="h-5 w-5 text-indigo-300" />
-            {isSystemSettingsMode ? tr('系统设置', 'System Settings') : tr('个人资料', 'Profile')}
-          </div>
-          )}
-          <div className="space-y-3">
-            {isSystemSettingsMode && (
-              <div className="overflow-hidden rounded-2xl border border-zinc-800/60">
-                {/* 语言 */}
-                <div className="p-4">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-black text-zinc-100">{t('language.switch')}</div>
-                      <div className="mt-1 text-xs leading-relaxed text-zinc-500">
-                        {appLanguage === 'en-US'
-                          ? 'This setting is saved on this device until it is changed here again.'
-                          : '语言设置会保存在当前设备，之后默认沿用，直到回到这里再次改变。'}
-                      </div>
-                    </div>
-                    <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1 text-xs font-black text-zinc-300">
-                      {appLanguage === 'zh-CN' ? t('language.zh') : t('language.en')}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {(['zh-CN', 'en-US'] as AppLanguage[]).map((option) => (
-                      <button
-                        key={option}
-                        type="button"
-                        onClick={() => setAppLanguage(option)}
-                        className={`rounded-xl border px-3 py-2 text-sm font-black transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
-                          appLanguage === option
-                            ? 'border-indigo-400 bg-indigo-500/15 text-indigo-100'
-                            : 'border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
-                        }`}
-                      >
-                        {option === 'zh-CN' ? t('language.zh') : t('language.en')}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                {/* 主题 */}
-                <div className="border-t border-zinc-800/60 p-4">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-black text-zinc-100">{tr('界面主题', 'Theme')}</div>
-                      <div className="mt-1 text-xs leading-relaxed text-zinc-500">
-                        {tr('浅色主题使用柔和低疲劳配色，暗色主题保留原本氛围。', 'Light theme uses softer low-fatigue colors; dark theme keeps the original atmosphere.')}
-                      </div>
-                    </div>
-                    {appTheme === 'light' ? <Sun className="h-5 w-5 text-amber-500" /> : <Moon className="h-5 w-5 text-indigo-300" />}
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {[
-                      { value: 'dark' as const, label: tr('暗色', 'Dark') },
-                      { value: 'light' as const, label: tr('浅色', 'Light') },
-                    ].map((option) => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        onClick={() => setAppTheme(option.value)}
-                        className={`rounded-xl border px-3 py-2 text-sm font-black transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
-                          appTheme === option.value
-                            ? 'border-indigo-400 bg-indigo-500/15 text-indigo-100'
-                            : 'border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
-                        }`}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                {/* 通知 */}
-                <div className="border-t border-zinc-800/60 p-4">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-black text-zinc-100">{tr('手机通知', 'Mobile notifications')}</div>
-                      <div className="mt-1 text-xs leading-relaxed text-zinc-500">
-                        {tr('接收作者更新、作品互动和系统提醒。若曾在系统弹窗中拒绝，需要到浏览器或手机设置里重新允许。', 'Receive author updates, story interactions, and system reminders. If blocked before, re-enable it in browser or phone settings.')}
-                      </div>
-                    </div>
-                    <Bell className="h-5 w-5 text-indigo-300" />
-                  </div>
-                  <button type="button" onClick={enablePushNotifications} disabled={pushSubscribeBusy} className={semanticButtonClass('secondary', { fullWidth: true })}>
-                    {pushSubscribeBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
-                    {tr('开启手机通知', 'Enable mobile notifications')}
-                  </button>
-                </div>
-                {/* 版本 */}
-                <div className="border-t border-zinc-800/60 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-black text-zinc-100">{tr('版本', 'Version')}</div>
-                      <div className="mt-1 text-xs leading-relaxed text-zinc-500">
-                        {tr('用于确认当前安装的 App 是否已经更新。', 'Use this to confirm whether the installed app is up to date.')}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-sm font-black text-indigo-200">{APP_VERSION_LABEL}</div>
-                      {APP_BUILD_LABEL && <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-600">{APP_BUILD_LABEL}</div>}
-                    </div>
-                  </div>
-                </div>
+    return (
+      <>
+        {isSystemSettingsMode && (
+          <div className="mb-6 flex items-center justify-between">
+            <div>
+              <div className="text-xs font-black uppercase tracking-[0.24em] text-zinc-500">
+                {tr('设置', 'Settings')}
               </div>
-            )}
-            {!isSystemSettingsMode && (
-              <>
-            <input
-              value={profileDisplayName}
-              onChange={(event) => setProfileDisplayName(event.target.value)}
-              placeholder={tr('显示名称', 'Display name')}
-              className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
-            />
-            <button type="button" onClick={handleUpdateProfileDisplayName} className={semanticButtonClass('secondary', { fullWidth: true })}>
-              <PenSquare className="h-4 w-4" />
-              {tr('更新名称', 'Update name')}
-            </button>
-            {!user?.isAnonymous && (
-              <>
-                <input
-                  type="password"
-                  value={profileCurrentPassword}
-                  onChange={(event) => setProfileCurrentPassword(event.target.value)}
-                  placeholder={tr('当前密码', 'Current password')}
-                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
-                />
-                <input
-                  type="password"
-                  value={profileNewPassword}
-                  onChange={(event) => setProfileNewPassword(event.target.value)}
-                  placeholder={tr('新密码（至少 6 位）', 'New password (at least 6 characters)')}
-                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
-                />
-                <button type="button" onClick={handleUpdateAccountPassword} className={semanticButtonClass('ghost', { fullWidth: true })}>
-                  <Lock className="h-4 w-4" />
-                  {tr('修改密码', 'Change password')}
-                </button>
-                <button type="button" onClick={() => handlePasswordResetForEmail(user?.email || '')} className={semanticButtonClass('ghost', { fullWidth: true })}>
-                  <Mail className="h-4 w-4" />
-                  {tr('发送重设邮件', 'Send reset email')}
-                </button>
-              </>
-            )}
+              <h2 className="mt-1 text-2xl font-black text-white">
+                {tr('系统设置', 'System Settings')}
+              </h2>
+            </div>
             <button
               type="button"
-              onClick={() => {
-                if (mode === 'modal') setIsAccountCenterOpen(false);
-                handleLogout();
-              }}
-              className={semanticButtonClass('danger', { fullWidth: true })}
+              onClick={() => mode === 'page' ? goBack('STORY_SELECT') : setIsAccountCenterOpen(false)}
+              className={semanticIconButtonClass('ghost')}
+              aria-label={tr('关闭', 'Close')}
             >
-              <LogOut className="h-4 w-4" />
-              {tr('登出', 'Log out')}
+              <X className="h-5 w-5" />
             </button>
-              </>
-            )}
           </div>
-        </section>
+        )}
+        {!isSystemSettingsMode && (
+          <div className="mb-6 flex items-center justify-between">
+            <div>
+              <div className="text-xs font-black uppercase tracking-[0.24em] text-zinc-500">
+                {isSystemSettingsMode ? tr('系统设置', 'System Settings') : tr('个人中心', 'Account Center')}
+              </div>
+              <div className="mt-1 flex items-center gap-2 text-2xl font-black text-white">
+                <span>{getUserAuthorName(user)}</span>
+                {!user?.isAnonymous && (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditNameModalOpen(true)}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-600 hover:text-white transition-all active:scale-95"
+                    title={tr('修改名称', 'Edit name')}
+                  >
+                    <PenSquare className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+              <div className="text-sm text-zinc-500">{user?.email || tr('游客账号', 'Guest account')}</div>
+              {user?.isAnonymous && (
+                <div className="mt-3 max-w-xl rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-50/80">
+                  {GUEST_RETENTION_NOTICE}
+                </div>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => mode === 'page' ? goBack('STORY_SELECT') : setIsAccountCenterOpen(false)}
+              className={semanticIconButtonClass('ghost')}
+              aria-label={tr('返回', 'Back')}
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+          </div>
+        )}
+
+        {!isSystemSettingsMode && (
+          <section className="mb-6">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <div className="text-lg font-black text-white">{tr('我的资产', 'My Library')}</div>
+                <div className="mt-1 text-xs leading-relaxed text-zinc-500">
+                  {tr('收藏、命运线、追踪和创作集中查看，方便快速找到相关内容。', 'Favorites, fate lines, follows, and works are gathered here for quick access.')}
+                </div>
+              </div>
+              <BarChart3 className="h-5 w-5 text-indigo-200" />
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {assetStats.map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={item.onClick}
+                  className="group text-left rounded-2xl border border-zinc-800/80 bg-zinc-950/50 p-4 transition-all duration-150 hover:-translate-y-0.5 hover:border-zinc-700 hover:bg-zinc-900/60 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70"
+                >
+                  <div className="text-2xl font-black text-white group-hover:text-indigo-200 transition-colors">{item.value}</div>
+                  <div className="mt-1 text-xs font-bold text-zinc-500 group-hover:text-zinc-400 transition-colors">{item.label}</div>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
+        <div className="space-y-6">
+          <section className="p-0">
+            {!isSystemSettingsMode && (
+              <div className="mb-4 flex items-center gap-2 text-lg font-black text-white">
+                <Settings className="h-5 w-5 text-indigo-300" />
+                {tr('个人资料', 'Profile')}
+              </div>
+            )}
+            <div className="space-y-3">
+              {isSystemSettingsMode && (
+                <div className="overflow-hidden rounded-2xl border border-zinc-800/60">
+                  {/* 语言 */}
+                  <div className="p-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-black text-zinc-100">{t('language.switch')}</div>
+                        <div className="mt-1 text-xs leading-relaxed text-zinc-500">
+                          {appLanguage === 'en-US'
+                            ? 'This setting is saved on this device until it is changed here again.'
+                            : '语言设置会保存在当前设备，之后默认沿用，直到回到这里再次改变。'}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(['zh-CN', 'en-US'] as AppLanguage[]).map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() => setAppLanguage(option)}
+                          className={`rounded-xl border px-3 py-2 text-sm font-black transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
+                            appLanguage === option
+                              ? 'border-indigo-400 bg-indigo-500/15 text-indigo-100'
+                              : 'border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
+                          }`}
+                        >
+                          {option === 'zh-CN' ? t('language.zh') : t('language.en')}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {/* 主题 */}
+                  <div className="border-t border-zinc-800/60 p-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-black text-zinc-100">{tr('界面主题', 'Theme')}</div>
+                        <div className="mt-1 text-xs leading-relaxed text-zinc-500">
+                          {tr('浅色主题使用柔和低疲劳配色，暗色主题保留原本氛围。', 'Light theme uses softer low-fatigue colors; dark theme keeps the original atmosphere.')}
+                        </div>
+                      </div>
+                      {appTheme === 'light' ? <Sun className="h-5 w-5 text-amber-500" /> : <Moon className="h-5 w-5 text-indigo-300" />}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { value: 'dark' as const, label: tr('暗色', 'Dark') },
+                        { value: 'light' as const, label: tr('浅色', 'Light') },
+                      ].map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => setAppTheme(option.value)}
+                          className={`rounded-xl border px-3 py-2 text-sm font-black transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
+                            appTheme === option.value
+                              ? 'border-indigo-400 bg-indigo-500/15 text-indigo-100'
+                              : 'border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {/* 通知 */}
+                  <div className="border-t border-zinc-800/60 p-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-black text-zinc-100">{tr('手机通知', 'Mobile notifications')}</div>
+                        <div className="mt-1 text-xs leading-relaxed text-zinc-500">
+                          {tr('接收作者更新、作品互动和系统提醒。若曾在系统弹窗中拒绝，需要到浏览器或手机设置里重新允许。', 'Receive author updates, story interactions, and system reminders. If blocked before, re-enable it in browser or phone settings.')}
+                        </div>
+                      </div>
+                      <Bell className="h-5 w-5 text-indigo-300" />
+                    </div>
+                    <button type="button" onClick={enablePushNotifications} disabled={pushSubscribeBusy} className={semanticButtonClass('secondary', { fullWidth: true })}>
+                      {pushSubscribeBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
+                      {tr('开启手机通知', 'Enable mobile notifications')}
+                    </button>
+                  </div>
+                  {/* 版本 */}
+                  <div className="border-t border-zinc-800/60 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-black text-zinc-100">{tr('版本', 'Version')}</div>
+                        <div className="mt-1 text-xs leading-relaxed text-zinc-500">
+                          {tr('用于确认当前安装的 App 是否已经更新。', 'Use this to confirm whether the installed app is up to date.')}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-black text-indigo-200">{APP_VERSION_LABEL}</div>
+                        {APP_BUILD_LABEL && <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-600">{APP_BUILD_LABEL}</div>}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {!isSystemSettingsMode && (
+                <div className="space-y-4">
+                  {/* 个人资料卡片 */}
+                  <div className="rounded-2xl border border-zinc-800/60 bg-zinc-900/10 p-5 space-y-4">
+                    <div>
+                      <div className="text-sm font-black text-white">{tr('个人签名', 'Personal Bio')}</div>
+                      <div className="mt-1 text-xs text-zinc-500">{tr('用于展示在您的作者档案中，告诉大家关于您的一两件事（最多120字）。', 'Displayed on your author profile to tell others a bit about yourself (max 120 chars).')}</div>
+                      <textarea
+                        value={editingBio}
+                        onChange={(e) => setEditingBio(e.target.value)}
+                        placeholder={tr('写点什么向别人介绍自己吧...', 'Write something to introduce yourself...')}
+                        maxLength={120}
+                        className="mt-3 w-full h-20 resize-none rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleUpdateBio}
+                        disabled={bioSaving || editingBio.trim() === myBio.trim()}
+                        className={`${semanticButtonClass('secondary', { compact: true, fullWidth: true })} mt-2`}
+                      >
+                        {bioSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                        {tr('更新签名', 'Update signature')}
+                      </button>
+                    </div>
+
+                    {!user?.isAnonymous && (
+                      <div className="border-t border-zinc-800/60 pt-4 space-y-3">
+                        <div>
+                          <div className="text-sm font-black text-white">{tr('安全设置', 'Security Settings')}</div>
+                          <div className="mt-1 text-xs text-zinc-500">{tr('修改账户登录密码或重置密码。', 'Change account password or send reset email.')}</div>
+                        </div>
+                        <input
+                          type="password"
+                          value={profileCurrentPassword}
+                          onChange={(event) => setProfileCurrentPassword(event.target.value)}
+                          placeholder={tr('当前密码', 'Current password')}
+                          className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                        />
+                        <input
+                          type="password"
+                          value={profileNewPassword}
+                          onChange={(event) => setProfileNewPassword(event.target.value)}
+                          placeholder={tr('新密码（至少 6 位）', 'New password (at least 6 characters)')}
+                          className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                        />
+                        <button type="button" onClick={handleUpdateAccountPassword} className={semanticButtonClass('secondary', { compact: true, fullWidth: true })}>
+                          <Lock className="h-4 w-4" />
+                          {tr('确认修改密码', 'Confirm change password')}
+                        </button>
+                        <button type="button" onClick={() => handlePasswordResetForEmail(user?.email || '')} className={semanticButtonClass('ghost', { compact: true, fullWidth: true })}>
+                          <Mail className="h-4 w-4" />
+                          {tr('发送重设密码邮件', 'Send reset email')}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 登出按钮独立在外 */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (mode === 'modal') setIsAccountCenterOpen(false);
+                      handleLogout();
+                    }}
+                    className={semanticButtonClass('danger', { fullWidth: true })}
+                  >
+                    <LogOut className="h-4 w-4" />
+                    {tr('退出登录', 'Log out')}
+                  </button>
+                </div>
+              )}
+            </div>
+          </section>
 
         {!isSystemSettingsMode && (
         <section className="p-0">
@@ -10765,6 +10863,7 @@ export default function App() {
       </div>
     </>
   );
+};
 
 
   const accountCenterModal = (
@@ -10786,6 +10885,62 @@ export default function App() {
             onClick={(event) => event.stopPropagation()}
           >
             {renderAccountCenterContent('modal')}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
+  const renderEditNameModal = () => (
+    <AnimatePresence>
+      {isEditNameModalOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[6100] flex items-center justify-center bg-black/70 px-4 backdrop-blur-md"
+          onClick={() => setIsEditNameModalOpen(false)}
+        >
+          <motion.div
+            initial={{ y: 16, opacity: 0, scale: 0.97 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: 12, opacity: 0, scale: 0.98 }}
+            className="w-full max-w-md rounded-[2rem] border border-zinc-800 bg-zinc-950 p-6 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-xl font-black text-white">{tr('修改昵称', 'Change Display Name')}</h3>
+                <p className="mt-1 text-xs text-zinc-500">{tr('修改后，您生成的作品和干涉记录都会显示新昵称（最多5字）。', 'After change, your works and records will display the new name (max 5 chars).')}</p>
+              </div>
+              <button type="button" onClick={() => setIsEditNameModalOpen(false)} className={semanticIconButtonClass('ghost')} aria-label={tr('关闭', 'Close')}>
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <input
+                value={profileDisplayName}
+                onChange={(event) => setProfileDisplayName(event.target.value)}
+                placeholder={tr('输入新昵称', 'New display name')}
+                maxLength={5}
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+              />
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setIsEditNameModalOpen(false)} className={semanticButtonClass('secondary', { fullWidth: true })}>
+                  {tr('取消', 'Cancel')}
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await handleUpdateProfileDisplayName();
+                    setIsEditNameModalOpen(false);
+                  }}
+                  className={semanticButtonClass('primary', { fullWidth: true })}
+                >
+                  {tr('确认修改', 'Save')}
+                </button>
+              </div>
+            </div>
           </motion.div>
         </motion.div>
       )}
@@ -11919,7 +12074,12 @@ export default function App() {
               <div>
                 <div className="text-xs font-black uppercase tracking-[0.2em] text-indigo-300">{tr('作者档案', 'Author Profile')}</div>
                 <h3 className="mt-2 text-2xl font-black text-white">{authorProfileTarget.authorName}</h3>
-                <p className="mt-1 text-xs font-semibold text-zinc-500">{tr('查看这个作者公开或非公开链接作品，并决定是否追踪后续更新。', 'View this author’s public or unlisted works, and decide whether to follow future updates.')}</p>
+                {authorProfileBio && (
+                  <p className="mt-1.5 text-xs text-indigo-200/90 italic">
+                    「 {authorProfileBio} 」
+                  </p>
+                )}
+                <p className="mt-2 text-xs font-semibold text-zinc-500">{tr('查看这个作者公开或非公开链接作品，并决定是否追踪后续更新。', 'View this author’s public or unlisted works, and decide whether to follow future updates.')}</p>
               </div>
               <button type="button" onClick={() => setAuthorProfileTarget(null)} className={semanticIconButtonClass('ghost')} aria-label={tr('关闭作者档案', 'Close author profile')}>
                 <X className="h-5 w-5" />
@@ -13838,6 +13998,7 @@ export default function App() {
           {renderNotificationCenter()}
           {renderShareComposer()}
           {accountCenterModal}
+          {renderEditNameModal()}
           {renderOnboardingGuide()}
           {renderPushPermissionPrompt()}
           {renderConfirmationModal()}
