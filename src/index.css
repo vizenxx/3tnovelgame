@@ -128,6 +128,93 @@ html[data-theme="light"] {
   touch-action: manipulation;
 }
 
+.authoring-tabbar {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.4rem;
+  overflow-x: auto;
+  border-bottom: 1px solid color-mix(in srgb, var(--app-border) 48%, transparent);
+  padding-bottom: 0.55rem;
+  scrollbar-width: none;
+}
+
+.authoring-tabbar::-webkit-scrollbar {
+  display: none;
+}
+
+.authoring-tab-button {
+  position: relative;
+  display: inline-flex;
+  min-height: 2.85rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border-radius: 999px;
+  padding: 0.55rem 0.8rem;
+  color: var(--app-muted-text);
+  font-size: 0.74rem;
+  font-weight: 950;
+  line-height: 1.15;
+  letter-spacing: 0.02em;
+  transition:
+    color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.authoring-tab-button svg {
+  margin-bottom: 0;
+}
+
+.authoring-tab-button:hover {
+  color: var(--app-readable-text);
+  background: color-mix(in srgb, var(--app-surface-soft) 42%, transparent);
+}
+
+.authoring-tab-button:active {
+  transform: scale(0.975);
+}
+
+.authoring-tab-button.is-active {
+  color: var(--app-readable-text);
+  background:
+    linear-gradient(145deg,
+      color-mix(in srgb, var(--app-accent) 20%, transparent),
+      color-mix(in srgb, var(--app-surface-soft) 45%, transparent));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 12px 28px color-mix(in srgb, var(--app-accent) 13%, transparent);
+}
+
+html[data-theme="light"] .authoring-tab-button:hover {
+  background: color-mix(in srgb, var(--app-surface-soft) 58%, transparent);
+}
+
+html[data-theme="light"] .authoring-tab-button.is-active {
+  background:
+    linear-gradient(145deg,
+      color-mix(in srgb, var(--app-accent) 16%, transparent),
+      color-mix(in srgb, var(--app-surface-soft) 70%, transparent));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.74),
+    0 12px 24px color-mix(in srgb, var(--app-accent) 10%, transparent);
+}
+
+@media (max-width: 640px) {
+  .authoring-tabbar {
+    grid-auto-columns: minmax(7.25rem, 1fr);
+    grid-auto-flow: column;
+    grid-template-columns: none;
+  }
+
+  .authoring-tab-button {
+    min-height: 2.75rem;
+    padding-inline: 0.65rem;
+    white-space: normal;
+  }
+}
+
 .authoring-save-pill {
   border: 1px solid var(--app-shell-border-soft);
   background: color-mix(in srgb, var(--app-surface) 72%, transparent);

@@ -10475,6 +10475,7 @@ export default function App() {
   const isSystemSettingsMode = accountCenterMode === 'settings';
   const renderAccountCenterContent = (mode: 'page' | 'modal' = 'modal') => (
     <>
+      {!isSystemSettingsMode && (
       <div className="mb-6 flex items-center justify-between">
         <div>
           <div className="text-xs font-black uppercase tracking-[0.24em] text-zinc-500">
@@ -10499,6 +10500,7 @@ export default function App() {
           <ChevronLeft className="h-5 w-5" />
         </button>
       </div>
+      )}
 
       {!isSystemSettingsMode && (
       <section className="mb-6">
@@ -10523,11 +10525,13 @@ export default function App() {
       )}
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <section className={isSystemSettingsMode ? 'rounded-[1.5rem] border border-zinc-800 bg-zinc-900/30 p-5 lg:col-span-2' : 'p-0'}>
+        <section className={isSystemSettingsMode ? 'lg:col-span-2' : 'p-0'}>
+          {!isSystemSettingsMode && (
           <div className="mb-4 flex items-center gap-2 text-lg font-black text-white">
             <Settings className="h-5 w-5 text-indigo-300" />
             {isSystemSettingsMode ? tr('系统设置', 'System Settings') : tr('个人资料', 'Profile')}
           </div>
+          )}
           <div className="space-y-3">
             {isSystemSettingsMode && (
               <>
@@ -10705,7 +10709,7 @@ export default function App() {
               <Settings className="h-5 w-5 text-amber-300" />
               管理目录
             </div>
-            <div className="space-y-4 rounded-2xl border border-amber-500/20 bg-zinc-950/60 p-4">
+            <div className="space-y-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <div className="text-sm font-black text-white">AI 图片生成功能</div>
@@ -12291,17 +12295,17 @@ export default function App() {
             </div>
           </div>
 
-          <div className="mb-6 flex gap-1 overflow-x-auto whitespace-nowrap border-b border-zinc-800/70 pb-2">
-            <button type="button" onClick={() => setAuthoringTab('settings')} className={`flex-1 flex min-h-12 flex-col items-center justify-center rounded-xl px-1 py-2 text-[10px] sm:text-[11px] font-black transition-colors ${authoringTab === 'settings' ? 'bg-indigo-600 text-white shadow-md' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'}`}>
+          <div className="authoring-tabbar mb-8">
+            <button type="button" onClick={() => setAuthoringTab('settings')} className={`authoring-tab-button ${authoringTab === 'settings' ? 'is-active' : ''}`}>
               <Copy className="mb-1 h-4 w-4 shrink-0" />{tr('作品设置', 'Settings')}
             </button>
-            <button type="button" onClick={() => setAuthoringTab('series')} className={`flex-1 flex min-h-12 flex-col items-center justify-center rounded-xl px-1 py-2 text-[10px] sm:text-[11px] font-black transition-colors ${authoringTab === 'series' ? 'bg-indigo-600 text-white shadow-md' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'}`}>
+            <button type="button" onClick={() => setAuthoringTab('series')} className={`authoring-tab-button ${authoringTab === 'series' ? 'is-active' : ''}`}>
               <GitBranch className="mb-1 h-4 w-4 shrink-0" />{tr('系列设置', 'Series')}
             </button>
-            <button type="button" onClick={() => setAuthoringTab('mainline')} className={`flex-1 flex min-h-12 flex-col items-center justify-center rounded-xl px-1 py-2 text-[10px] sm:text-[11px] font-black transition-colors ${authoringTab === 'mainline' ? 'bg-indigo-600 text-white shadow-md' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'}`}>
+            <button type="button" onClick={() => setAuthoringTab('mainline')} className={`authoring-tab-button ${authoringTab === 'mainline' ? 'is-active' : ''}`}>
               <BookOpen className="mb-1 h-4 w-4 shrink-0" />{tr('主线和结局', 'Mainline & Endings')}
             </button>
-            <button type="button" onClick={() => setAuthoringTab('branches')} className={`flex-1 flex min-h-12 flex-col items-center justify-center rounded-xl px-1 py-2 text-[10px] sm:text-[11px] font-black transition-colors ${authoringTab === 'branches' ? 'bg-indigo-600 text-white shadow-md' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'}`}>
+            <button type="button" onClick={() => setAuthoringTab('branches')} className={`authoring-tab-button ${authoringTab === 'branches' ? 'is-active' : ''}`}>
               <Sparkles className="mb-1 h-4 w-4 shrink-0" />{tr('角色和支线', 'Characters & Branches')}
             </button>
           </div>
@@ -12505,8 +12509,7 @@ export default function App() {
             )}
           </div>
 
-          <div className="rounded-[2rem] border border-zinc-800 bg-zinc-900/20 p-6 sm:p-8">
-            <div className="space-y-8">
+          <div className="space-y-8">
               {authoringTab === 'settings' && (
                 <section className="space-y-4">
 
@@ -13472,7 +13475,6 @@ export default function App() {
                   </div>
                 </section>
               )}
-            </div>
           </div>
         </>
       )}
