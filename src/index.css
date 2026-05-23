@@ -946,12 +946,12 @@ html[data-theme="light"] .story-detail-stat[data-tone="favorite"]:hover {
   pointer-events: auto;
   position: relative;
   display: grid;
-  width: min(92vw, 30rem);
+  width: min(88vw, 21.5rem);
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.28rem;
+  gap: 0.2rem;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--app-shell-border) 62%, rgba(255, 255, 255, 0.16));
-  border-radius: 1.65rem;
+  border-radius: 1.4rem;
   background:
     linear-gradient(145deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.035) 36%, rgba(255, 255, 255, 0.02)),
     color-mix(in srgb, var(--app-surface) 62%, transparent);
@@ -959,7 +959,7 @@ html[data-theme="light"] .story-detail-stat[data-tone="favorite"]:hover {
     0 26px 74px rgba(0, 0, 0, 0.38),
     inset 0 1px 0 rgba(255, 255, 255, 0.18),
     inset 0 -1px 0 rgba(255, 255, 255, 0.04);
-  padding: 0.35rem;
+  padding: 0.22rem;
   -webkit-backdrop-filter: saturate(1.35) blur(24px);
   backdrop-filter: saturate(1.35) blur(24px);
 }
@@ -979,12 +979,12 @@ html[data-theme="light"] .story-detail-stat[data-tone="favorite"]:hover {
   position: relative;
   z-index: 1;
   display: flex;
-  min-height: 3.35rem;
+  min-height: 2.9rem;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.22rem;
-  border-radius: 1.25rem;
+  gap: 0.15rem;
+  border-radius: 1.1rem;
   color: color-mix(in srgb, var(--app-muted-text) 92%, transparent);
   font-size: 0.68rem;
   font-weight: 950;
