@@ -10,7 +10,7 @@
   --app-border: #1a1b2a;
   --app-text: #c5c6cb;
   --app-muted: #8d909b;
-  --app-faint: #575a68;
+  --app-faint: #6e7282;
   --app-accent: #6376f0;
   --app-brand-aura: rgba(99, 118, 240, 0.06);
   --app-brand-warm: rgba(235, 94, 118, 0.05);
@@ -19,7 +19,7 @@
   --app-reading-scale: 1;
   --app-readable-text: color-mix(in srgb, #c5c6cb calc(var(--app-reading-brightness) * 100%), #8c8c8c);
   --app-muted-text: color-mix(in srgb, #8d909b calc(var(--app-reading-brightness) * 100%), #737373);
-  --app-faint-text: color-mix(in srgb, #575a68 calc(var(--app-reading-brightness) * 100%), #626262);
+  --app-faint-text: color-mix(in srgb, #6e7282 calc(var(--app-reading-brightness) * 100%), #626262);
   --app-soft-white: #c5c6cb;
   --app-soft-black: #040507;
   --app-shell-card: color-mix(in srgb, var(--app-surface) 64%, transparent);
@@ -56,7 +56,7 @@ html[data-theme="light"] {
   --app-border: #d8cebf;
   --app-text: #292522;
   --app-muted: #625b52;
-  --app-faint: #80766a;
+  --app-faint: #70665a;
   --app-accent: #4f5fbb;
   --app-brand-aura: rgba(79, 95, 187, 0.13);
   --app-brand-warm: rgba(180, 113, 76, 0.1);
@@ -544,18 +544,18 @@ html[data-theme="light"] .authoring-tab-button.is-active {
 }
 
 .app-semantic-button.app-button-primary {
-  background: linear-gradient(135deg, var(--app-accent) 0%, #4f63e0 100%) !important;
-  color: #ffffff !important;
+  background: linear-gradient(135deg, #4f5fdd 0%, #3a4db5 100%) !important;
+  color: #f0f2ff !important;
   border: 1px solid rgba(255, 255, 255, 0.12) !important;
   box-shadow: 
-    0 4px 12px rgba(99, 118, 240, 0.2),
-    0 12px 24px rgba(99, 118, 240, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
+    0 4px 12px rgba(79, 95, 221, 0.16),
+    0 12px 24px rgba(79, 95, 221, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
 .app-semantic-button.app-button-primary:hover {
-  background: linear-gradient(135deg, #7488ff 0%, #5266e6 100%) !important;
+  background: linear-gradient(135deg, #5c6cf2 0%, #4555d4 100%) !important;
   box-shadow: 
     0 6px 16px rgba(99, 118, 240, 0.32),
     0 16px 32px rgba(99, 118, 240, 0.14),
@@ -1912,4 +1912,38 @@ html[data-theme="light"] .story-library-cover {
   .safe-bottom {
     padding-bottom: max(1rem, env(safe-area-inset-bottom));
   }
+}
+
+/* Onboarding & FAQ Drawer Styles */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.2);
+  border-radius: 9999px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.4);
+}
+
+/* Keyboard Focus Visible styles for Accessible Keyboard Navigation */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--app-accent) !important;
+  outline-offset: 2.5px !important;
+  box-shadow: 0 0 0 4px rgba(99, 118, 240, 0.25) !important;
+}
+
+button:focus:not(:focus-visible),
+a:focus:not(:focus-visible),
+[role="button"]:focus:not(:focus-visible) {
+  outline: none !important;
+  box-shadow: none !important;
 }

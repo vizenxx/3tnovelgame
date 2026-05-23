@@ -3,9 +3,38 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, ChevronRight, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp, Download, Sun, Moon, Search, GitBranch, Trophy, Bell, BarChart3, WifiOff } from 'lucide-react';
 import { auth, db, firebaseInitError } from './firebase';
-import { createEmptyStory, createSharedStoryRecord, createStorySnapshot, adaptBlueprintToStory, createStoryBranch, deleteAllNotifications, deleteNotification, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, deleteSeriesWorld, favoriteStory, unfavoriteStory, followAuthor, getAppSettings, getAuthorFollowState, getPushConfig, getSharedStoryRecord, getStoryCartridge, getStoryMeta, getUserProgress, incrementShareMetric, incrementStoryMetric, likeStory, unlikeStory, listAuthorStories, listContinuityNodes, listFollowedAuthors, listMySeriesWorlds, listMySharedStories, listMyStories, listNotifications, listPublicStories, markNotificationsRead, refundCoverGenerationUsage, reportStory, reserveCoverGenerationUsage, saveAppSettings, saveContinuityNode, savePushSubscription, saveSeriesWorld, saveStoryMainlineBundle, saveStoryMeta, saveUserProgress, unfollowAuthor, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch, type ContinuityNodeRecord, type SeriesWorldRecord } from './storyStore';
+import { createEmptyStory, createSharedStoryRecord, createStorySnapshot, adaptBlueprintToStory, createStoryBranch, deleteAllNotifications, deleteNotification, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, deleteSeriesWorld, favoriteStory, unfavoriteStory, followAuthor, getAppSettings, getAuthorFollowState, getPushConfig, getSharedStoryRecord, getStoryCartridge as getStoryCartridgeStore, getStoryMeta, getUserProgress as getUserProgressStore, incrementShareMetric, incrementStoryMetric, likeStory, unlikeStory, listAuthorStories, listContinuityNodes, listFollowedAuthors, listMySeriesWorlds, listMySharedStories, listMyStories, listNotifications, listPublicStories, markNotificationsRead, refundCoverGenerationUsage, reportStory, reserveCoverGenerationUsage, saveAppSettings, saveContinuityNode, savePushSubscription, saveSeriesWorld, saveStoryMainlineBundle, saveStoryMeta, saveUserProgress as saveUserProgressStore, unfollowAuthor, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch, type ContinuityNodeRecord, type SeriesWorldRecord } from './storyStore';
 import { branchEffectiveWeight, isBranchUnlockedByHistory, normalizeEndingBias } from './storyCartridge';
 import { deleteLocalCache, getLocalCache, setLocalCache } from './localCache';
+import {
+  TUTORIAL_CARTRIDGE_META,
+  TUTORIAL_CARTRIDGE_CONTENT,
+  getTutorialInterventionResult,
+  getTutorialEndingText
+} from './tutorialCartridge';
+
+const getUserProgress = async (db: any, uid: string, storyId: string) => {
+  if (storyId === 'tutorial-cartridge') {
+    const val = localStorage.getItem('tutorial-cartridge-progress');
+    return val ? JSON.parse(val) : null;
+  }
+  return getUserProgressStore(db, uid, storyId);
+};
+
+const saveUserProgress = async (db: any, uid: string, storyId: string, payload: any) => {
+  if (storyId === 'tutorial-cartridge') {
+    localStorage.setItem('tutorial-cartridge-progress', JSON.stringify(payload));
+    return;
+  }
+  return saveUserProgressStore(db, uid, storyId, payload);
+};
+
+const getStoryCartridge = async (db: any, storyId: string) => {
+  if (storyId === 'tutorial-cartridge') {
+    return TUTORIAL_CARTRIDGE_CONTENT;
+  }
+  return getStoryCartridgeStore(db, storyId);
+};
 import { useAppNavigation } from './navigation/useAppNavigation';
 import { evaluateStoryRunAfterIntervention } from './storyRunEngine';
 import { createIdleStoryListSyncState, updateStoryListSegmentState, type StoryListSegment, type SyncStatus } from './storySyncTypes';
@@ -1941,6 +1970,43 @@ export default function App() {
   const [showLeaveGameModal, setShowLeaveGameModal] = useState(false);
   const [pendingProgressToLoad, setPendingProgressToLoad] = useState<{ id: string, data: any } | null>(null);
 
+  const [dismissedHelpCards, setDismissedHelpCards] = useState<Record<string, boolean>>(() => {
+    try {
+      const val = localStorage.getItem('dismissed-help-cards');
+      return val ? JSON.parse(val) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const dismissHelpCard = (key: string) => {
+    setDismissedHelpCards(prev => {
+      const next = { ...prev, [key]: true };
+      localStorage.setItem('dismissed-help-cards', JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const restoreHelpCards = () => {
+    setDismissedHelpCards({});
+    localStorage.removeItem('dismissed-help-cards');
+    setErrorMsg(isEnglish ? 'All onboarding helper cards have been restored!' : '已成功恢复所有新手引导卡片！');
+    setTimeout(() => setErrorMsg(null), 4000);
+  };
+
+  const [tourStep, setTourStep] = useState<number | null>(null);
+  const [helpSearch, setHelpSearch] = useState('');
+  const [isHelpDrawerOpen, setIsHelpDrawerOpen] = useState(false);
+
+  useEffect(() => {
+    if (gameState === 'AUTHORING' && authoringCartridge && localStorage.getItem('completed-authoring-tour') !== 'true') {
+      setTourStep(0);
+      setAuthoringTab('settings');
+    } else {
+      setTourStep(null);
+    }
+  }, [gameState, authoringCartridge]);
+
 
   // Cartridge platform state
   const [activeStoryId, setActiveStoryId] = useState<string | null>(null);
@@ -3317,6 +3383,9 @@ export default function App() {
   const getStoryListCache = async () => getLocalCache<{ pub: any[]; mine: any[]; shared: any[]; publicSort?: StoryLibrarySort }>(storyListCacheKey());
 
   const getCachedStoryCartridge = async (storyId: string, expectedStory?: any) => {
+    if (storyId === 'tutorial-cartridge') {
+      return TUTORIAL_CARTRIDGE_CONTENT;
+    }
     const cached = await getLocalCache<any>(storyCartridgeCacheKey(storyId));
     if (!cached?.value) return null;
     const expectedUpdatedAt = String(expectedStory?.updatedAt || '');
@@ -3329,6 +3398,9 @@ export default function App() {
   };
 
   const getAnyCachedStoryCartridge = async (storyId: string) => {
+    if (storyId === 'tutorial-cartridge') {
+      return TUTORIAL_CARTRIDGE_CONTENT;
+    }
     const cached = await getLocalCache<any>(storyCartridgeCacheKey(storyId));
     return cached?.value || null;
   };
@@ -5618,7 +5690,7 @@ export default function App() {
     setSelectedThemes(nextBlueprint.tags || []);
     setChapters(baseChapters);
     setChangeHighlights(progressData?.changeHighlights || {});
-    setInterventionsLeft(progressData?.interventionsLeft ?? 3);
+    setInterventionsLeft(storyId === 'tutorial-cartridge' ? (progressData?.interventionsLeft ?? 1) : (progressData?.interventionsLeft ?? 3));
     setEndingValue(progressData?.endingValue || 0);
     setUnlockedBranches(normalizeUnlockedBranchesForBlueprint(progressData?.unlockedBranches || [], nextBlueprint));
     setHistoricallyUnlockedBranches(historicalBranches);
@@ -6968,33 +7040,43 @@ export default function App() {
             '命运之轮已经转动...',
           ]);
 
-      const response = await apiFetch('/api/ai?action=intervene', {
-        method: 'POST',
-        body: JSON.stringify({
-          blueprint,
-          chapters,
-          chapterNum,
-          charId,
-          action,
-          currentEndingValue: endingValue,
-          currentUnlockedBranches: effectiveUnlockedBranches,
-          targetWordCount,
-          interventionHistory: [...interventionHistory, { chapterNum, charId, action }],
-          worldState: buildWorldStateForPrompt(chapterNum, endingValue),
-          language: appLanguage,
-        })
-      });
+      let result;
+      if (activeStoryId === 'tutorial-cartridge' || blueprint?.id === 'tutorial-cartridge') {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        result = getTutorialInterventionResult(chapterNum, charId, action);
+        if (simulation) {
+          clearInterval(simulation);
+          simulation = null;
+        }
+      } else {
+        const response = await apiFetch('/api/ai?action=intervene', {
+          method: 'POST',
+          body: JSON.stringify({
+            blueprint,
+            chapters,
+            chapterNum,
+            charId,
+            action,
+            currentEndingValue: endingValue,
+            currentUnlockedBranches: effectiveUnlockedBranches,
+            targetWordCount,
+            interventionHistory: [...interventionHistory, { chapterNum, charId, action }],
+            worldState: buildWorldStateForPrompt(chapterNum, endingValue),
+            language: appLanguage,
+          })
+        });
 
-      if (simulation) {
-        clearInterval(simulation);
-        simulation = null;
+        if (simulation) {
+          clearInterval(simulation);
+          simulation = null;
+        }
+
+        if (!response.ok) {
+          throw new Error(await readErrorMessage(response));
+        }
+
+        result = await response.json();
       }
-
-      if (!response.ok) {
-        throw new Error(await readErrorMessage(response));
-      }
-
-      const result = await response.json();
       const aiData = result?.aiData || {};
       
       const newHistory = [...interventionHistory, { chapterNum, charId, action }];
@@ -7338,27 +7420,37 @@ export default function App() {
             '正在铭刻命运总结...',
           ]);
 
-      const response = await apiFetch('/api/ai?action=generate-summary', {
-        method: 'POST',
-        body: JSON.stringify({
-          blueprint,
-          endingValue,
-          chapters,
-          language: appLanguage,
-        })
-      });
+      let conclusionText;
+      if (activeStoryId === 'tutorial-cartridge' || blueprint?.id === 'tutorial-cartridge') {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        conclusionText = getTutorialEndingText(endingValue);
+        if (simulation) {
+          clearInterval(simulation);
+          simulation = null;
+        }
+      } else {
+        const response = await apiFetch('/api/ai?action=generate-summary', {
+          method: 'POST',
+          body: JSON.stringify({
+            blueprint,
+            endingValue,
+            chapters,
+            language: appLanguage,
+          })
+        });
 
-      if (simulation) {
-        clearInterval(simulation);
-        simulation = null;
+        if (simulation) {
+          clearInterval(simulation);
+          simulation = null;
+        }
+
+        if (!response.ok) {
+          throw new Error(await readErrorMessage(response));
+        }
+
+        const result = await response.json();
+        conclusionText = result.text || result.conclusion || '';
       }
-
-      if (!response.ok) {
-        throw new Error(await readErrorMessage(response));
-      }
-
-      const result = await response.json();
-      const conclusionText = result.text || result.conclusion || '';
       setStoryConclusion(conclusionText);
       setShowSummaryModal(true);
       if (db && user) {
@@ -7527,6 +7619,29 @@ export default function App() {
   const handleStoryInteraction = async (kind: 'like' | 'favorite' | 'report', targetId?: string, targetMeta?: any) => {
     const idToUse = targetId || activeStoryId;
     if (!idToUse || !db || !user) { if (!user) setIsAccountCenterOpen(true); return; }
+    if (idToUse === 'tutorial-cartridge') {
+      const wasActionActive = kind === 'like' || kind === 'favorite'
+        ? (targetMeta
+            ? hasStoryCardAction(kind, targetMeta)
+            : (idToUse === activeStoryId ? isCurrentStoryActive(kind) : hasOptimisticStoryAction(kind, idToUse)))
+        : false;
+      if (kind === 'like') {
+        const isActive = wasActionActive;
+        setStoryActionState('like', idToUse, !isActive);
+        applyStoryActionFlag('like', idToUse, !isActive);
+        applyStoryCountDelta(idToUse, 'likeCount', isActive ? -1 : 1);
+        showError(isActive ? '已取消点赞。' : '已点赞。');
+      } else if (kind === 'favorite') {
+        const isActive = wasActionActive;
+        setStoryActionState('favorite', idToUse, !isActive);
+        applyStoryActionFlag('favorite', idToUse, !isActive);
+        applyStoryCountDelta(idToUse, 'favoriteCount', isActive ? -1 : 1);
+        showError(isActive ? '已取消收藏。' : '已收藏。');
+      } else if (kind === 'report') {
+        showError('不能举报系统教学卡带！');
+      }
+      return;
+    }
     const wasActionActive = kind === 'like' || kind === 'favorite'
       ? (targetMeta
           ? hasStoryCardAction(kind, targetMeta)
@@ -8427,7 +8542,10 @@ export default function App() {
               <button
                 key={stat.key}
                 type="button"
-                onClick={onClick}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClick?.();
+                }}
                 disabled={!onClick}
                 data-active={stat.active ? 'true' : undefined}
                 data-tone={stat.tone}
@@ -8458,7 +8576,10 @@ export default function App() {
               <button
                 key={stat.key}
                 type="button"
-                onClick={onClick}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClick?.();
+                }}
                 disabled={!onClick}
                 data-active={stat.active ? 'true' : undefined}
                 data-tone={stat.tone}
@@ -8497,7 +8618,10 @@ export default function App() {
               <button
                 key={stat.key}
                 type="button"
-                onClick={onClick}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClick?.();
+                }}
                 data-active={stat.active ? 'true' : undefined}
                 data-tone={stat.tone}
                 className="story-detail-stat group text-left transition-all active:scale-[0.98]"
@@ -8548,13 +8672,14 @@ export default function App() {
       <motion.div
         key={storyId || story.id}
         whileHover={{ y: -4, scale: 1.01 }}
-        className={`story-library-card group p-4 transition-all ${
+        onClick={() => setStoryDetailStory(story)}
+        className={`story-library-card group p-4 transition-all cursor-pointer ${
           isLiked ? 'ring-1 ring-pink-500/18' : isFavorited ? 'ring-1 ring-amber-500/18' : ''
         }`}
       >
         <div className="relative flex gap-4">
           <div className="w-28 shrink-0 sm:w-32">
-            <button type="button" onClick={() => setStoryDetailStory(story)} className="story-library-cover h-28 w-28 cursor-pointer transition-all hover:ring-2 hover:ring-indigo-400/70 hover:ring-offset-2 hover:ring-offset-zinc-950 sm:h-32 sm:w-32">
+            <button type="button" onClick={(e) => { e.stopPropagation(); setStoryDetailStory(story); }} className="story-library-cover h-28 w-28 cursor-pointer transition-all hover:ring-2 hover:ring-indigo-400/70 hover:ring-offset-2 hover:ring-offset-zinc-950 sm:h-32 sm:w-32">
               {coverUrl ? (
                 <img src={coverUrl} alt={`${formatBookTitle(getStoryTitle(story))} 封面`} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
               ) : (
@@ -8597,11 +8722,11 @@ export default function App() {
               ))}
             </div>
             <div className="shrink-0 grid gap-2 sm:grid-cols-2">
-              <button type="button" onClick={() => setStoryDetailStory(story)} className={`${semanticButtonClass('secondary', { fullWidth: true, compact: true })} text-sm`}>
+              <button type="button" onClick={(e) => { e.stopPropagation(); setStoryDetailStory(story); }} className={`${semanticButtonClass('secondary', { fullWidth: true, compact: true })} text-sm`}>
                 <BookOpen className="h-4 w-4" />
                 {t('library.details')}
               </button>
-              <button type="button" onClick={() => startStoryPlay(story.id)} className={`${semanticButtonClass('primary', { fullWidth: true, compact: true })} text-sm`}>
+              <button type="button" onClick={(e) => { e.stopPropagation(); startStoryPlay(story.id); }} className={`${semanticButtonClass('primary', { fullWidth: true, compact: true })} text-sm`}>
                 <Sparkles className="h-4 w-4" />
                 {t('library.intervene')}
               </button>
@@ -8845,7 +8970,13 @@ export default function App() {
   );
 
   const getVisibleStoryLibraryItems = () => {
-    const source = storyLibraryTab === 'mine' ? myStories : publicStories;
+    let source = storyLibraryTab === 'mine' ? myStories : publicStories;
+    if (storyLibraryTab === 'public') {
+      const hasTutorial = source.some((s: any) => s.id === 'tutorial-cartridge');
+      if (!hasTutorial) {
+        source = [{ ...TUTORIAL_CARTRIDGE_META, id: 'tutorial-cartridge' }, ...source];
+      }
+    }
     const keyword = storyLibrarySearch.trim().toLowerCase();
     return [...source]
       .filter((story: any) => {
@@ -8856,6 +8987,8 @@ export default function App() {
         return haystack.includes(keyword);
       })
       .sort((a: any, b: any) => {
+        if (a.id === 'tutorial-cartridge') return -1;
+        if (b.id === 'tutorial-cartridge') return 1;
         if (storyLibrarySort === 'likes') return getStoryLikeCount(b) - getStoryLikeCount(a);
         if (storyLibrarySort === 'interventions') return getStoryInterventionCount(b) - getStoryInterventionCount(a);
         if (storyLibrarySort === 'favorites') return getStoryFavoriteCount(b) - getStoryFavoriteCount(a);
@@ -9619,6 +9752,7 @@ export default function App() {
             {pageDescription}
           </p>
         </div>
+        {isSeriesWorldGeneratePage && renderInlineHelp('world-generator', '世界观生成与提取指引', '在此页面，你可以让AI自动生成一套全新的世界观蓝图，或者通过提取已有故事的章节来抓取其中的人物设定、世界法则。生成好的世界观可以在后续创建『续作』或『新篇章』故事时在高级设置里套用。')}
 
         <div className="grid gap-6">
           <section className="space-y-4">
@@ -9732,6 +9866,7 @@ export default function App() {
                   </button>
                 </div>
               </div>
+              {renderInlineHelp('world-editor', '世界观仓库编辑指引', '在此编辑世界观的关键要素。其中【世界基准规则】是AI创作故事时绝对遵守的铁律（例如：魔法在这个世界上已被禁止）；【角色卡池】存放该世界里登场的主要配角与背景；【故事大纲与素材】能为后续作品提供线索。修改完成后，切记点击最下方的『保存世界观』，才能让改动生效。')}
               <div className="grid gap-3 sm:grid-cols-2">
                 <input value={seriesForm.title || ''} onChange={(event) => setSeriesForm((prev) => ({ ...prev, title: event.target.value }))} placeholder={tr('世界观设定名称', 'World setting title')} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
                 <input value={seriesGenreText} onChange={(event) => setSeriesForm((prev) => ({ ...prev, genreTags: event.target.value.split(/[,，]/).map((tag) => tag.trim()).filter(Boolean) }))} placeholder={tr('题材标签，以逗号分隔', 'Genre tags, comma-separated')} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
@@ -10895,6 +11030,252 @@ export default function App() {
       )}
     </AnimatePresence>
   );
+
+  const renderInlineHelp = (key: string, title: string, content: React.ReactNode) => {
+    if (dismissedHelpCards[key]) return null;
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -10 }}
+        className="mb-6 flex gap-3 rounded-2xl border border-indigo-500/15 bg-indigo-500/5 p-4 text-sm text-indigo-200/90 shadow-[inset_0_1px_1px_rgba(99,102,241,0.05)] transition-all"
+      >
+        <Sparkles className="h-5 w-5 shrink-0 text-indigo-400" />
+        <div className="flex-1 leading-relaxed">
+          <div className="font-black text-indigo-100">{title}</div>
+          <div className="mt-1 text-xs text-indigo-200/80">{content}</div>
+        </div>
+        <button
+          type="button"
+          onClick={() => dismissHelpCard(key)}
+          className="h-8 w-8 shrink-0 rounded-lg border border-indigo-500/10 bg-indigo-500/10 text-indigo-300 hover:border-indigo-400/30 hover:text-white transition-all flex items-center justify-center focus-visible:ring-1 focus-visible:ring-indigo-400"
+          title={isEnglish ? "Dismiss" : "我知道了"}
+          aria-label={isEnglish ? "Dismiss" : "我知道了"}
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </motion.div>
+    );
+  };
+
+  const renderTourOverlay = () => {
+    if (tourStep === null || !authoringCartridge) return null;
+
+    const steps = [
+      {
+        tab: 'settings',
+        title: '第一步：配置故事基础 (Settings)',
+        text: '在这个选项卡下，你可以设置故事标题、主轴（如“自由 VS 妥协”）、题材标签，以及添加或修改故事的登场人物。人物卡是触发干涉的实体，请务必先在此处配置角色。',
+      },
+      {
+        tab: 'mainline',
+        title: '第二步：编写正史主线 (Mainline)',
+        text: '在这里编写故事的主线章节（第 1 到第 7 章）。这是整个世界线的基础架构。第 7 章还可以设置双向模式下的左倾/右倾终章结局名称。',
+      },
+      {
+        tab: 'branches',
+        title: '第三步：编织命运分支 (Branches & Rules)',
+        text: '在此处添加命运支线规则。你可以绑定某个角色在特定章节（第 2-6 章）遭遇庇佑(Bless)或磨难(Curse)作为触发器。一旦触发，分支的注入条件（mustHappen 等）将改写下游章节的正文走向。',
+      },
+      {
+        tab: 'settings',
+        title: '第四步：保存并发布 (Save & Publish)',
+        text: '编辑完所有规则与文本后，请记得点击右上角的『保存更改』以保存至云端。当作品开发完毕，修改其可见性为“公开”即可发布在书库中！',
+      }
+    ];
+
+    const currentStep = steps[tourStep];
+    if (!currentStep) return null;
+
+    const handleNext = () => {
+      if (tourStep < steps.length - 1) {
+        const nextStep = tourStep + 1;
+        setTourStep(nextStep);
+        setAuthoringTab(steps[nextStep].tab as any);
+      } else {
+        setTourStep(null);
+        localStorage.setItem('completed-authoring-tour', 'true');
+        showError('向导完成！祝你创作愉快！');
+      }
+    };
+
+    const handleSkip = () => {
+      setTourStep(null);
+      localStorage.setItem('completed-authoring-tour', 'true');
+    };
+
+    return (
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-zinc-950/75 p-6 backdrop-blur-[2px]">
+        <motion.div
+          initial={{ scale: 0.95, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className="relative max-w-md rounded-[2rem] border border-indigo-500/25 bg-zinc-900/90 p-6 shadow-2xl backdrop-blur-md"
+        >
+          <div className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300">
+            <Sparkles className="h-3 w-3" />
+            创作者引导 ({tourStep + 1} / {steps.length})
+          </div>
+          <h3 className="text-xl font-black text-white">{currentStep.title}</h3>
+          <p className="mt-3 text-sm leading-relaxed text-zinc-300">
+            {currentStep.text}
+          </p>
+          <div className="mt-6 flex justify-between gap-3">
+            <button
+              type="button"
+              onClick={handleSkip}
+              className={semanticButtonClass('ghost', { compact: true })}
+            >
+              跳过引导
+            </button>
+            <button
+              type="button"
+              onClick={handleNext}
+              className={semanticButtonClass('primary', { compact: true })}
+            >
+              {tourStep === steps.length - 1 ? '完成' : '下一步'}
+            </button>
+          </div>
+        </motion.div>
+      </div>
+    );
+  };
+
+  const renderHelpFloatingButton = () => {
+    if (gameState === 'PLAYING' || gameState === 'GENERATING_BLUEPRINT' || tourStep !== null) return null;
+    return (
+      <button
+        type="button"
+        onClick={() => setIsHelpDrawerOpen(true)}
+        className="fixed bottom-[calc(max(0.85rem,env(safe-area-inset-bottom))+5rem)] right-8 z-[1500] flex h-12 w-12 items-center justify-center rounded-full border border-indigo-500/30 bg-zinc-950/80 text-indigo-300 shadow-2xl backdrop-blur-md transition-all hover:border-indigo-400 hover:text-white hover:scale-105 active:scale-95 animate-pulse"
+        title={isEnglish ? "Help Center" : "帮助中心"}
+        aria-label={isEnglish ? "Help Center" : "帮助中心"}
+      >
+        <span className="relative flex h-5 w-5 items-center justify-center">
+          <span className="relative text-lg font-black leading-none">?</span>
+        </span>
+      </button>
+    );
+  };
+
+  const renderHelpCenterDrawer = () => {
+    const qas = [
+      {
+        q: '什么是干涉值（Ending Value）与命运走向？',
+        a: '在命运馆中，每一部双向结局的作品都有【左倾】和【右倾】两条因果走向。你在第 2 至第 6 章中，对登场角色施加的「庇佑 (Bless)」或「磨难 (Curse)」会给命运池注入偏向。庇佑会将世界线向左侧引动，而磨难会将世界线向右侧坠落。最终在第 7 章，系统会根据偏向总值（大于等于15为左倾结局，小于等于-15为右倾结局，其余为中间结局）为你推演出不同的终章故事。',
+        tags: '干涉 庇佑 磨难 命运走向 结局 ending value bless curse'
+      },
+      {
+        q: '怎么让故事分支（Branch）被成功解锁？',
+        a: '每个分支都有其『触发条件』。触发条件由作者在创作故事时指定（例如：林晓在第 2 章遭遇庇佑）。当你在游玩过程中做出了符合条件的干涉时，该分支就会即时解锁。解锁的分支会通过“注入动作（inject）”强制改写下游章节的故事内容，展示出非同寻常的历史细节。一些高阶分支甚至有『多重干涉组合条件』。',
+        tags: '分支 解锁 条件 触发器 注入 剧情改动 trigger inject'
+      },
+      {
+        q: '如何使用世界观设定（World Bible）创作续作？',
+        a: '世界观仓库是多部作品共用的因果基座。当你生成或手动创建了一套世界观（包含世界基准规则、角色卡池和故事大纲素材）后，你可以新建作品，并在『系列/世界观设置』中选择该世界观。AI 在生成故事章节时，会绝对遵守世界观中的【世界基准规则】（例如：魔法在这个世界上已被禁止），并自动从角色池中引入人物。',
+        tags: '世界观 世界基准 角色池 续作 创作 创作者 world bible rules'
+      },
+      {
+        q: '续作是如何“继承前作”结局和设定状态的？',
+        a: '当你在创作者后台为一部作品勾选了『此作品是续作』，并关联了前作时，系统会在续作开始时自动建立【命运继承规则】。续作的第 1 章会静默继承你在前作中走出的结局文本、曾解锁的分支以及人物的死活存留状态。AI 将自动分析这些前置因果，作为续作开篇的剧情前奏，实现真正的内容传承。',
+        tags: '继承 续作 前作 结局 人物状态 关联 命运继承 inheritance sequel'
+      },
+      {
+        q: 'AI 快速生成故事的流程是怎样的？',
+        a: '当你输入故事标题和主轴概念后，系统将先为你生成一份『世界线蓝图 (Blueprint)』，里面包含 7 个章节的大纲梗概、初始登场人物和若干预置分支规则。在蓝图建立后，你可以自由调整其章节或分支设置。点击『开发/干涉』时，系统将根据你当前的配置，渲染并填充前几章 of 初始主干正文。后续的重写也是基于此蓝图逻辑展开的。',
+        tags: '快速生成 世界蓝图 创作 章节大纲 ai 流程 blueprint'
+      }
+    ];
+
+    const keyword = helpSearch.trim().toLowerCase();
+    const filteredQas = qas.filter(item => {
+      if (!keyword) return true;
+      return `${item.q}\n${item.a}\n${item.tags}`.toLowerCase().includes(keyword);
+    });
+
+    return (
+      <AnimatePresence>
+        {isHelpDrawerOpen && (
+          <div className="fixed inset-0 z-[6500] flex justify-end bg-zinc-950/60 backdrop-blur-[1px]">
+            <div className="absolute inset-0" onClick={() => setIsHelpDrawerOpen(false)} />
+            
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'tween', duration: 0.3, ease: 'easeOut' }}
+              className="relative z-10 flex h-full w-full flex-col border-l border-zinc-800 bg-zinc-900/95 p-6 shadow-2xl backdrop-blur-md sm:max-w-md"
+            >
+              <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-400">
+                    <Sparkles className="h-4 w-4" />
+                  </div>
+                  <h2 className="text-lg font-black text-white">{tr('命运馆帮助中心', 'Help Center')}</h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsHelpDrawerOpen(false)}
+                  className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors"
+                  aria-label={isEnglish ? "Close Help Center" : "关闭帮助中心"}
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="relative mt-4">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                <input
+                  type="search"
+                  value={helpSearch}
+                  onChange={(event) => setHelpSearch(event.target.value)}
+                  placeholder={tr('搜索您想知道的规则或名词...', 'Search terms, rules...')}
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950/60 py-2.5 pl-9 pr-4 text-xs font-semibold text-zinc-100 outline-none transition-colors focus:border-indigo-400/70"
+                />
+              </div>
+
+              <div className="mt-6 flex-1 overflow-y-auto pr-1 space-y-4 scrollbar-thin">
+                {filteredQas.length === 0 ? (
+                  <div className="py-12 text-center text-xs text-zinc-500">
+                    {tr('没有找到匹配的内容，换个词试试吧？', 'No matches found. Try another search term.')}
+                  </div>
+                ) : (
+                  filteredQas.map((qa, index) => (
+                    <div key={index} className="rounded-2xl border border-zinc-800/80 bg-zinc-950/20 p-4 transition-colors hover:border-zinc-800">
+                      <h3 className="text-sm font-black text-zinc-100 flex gap-2">
+                        <span className="text-indigo-400">Q:</span>
+                        {qa.q}
+                      </h3>
+                      <p className="mt-2 text-xs leading-relaxed text-zinc-400">
+                        {qa.a}
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {Object.keys(dismissedHelpCards).length > 0 && (
+                <div className="mt-4 shrink-0 px-2">
+                  <button
+                    type="button"
+                    onClick={restoreHelpCards}
+                    className="w-full rounded-xl border border-zinc-800 bg-zinc-950/40 py-2.5 text-xs font-semibold text-zinc-400 hover:border-indigo-500/30 hover:text-indigo-300 transition-colors"
+                  >
+                    {tr('恢复所有被折叠的教学提示', 'Restore All Dismissed Tips')}
+                  </button>
+                </div>
+              )}
+
+              <div className="mt-4 border-t border-zinc-800 pt-4 text-center">
+                <p className="text-[10px] text-zinc-600">
+                  {tr('命运馆执行官专用工具集 · 离线引导版本', 'Fate interference toolkit · Offline version')}
+                </p>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    );
+  };
 
   const renderEditNameModal = () => (
     <AnimatePresence>
@@ -12181,7 +12562,10 @@ export default function App() {
       {prefix}
       <button
         type="button"
-        onClick={() => openAuthorProfile(authorId, authorName)}
+        onClick={(e) => {
+          e.stopPropagation();
+          openAuthorProfile(authorId, authorName);
+        }}
         className="font-black text-zinc-300 underline decoration-zinc-700 underline-offset-4 transition-colors hover:text-indigo-200 hover:decoration-indigo-300"
       >
         {authorName || (authorId ? `游客+${shortUserId(authorId)}` : '未知作者')}
@@ -12417,6 +12801,7 @@ export default function App() {
     <div className="authoring-studio mx-auto max-w-5xl px-6 pb-[calc(7.5rem+env(safe-area-inset-bottom))] pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] lg:px-8">
       {!authoringCartridge ? (
         <>
+          {renderInlineHelp('authoring-list', '创作者后台指引', '欢迎来到命运馆的作者工坊。在这里你可以新建单独的叙事卡带，或者建立并绑定自定义的世界观体系。你发布的作品将展示在公共书库中。数据面板可以帮你评估哪些命运走向和分支吸引了最多执行官的干涉。')}
           <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
             <BackNavButton label={tr('返回上一页', 'Back')} onClick={() => goBack('STORY_SELECT')} />
             <div className="flex flex-wrap gap-3">
@@ -12577,6 +12962,7 @@ export default function App() {
         </>
       ) : (
         <>
+          {renderInlineHelp('authoring-editor', '故事编辑器指南', '这里是故事的核心编织区。你可以设置【作品设置】里的题材与登场人物，编写【主线和结局】（第 1 至第 7 章基础正文与结局名称）。通过【角色和支线】选项卡，你可以配置“命运分支规则”，设定玩家施加庇佑（Bless）或磨难（Curse）时被解锁，并注入改动覆盖指定章节，引导出截然相异的终章结局。')}
           <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
             <BackNavButton
               label={tr('返回列表', 'Back to list')}
@@ -14147,6 +14533,9 @@ export default function App() {
           {renderBranchUnlockModal()}
           {renderInterventionStatusNotice()}
           {renderSummaryModal()}
+          {renderTourOverlay()}
+          {renderHelpCenterDrawer()}
+          {renderHelpFloatingButton()}
           
           <AnimatePresence>
             {storyLaunchOverlay && (
