@@ -8814,7 +8814,7 @@ export default function App() {
     const languagePublicCount = publicStories.filter((story) => storyMatchesLanguage(story, appLanguage)).length;
     const languageMineCount = myStories.filter((story) => storyMatchesLanguage(story, appLanguage)).length;
     return (
-    <div className="story-library-page mx-auto max-w-7xl px-5 pb-32 pt-[max(3rem,calc(env(safe-area-inset-top)+3rem))] sm:px-6 lg:px-8">
+    <div className="story-library-page mx-auto max-w-7xl px-5 pb-[calc(8.5rem+env(safe-area-inset-bottom))] pt-[max(3rem,calc(env(safe-area-inset-top)+3rem))] sm:px-6 lg:px-8">
       <div className="story-library-hero relative mb-10 p-2 sm:p-4 lg:p-6">
         <div
           className="absolute right-4 top-4 rounded-full border border-zinc-800/70 bg-zinc-950/45 px-2.5 py-1 text-[10px] font-black tracking-[0.12em] text-zinc-500 backdrop-blur-md"
@@ -9228,7 +9228,7 @@ export default function App() {
     );
 
     return (
-      <div className="relative mx-auto max-w-6xl px-6 pb-12 pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] lg:px-8">
+      <div className="relative mx-auto max-w-6xl px-6 pb-[calc(7.5rem+env(safe-area-inset-bottom))] pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] lg:px-8">
         <AnimatePresence>
           {isArchiveSyncing && archiveStories.length === 0 && (
             <BlockingSyncOverlay
@@ -9536,7 +9536,7 @@ export default function App() {
         ? tr('从基本概况生成全新的世界观仓库，或导入已有作品提取世界基准、角色卡池和情节素材。生成完成后会进入编辑页。', 'Generate a new setting archive from an overview, or import an existing story to extract baseline rules, character cards, and plot material. After generation, the editor opens.')
         : tr('这里只编辑世界观仓库条目。后续生成作品时，再到高级创作设置里选择要套用的世界观设定。', 'Edit archive items here. Later, apply the world setting from Advanced creation when generating a story.');
     return (
-      <div className="mx-auto min-h-[100dvh] max-w-6xl px-5 pb-14 pt-[max(5rem,calc(env(safe-area-inset-top)+4rem))] sm:px-6 lg:px-8">
+      <div className="mx-auto min-h-[100dvh] max-w-6xl px-5 pb-[calc(7.5rem+env(safe-area-inset-bottom))] pt-[max(5rem,calc(env(safe-area-inset-top)+4rem))] sm:px-6 lg:px-8">
         <div className="mb-8 flex items-center justify-between gap-3">
           <BackNavButton
             label={tr('返回上一页', 'Back')}
@@ -9886,7 +9886,7 @@ export default function App() {
   };
 
   const renderThemeSelectionView = () => (
-    <div className="mx-auto flex min-h-[100dvh] max-w-5xl flex-col justify-center px-6 pb-20 pt-[max(7rem,calc(env(safe-area-inset-top)+6rem))] text-center lg:px-8">
+    <div className="mx-auto flex min-h-[100dvh] max-w-5xl flex-col justify-center px-6 pb-[calc(7.5rem+env(safe-area-inset-bottom))] pt-[max(7rem,calc(env(safe-area-inset-top)+6rem))] text-center lg:px-8">
       <div className="mb-8 flex items-center justify-between">
         <BackNavButton label={tr('返回上一页', 'Back')} onClick={() => goBack('STORY_SELECT')} />
         <div className="h-10 w-10" />
@@ -10793,7 +10793,7 @@ export default function App() {
   );
 
   const renderAccountCenterView = () => (
-    <div className="mx-auto max-w-4xl px-6 pb-32 pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] lg:px-8">
+    <div className="mx-auto max-w-4xl px-6 pb-[calc(8.5rem+env(safe-area-inset-bottom))] pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] lg:px-8">
       {renderAccountCenterContent('page')}
     </div>
   );
@@ -10805,7 +10805,7 @@ export default function App() {
     const isReadonlyOwner = Boolean(user && readonlyArchiveId && story.meta?.authorId === user.uid);
     const isReadonlyUpdating = Boolean(readonlyArchiveId && archiveUpdatingIds[readonlyArchiveId]);
     return (
-      <div className="reading-page mx-auto max-w-4xl rounded-b-[2.5rem] px-6 pb-16 pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] sm:px-8">
+      <div className="reading-page mx-auto max-w-4xl rounded-b-[2.5rem] px-6 pb-[calc(5rem+env(safe-area-inset-bottom))] pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] sm:px-8">
         <div className="mb-10 flex items-start justify-between gap-4">
           <div className="flex min-w-0 gap-4">
             {story.meta?.coverUrl && (
@@ -11313,7 +11313,7 @@ export default function App() {
     : null;
 
   const renderPlayingView = () => (
-    <div className="reading-page relative mx-auto max-w-4xl rounded-b-[2.5rem] px-6 pb-40 pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] sm:px-8 sm:pb-32">
+    <div className="reading-page relative mx-auto max-w-4xl rounded-b-[2.5rem] px-6 pb-[calc(10.5rem+env(safe-area-inset-bottom))] pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] sm:px-8 sm:pb-[calc(8.5rem+env(safe-area-inset-bottom))]">
       {blueprint && (
         <div className="mb-16 space-y-4 text-center">
           <motion.div
@@ -11575,7 +11575,7 @@ export default function App() {
   );
 
   const renderSummaryView = () => (
-    <div className="mx-auto max-w-4xl px-6 pb-24 pt-[max(7rem,calc(env(safe-area-inset-top)+6rem))] sm:px-8">
+    <div className="mx-auto max-w-4xl px-6 pb-[calc(7.5rem+env(safe-area-inset-bottom))] pt-[max(7rem,calc(env(safe-area-inset-top)+6rem))] sm:px-8">
       <div className="mb-16 text-center space-y-4">
         <div className="inline-block rounded-full bg-amber-500/10 px-4 py-1 text-[10px] font-bold tracking-[0.2em] text-amber-500 uppercase">
           {tr('命运之卷已封存', 'Fate volume sealed')}
@@ -12118,7 +12118,7 @@ export default function App() {
   );
 
   const renderAuthoringView = () => (
-    <div className="authoring-studio mx-auto max-w-5xl px-6 pb-12 pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] lg:px-8">
+    <div className="authoring-studio mx-auto max-w-5xl px-6 pb-[calc(7.5rem+env(safe-area-inset-bottom))] pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] lg:px-8">
       {!authoringCartridge ? (
         <>
           <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
@@ -12336,7 +12336,7 @@ export default function App() {
             </button>
           </div>
 
-          <div className="fixed bottom-8 left-8 z-[1700]">
+          <div className="fixed bottom-[calc(max(0.85rem,env(safe-area-inset-bottom))+5rem)] left-8 z-[1700]">
             <button
               type="button"
               onClick={() => {
@@ -13125,7 +13125,7 @@ export default function App() {
                   {authoringTocOpen && (
                     <div className="fixed inset-0 z-[99]" onClick={() => setAuthoringTocOpen(false)} />
                   )}
-                  <div className={`fixed bottom-40 left-8 z-[1600] max-h-[min(52dvh,26rem)] flex-col gap-2 overflow-y-auto rounded-2xl border border-zinc-800 bg-zinc-950/90 p-2 shadow-2xl backdrop-blur-md transition-all ${authoringTocOpen ? 'flex' : 'hidden'}`}>
+                  <div className={`fixed bottom-[calc(max(0.85rem,env(safe-area-inset-bottom))+13.5rem)] left-8 z-[1600] max-h-[min(52dvh,26rem)] flex-col gap-2 overflow-y-auto rounded-2xl border border-zinc-800 bg-zinc-950/90 p-2 shadow-2xl backdrop-blur-md transition-all ${authoringTocOpen ? 'flex' : 'hidden'}`}>
                      <div className="mb-1 text-center text-[10px] font-black text-zinc-500">目录导航</div>
                      {(authoringCartridge.chapters || []).map((c: any) => (
                         <button type="button" key={c.chapter_num} onClick={() => { setAuthoringTocOpen(false); document.getElementById(`authoring-chapter-${c.chapter_num}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} className="rounded-xl px-3 py-2 text-xs font-bold text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white">
@@ -13141,7 +13141,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setAuthoringTocOpen(!authoringTocOpen)}
-                    className="fixed bottom-24 left-8 z-[1601] flex h-12 w-12 items-center justify-center rounded-full bg-indigo-600 text-white shadow-xl hover:bg-indigo-500 active:scale-95"
+                    className="fixed bottom-[calc(max(0.85rem,env(safe-area-inset-bottom))+9.5rem)] left-8 z-[1601] flex h-12 w-12 items-center justify-center rounded-full bg-indigo-600 text-white shadow-xl hover:bg-indigo-500 active:scale-95"
                   >
                     {authoringTocOpen ? <X className="h-5 w-5" /> : <BookOpen className="h-5 w-5" />}
                   </button>
