@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { evaluateStoryRunAfterIntervention } from '../src/storyRunEngine';
+import { calculateEndingMechanics } from '../server/_endingMechanics';
 import { areStoryChaptersEquivalent, hashStoryChapters } from '../src/storyContentHash';
 import { createIdleStoryListSyncState, updateStoryListSegmentState } from '../src/storySyncTypes';
 
@@ -32,38 +32,34 @@ const branches = [
   },
 ] as any;
 
-const first = evaluateStoryRunAfterIntervention({
-  branches,
-  history: [],
-  previousUnlockedBranches: [],
-  previousHistoricalBranches: [],
+const first = calculateEndingMechanics({
+  currentEndingValue: 0,
+  allBranches: branches,
+  unlockedBranches: [branches[0]],
+  newlyUnlockedBranches: [branches[0]],
   intervention: { chapterNum: 2, charId: 'c1', action: 'bless' },
-  previousIntervenedChapters: [],
+  historyLength: 1,
 });
 
-assert.equal(first.unlockedBranches.length, 1);
-assert.equal(first.newlyUnlockedBranches[0]?.id, 'branch-bless-c1-ch2');
-assert.equal(first.historicallyUnlockedBranches.length, 1);
 assert.equal(first.endingDelta, 2.5);
 assert.equal(first.newEndingValue, 2.5);
 assert.equal(first.endingDomain, 'middle');
 assert.equal(first.leftPool, 60);
 assert.equal(first.rightPool, 60);
-assert.equal(first.shouldWarnAboutRewriteRisk, false);
+assert.equal(first.rewriteRange.endChapter, 2);
 
-const rewriteEarlier = evaluateStoryRunAfterIntervention({
-  branches,
-  history: [{ chapterNum: 5, charId: 'c2', action: 'curse' }],
-  previousUnlockedBranches: [],
-  previousHistoricalBranches: first.historicallyUnlockedBranches,
+const largeBranch = calculateEndingMechanics({
+  currentEndingValue: 0,
+  allBranches: branches,
+  unlockedBranches: [branches[1]],
+  newlyUnlockedBranches: [branches[1]],
   intervention: { chapterNum: 3, charId: 'c2', action: 'curse' },
-  previousIntervenedChapters: [5],
+  historyLength: 2,
 });
 
-assert.equal(rewriteEarlier.shouldWarnAboutRewriteRisk, true);
-assert.equal(rewriteEarlier.unlockedBranches.some((branch) => branch.id === 'branch-curse-c2-count'), true);
-assert.equal(rewriteEarlier.endingDelta, -4.5);
-assert.equal(rewriteEarlier.newEndingValue, -4.5);
+assert.equal(largeBranch.rewriteRange.endChapter, 7);
+assert.equal(largeBranch.rewriteRange.reason, 'large_branch');
+assert.ok(largeBranch.endingDelta <= 0);
 
 const branchesWithHidden = [
   ...branches,
@@ -79,17 +75,17 @@ const branchesWithHidden = [
   }
 ] as any;
 
-const hiddenTest = evaluateStoryRunAfterIntervention({
-  branches: branchesWithHidden,
-  history: [],
-  previousUnlockedBranches: [],
-  previousHistoricalBranches: [],
+const hiddenTest = calculateEndingMechanics({
+  currentEndingValue: 0,
+  allBranches: branchesWithHidden,
+  unlockedBranches: [branchesWithHidden[2]],
+  newlyUnlockedBranches: [branchesWithHidden[2]],
   intervention: { chapterNum: 4, charId: 'c1', action: 'bless' },
-  previousIntervenedChapters: [],
+  historyLength: 1,
 });
 
-assert.equal(hiddenTest.unlockedBranches.length, 1);
-assert.equal(hiddenTest.newlyUnlockedBranches[0]?.id, 'branch-hidden-medium');
+assert.equal(hiddenTest.rewriteRange.endChapter, 6);
+assert.equal(hiddenTest.rewriteRange.reason, 'medium_branch');
 assert.equal(hiddenTest.endingDelta, 3.5);
 assert.equal(hiddenTest.newEndingValue, 3.5);
 
@@ -110,4 +106,4 @@ assert.equal(syncState.archive.status, 'error');
 assert.equal(syncState.archive.error, 'timeout');
 assert.equal(syncState.public.status, 'idle');
 
-console.log('storyRunEngine tests passed');
+console.log('story mechanics tests passed');

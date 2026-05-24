@@ -161,39 +161,6 @@ export interface RuntimeBlueprint {
   };
 }
 
-export function tierToScore(tier: BranchTier): number {
-  if (tier === 'small') return 1;
-  if (tier === 'medium') return 2;
-  if (tier === 'large') return 3;
-  return 2; // legacy hidden means "small + hidden bonus"; hidden is no longer a strength tier.
-}
-
-export function branchBaseWeight(tier?: BranchTier): number {
-  if (tier === 'medium') return 2;
-  if (tier === 'large') return 3;
-  return 1;
-}
-
-export function branchHiddenBonus(branch: { tier?: BranchTier; is_hidden?: boolean; hidden?: boolean }): number {
-  return branch.tier === 'hidden' || branch.is_hidden || branch.hidden || (branch as any).inject?.hidden ? 1 : 0;
-}
-
-export function branchEffectiveWeight(branch: {
-  tier?: BranchTier;
-  score?: number;
-  is_hidden?: boolean;
-  hidden?: boolean;
-}): number {
-  const score = Number(branch.score);
-  let base = 1;
-  if (Number.isFinite(score) && score > 0) {
-    base = score >= 3 ? 3 : score >= 2 ? 2 : 1;
-  } else {
-    base = branchBaseWeight(branch.tier);
-  }
-  return base;
-}
-
 export function normalizeEndingBias(input?: Partial<EndingBias> | { left?: number; right?: number } | null): EndingBias {
   const rawLeft = Number((input as any)?.leftBaseWeight ?? (input as any)?.left);
   const rawRight = Number((input as any)?.rightBaseWeight ?? (input as any)?.right);
@@ -213,30 +180,4 @@ export function normalizeEndingBias(input?: Partial<EndingBias> | { left?: numbe
 export function endingBiasPercentToInternalWeight(percent: number): number {
   const normalized = normalizeEndingBias({ leftBaseWeight: percent, rightBaseWeight: percent }).leftBaseWeight;
   return Math.round((normalized / 100) * ENDING_BIAS_INTERNAL_BASE * 100) / 100;
-}
-
-export function normalizeEndingBiasForMechanics(input?: Partial<EndingBias> | { left?: number; right?: number } | null): EndingBias {
-  const displayBias = normalizeEndingBias(input);
-  return {
-    leftBaseWeight: endingBiasPercentToInternalWeight(displayBias.leftBaseWeight),
-    rightBaseWeight: endingBiasPercentToInternalWeight(displayBias.rightBaseWeight),
-  };
-}
-
-export function isBranchUnlockedByHistory(args: {
-  branch: StoryBranchDoc;
-  history: Array<{ chapterNum: number; charId: string; action: InterventionAction }>;
-}): boolean {
-  const { branch, history } = args;
-  const groups = (branch.triggerGroups && branch.triggerGroups.length > 0 ? branch.triggerGroups : [branch.trigger]).slice(0, 3);
-  return groups.every((g) => {
-    if (g.type === 'single') {
-      const t = g.single;
-      return history.some(h => h.chapterNum === t.chapterNum && h.charId === t.charId && h.action === t.action);
-    }
-    const c = g.count;
-    const relevant = history.filter(h => h.charId === c.charId && h.action === c.action);
-    const sliced = typeof c.upToChapterNum === 'number' ? relevant.filter(h => h.chapterNum <= c.upToChapterNum) : relevant;
-    return sliced.length >= c.minCount;
-  });
 }

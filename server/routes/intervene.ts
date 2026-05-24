@@ -211,6 +211,23 @@ function uniqueBranches(branches: any[]) {
   });
 }
 
+function toPublicBranch(branch: any) {
+  if (!branch) return null;
+  const {
+    score: _score,
+    weight: _weight,
+    effectiveWeight: _effectiveWeight,
+    ...publicBranch
+  } = branch;
+  return publicBranch;
+}
+
+function toPublicBranches(branches: any[]) {
+  return (Array.isArray(branches) ? branches : [])
+    .map(toPublicBranch)
+    .filter(Boolean);
+}
+
 const rewriteSchema = {
   type: Type.OBJECT,
   properties: {
@@ -472,9 +489,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       aiData,
       newEndingValue,
-      endingMechanics,
-      newUnlockedBranches,
-      unlockedBranch: unlocked && !safeCurrentUnlockedBranches.some((branch: any) => branch.id === unlocked.id) ? unlocked : null,
+      newUnlockedBranches: toPublicBranches(newUnlockedBranches),
+      unlockedBranch: unlocked && !safeCurrentUnlockedBranches.some((branch: any) => branch.id === unlocked.id) ? toPublicBranch(unlocked) : null,
       uiFeedback: {
         leftProgress,
         rightProgress,

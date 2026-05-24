@@ -4,10 +4,11 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, ChevronRight, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp, Download, Sun, Moon, Search, GitBranch, Trophy, Bell, BarChart3, WifiOff } from 'lucide-react';
 import { auth, db, firebaseInitError } from './firebase';
 import { createEmptyStory, createSharedStoryRecord, createStorySnapshot, adaptBlueprintToStory, createStoryBranch, deleteAllNotifications, deleteNotification, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, deleteSeriesWorld, favoriteStory, unfavoriteStory, followAuthor, getAppSettings, getAuthorFollowState, getPushConfig, getSharedStoryRecord, getStoryCartridge as getStoryCartridgeStore, getStoryMeta, getUserProgress as getUserProgressStore, incrementShareMetric, incrementStoryMetric, likeStory, unlikeStory, listAuthorStories, listContinuityNodes, listFollowedAuthors, listMySeriesWorlds, listMySharedStories, listMyStories, listNotifications, listPublicStories, markNotificationsRead, refundCoverGenerationUsage, reportStory, reserveCoverGenerationUsage, saveAppSettings, saveContinuityNode, savePushSubscription, saveSeriesWorld, saveStoryMainlineBundle, saveStoryMeta, saveUserProgress as saveUserProgressStore, unfollowAuthor, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch, type ContinuityNodeRecord, type SeriesWorldRecord } from './storyStore';
-import { branchEffectiveWeight, isBranchUnlockedByHistory, normalizeEndingBias, type EndingBias } from './storyCartridge';
+import { normalizeEndingBias, type EndingBias } from './storyCartridge';
 import { deleteLocalCache, getLocalCache, setLocalCache } from './localCache';
 import {
   TUTORIAL_STORY_CARTRIDGE,
+  TUTORIAL_PROGRESS_VERSION,
   getTutorialInterventionResult,
   getTutorialEndingText
 } from './tutorialCartridge';
@@ -15,14 +16,18 @@ import {
 const getUserProgress = async (db: any, uid: string, storyId: string) => {
   if (storyId === 'tutorial-cartridge') {
     const val = localStorage.getItem('tutorial-cartridge-progress');
-    return val ? JSON.parse(val) : null;
+    const parsed = val ? JSON.parse(val) : null;
+    return parsed?.tutorialProgressVersion === TUTORIAL_PROGRESS_VERSION ? parsed : null;
   }
   return getUserProgressStore(db, uid, storyId);
 };
 
 const saveUserProgress = async (db: any, uid: string, storyId: string, payload: any) => {
   if (storyId === 'tutorial-cartridge') {
-    localStorage.setItem('tutorial-cartridge-progress', JSON.stringify(payload));
+    localStorage.setItem('tutorial-cartridge-progress', JSON.stringify({
+      ...payload,
+      tutorialProgressVersion: TUTORIAL_PROGRESS_VERSION,
+    }));
     return;
   }
   return saveUserProgressStore(db, uid, storyId, payload);
@@ -35,7 +40,6 @@ const getStoryCartridge = async (db: any, storyId: string): Promise<any> => {
   return getStoryCartridgeStore(db, storyId);
 };
 import { useAppNavigation } from './navigation/useAppNavigation';
-import { evaluateStoryRunAfterIntervention } from './storyRunEngine';
 import { createIdleStoryListSyncState, updateStoryListSegmentState, type StoryListSegment, type SyncStatus } from './storySyncTypes';
 import { StartupShell } from './components/StartupShell';
 import { BackNavButton } from './components/BackNavButton';
@@ -328,7 +332,7 @@ interface PwaUpdateInfo {
 interface Branch {
   id: string;
   name: string;
-  score: number; // This will be the weight: 1, 2, 3, or 5
+  score?: number;
   side: 'left' | 'right';
   condition_char: string;
   condition_action: 'bless' | 'curse';
@@ -5706,7 +5710,6 @@ export default function App() {
       return {
         id: branch.id,
         name: branch.name,
-        score: branchEffectiveWeight(branch),
         side: branch.side,
         condition_char: condition.charId,
         condition_action: condition.action,
@@ -5741,7 +5744,7 @@ export default function App() {
     setSelectedThemes(nextBlueprint.tags || []);
     setChapters(baseChapters);
     setChangeHighlights(progressData?.changeHighlights || {});
-    setInterventionsLeft(storyId === 'tutorial-cartridge' ? (progressData?.interventionsLeft ?? 1) : (progressData?.interventionsLeft ?? 3));
+    setInterventionsLeft(progressData?.interventionsLeft ?? 3);
     setEndingValue(progressData?.endingValue || 0);
     setUnlockedBranches(normalizeUnlockedBranchesForBlueprint(progressData?.unlockedBranches || [], nextBlueprint));
     setHistoricallyUnlockedBranches(historicalBranches);
@@ -5756,6 +5759,16 @@ export default function App() {
     setUiFeedback(progressData?.uiFeedback || { leftProgress: 0, rightProgress: 0, endingLabel: '中域' });
     navigateTo('PLAYING');
     scrollToTopAfterViewChange();
+    if (storyId === 'tutorial-cartridge' && !progressData) {
+      window.setTimeout(() => {
+        setConfirmationModal({
+          isOpen: true,
+          title: '入门试玩已开启',
+          message: '这是一段完整离线教学故事，不会消耗 AI 额度。先阅读到第 2 章末尾，点击“干涉命运”，选择林晓和一次庇佑或磨难。第 4 章、第 6 章也会出现干涉点；完成三次后即可查看最终命运。',
+          onConfirm: () => {},
+        });
+      }, 250);
+    }
   };
 
   const startStoryPlay = async (storyId: string) => {
@@ -7033,18 +7046,7 @@ export default function App() {
 
   const handleIntervene = async (chapterNum: number, charId: string, action: 'bless' | 'curse', confirmedEarlierRewrite = false) => {
     if (interventionsLeft <= 0 || isRewriting || !blueprint || !user) return;
-    const runDecision = evaluateStoryRunAfterIntervention({
-      branches: (blueprint.branches || []) as any,
-      history: interventionHistory,
-      previousUnlockedBranches: unlockedBranches as any,
-      previousHistoricalBranches: historicallyUnlockedBranches as any,
-      intervention: { chapterNum, charId, action },
-      previousIntervenedChapters: intervenedChapters,
-      currentEndingValue: endingValue,
-      endingBias: blueprint?.endingBias || { left: blueprint?.left_mainline_default, right: blueprint?.right_mainline_default },
-      endingMode: blueprint?.endingMode === 'single' ? 'single' : 'dual',
-    });
-    const willRewriteEarlierThanPastIntervention = runDecision.shouldWarnAboutRewriteRisk;
+    const willRewriteEarlierThanPastIntervention = interventionHistory.some((item) => Number(item.chapterNum) > chapterNum);
     if (willRewriteEarlierThanPastIntervention && !confirmedEarlierRewrite) {
       const affectedChapters = Array.from(new Set(interventionHistory.filter((item) => item.chapterNum > chapterNum).map((item) => Number(item.chapterNum)))).sort((a, b) => Number(a) - Number(b));
       setConfirmationModal({
@@ -7085,7 +7087,7 @@ export default function App() {
       let result;
       if (activeStoryId === 'tutorial-cartridge' || blueprint?.id === 'tutorial-cartridge') {
         await new Promise((resolve) => setTimeout(resolve, 1500));
-        result = getTutorialInterventionResult(chapterNum, charId, action);
+        result = getTutorialInterventionResult(chapterNum, charId, action, endingValue, effectiveUnlockedBranches);
         if (simulation) {
           clearInterval(simulation);
           simulation = null;
