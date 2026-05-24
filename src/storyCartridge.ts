@@ -50,7 +50,7 @@ export interface StoryMeta {
   endingMode?: EndingMode; // default: dual
   endingRates?: { left: number; right: number }; // 10-80%, only meaningful in dual mode
   endingBias?: EndingBias;
-  /** 玩家总结界面展示用，各≤5字；双向模式下对应左/右倾向结局的「XX结局」 */
+  /** 玩家总结界面展示用，各≤5字；双向模式下对应左域/右域结局的「XX结局」 */
   endingNames?: { left?: string; right?: string };
   createdAt: string;
   updatedAt: string;

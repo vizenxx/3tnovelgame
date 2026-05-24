@@ -1296,8 +1296,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })), 'story_id,chapter_num');
       await supabaseUpsert('story_endings', [
         { story_id: storyId, id: 'default', chapter_num: 7, title: '第七章', text: '' },
-        { story_id: storyId, id: 'left', chapter_num: 7, title: '左结局', text: '' },
-        { story_id: storyId, id: 'right', chapter_num: 7, title: '右结局', text: '' },
+        { story_id: storyId, id: 'left', chapter_num: 7, title: '左域默认结局', text: '' },
+        { story_id: storyId, id: 'right', chapter_num: 7, title: '右域默认结局', text: '' },
       ], 'story_id,id');
       return res.status(200).json(storyId);
     }
@@ -1404,8 +1404,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const isSingleEnding = bp.endingMode === 'single';
       await runAdaptStage('create-endings', () => supabaseUpsert('story_endings', [
         { story_id: storyId, id: 'default', chapter_num: 7, title: chapterByNum.get(7)?.title || '第七章', text: defaultEndingText },
-        { story_id: storyId, id: 'left', chapter_num: 7, title: '左结局', text: isSingleEnding ? defaultEndingText : asArray(bp.endings).find((ending) => ending.type === 'good' || ending.type === 'left')?.text || '' },
-        { story_id: storyId, id: 'right', chapter_num: 7, title: '右结局', text: isSingleEnding ? defaultEndingText : asArray(bp.endings).find((ending) => ending.type === 'bad' || ending.type === 'right')?.text || '' },
+        { story_id: storyId, id: 'left', chapter_num: 7, title: '左域默认结局', text: isSingleEnding ? defaultEndingText : asArray(bp.endings).find((ending) => ending.type === 'good' || ending.type === 'left')?.text || '' },
+        { story_id: storyId, id: 'right', chapter_num: 7, title: '右域默认结局', text: isSingleEnding ? defaultEndingText : asArray(bp.endings).find((ending) => ending.type === 'bad' || ending.type === 'right')?.text || '' },
       ], 'story_id,id'));
       const branches = asArray(bp.branches).map((branch) => ({
         story_id: storyId,

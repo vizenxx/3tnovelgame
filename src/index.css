@@ -484,6 +484,18 @@ html[data-theme="light"] .authoring-tab-button.is-active {
   font-size: 0.74rem;
 }
 
+.story-bias-single {
+  grid-template-columns: minmax(0, 1fr);
+  background:
+    linear-gradient(90deg, rgba(99, 102, 241, 0.12), rgba(255, 255, 255, 0.025), rgba(99, 102, 241, 0.1)),
+    color-mix(in srgb, var(--app-soft-black) 38%, transparent);
+}
+
+.story-bias-center {
+  justify-content: center;
+  text-align: center;
+}
+
 .story-bias-left {
   justify-content: flex-start;
 }

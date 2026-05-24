@@ -808,8 +808,8 @@ export async function createEmptyStory(db: Firestore, args: { authorId: string; 
     batch.set(doc(db, 'stories', ref.id, 'chapters', String(i)), chapter);
   }
   const defaultEnding: StoryEndingDoc = { id: 'default', chapter_num: 7, title: '第七章', text: '' };
-  const leftEnding: StoryEndingDoc = { id: 'left', chapter_num: 7, title: '左结局', text: '' };
-  const rightEnding: StoryEndingDoc = { id: 'right', chapter_num: 7, title: '右结局', text: '' };
+  const leftEnding: StoryEndingDoc = { id: 'left', chapter_num: 7, title: '左域默认结局', text: '' };
+  const rightEnding: StoryEndingDoc = { id: 'right', chapter_num: 7, title: '右域默认结局', text: '' };
   batch.set(doc(db, 'stories', ref.id, 'endings', 'default'), defaultEnding);
   batch.set(doc(db, 'stories', ref.id, 'endings', 'left'), leftEnding);
   batch.set(doc(db, 'stories', ref.id, 'endings', 'right'), rightEnding);
@@ -1162,13 +1162,13 @@ export async function adaptBlueprintToStory(db: Firestore, args: {
   const leftEnding: StoryEndingDoc = {
     id: 'left',
     chapter_num: 7,
-    title: bp.endings?.find((e: any) => e.type === 'good' || e.type === 'left')?.title || '左结局',
+    title: bp.endings?.find((e: any) => e.type === 'good' || e.type === 'left')?.title || '左域默认结局',
     text: bp.endingMode === 'single' ? singleEndingText : bp.endings?.find((e: any) => e.type === 'good' || e.type === 'left')?.text || ''
   };
   const rightEnding: StoryEndingDoc = {
     id: 'right',
     chapter_num: 7,
-    title: bp.endings?.find((e: any) => e.type === 'bad' || e.type === 'right')?.title || '右结局',
+    title: bp.endings?.find((e: any) => e.type === 'bad' || e.type === 'right')?.title || '右域默认结局',
     text: bp.endingMode === 'single' ? singleEndingText : bp.endings?.find((e: any) => e.type === 'bad' || e.type === 'right')?.text || ''
   };
   batch.set(doc(db, 'stories', ref.id, 'endings', 'default'), defaultEnding);
