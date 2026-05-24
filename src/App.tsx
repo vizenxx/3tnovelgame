@@ -4,10 +4,10 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, ChevronRight, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp, Download, Sun, Moon, Search, GitBranch, Trophy, Bell, BarChart3, WifiOff } from 'lucide-react';
 import { auth, db, firebaseInitError } from './firebase';
 import { createEmptyStory, createSharedStoryRecord, createStorySnapshot, adaptBlueprintToStory, createStoryBranch, deleteAllNotifications, deleteNotification, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, deleteSeriesWorld, favoriteStory, unfavoriteStory, followAuthor, getAppSettings, getAuthorFollowState, getPushConfig, getSharedStoryRecord, getStoryCartridge as getStoryCartridgeStore, getStoryMeta, getUserProgress as getUserProgressStore, incrementShareMetric, incrementStoryMetric, likeStory, unlikeStory, listAuthorStories, listContinuityNodes, listFollowedAuthors, listMySeriesWorlds, listMySharedStories, listMyStories, listNotifications, listPublicStories, markNotificationsRead, refundCoverGenerationUsage, reportStory, reserveCoverGenerationUsage, saveAppSettings, saveContinuityNode, savePushSubscription, saveSeriesWorld, saveStoryMainlineBundle, saveStoryMeta, saveUserProgress as saveUserProgressStore, unfollowAuthor, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch, type ContinuityNodeRecord, type SeriesWorldRecord } from './storyStore';
-import { branchEffectiveWeight, isBranchUnlockedByHistory, normalizeEndingBias } from './storyCartridge';
+import { branchEffectiveWeight, isBranchUnlockedByHistory, normalizeEndingBias, type EndingBias } from './storyCartridge';
 import { deleteLocalCache, getLocalCache, setLocalCache } from './localCache';
 import {
-  TUTORIAL_CARTRIDGE_CONTENT,
+  TUTORIAL_STORY_CARTRIDGE,
   getTutorialInterventionResult,
   getTutorialEndingText
 } from './tutorialCartridge';
@@ -30,7 +30,7 @@ const saveUserProgress = async (db: any, uid: string, storyId: string, payload: 
 
 const getStoryCartridge = async (db: any, storyId: string): Promise<any> => {
   if (storyId === 'tutorial-cartridge') {
-    return TUTORIAL_CARTRIDGE_CONTENT;
+    return TUTORIAL_STORY_CARTRIDGE;
   }
   return getStoryCartridgeStore(db, storyId);
 };
@@ -814,7 +814,7 @@ const renderCharacterHighlights = (text: string, keyPrefix: string, characters: 
 };
 
 const renderParagraphWithHighlights = (text: unknown, characters: Character[] = [], changeQuotes: string[] = []) => {
-  const parts = String(text || '').split(/(<mark>.*?<\/mark>)/g);
+  const parts = stripGeneratedMarkup(text).split(/(<mark>.*?<\/mark>)/g);
   return parts.map((part, i) => {
     if (part.startsWith('<mark>') && part.endsWith('</mark>')) {
       return <span key={i} className="text-amber-400 font-bold bg-amber-400/10 px-1 rounded">{part.slice(6, -7)}</span>;
@@ -1538,9 +1538,16 @@ const sanitizeTextForAdaptation = (input?: string) => {
 
 const stripGeneratedMarkup = (value: unknown) => String(value || '')
   .replace(/&lt;\s*\/?\s*mark\s*&gt;/gi, '')
+  .replace(/&lt;\s*\/?\s*(?:span|strong|em|b|i|u|p|div|br|code|pre|section|article|aside|font|small|big|center|ruby|rt|rp)(?:\s+[^&]*?)?\s*&gt;/gi, '')
   .replace(/<\s*\/?\s*mark\s*>/gi, '')
+  .replace(/<\/?(?:span|strong|em|b|i|u|p|div|br|code|pre|section|article|aside|font|small|big|center|ruby|rt|rp)(?:\s+[^<>]*?)?>/gi, '')
+  .replace(/<\/?[a-z][a-z0-9:-]*(?:\s+[^<>]*?)?>/gi, '')
   .replace(/```(?:json|html|xml|markdown|md)?/gi, '')
-  .replace(/<\/?(?:span|strong|em|b|i)>/gi, '')
+  .replace(/```/g, '')
+  .replace(/\[\/?(?:focus|highlight|mark|changed?|diff|insert|delete)\]/gi, '')
+  .replace(/(?:【|「|\[)?(?:高亮|标记|变化标记|highlight|markup)(?:】|」|\])?[：:]/gi, '')
+  .replace(/\u200b|\u200c|\u200d|\ufeff/g, '')
+  .replace(/\n{3,}/g, '\n\n')
   .trim();
 
 const normalizeChangeHighlightsForClient = (raw: any) => {
@@ -3428,7 +3435,7 @@ export default function App() {
 
   const getCachedStoryCartridge = async (storyId: string, expectedStory?: any) => {
     if (storyId === 'tutorial-cartridge') {
-      return TUTORIAL_CARTRIDGE_CONTENT;
+      return TUTORIAL_STORY_CARTRIDGE;
     }
     const cached = await getLocalCache<any>(storyCartridgeCacheKey(storyId));
     if (!cached?.value) return null;
@@ -3443,7 +3450,7 @@ export default function App() {
 
   const getAnyCachedStoryCartridge = async (storyId: string) => {
     if (storyId === 'tutorial-cartridge') {
-      return TUTORIAL_CARTRIDGE_CONTENT;
+      return TUTORIAL_STORY_CARTRIDGE;
     }
     const cached = await getLocalCache<any>(storyCartridgeCacheKey(storyId));
     return cached?.value || null;

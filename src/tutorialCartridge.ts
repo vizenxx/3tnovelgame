@@ -1,4 +1,6 @@
-import type { StoryMeta, RuntimeBlueprint } from './storyCartridge';
+import type { RuntimeBlueprint, StoryMeta } from './storyCartridge';
+
+const TUTORIAL_STORY_ID = 'tutorial-cartridge';
 
 export const TUTORIAL_CARTRIDGE_META: StoryMeta = {
   title: '「命运馆入门：第一段命运」',
@@ -20,13 +22,17 @@ export const TUTORIAL_CARTRIDGE_META: StoryMeta = {
   endingNames: { left: '勇敢前行', right: '稳妥停泊' },
   createdAt: '2026-05-23T00:00:00Z',
   updatedAt: '2026-05-23T00:00:00Z',
-  version: 2,
+  version: 3,
   defaults: {
     targetWordCount: 320,
     paragraphs: { min: 2, max: 5 },
   },
   characters: [
-    { id: 'c2', name: '林晓', desc: '在稳定工作与自由创作之间犹豫的年轻创作者' },
+    {
+      id: 'c2',
+      name: '林晓',
+      desc: '在稳定工作与自由创作之间犹豫的年轻创作者',
+    },
   ],
 };
 
@@ -36,14 +42,14 @@ const introChapters = [
     title: '灯下的草稿',
     summary: '林晓在深夜面对一份稳定工作的合同，也面对一份迟迟不敢完成的游戏草稿。',
     present_characters: ['c2'],
-    text: '深夜的房间里，只剩电脑屏幕还亮着。林晓看着桌面上的两份文件：一份是明天就要回复的入职合同，一份是他写了三年的独立游戏草稿。\n这段故事会带你熟悉命运馆的基本操作。先阅读章节，再在出现干涉按钮的章节里选择角色与行动。不同选择会让故事朝不同方向展开。',
+    text: '深夜的房间里，只剩电脑屏幕还亮着。林晓看着桌面上的两份文件：一份是明天就要回复的入职合同，一份是他写了三年的独立游戏草稿。\n这段故事会带玩家熟悉命运馆的基本操作。先阅读章节，再在出现干涉按钮的章节里选择角色与行动。不同选择会让故事朝不同方向展开。',
   },
   {
     chapter_num: 2,
     title: '选择之前',
     summary: '林晓迟迟没有按下确认键。他需要一点推动，或一点提醒。',
     present_characters: ['c2'],
-    text: '午夜十二点，林晓把鼠标停在合同确认页上。他想象着稳定薪水带来的安全感，也想象着如果放弃创作，几年后会不会连自己真正喜欢什么都忘了。\n现在可以在本章末尾进行一次干涉。选择林晓，再选择“庇佑”或“磨难”。庇佑通常会带来鼓励与支持；磨难通常会带来压力、考验或提醒。它们不会直接把按钮写进故事，而是会自然地推动新的情节发生。',
+    text: '午夜十二点，林晓把鼠标停在合同确认页上。他想象着稳定薪水带来的安全感，也想象着如果放弃创作，几年后会不会连自己真正喜欢什么都忘了。\n现在可以在本章末尾进行一次干涉。选择林晓，再选择“庇佑”或“磨难”。庇佑通常会带来鼓励与支持；磨难通常会带来压力、考验或提醒。它们不会直白地写进故事，而是会自然推动新的情节发生。',
   },
   {
     chapter_num: 3,
@@ -128,8 +134,36 @@ export const TUTORIAL_CARTRIDGE_CONTENT: RuntimeBlueprint = {
     },
   ],
   endings: [
+    { type: 'normal', text: '林晓还没有做出彻底选择，但他已经看见自己真正害怕的东西。下一次，当机会再次出现时，他也许会更清楚该把手伸向哪里。' },
     { type: 'good', text: '林晓把试玩版发布出去，虽然没有立刻成功，却终于听见了真实玩家的回应。' },
     { type: 'bad', text: '林晓进入稳定工作，生活暂时安稳下来，但他必须努力不让创作彻底沉睡。' },
+  ],
+};
+
+export const TUTORIAL_STORY_CARTRIDGE = {
+  id: TUTORIAL_STORY_ID,
+  meta: { ...TUTORIAL_CARTRIDGE_META, id: TUTORIAL_STORY_ID },
+  chapters: introChapters,
+  branches: TUTORIAL_CARTRIDGE_CONTENT.branches,
+  endings: [
+    {
+      id: 'default',
+      chapter_num: 7,
+      title: '中域默认结局',
+      text: TUTORIAL_CARTRIDGE_CONTENT.endings.find((ending) => ending.type === 'normal')?.text || '',
+    },
+    {
+      id: 'left',
+      chapter_num: 7,
+      title: '勇敢前行',
+      text: TUTORIAL_CARTRIDGE_CONTENT.endings.find((ending) => ending.type === 'good')?.text || '',
+    },
+    {
+      id: 'right',
+      chapter_num: 7,
+      title: '稳妥停泊',
+      text: TUTORIAL_CARTRIDGE_CONTENT.endings.find((ending) => ending.type === 'bad')?.text || '',
+    },
   ],
 };
 
@@ -147,7 +181,7 @@ export const TUTORIAL_BLESS_CHAPTERS: Record<number, { text: string; title: stri
   4: {
     title: '陌生人的回声',
     summary: '试玩版被转发出去，林晓第一次收到陌生玩家的留言。',
-    text: '朋友把试玩版转发到一个小社区。林晓原本只是想收几条建议，却意外收到一页又一页留言。\n有人说角色很像年轻时的自己，有人指出系统还不够顺，有人直接问：“正式版什么时候出？”林晓第一次意识到，这个故事也许真的能被别人听见。',
+    text: '朋友把试玩版转发到一个小社区。林晓原本只是想收几条建议，却意外收到一页又一页留言。\n有人说角色很像年轻时的自己，有人指出系统还不够顺，也有人直接问：“正式版什么时候出？”林晓第一次意识到，这个故事也许真的能被别人听见。',
   },
   5: {
     title: '合同的期限',
@@ -226,9 +260,16 @@ export function getTutorialInterventionResult(chapterNum: number, charId: string
 
   return {
     newEndingValue,
+    uiFeedback: {
+      leftProgress: isLeft ? 1 : 0,
+      rightProgress: isLeft ? 0 : 1,
+      endingLabel: isLeft ? '左域' : '右域',
+    },
     aiData: {
       chapters: chaptersList.filter((chapter) => chapter.chapter_num >= chapterNum),
       future_outlines: [],
+      change_highlights: [],
+      character_updates: [],
     },
   };
 }

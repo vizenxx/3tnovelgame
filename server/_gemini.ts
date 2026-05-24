@@ -21,6 +21,37 @@ type GeminiLogContext = { flow: string; requestId: string };
 type GeminiLogInfo = (context: GeminiLogContext, event: string, metadata?: Record<string, unknown>) => void;
 type GeminiLogError = (context: GeminiLogContext, event: string, error: unknown, metadata?: Record<string, unknown>) => void;
 
+export function stripGeneratedMarkup(value: unknown) {
+  return String(value ?? '')
+    .replace(/&lt;\s*\/?\s*mark\s*&gt;/gi, '')
+    .replace(/&lt;\s*\/?\s*(?:span|strong|em|b|i|u|p|div|br|code|pre|section|article|aside|font|small|big|center|ruby|rt|rp)(?:\s+[^&]*?)?\s*&gt;/gi, '')
+    .replace(/<\s*\/?\s*mark\s*>/gi, '')
+    .replace(/<\/?(?:span|strong|em|b|i|u|p|div|br|code|pre|section|article|aside|font|small|big|center|ruby|rt|rp)(?:\s+[^<>]*?)?>/gi, '')
+    .replace(/<\/?[a-z][a-z0-9:-]*(?:\s+[^<>]*?)?>/gi, '')
+    .replace(/```(?:json|html|xml|markdown|md)?/gi, '')
+    .replace(/```/g, '')
+    .replace(/\[\/?(?:focus|highlight|mark|changed?|diff|insert|delete)\]/gi, '')
+    .replace(/(?:【|「|\[)?(?:高亮|标记|变化标记|highlight|markup)(?:】|」|\])?[：:]/gi, '')
+    .replace(/\u200b|\u200c|\u200d|\ufeff/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+export function sanitizeGeneratedPayload<T>(value: T): T {
+  if (typeof value === 'string') {
+    return stripGeneratedMarkup(value) as T;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeGeneratedPayload(item)) as T;
+  }
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, sanitizeGeneratedPayload(item)])
+    ) as T;
+  }
+  return value;
+}
+
 function isLikelyGeminiKey(value: string) {
   return /^[A-Za-z0-9_-]{20,}$/.test(value);
 }
@@ -206,7 +237,7 @@ export async function generateGeminiJsonWithFallback<T>(options: {
           contents: options.contents,
           config: options.config,
         });
-        const data = options.parseResponse(response.text);
+        const data = sanitizeGeneratedPayload(options.parseResponse(response.text));
         options.logInfo?.(options.logContext!, 'gemini-success', {
           ...options.metadata,
           model,
