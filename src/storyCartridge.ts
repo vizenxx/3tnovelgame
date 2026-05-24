@@ -187,12 +187,11 @@ export function branchEffectiveWeight(branch: {
   const score = Number(branch.score);
   let base = 1;
   if (Number.isFinite(score) && score > 0) {
-    base = score;
+    base = score >= 3 ? 3 : score >= 2 ? 2 : 1;
   } else {
     base = branchBaseWeight(branch.tier);
   }
-  const isHidden = branch.tier === 'hidden' || !!branch.is_hidden || !!branch.hidden || !!(branch as any).inject?.hidden;
-  return base + (isHidden ? 0.5 : 0);
+  return base;
 }
 
 export function normalizeEndingBias(input?: Partial<EndingBias> | { left?: number; right?: number } | null): EndingBias {

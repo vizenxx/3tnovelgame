@@ -218,7 +218,7 @@ async function enrichStoryActionState(items: any[], userId?: string | null) {
     favoritedByMe: favoritedIds.has(String(item.sourceStoryId || item.id || '')),
     branchCount: branchCountByStory.get(String(item.sourceStoryId || item.id || '')) || item.branchCount || 0,
     unlockedBranchCount: unlockedCountByStory.get(String(item.sourceStoryId || item.id || '')) || item.unlockedBranchCount || 0,
-    endingCount: endingCountByStory.get(String(item.sourceStoryId || item.id || '')) || item.endingCount || (item.endingMode === 'single' ? 1 : 3),
+    endingCount: item.endingMode === 'single' ? 1 : (endingCountByStory.get(String(item.sourceStoryId || item.id || '')) || item.endingCount || 3),
     unlockedEndingCount: unlockedEndingCountByStory.get(String(item.sourceStoryId || item.id || '')) || item.unlockedEndingCount || 0,
   }));
 }
@@ -1402,11 +1402,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }), 'story_id,chapter_num'));
       const defaultEndingText = chapterByNum.get(7)?.text || args.conclusionText || asArray(bp.endings).find((ending) => ending.type === 'normal')?.text || asArray(bp.endings)[0]?.text || '';
       const isSingleEnding = bp.endingMode === 'single';
-      await runAdaptStage('create-endings', () => supabaseUpsert('story_endings', [
+      const endingRows = isSingleEnding ? [
         { story_id: storyId, id: 'default', chapter_num: 7, title: chapterByNum.get(7)?.title || '第七章', text: defaultEndingText },
-        { story_id: storyId, id: 'left', chapter_num: 7, title: '左域默认结局', text: isSingleEnding ? defaultEndingText : asArray(bp.endings).find((ending) => ending.type === 'good' || ending.type === 'left')?.text || '' },
-        { story_id: storyId, id: 'right', chapter_num: 7, title: '右域默认结局', text: isSingleEnding ? defaultEndingText : asArray(bp.endings).find((ending) => ending.type === 'bad' || ending.type === 'right')?.text || '' },
-      ], 'story_id,id'));
+      ] : [
+        { story_id: storyId, id: 'default', chapter_num: 7, title: chapterByNum.get(7)?.title || '第七章', text: defaultEndingText },
+        { story_id: storyId, id: 'left', chapter_num: 7, title: '左域默认结局', text: asArray(bp.endings).find((ending) => ending.type === 'good' || ending.type === 'left')?.text || '' },
+        { story_id: storyId, id: 'right', chapter_num: 7, title: '右域默认结局', text: asArray(bp.endings).find((ending) => ending.type === 'bad' || ending.type === 'right')?.text || '' },
+      ];
+      await runAdaptStage('create-endings', () => supabaseUpsert('story_endings', endingRows, 'story_id,id'));
       const branches = asArray(bp.branches).map((branch) => ({
         story_id: storyId,
         side: branch.side === 'right' ? 'right' : 'left',
@@ -1485,6 +1488,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await supabaseRequest('stories', { method: 'PATCH', query: { id: `eq.${body.storyId}` }, body: { ...storyRowFromMeta({ ...args.metaPatch, authorId: authUser.uid }, body.storyId), updated_at: nowIso() } });
       await supabaseUpsert('story_chapters', asArray(args.chapters).map((chapter) => ({ story_id: body.storyId, chapter_num: chapter.chapter_num, title: chapter.title || '', summary: chapter.summary || '', present_characters: asArray(chapter.present_characters), text: chapter.text || '' })), 'story_id,chapter_num');
       await supabaseUpsert('story_endings', asArray(args.endings).map((ending) => ({ story_id: body.storyId, id: ending.id, chapter_num: 7, title: ending.title || '', text: ending.text || '' })), 'story_id,id');
+      if (args.metaPatch?.endingMode === 'single') {
+        await supabaseRequest('story_endings', { method: 'DELETE', query: { story_id: `eq.${body.storyId}`, id: 'neq.default' } });
+      }
       if (args.metaPatch?.visibility === 'public' || args.metaPatch?.visibility === 'unlisted') {
         await notifyAuthorFollowers(authUser.uid, {
           type: 'author_story_updated',

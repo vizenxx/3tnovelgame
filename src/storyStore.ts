@@ -1158,22 +1158,23 @@ export async function adaptBlueprintToStory(db: Firestore, args: {
     title: chapterByNum.get(7)?.title || bp.endings?.find((e: any) => e.type === 'normal')?.title || '第七章',
     text: chapterByNum.get(7)?.text || args.conclusionText || bp.endings?.find((e: any) => e.type === 'normal')?.text || ''
   };
-  const singleEndingText = defaultEnding.text || bp.endings?.[0]?.text || '';
   const leftEnding: StoryEndingDoc = {
     id: 'left',
     chapter_num: 7,
     title: bp.endings?.find((e: any) => e.type === 'good' || e.type === 'left')?.title || '左域默认结局',
-    text: bp.endingMode === 'single' ? singleEndingText : bp.endings?.find((e: any) => e.type === 'good' || e.type === 'left')?.text || ''
+    text: bp.endings?.find((e: any) => e.type === 'good' || e.type === 'left')?.text || ''
   };
   const rightEnding: StoryEndingDoc = {
     id: 'right',
     chapter_num: 7,
     title: bp.endings?.find((e: any) => e.type === 'bad' || e.type === 'right')?.title || '右域默认结局',
-    text: bp.endingMode === 'single' ? singleEndingText : bp.endings?.find((e: any) => e.type === 'bad' || e.type === 'right')?.text || ''
+    text: bp.endings?.find((e: any) => e.type === 'bad' || e.type === 'right')?.text || ''
   };
   batch.set(doc(db, 'stories', ref.id, 'endings', 'default'), defaultEnding);
-  batch.set(doc(db, 'stories', ref.id, 'endings', 'left'), leftEnding);
-  batch.set(doc(db, 'stories', ref.id, 'endings', 'right'), rightEnding);
+  if (bp.endingMode !== 'single') {
+    batch.set(doc(db, 'stories', ref.id, 'endings', 'left'), leftEnding);
+    batch.set(doc(db, 'stories', ref.id, 'endings', 'right'), rightEnding);
+  }
 
   for (const b of (bp.branches || [])) {
     const isHidden = Boolean(b.is_hidden || b.hidden || b.score >= 5 || b.tier === 'hidden' || b.inject?.hidden);

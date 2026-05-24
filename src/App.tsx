@@ -606,7 +606,7 @@ const QUICK_STORY_TEMPLATES: Array<{
   {
     id: 'single-emotion',
     label: '单线情感',
-    badge: '适合单一结局',
+    badge: '适合唯一走向',
     hint: '结局固定，重点在干涉后如何圆回主线。',
     tags: ['治愈', '日常', '遗憾'],
     outline: '一位总是错过重要告别的人，意外获得三次干涉过去片段的机会。无论他如何改变细节，最终都必须学会面对同一个答案。',
@@ -718,7 +718,7 @@ const QUICK_QUIZ_STEPS: QuickQuizStep[] = [
     subtitle: { 'zh-CN': '选择一种游戏感，决定故事偏转的力度。', 'en-US': 'Pick the kind of story shift you want.' },
     maxSelections: 1,
     options: [
-      { id: 'gentle', label: { 'zh-CN': '温和改写', 'en-US': 'Gentle rewrite' }, outline: { 'zh-CN': '干涉更偏向温和改写，重视同一结局下的过程变化', 'en-US': 'interference should gently reshape the path more than the endpoint' }, endingMode: 'single' },
+      { id: 'gentle', label: { 'zh-CN': '温和改写', 'en-US': 'Gentle rewrite' }, outline: { 'zh-CN': '干涉更偏向温和改写，重视唯一走向里的过程变化', 'en-US': 'interference should gently reshape the path within one fixed ending' }, endingMode: 'single' },
       { id: 'branching', label: { 'zh-CN': '明显分歧', 'en-US': 'Clear branches' }, outline: { 'zh-CN': '干涉会制造明显分歧', 'en-US': 'interference should create clear branches' }, endingMode: 'dual' },
       { id: 'butterfly', label: { 'zh-CN': '蝴蝶效应', 'en-US': 'Butterfly effect' }, outline: { 'zh-CN': '小选择会逐步引发蝴蝶效应', 'en-US': 'small choices should gradually create butterfly effects' }, endingMode: 'dual' },
       { id: 'darkcost', label: { 'zh-CN': '黑暗代价', 'en-US': 'Dark cost' }, outline: { 'zh-CN': '每次改变都要有清晰代价', 'en-US': 'every change should carry a visible cost' }, endingMode: 'dual' },
@@ -1245,7 +1245,7 @@ function summaryEndingCategoryLabel(args: {
   endingLabel: string;
 }) {
   const mode = args.endingMode ?? 'dual';
-  if (mode === 'single') return '单一结局';
+  if (mode === 'single') return '唯一结局';
   if (args.endingLabel === '秩序律') return '左域结局';
   if (args.endingLabel === '混沌终') return '右域结局';
   return '中域结局';
@@ -1267,6 +1267,40 @@ const normalizeEndingBiasPercent = (value: number) => normalizeEndingBias({
   rightBaseWeight: value,
 }).leftBaseWeight;
 
+const clampEndingBiasAxis = (value: number) => Math.max(-70, Math.min(70, Math.round(Number(value) || 0)));
+
+const endingBiasAxisFromBias = (input?: Partial<EndingBias> | { left?: number; right?: number } | null) => {
+  const bias = normalizeEndingBias(input);
+  return clampEndingBiasAxis(bias.leftBaseWeight - bias.rightBaseWeight);
+};
+
+const endingBiasFromAxis = (axis: number) => {
+  const value = clampEndingBiasAxis(axis);
+  if (value >= 0) {
+    const ratio = value / 70;
+    return normalizeEndingBias({
+      leftBaseWeight: Math.round(40 + ratio * 40),
+      rightBaseWeight: Math.round(40 - ratio * 30),
+    });
+  }
+  const ratio = Math.abs(value) / 70;
+  return normalizeEndingBias({
+    leftBaseWeight: Math.round(40 - ratio * 30),
+    rightBaseWeight: Math.round(40 + ratio * 40),
+  });
+};
+
+const endingBiasAxisLabel = (axis: number) => {
+  const value = clampEndingBiasAxis(axis);
+  const strength = Math.abs(value);
+  if (strength < 10) return '中性';
+  const side = value > 0 ? '左域' : '右域';
+  if (strength >= 60) return `${side}极强`;
+  if (strength >= 45) return `${side}强`;
+  if (strength >= 25) return `${side}明显`;
+  return `${side}轻微`;
+};
+
 const endingBiasPercentLabel = (value: number) => {
   const percent = normalizeEndingBiasPercent(value);
   if (percent >= 75) return '极强';
@@ -1280,7 +1314,7 @@ const endingBiasPercentLabel = (value: number) => {
 
 const endingBiasStoryCardLabels = (source?: any) => {
   if (isSingleEndingStory(source)) return [
-    { side: 'single', label: '单一结局', value: '同一终局', active: true },
+    { side: 'single', label: '唯一走向', value: '', active: true },
   ];
   const bias = getEndingBias(source);
   return [
@@ -1468,9 +1502,10 @@ const getStoryShareCount = (story: any) => Number(story?.shareCount ?? story?.me
 const getStoryBranchCount = (story: any) => Number(story?.branchCount ?? story?.meta?.branchCount ?? story?.branches?.length ?? story?.meta?.branches?.length ?? 0);
 const getStoryUnlockedBranchCount = (story: any) => Number(story?.unlockedBranchCount ?? story?.meta?.unlockedBranchCount ?? 0);
 const getStoryEndingCount = (story: any) => {
+  if (isSingleEndingStory(story)) return 1;
   const count = Number(story?.endingCount ?? story?.meta?.endingCount ?? story?.endings?.length ?? story?.meta?.endings?.length ?? 0);
   if (count > 0) return count;
-  return isSingleEndingStory(story) ? 1 : 3;
+  return 3;
 };
 const getStoryUnlockedEndingCount = (story: any) => Number(story?.unlockedEndingCount ?? story?.meta?.unlockedEndingCount ?? 0);
 const getStoryUpdatedMs = (story: any) => {
@@ -6765,7 +6800,7 @@ export default function App() {
         } as any,
         chapters: normalizedChapters,
         endings: (authoringCartridge.endings || [])
-          .filter((ending: any) => authoringCartridge.meta?.endingMode === 'single' ? ending.id === 'default' : true)
+          .filter((ending: any) => authoringCartridge.meta?.endingMode === 'single' ? endingDomainFromId(String(ending.id || '')) === 'middle' : true)
           .map((ending: any) => ({
             id: ending.id,
             title: ending.title || endingIdToLabel(ending.id),
@@ -6773,15 +6808,6 @@ export default function App() {
           })),
       });
       const latest = await getStoryCartridge(db as any, authoringStoryId);
-      // In single-ending mode, the server only has the default ending.
-      // Merge back any locally-cached non-default endings so the author
-      // can still see them if they switch back to multi-ending mode before leaving.
-      if (authoringCartridge.meta?.endingMode === 'single') {
-        const cachedOtherEndings = (authoringCartridge.endings || []).filter((e: any) => e.id !== 'default');
-        if (cachedOtherEndings.length > 0 && latest) {
-          latest.endings = [...(latest.endings || []), ...cachedOtherEndings];
-        }
-      }
       setAuthoringCartridge(latest);
       setAuthoringCustomTagsInput(normalizedTags.join('，'));
       markAuthoringSaved(latest);
@@ -8459,7 +8485,7 @@ export default function App() {
             </div>
             {singleEnding && (
               <div className="mb-4 rounded-2xl border border-indigo-400/20 bg-indigo-500/10 px-4 py-3 text-sm font-black text-indigo-100">
-                {tr('当前结局：单一终局', 'Current ending: Single fate')}
+                {tr('当前走向：唯一走向', 'Current path: Fixed-ending path')}
               </div>
             )}
             {!singleEnding && (
@@ -8538,7 +8564,7 @@ export default function App() {
       { key: 'words', label: '均字', detailLabel: '均字', value: getStoryAverageChapterWords(story) || '未知', valueSuffix: ' 字', icon: BookOpen },
     ];
     return singleEnding
-      ? stats.map((stat) => stat.key === 'endings' ? { ...stat, label: '单结局', value: '1' } : stat)
+      ? stats.map((stat) => stat.key === 'endings' ? { ...stat, label: '唯一', value: getStoryEndingCount(story) || 1 } : stat)
       : stats;
   };
 
@@ -8665,10 +8691,9 @@ export default function App() {
   const renderStoryBiasBar = (story: any) => {
     if (isSingleEndingStory(story)) {
       return (
-        <div className="story-bias-bar story-bias-single" aria-label="单一结局结构">
+        <div className="story-bias-bar story-bias-single" aria-label="唯一走向结构">
           <div className="story-bias-side story-bias-center" data-active="true">
-            <span>{tr('单一结局', 'Single ending')}</span>
-            <strong>{tr('同一终局', 'One fate')}</strong>
+            <span>{tr('唯一走向', 'Fixed-ending path')}</span>
           </div>
         </div>
       );
@@ -10576,19 +10601,19 @@ export default function App() {
             <div className="flex items-center justify-between gap-3">
               <span className="text-sm font-bold text-zinc-400">{tr('结局结构', 'Ending structure')}</span>
               <span className="text-xs font-black text-indigo-300">
-                {quickEndingMode === 'single' ? tr('单一结局', 'Single ending') : tr('多线结局', 'Multi-ending')}
+                {quickEndingMode === 'single' ? tr('唯一走向', 'Fixed-ending path') : tr('三域走向', 'Three-domain path')}
               </span>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
               {([
                 {
                   value: 'single',
-                  label: tr('单一结局', 'Single ending'),
-                  hint: tr('所有干涉最终收束到同一个终局，重点在过程变化与圆回主线。', 'All interference ultimately returns to one ending; the focus is how the path changes.'),
+                  label: tr('唯一走向', 'Fixed-ending path'),
+                  hint: tr('所有干涉最终都会自然收束到唯一结局，重点在过程变化、角色经历与支线展开。', 'All interference naturally converges to one fixed ending; the focus is path changes, character experience, and branches.'),
                 },
                 {
                   value: 'dual',
-                  label: tr('多线结局', 'Multi-ending'),
+                  label: tr('三域走向', 'Three-domain path'),
                   hint: tr('使用中域、左域、右域三类收束，并为每一域保留扩展更多具体结局的空间。', 'Uses middle, left, and right domains while leaving room for more concrete endings later.'),
                 },
               ] as const).map((option) => (
@@ -10608,33 +10633,36 @@ export default function App() {
               ))}
             </div>
             {quickEndingMode === 'dual' && (
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                {([
-                  { key: 'leftBaseWeight', label: tr('左结局域', 'Left ending domain') },
-                  { key: 'rightBaseWeight', label: tr('右结局域', 'Right ending domain') },
-                ] as const).map((option) => {
-                  const value = normalizeEndingBiasPercent(quickEndingBias[option.key]);
+              <div className="mt-4 rounded-2xl border border-zinc-800/80 bg-zinc-950/60 p-3 text-xs font-bold text-zinc-400">
+                {(() => {
+                  const axis = endingBiasAxisFromBias(quickEndingBias);
+                  const bias = endingBiasFromAxis(axis);
                   return (
-                    <label key={option.key} className="block space-y-2 rounded-2xl border border-zinc-800/80 bg-zinc-950/60 p-3 text-xs font-bold text-zinc-400">
+                    <>
                       <div className="flex items-center justify-between gap-3">
-                        <span>{option.label}</span>
-                        <span className="text-sm font-black text-indigo-200">{value}% · {endingBiasPercentLabel(value)}</span>
+                        <span>{tr('主线倾向', 'Mainline tendency')}</span>
+                        <span className="text-sm font-black text-indigo-200">{endingBiasAxisLabel(axis)}</span>
                       </div>
                       <input
                         type="range"
-                        min={10}
-                        max={80}
+                        min={-70}
+                        max={70}
                         step={10}
-                        value={value}
-                        onChange={(event) => {
-                          const raw = normalizeEndingBiasPercent(Number(event.target.value));
-                          setQuickEndingBias((prev) => ({ ...normalizeEndingBias(prev), [option.key]: raw }));
-                        }}
-                        className="w-full accent-indigo-500"
+                        value={axis}
+                        onChange={(event) => setQuickEndingBias(endingBiasFromAxis(Number(event.target.value)))}
+                        className="mt-3 w-full accent-indigo-500"
                       />
-                    </label>
+                      <div className="mt-2 flex justify-between text-[10px] font-black text-zinc-600">
+                        <span>{tr('右域强', 'Right strong')}</span>
+                        <span>{tr('中性', 'Neutral')}</span>
+                        <span>{tr('左域强', 'Left strong')}</span>
+                      </div>
+                      <div className="mt-2 text-[11px] leading-relaxed text-zinc-500">
+                        {tr(`左域 ${bias.leftBaseWeight}% / 右域 ${bias.rightBaseWeight}%；支线会瓜分各自剩余空间来撬动走向。`, `Left ${bias.leftBaseWeight}% / Right ${bias.rightBaseWeight}%. Branches use each side's remaining room to shift the path.`)}
+                      </div>
+                    </>
                   );
-                })}
+                })()}
               </div>
             )}
           </div>
@@ -11804,7 +11832,7 @@ export default function App() {
                     </div>
                     {isSingleEndingStory(blueprint) && (
                       <p className="text-xs leading-relaxed text-zinc-500">
-                        {tr('本作所有干涉都会自然收束到同一终局，重点在过程变化与角色经历。', 'All interference naturally converges to one ending; the focus is path changes and character experience.')}
+                        {tr('本作采用唯一走向，干涉会改变过程、角色经历与支线展开，但最终会自然收束到唯一结局。', 'This work uses a fixed-ending path; interference changes the journey, character experience, and branches, but ultimately converges to one ending.')}
                       </p>
                     )}
                     {!isSingleEndingStory(blueprint) && (
@@ -12096,7 +12124,7 @@ export default function App() {
           <div className="min-w-0 flex-1 text-center text-xs font-black sm:text-sm">
             {(() => {
               if (isSingleEndingStory(blueprint)) {
-                return <span className="text-indigo-300/90">{storyConclusion || interventionsLeft <= 0 ? tr('单一终局', 'Single fate') : tr('单一结局', 'Single ending')}</span>;
+                return <span className="text-indigo-300/90">{tr('唯一走向', 'Fixed-ending path')}</span>;
               }
               if (storyConclusion || interventionsLeft <= 0) {
                 const domain = endingDomainFromValue(endingValue);
@@ -13472,12 +13500,12 @@ export default function App() {
                       {([
                         {
                           value: 'single',
-                          label: tr('单一结局', 'Single ending'),
-                          hint: tr('所有干涉都需要自然收束到同一个默认结局，适合宿命感或强主线作品。', 'All interventions naturally converge to one default ending. Best for fated or strong-mainline stories.'),
+                          label: tr('唯一走向', 'Fixed-ending path'),
+                          hint: tr('所有干涉最终都会自然收束到唯一结局，适合宿命感或强主线作品。', 'All interventions naturally converge to one fixed ending. Best for fated or strong-mainline stories.'),
                         },
                         {
                           value: 'dual',
-                          label: tr('多线结局', 'Branching endings'),
+                          label: tr('三域走向', 'Three-domain path'),
                           hint: tr('使用中域、左域、右域三类收束，每一域都可以继续扩展具体结局。', 'Uses middle, left, and right domains. Each domain can later expand into specific endings.'),
                         },
                       ] as const).map((option) => {
@@ -13503,44 +13531,44 @@ export default function App() {
                     <div className="app-card-quiet mt-4 rounded-2xl p-4">
                       <div className="text-sm font-black text-zinc-100">{tr('故事倾向', 'Story Tendency')}</div>
                       <p className="mt-1 text-xs leading-relaxed text-zinc-500">{tr('设置作品本身比较容易走向哪一种收束。读者只会感受到故事倾向，不会看到具体数值。', 'Set which ending direction the work naturally leans toward. Readers feel the tendency but do not see exact values.')}</p>
-                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                        {([
-                          { key: 'leftBaseWeight', label: tr('左结局域', 'Left ending domain') },
-                          { key: 'rightBaseWeight', label: tr('右结局域', 'Right ending domain') },
-                        ] as const).map((option) => {
-                          const bias = normalizeEndingBias(authoringCartridge.meta?.endingBias || authoringCartridge.meta?.endingRates);
-                          const value = normalizeEndingBiasPercent(bias[option.key]);
+                      <div className="mt-3 rounded-2xl border border-zinc-800/60 bg-zinc-950/45 p-3 text-xs font-bold text-zinc-400">
+                        {(() => {
+                          const axis = endingBiasAxisFromBias(authoringCartridge.meta?.endingBias || authoringCartridge.meta?.endingRates);
+                          const bias = endingBiasFromAxis(axis);
                           return (
-                            <label key={option.key} className="block space-y-3 rounded-2xl border border-zinc-800/60 bg-zinc-950/45 p-3 text-xs font-bold text-zinc-400">
+                            <>
                               <div className="flex items-center justify-between gap-3">
-                                <span>{option.label}</span>
-                                <span className="text-sm font-black text-zinc-100">{value}% · {endingBiasPercentLabel(value)}</span>
+                                <span>{tr('主线倾向', 'Mainline tendency')}</span>
+                                <span className="text-sm font-black text-zinc-100">{endingBiasAxisLabel(axis)}</span>
                               </div>
                               <input
                                 type="range"
-                                min={10}
-                                max={80}
+                                min={-70}
+                                max={70}
                                 step={10}
-                                value={value}
+                                value={axis}
                                 onChange={(event) => {
-                                  const raw = normalizeEndingBiasPercent(Number(event.target.value));
-                                  setAuthoringCartridge((prev: any) => {
-                                    const prevBias = normalizeEndingBias(prev.meta?.endingBias || prev.meta?.endingRates);
-                                    return { ...prev, meta: { ...prev.meta, endingBias: { ...prevBias, [option.key]: raw } } };
-                                  });
+                                  const nextBias = endingBiasFromAxis(Number(event.target.value));
+                                  setAuthoringCartridge((prev: any) => ({
+                                    ...prev,
+                                    meta: { ...prev.meta, endingBias: nextBias, endingRates: nextBias },
+                                  }));
                                 }}
-                                className="w-full accent-indigo-400"
+                                className="mt-3 w-full accent-indigo-400"
                               />
-                              <div className="flex justify-between text-[10px] font-black text-zinc-600">
-                                <span>10%</span>
-                                <span>40%</span>
-                                <span>80%</span>
+                              <div className="mt-2 flex justify-between text-[10px] font-black text-zinc-600">
+                                <span>{tr('右域强', 'Right strong')}</span>
+                                <span>{tr('中性', 'Neutral')}</span>
+                                <span>{tr('左域强', 'Left strong')}</span>
                               </div>
-                            </label>
+                              <div className="mt-2 text-[11px] leading-relaxed text-zinc-500">
+                                {tr(`左域 ${bias.leftBaseWeight}% / 右域 ${bias.rightBaseWeight}%；主线越偏一侧，另一侧越需要靠支线撬动。`, `Left ${bias.leftBaseWeight}% / Right ${bias.rightBaseWeight}%. The stronger one side's mainline is, the more the other side relies on branches to push back.`)}
+                              </div>
+                            </>
                           );
-                        })}
+                        })()}
                       </div>
-                      <p className="mt-3 text-[11px] leading-relaxed text-zinc-500">{tr('如果不确定，保持两边相同即可；支线与玩家干涉会继续影响故事最终走向。', 'If unsure, keep both sides equal. Branches and player interventions still affect the final direction.')}</p>
+                      <p className="mt-3 text-[11px] leading-relaxed text-zinc-500">{tr('如果不确定，保持中性即可；支线与玩家干涉会继续影响故事最终走向。', 'If unsure, keep it neutral. Branches and player interventions still affect the final direction.')}</p>
                     </div>
                     )}
                   </section>
