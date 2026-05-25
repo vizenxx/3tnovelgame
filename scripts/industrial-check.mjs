@@ -57,3 +57,9 @@ if (!envExampleTracked) {
 }
 
 console.log(`Industrial guardrail check complete. Required production env keys: ${requiredEnvExamples.join(', ')}`);
+
+try {
+  execFileSync(process.execPath, ['scripts/check-frontend-safety.mjs'], { cwd: root, stdio: 'inherit' });
+} catch (error) {
+  process.exitCode = 1;
+}

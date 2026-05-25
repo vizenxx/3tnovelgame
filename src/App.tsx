@@ -5,7 +5,7 @@ import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogI
 import { auth, db, firebaseInitError } from './firebase';
 import { createEmptyStory, createSharedStoryRecord, createStorySnapshot, adaptBlueprintToStory, createStoryBranch, deleteAllNotifications, deleteNotification, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, deleteSeriesWorld, favoriteStory, unfavoriteStory, followAuthor, getAppSettings, getAuthorFollowState, getPushConfig, getSharedStoryRecord, getStoryCartridge as getStoryCartridgeStore, getStoryMeta, getUserProgress as getUserProgressStore, incrementShareMetric, incrementStoryMetric, likeStory, unlikeStory, listAuthorStories, listContinuityNodes, listFollowedAuthors, listMySeriesWorlds, listMySharedStories, listMyStories, listNotifications, listPublicStories, markNotificationsRead, refundCoverGenerationUsage, reportStory, reserveCoverGenerationUsage, saveAppSettings, saveContinuityNode, savePushSubscription, saveSeriesWorld, saveStoryMainlineBundle, saveStoryMeta, saveUserProgress as saveUserProgressStore, unfollowAuthor, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch, type ContinuityNodeRecord, type SeriesWorldRecord } from './storyStore';
 import { normalizeEndingBias, type EndingBias } from './storyCartridge';
-import { deleteLocalCache, getLocalCache, setLocalCache } from './localCache';
+import { deleteLocalCache, getLocalCache, pruneLocalCache, setLocalCache } from './localCache';
 import {
   TUTORIAL_STORY_CARTRIDGE,
   TUTORIAL_PROGRESS_VERSION,
@@ -925,7 +925,7 @@ const PwaUpdateModal = ({
           initial={{ opacity: 0, scale: 0.96, y: 16 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.96, y: 16 }}
-          className="w-full max-w-md rounded-3xl border border-zinc-800 bg-zinc-950 p-6 space-y-5 shadow-2xl"
+          className="app-modal-surface app-modal-safe-height w-full max-w-md space-y-5 overflow-y-auto rounded-3xl border border-zinc-800 p-5 shadow-2xl sm:p-6"
         >
           <div className="space-y-2">
             <div className="text-xs uppercase tracking-[0.35em] text-zinc-500">版本更新</div>
@@ -1841,6 +1841,21 @@ export default function App() {
     document.documentElement.lang = appLanguage;
     window.localStorage.setItem(LANGUAGE_STORAGE_KEY, appLanguage);
   }, [appLanguage]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const prune = () => {
+      void pruneLocalCache({ maxEntries: 180, maxAgeMs: 45 * 24 * 60 * 60 * 1000 });
+    };
+    const requestIdle = (window as any).requestIdleCallback as undefined | ((callback: () => void, options?: { timeout?: number }) => number);
+    const cancelIdle = (window as any).cancelIdleCallback as undefined | ((id: number) => void);
+    if (requestIdle) {
+      const id = requestIdle(prune, { timeout: 6000 });
+      return () => cancelIdle?.(id);
+    }
+    const timer = window.setTimeout(prune, 2500);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
@@ -8049,7 +8064,7 @@ export default function App() {
           <motion.div
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="w-full max-w-sm rounded-3xl border border-zinc-800 bg-zinc-950 p-6 shadow-2xl"
+            className="app-modal-surface app-modal-safe-height w-full max-w-sm overflow-y-auto rounded-3xl border border-zinc-800 p-5 shadow-2xl sm:p-6"
           >
             <h3 className="mb-2 text-xl font-black text-white">{confirmationModal.title}</h3>
             <p className="mb-6 text-sm text-zinc-400 leading-relaxed">{confirmationModal.message}</p>
@@ -8095,7 +8110,7 @@ export default function App() {
               initial={{ y: 18, opacity: 0, scale: 0.96 }}
               animate={{ y: 0, opacity: 1, scale: 1 }}
               exit={{ y: 12, opacity: 0, scale: 0.98 }}
-              className="w-full max-w-md rounded-[2rem] border border-emerald-500/25 bg-zinc-950 p-6 shadow-2xl"
+              className="app-modal-surface app-modal-safe-height w-full max-w-md overflow-y-auto rounded-[2rem] border border-emerald-500/25 p-5 shadow-2xl sm:p-6"
             >
               <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-300">
                 <CheckCircle2 className="h-6 w-6" />
@@ -8161,7 +8176,7 @@ export default function App() {
           <motion.div
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            className="w-full max-w-md rounded-[2.5rem] border border-white/10 bg-zinc-950/50 p-8 shadow-2xl backdrop-blur-2xl"
+            className="app-modal-surface app-modal-safe-height w-full max-w-md overflow-y-auto rounded-[2.5rem] border border-white/10 p-6 shadow-2xl backdrop-blur-2xl sm:p-8"
           >
             <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-500/20 text-indigo-400">
               <RefreshCcw className="h-8 w-8" />
@@ -8293,7 +8308,7 @@ export default function App() {
           <motion.div
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="w-full max-w-md rounded-[2.5rem] border border-zinc-800 bg-zinc-950 p-8 shadow-2xl"
+            className="app-modal-surface app-modal-safe-height w-full max-w-md overflow-y-auto rounded-[2.5rem] border border-zinc-800 p-6 shadow-2xl sm:p-8"
           >
             <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-rose-500/20 text-rose-400">
               <AlertCircle className="h-8 w-8" />
@@ -8362,7 +8377,7 @@ export default function App() {
             initial={{ y: 18, opacity: 0, scale: 0.96 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 12, opacity: 0, scale: 0.98 }}
-            className="w-full max-w-md rounded-[2rem] border border-indigo-500/30 bg-zinc-950 p-7 text-center shadow-2xl"
+            className="app-modal-surface app-modal-safe-height w-full max-w-md overflow-y-auto rounded-[2rem] border border-indigo-500/30 p-5 text-center shadow-2xl sm:p-7"
           >
             <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-500/15 text-indigo-300">
               <Sparkles className="h-7 w-7" />
@@ -8402,7 +8417,7 @@ export default function App() {
             initial={{ y: 18, opacity: 0, scale: 0.96 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 18, opacity: 0, scale: 0.96 }}
-            className="w-full max-w-md rounded-3xl border border-zinc-800 bg-zinc-950 p-6 shadow-2xl"
+            className="app-modal-surface app-modal-safe-height w-full max-w-md overflow-y-auto rounded-3xl border border-zinc-800 p-5 shadow-2xl sm:p-6"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="text-xs font-black uppercase tracking-[0.22em] text-indigo-300">命运涟漪</div>
@@ -8481,7 +8496,7 @@ export default function App() {
             initial={{ y: 18, opacity: 0, scale: 0.96 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 12, opacity: 0, scale: 0.98 }}
-            className="w-full max-w-2xl rounded-[2rem] border border-amber-500/25 bg-zinc-950 p-7 shadow-2xl"
+            className="app-modal-surface app-modal-safe-height w-full max-w-2xl overflow-y-auto rounded-[2rem] border border-amber-500/25 p-5 shadow-2xl sm:p-7"
           >
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
@@ -8528,19 +8543,6 @@ export default function App() {
               {String(storyConclusion || '').split('\n').filter(Boolean).map((paragraph, index) => (
                 <p key={index}>{paragraph}</p>
               ))}
-              <button
-                type="button"
-                onClick={() => {
-                  setArchiveTab('authors');
-                  setArchiveChoiceStoryId(null);
-                  void refreshFollowedAuthors();
-                }}
-                className={`rounded-xl px-4 py-2 text-sm font-black transition-all duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 ${
-                  archiveTab === 'authors' ? 'bg-indigo-600 text-white shadow-lg' : 'text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200'
-                }`}
-              >
-                追踪作者 <span className="ml-1 text-[10px] opacity-70">{followedAuthors.length}</span>
-              </button>
             </div>
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
               <button type="button" onClick={() => setShowSummaryModal(false)} className={semanticButtonClass('secondary', { fullWidth: true })}>
@@ -9632,7 +9634,7 @@ export default function App() {
             initial={{ opacity: 0, y: 18, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 18, scale: 0.98 }}
-            className="w-full max-w-2xl rounded-[2rem] border border-indigo-300/20 bg-zinc-950 p-6 shadow-2xl"
+            className="app-modal-surface app-modal-safe-height w-full max-w-2xl overflow-y-auto rounded-[2rem] border border-indigo-300/20 p-5 shadow-2xl sm:p-6"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-5 flex items-start justify-between gap-4">
@@ -9691,7 +9693,7 @@ export default function App() {
             initial={{ opacity: 0, y: 18, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 18, scale: 0.98 }}
-            className="w-full max-w-lg rounded-[2rem] border border-zinc-800 bg-zinc-950 p-6 shadow-2xl"
+            className="app-modal-surface app-modal-safe-height w-full max-w-lg overflow-y-auto rounded-[2rem] border border-zinc-800 p-5 shadow-2xl sm:p-6"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-5 flex items-start gap-4">
@@ -11125,7 +11127,7 @@ export default function App() {
             initial={{ opacity: 0, y: 16, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 16, scale: 0.97 }}
-            className={`${isSystemSettingsMode ? 'max-h-[82dvh]' : 'max-h-[calc(100dvh-9rem)]'} w-full max-w-4xl overflow-y-auto rounded-[2rem] border border-zinc-800 bg-zinc-950 p-6 shadow-2xl`}
+            className={`app-modal-surface app-modal-safe-height w-full max-w-4xl overflow-y-auto rounded-[2rem] border border-zinc-800 p-5 shadow-2xl sm:p-6`}
             onClick={(event) => event.stopPropagation()}
           >
             {renderAccountCenterContent('modal')}
@@ -11453,14 +11455,14 @@ export default function App() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[6100] flex items-center justify-center bg-black/70 px-4 backdrop-blur-md"
+          className={`${safeModalBackdropClass} z-[6100] bg-black/70 backdrop-blur-md`}
           onClick={() => setIsEditNameModalOpen(false)}
         >
           <motion.div
             initial={{ y: 16, opacity: 0, scale: 0.97 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 12, opacity: 0, scale: 0.98 }}
-            className="w-full max-w-md rounded-[2rem] border border-zinc-800 bg-zinc-950 p-6 shadow-2xl"
+            className="app-modal-surface app-modal-safe-height w-full max-w-md overflow-y-auto rounded-[2rem] border border-zinc-800 p-5 shadow-2xl sm:p-6"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-4 flex items-start justify-between gap-4">
@@ -11509,14 +11511,14 @@ export default function App() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[6100] flex items-center justify-center bg-black/70 px-4 backdrop-blur-md"
+          className={`${safeModalBackdropClass} z-[6100] bg-black/70 backdrop-blur-md`}
           onClick={() => setIsEditBioModalOpen(false)}
         >
           <motion.div
             initial={{ y: 16, opacity: 0, scale: 0.97 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 12, opacity: 0, scale: 0.98 }}
-            className="w-full max-w-md rounded-[2rem] border border-zinc-800 bg-zinc-950 p-6 shadow-2xl"
+            className="app-modal-surface app-modal-safe-height w-full max-w-md overflow-y-auto rounded-[2rem] border border-zinc-800 p-5 shadow-2xl sm:p-6"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-4 flex items-start justify-between gap-4">
@@ -11565,14 +11567,14 @@ export default function App() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[6100] flex items-center justify-center bg-black/70 px-4 backdrop-blur-md"
+          className={`${safeModalBackdropClass} z-[6100] bg-black/70 backdrop-blur-md`}
           onClick={() => setIsSecurityModalOpen(false)}
         >
           <motion.div
             initial={{ y: 16, opacity: 0, scale: 0.97 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 12, opacity: 0, scale: 0.98 }}
-            className="w-full max-w-md rounded-[2rem] border border-zinc-800 bg-zinc-950 p-6 shadow-2xl"
+            className="app-modal-surface app-modal-safe-height w-full max-w-md overflow-y-auto rounded-[2rem] border border-zinc-800 p-5 shadow-2xl sm:p-6"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-4 flex items-start justify-between gap-4">
@@ -12768,7 +12770,7 @@ export default function App() {
             initial={{ y: 20, opacity: 0, scale: 0.96 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 14, opacity: 0, scale: 0.98 }}
-            className="w-full max-w-xl rounded-[2rem] border border-zinc-800 bg-zinc-950 p-6 shadow-2xl"
+            className="app-modal-surface app-modal-safe-height w-full max-w-xl overflow-y-auto rounded-[2rem] border border-zinc-800 p-5 shadow-2xl sm:p-6"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-5 flex items-start justify-between gap-4">
@@ -12846,7 +12848,7 @@ export default function App() {
             initial={{ y: 20, opacity: 0, scale: 0.96 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 14, opacity: 0, scale: 0.98 }}
-            className="w-full max-w-lg rounded-[2rem] border border-zinc-800 bg-zinc-950 p-5 shadow-2xl sm:p-6"
+            className="app-modal-surface app-modal-safe-height w-full max-w-lg overflow-y-auto rounded-[2rem] border border-zinc-800 p-5 shadow-2xl sm:p-6"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-5 flex items-start justify-between gap-4">
@@ -12941,7 +12943,7 @@ export default function App() {
             initial={{ y: 20, opacity: 0, scale: 0.96 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 14, opacity: 0, scale: 0.98 }}
-            className="w-full max-w-lg rounded-[2rem] border border-zinc-800 bg-zinc-950 p-5 shadow-2xl sm:p-6"
+            className="app-modal-surface app-modal-safe-height w-full max-w-lg overflow-y-auto rounded-[2rem] border border-zinc-800 p-5 shadow-2xl sm:p-6"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-5 flex items-start justify-between gap-4">
@@ -14386,7 +14388,7 @@ export default function App() {
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.9, opacity: 0 }}
-            className="grid w-full max-w-md gap-4 rounded-3xl border border-zinc-800 bg-zinc-950 p-8 shadow-2xl"
+            className="app-modal-surface app-modal-safe-height grid w-full max-w-md gap-4 overflow-y-auto rounded-3xl border border-zinc-800 p-5 shadow-2xl sm:p-8"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
@@ -14584,7 +14586,7 @@ export default function App() {
             initial={{ y: 16, opacity: 0, scale: 0.97 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 16, opacity: 0, scale: 0.97 }}
-            className="w-full max-w-sm rounded-3xl border border-zinc-800 bg-zinc-950 p-6 shadow-2xl"
+            className="app-modal-surface app-modal-safe-height w-full max-w-sm overflow-y-auto rounded-3xl border border-zinc-800 p-5 shadow-2xl sm:p-6"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-5 flex items-center justify-between gap-3">

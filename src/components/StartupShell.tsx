@@ -10,15 +10,22 @@ const SimulatedProgressBar = () => {
     });
     const start = Date.now();
     const dur = 6500;
+    let isVisible = typeof document === 'undefined' || document.visibilityState !== 'hidden';
+    const handleVisibility = () => {
+      isVisible = document.visibilityState !== 'hidden';
+    };
     const interval = setInterval(() => {
+      if (!isVisible) return;
       const elapsed = Date.now() - start;
       const t = Math.min(elapsed / dur, 1);
       const ease = 1 - Math.pow(1 - t, 3);
       setPercent(Math.round(12 + ease * 76));
-    }, 120);
+    }, 250);
+    document.addEventListener('visibilitychange', handleVisibility);
     return () => {
       cancelAnimationFrame(frame);
       clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, []);
 

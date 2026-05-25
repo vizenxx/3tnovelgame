@@ -71,3 +71,38 @@ export async function deleteLocalCache(key: string): Promise<void> {
   }
 }
 
+export async function pruneLocalCache(options?: { maxEntries?: number; maxAgeMs?: number }): Promise<void> {
+  try {
+    const db = await openCacheDb();
+    const maxEntries = Math.max(20, options?.maxEntries ?? 160);
+    const maxAgeMs = Math.max(24 * 60 * 60 * 1000, options?.maxAgeMs ?? 45 * 24 * 60 * 60 * 1000);
+    const now = Date.now();
+    const entries = await new Promise<Array<CacheEnvelope<unknown>>>((resolve, reject) => {
+      const transaction = db.transaction(STORE_NAME, 'readonly');
+      const request = transaction.objectStore(STORE_NAME).getAll();
+      request.onsuccess = () => resolve(Array.isArray(request.result) ? request.result : []);
+      request.onerror = () => reject(request.error);
+    });
+    const sorted = entries
+      .filter((entry) => entry?.key)
+      .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
+    const staleKeys = new Set<string>();
+    sorted.forEach((entry, index) => {
+      const updatedAt = Number(entry.updatedAt || 0);
+      if (index >= maxEntries || !updatedAt || now - updatedAt > maxAgeMs) {
+        staleKeys.add(entry.key);
+      }
+    });
+    if (staleKeys.size === 0) return;
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(STORE_NAME, 'readwrite');
+      const store = transaction.objectStore(STORE_NAME);
+      staleKeys.forEach((key) => store.delete(key));
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+  } catch {
+    // Cache pruning should never block the app.
+  }
+}
+
