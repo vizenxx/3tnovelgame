@@ -1016,11 +1016,11 @@ html[data-theme="light"] .reading-page::before {
   margin-top: 0.45rem;
   display: flex;
   flex-direction: column;
-  gap: 0.22rem;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  padding: 0;
+  gap: 0.16rem;
+  border: 1px solid color-mix(in srgb, var(--app-border) 46%, transparent);
+  border-radius: 1.1rem;
+  background: color-mix(in srgb, var(--app-soft-black) 32%, transparent);
+  padding: 0.38rem;
 }
 
 .story-card-stat {
@@ -1029,19 +1029,14 @@ html[data-theme="light"] .reading-page::before {
   align-items: center;
   gap: 0.45rem;
   min-height: 1.45rem;
-  border: 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--app-border) 32%, transparent);
+  border: 1px solid transparent;
   border-radius: 0.85rem;
-  padding: 0.22rem 0.15rem;
+  padding: 0.24rem 0.42rem;
   color: var(--app-muted-text);
   font-size: 0.66rem;
   font-weight: 900;
   line-height: 1.1;
   background: transparent;
-}
-
-.story-card-stat:last-child {
-  border-bottom-color: transparent;
 }
 
 .story-card-stat-label {
@@ -1070,14 +1065,14 @@ html[data-theme="light"] .reading-page::before {
 }
 
 .story-card-stat[data-active="true"][data-tone="like"] {
-  border-bottom-color: rgba(244, 114, 182, 0.28);
-  background: linear-gradient(90deg, rgba(236, 72, 153, 0.1), transparent);
+  border-color: rgba(244, 114, 182, 0.28);
+  background: linear-gradient(90deg, rgba(236, 72, 153, 0.12), rgba(236, 72, 153, 0.04));
   color: #f9a8d4;
 }
 
 .story-card-stat[data-active="true"][data-tone="favorite"] {
-  border-bottom-color: rgba(251, 191, 36, 0.28);
-  background: linear-gradient(90deg, rgba(245, 158, 11, 0.1), transparent);
+  border-color: rgba(251, 191, 36, 0.28);
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.12), rgba(245, 158, 11, 0.04));
   color: #fcd34d;
 }
 
@@ -1932,18 +1927,26 @@ html[data-theme="light"] .story-library-tab[data-active="true"] {
 }
 
 html[data-theme="light"] .story-card-stat-list {
-  background: transparent !important;
-  border-color: transparent !important;
+  background: color-mix(in srgb, var(--app-surface-soft) 42%, transparent) !important;
+  border-color: var(--app-shell-border-soft) !important;
 }
 
 html[data-theme="light"] .story-card-stat {
-  border-bottom-color: color-mix(in srgb, var(--app-border) 42%, transparent) !important;
+  border-color: transparent !important;
   background: transparent !important;
   color: var(--app-muted-text) !important;
 }
 
-html[data-theme="light"] .story-card-stat:last-child {
-  border-bottom-color: transparent !important;
+html[data-theme="light"] .story-card-stat[data-active="true"][data-tone="like"] {
+  border-color: rgba(171, 55, 119, 0.24) !important;
+  background: linear-gradient(90deg, rgba(171, 55, 119, 0.11), rgba(171, 55, 119, 0.035)) !important;
+  color: #ab3777 !important;
+}
+
+html[data-theme="light"] .story-card-stat[data-active="true"][data-tone="favorite"] {
+  border-color: rgba(132, 90, 24, 0.24) !important;
+  background: linear-gradient(90deg, rgba(132, 90, 24, 0.12), rgba(132, 90, 24, 0.035)) !important;
+  color: #845a18 !important;
 }
 
 html[data-theme="light"] .story-card-stat-value {
