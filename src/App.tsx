@@ -49,9 +49,14 @@ import { AccountProfileModals } from './components/AccountModals';
 import { StoryLibraryCard } from './components/StoryLibraryCard';
 import { StorySelectView } from './components/StorySelectView';
 import { StoryDetailModal } from './components/StoryDetailModal';
+import { StoryLibraryView } from './components/StoryLibraryView';
 import { ArchiveView } from './components/ArchiveView';
 import { AccountCenterContent } from './components/AccountCenterView';
 import { ReadonlyStoryView } from './components/ReadonlyStoryView';
+import { SeriesWorldView } from './components/SeriesWorldView';
+import { ThemeSelectionView } from './components/ThemeSelectionView';
+import { AuthoringView } from './components/AuthoringView';
+import { GameplayModals } from './components/GameplayModals';
 import { AuthoringSaveSuccessModal, ConfirmationModal, SequelGateModal, type SequelGateModalState } from './components/GeneralModals';
 import { AuthorProfileModal, NotificationCenterModal, ShareComposerModal } from './components/SocialModals';
 import {
@@ -7714,773 +7719,52 @@ export default function App() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const renderConfirmationModal = () => (
-    <ConfirmationModal
-      modal={confirmationModal}
-      onClose={() => setConfirmationModal((prev) => ({ ...prev, isOpen: false }))}
-    />
-  );
-
-  const renderAuthoringSaveSuccessModal = () => (
-    <AuthoringSaveSuccessModal
-      story={authoringSaveSuccessStory}
-      isSharing={isSharing}
-      formatBookTitle={formatBookTitle}
-      onShare={handleShareSavedAuthoringStory}
-      onReturnHome={() => {
-        setAuthoringSaveSuccessStory(null);
-        setAuthoringStoryId(null);
-        setAuthoringCartridge(null);
-        resetToHome();
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+  const renderGameplayModals = () => (
+    <GameplayModals
+      ctx={{
+        confirmationModal,
+        setConfirmationModal,
+        tr,
+        t,
+        shareOriginalStoryByCard,
+        myStories,
+        resetToHome,
+        branchUnlockNotice,
+        setBranchUnlockNotice,
+        interventionStatusNotice,
+        setInterventionStatusNotice,
+        activeStoryId,
+        blueprint,
+        handleShareStory,
+        isSharing,
+        endingDomainUserLabel,
+        endingDomainToneClass,
+        semanticIconButtonClass,
+        setShowSummaryModal,
+        showSummaryModal,
+        endingDomainFromValue,
+        handleSaveWorkAndReturn,
+        handleSaveProgressAndReturn,
+        resetGame,
+        setShowLeaveGameModal,
+        showLeaveGameModal,
+        startNewStoryPlay,
+        inheritedEndingDisplayLabel,
+        startSequelWithInheritedRecord,
+        setPendingSequelInheritance,
+        pendingSequelInheritance,
+        startFreshFromPendingProgress,
+        resumeStoryPlay,
+        safeModalBackdropClass,
+        setPendingProgressToLoad,
+        pendingProgressToLoad,
+        handleShareSavedAuthoringStory,
+        setAuthoringSaveSuccessStory,
+        authoringSaveSuccessStory,
       }}
-      onClose={() => setAuthoringSaveSuccessStory(null)}
     />
   );
 
-  const renderResumePromptModal = () => (
-    <AnimatePresence>
-      {pendingProgressToLoad && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className={`${safeModalBackdropClass} z-[5000] bg-black/90 backdrop-blur-lg`}
-        >
-          <motion.div
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            className="app-modal-surface app-modal-safe-height w-full max-w-md overflow-y-auto rounded-[2.5rem] border border-white/10 p-6 shadow-2xl backdrop-blur-2xl sm:p-8"
-          >
-            <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-500/20 text-indigo-400">
-              <RefreshCcw className="h-8 w-8" />
-            </div>
-            <h3 className="mb-3 text-2xl font-black text-white">检测到现有进度</h3>
-            <p className="mb-8 text-app-muted leading-relaxed">
-              您之前在这个故事中有尚未完成的干涉。是否要继承上次的进度继续游玩？
-            </p>
-            <div className="flex flex-col gap-3">
-              <button
-                type="button"
-                onClick={() => resumeStoryPlay(pendingProgressToLoad.id, pendingProgressToLoad.data)}
-                className="w-full rounded-2xl bg-white py-4 text-sm font-black text-black shadow-lg shadow-white/5"
-              >
-                继承并继续
-              </button>
-              <button
-                type="button"
-                onClick={() => { void startFreshFromPendingProgress(); }}
-                className="w-full rounded-2xl bg-app-surface py-4 text-sm font-bold text-app-muted"
-              >
-                开始新干涉
-              </button>
-              <button
-                type="button"
-                onClick={() => setPendingProgressToLoad(null)}
-                className="w-full py-2 text-xs font-medium text-zinc-600 hover:text-app-muted transition-colors"
-              >
-                暂不处理
-              </button>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-
-  const renderSequelInheritanceModal = () => (
-    <AnimatePresence>
-      {pendingSequelInheritance && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className={`${safeModalBackdropClass} z-[5050] bg-black/85 backdrop-blur-lg`}
-        >
-          <motion.div
-            initial={{ y: 20, opacity: 0, scale: 0.97 }}
-            animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: 12, opacity: 0, scale: 0.98 }}
-            className="app-modal-surface app-modal-safe-height w-full max-w-2xl overflow-y-auto rounded-[2rem] p-6"
-          >
-            <div className="mb-5">
-              <div className="text-xs font-black uppercase tracking-[0.2em] text-indigo-300">续作继承</div>
-              <h3 className="mt-2 text-2xl font-black text-white">选择要继承的前作命运线</h3>
-              <p className="mt-2 text-sm leading-relaxed text-app-muted">
-                找到多条符合前置条件的记录。选择其中一条后，续作第一章会根据该记录做开场调节，之后再回到本作的既定轨道。
-              </p>
-            </div>
-            <div className="grid max-h-[56vh] gap-3 overflow-y-auto pr-1">
-              {pendingSequelInheritance.records.map((record) => (
-                <button
-                  key={record.runId}
-                  type="button"
-                  onClick={() => {
-                    const pending = pendingSequelInheritance;
-                    setPendingSequelInheritance(null);
-                    void startSequelWithInheritedRecord(pending.storyId, pending.cartridge, pending.progressData, record, pending.requirement);
-                  }}
-                  className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-left transition-colors hover:border-indigo-400/45 hover:bg-indigo-500/10 active:scale-[0.99]"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex min-w-0 flex-wrap items-center gap-2">
-                      <div className="font-black text-app-text">{inheritedEndingDisplayLabel(record, pendingSequelInheritance.requirement)}</div>
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${record.sourceType === 'archived' ? 'bg-amber-500/15 text-amber-200' : 'bg-app-surface-soft text-app-muted'}`}>
-                        {record.sourceType === 'archived' ? '收藏命运' : '自动记录'}
-                      </span>
-                    </div>
-                    <div className="text-[10px] font-black uppercase tracking-[0.16em] text-app-muted">
-                      {record.completedAt ? new Date(record.completedAt).toLocaleString() : '完成记录'}
-                    </div>
-                  </div>
-                  {record.unlockedBranches.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {record.unlockedBranches.slice(0, 5).map((branch) => (
-                        <span key={branch.id} className="rounded-full bg-indigo-500/12 px-2.5 py-1 text-[11px] font-black text-indigo-100">
-                          {branch.name || branch.id}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  {record.storyConclusion && (
-                    <p className="mt-3 line-clamp-2 text-xs leading-relaxed text-app-muted">{record.storyConclusion}</p>
-                  )}
-                </button>
-              ))}
-            </div>
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <button type="button" onClick={() => setPendingSequelInheritance(null)} className={semanticButtonClass('ghost', { fullWidth: true })}>
-                关闭
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const pending = pendingSequelInheritance;
-                  setPendingSequelInheritance(null);
-                  void startNewStoryPlay(pending.storyId, pending.cartridge, pending.progressData);
-                }}
-                className={semanticButtonClass('secondary', { fullWidth: true })}
-              >
-                使用标准开场
-              </button>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-
-  const renderLeaveGameModal = () => (
-    <AnimatePresence>
-      {showLeaveGameModal && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className={`${safeModalBackdropClass} z-[5000] bg-black/80 backdrop-blur-md`}
-        >
-          <motion.div
-            initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="app-modal-surface app-modal-safe-height w-full max-w-md overflow-y-auto rounded-[2.5rem] border border-app-border p-6 shadow-2xl sm:p-8"
-          >
-            <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-rose-500/20 text-rose-400">
-              <AlertCircle className="h-8 w-8" />
-            </div>
-            <h3 className="mb-3 text-2xl font-black text-white">确定要离开吗？</h3>
-            <p className="mb-8 text-app-muted leading-relaxed">
-              当前干涉尚未保存。离开游玩页后，未保存的游玩进度将会丢失。
-            </p>
-            <div className="flex flex-col gap-3">
-              {interventionsLeft > 0 && (
-                <button
-                  type="button"
-                  onClick={() => resetGame({ discardCloudProgress: true })}
-                  className="w-full rounded-2xl bg-rose-500 py-4 text-sm font-black text-white shadow-lg shadow-rose-500/20"
-                >
-                  放弃干涉并返回
-                </button>
-              )}
-              {interventionsLeft < 3 && interventionsLeft > 0 && (
-                <button
-                  type="button"
-                  onClick={handleSaveProgressAndReturn}
-                  className="w-full rounded-2xl bg-indigo-600 py-4 text-sm font-black text-white shadow-lg shadow-indigo-600/20"
-                >
-                  保存进度并返回
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={handleSaveWorkAndReturn}
-                className="w-full rounded-2xl bg-emerald-600 py-4 text-sm font-black text-white shadow-lg shadow-emerald-600/20"
-              >
-                收藏命运并返回
-              </button>
-              <button
-                type="button"
-                onClick={() => resetGame({ discardCloudProgress: true })}
-                className="w-full rounded-2xl bg-app-surface py-4 text-sm font-bold text-app-muted"
-              >
-                确认返回
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowLeaveGameModal(false)}
-                className="mt-2 w-full py-2 text-sm font-medium text-app-muted hover:text-app-text"
-              >
-                继续游玩
-              </button>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-
-  const renderBranchUnlockModal = () => (
-    <AnimatePresence>
-      {branchUnlockNotice && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className={`${safeModalBackdropClass} z-[5200] bg-black/75 backdrop-blur-md`}
-        >
-          <motion.div
-            initial={{ y: 18, opacity: 0, scale: 0.96 }}
-            animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: 12, opacity: 0, scale: 0.98 }}
-            className="app-modal-surface app-modal-safe-height w-full max-w-md overflow-y-auto rounded-[2rem] border border-indigo-500/30 p-5 text-center shadow-2xl sm:p-7"
-          >
-            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-500/15 text-indigo-300">
-              <Sparkles className="h-7 w-7" />
-            </div>
-            <div className="mb-2 text-xs font-black uppercase tracking-[0.22em] text-indigo-300">支线解锁</div>
-            <h3 className="text-2xl font-black text-white">{branchUnlockNotice.name || '新的命运支线'}</h3>
-            {(branchUnlockNotice.desc || branchUnlockNotice.hint) && (
-              <p className="mt-4 text-sm leading-relaxed text-app-muted">
-                {branchUnlockNotice.desc || branchUnlockNotice.hint}
-              </p>
-            )}
-            <button
-              type="button"
-              onClick={() => setBranchUnlockNotice(null)}
-              className={`${semanticButtonClass('primary', { fullWidth: true })} mt-7`}
-            >
-              <Check className="h-4 w-4" />
-              继续阅读
-            </button>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-
-  const renderInterventionStatusNotice = () => (
-    <AnimatePresence>
-      {interventionStatusNotice && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className={`${safeModalBackdropClass} z-[5250] bg-black/65 backdrop-blur-md`}
-          onClick={() => setInterventionStatusNotice(null)}
-        >
-          <motion.div
-            initial={{ y: 18, opacity: 0, scale: 0.96 }}
-            animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: 18, opacity: 0, scale: 0.96 }}
-            className="app-modal-surface app-modal-safe-height w-full max-w-md overflow-y-auto rounded-3xl border border-app-border p-5 shadow-2xl sm:p-6"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="text-xs font-black uppercase tracking-[0.22em] text-indigo-300">命运涟漪</div>
-            {interventionStatusNotice.updates.length > 0 ? (
-              <>
-                <h3 className="mt-2 text-2xl font-black text-white">众人的命运因干涉而有了变化...</h3>
-                <div className="mt-5 grid gap-3">
-                  {interventionStatusNotice.updates.map((update) => (
-                    <div key={update.id} className="rounded-2xl border border-app-border bg-app-surface/45 p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="font-black text-app-text">{update.name}</div>
-                        <div className={`rounded-full px-2.5 py-1 text-[11px] font-black ${update.isDead ? 'bg-red-500/20 text-red-300' : 'bg-emerald-500/20 text-emerald-300'}`}>
-                          {update.status}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <>
-                <h3 className="mt-2 text-2xl font-black text-white">干涉的涟漪似乎没能碰触到众人...</h3>
-                <p className="mt-4 text-sm leading-relaxed text-app-muted">
-                  这次变化更多停留在情节与命运走向之中，角色状态暂未出现可记录的改变。
-                </p>
-              </>
-            )}
-            <button
-              type="button"
-              onClick={() => setInterventionStatusNotice(null)}
-              className={`${semanticButtonClass('primary', { fullWidth: true })} mt-7`}
-            >
-              <Check className="h-4 w-4" />
-              关闭
-            </button>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-
-  const getCurrentBranchExplorationStats = () => {
-    const total = (blueprint?.branches || []).length;
-    const runById = new Map<string, any>();
-    (unlockedBranches || []).forEach((branch: any) => {
-      const id = String(branch?.id || branch?.name || '');
-      if (id) runById.set(id, branch);
-    });
-    const historicalById = new Map<string, any>();
-    (historicallyUnlockedBranches || []).forEach((branch: any) => {
-      const id = String(branch?.id || branch?.name || '');
-      if (id) historicalById.set(id, branch);
-    });
-    runById.forEach((branch, id) => historicalById.set(id, branch));
-    return {
-      total,
-      runUnlocked: Array.from(runById.values()),
-      historicalUnlockedCount: historicalById.size,
-    };
-  };
-
-  const renderSummaryModal = () => {
-    const domain = endingDomainFromValue(endingValue);
-    const singleEnding = isSingleEndingStory(blueprint);
-    const branchStats = getCurrentBranchExplorationStats();
-    return (
-    <AnimatePresence>
-      {showSummaryModal && storyConclusion && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className={`${safeModalBackdropClass} z-[5200] bg-black/75 backdrop-blur-md`}
-        >
-          <motion.div
-            initial={{ y: 18, opacity: 0, scale: 0.96 }}
-            animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: 12, opacity: 0, scale: 0.98 }}
-            className="app-modal-surface app-modal-safe-height w-full max-w-2xl overflow-y-auto rounded-[2rem] border border-amber-500/25 p-5 shadow-2xl sm:p-7"
-          >
-            <div className="mb-5 flex items-start justify-between gap-4">
-              <div>
-                <div className="mb-2 text-xs font-black uppercase tracking-[0.22em] text-amber-300">命运结算</div>
-                <h3 className="text-3xl font-black text-white">最终命运总结</h3>
-              </div>
-              <button type="button" onClick={() => setShowSummaryModal(false)} className={semanticIconButtonClass('ghost')}>
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            {singleEnding && (
-              <div className="mb-4 rounded-2xl border border-indigo-400/20 bg-indigo-500/10 px-4 py-3 text-sm font-black text-indigo-100">
-                {tr('当前走向：唯一走向', 'Current path: Fixed-ending path')}
-              </div>
-            )}
-            {!singleEnding && (
-            <div className={`mb-4 rounded-2xl border px-4 py-3 text-sm font-black ${endingDomainToneClass(domain)}`}>
-              当前结局归属：{endingDomainUserLabel(domain)}
-            </div>
-            )}
-            <div className="mb-4 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-2xl border border-app-border bg-app-surface/35 p-4">
-                <div className="text-[11px] font-black uppercase tracking-[0.18em] text-app-muted">本次解锁</div>
-                <div className="mt-1 text-2xl font-black text-white">{branchStats.runUnlocked.length}</div>
-              </div>
-              <div className="rounded-2xl border border-app-border bg-app-surface/35 p-4">
-                <div className="text-[11px] font-black uppercase tracking-[0.18em] text-app-muted">解锁统计</div>
-                <div className="mt-1 text-2xl font-black text-white">{branchStats.historicalUnlockedCount}/{branchStats.total}</div>
-              </div>
-            </div>
-            {branchStats.runUnlocked.length > 0 && (
-              <div className="mb-4 rounded-2xl border border-app-border bg-app-surface/30 p-4">
-                <div className="mb-2 text-[11px] font-black uppercase tracking-[0.18em] text-app-muted">本次触及支线</div>
-                <div className="flex flex-wrap gap-2">
-                  {branchStats.runUnlocked.map((branch: any) => (
-                    <span key={branch.id || branch.name} className="rounded-full bg-indigo-500/10 px-2.5 py-1 text-xs font-black text-indigo-200">
-                      {branch.name || '未命名支线'}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-            <div className="rounded-2xl border border-app-border bg-app-surface/40 p-5 text-lg font-medium leading-relaxed text-amber-100">
-              {String(storyConclusion || '').split('\n').filter(Boolean).map((paragraph, index) => (
-                <p key={index}>{paragraph}</p>
-              ))}
-            </div>
-            <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              <button type="button" onClick={() => setShowSummaryModal(false)} className={semanticButtonClass('secondary', { fullWidth: true })}>
-                <BookOpen className="h-4 w-4" />
-                回去阅读完整故事
-              </button>
-              <button type="button" onClick={handleShareStory} disabled={isSharing} className={semanticButtonClass('primary', { fullWidth: true })}>
-                {isSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
-                分享故事
-              </button>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-    );
-  };
-
-  const getStoryStats = (story: any) => {
-    const isLiked = hasStoryCardAction('like', story);
-    const isFavorited = hasStoryCardAction('favorite', story);
-    const singleEnding = isSingleEndingStory(story);
-    const stats = [
-      { key: 'like', label: '点赞', activeLabel: '已点赞', value: getStoryLikeCount(story), icon: Heart, active: isLiked, tone: 'like' },
-      { key: 'favorite', label: '收藏', activeLabel: '已收藏', value: getStoryFavoriteCount(story), icon: Bookmark, active: isFavorited, tone: 'favorite' },
-      { key: 'share', label: '分享', value: getStoryShareCount(story), icon: ExternalLink },
-      { key: 'intervention', label: '干涉', value: getStoryInterventionCount(story), icon: Sparkles },
-      { key: 'branches', label: '支线', value: `${getStoryUnlockedBranchCount(story)}/${getStoryBranchCount(story) || 0}`, icon: GitBranch },
-      { key: 'endings', label: '结局', value: `${getStoryUnlockedEndingCount(story)}/${getStoryEndingCount(story) || 0}`, icon: Trophy },
-      { key: 'words', label: '均字', detailLabel: '均字', value: getStoryAverageChapterWords(story) || '未知', valueSuffix: ' 字', icon: BookOpen },
-    ];
-    return singleEnding
-      ? stats.map((stat) => stat.key === 'endings' ? { ...stat, label: '唯一', value: getStoryEndingCount(story) || 1 } : stat)
-      : stats;
-  };
-
-  const renderStoryStats = (
-    story: any,
-    variant: 'card' | 'detail' | 'compact-row',
-    actions?: {
-      storyId?: string;
-      onLike?: () => void;
-      onFavorite?: () => void;
-      onShare?: () => void;
-    }
-  ) => {
-    const stats = getStoryStats(story);
-    if (variant === 'compact-row') {
-      return (
-        <div className="story-compact-stats-row flex flex-wrap gap-x-3.5 gap-y-1.5 py-1">
-          {stats.map((stat) => {
-            const Icon = stat.icon;
-            const onClick = stat.key === 'like' ? actions?.onLike : stat.key === 'favorite' ? actions?.onFavorite : stat.key === 'share' ? actions?.onShare : undefined;
-            return (
-              <button
-                key={stat.key}
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onClick?.();
-                }}
-                disabled={!onClick}
-                data-active={stat.active ? 'true' : undefined}
-                data-tone={stat.tone}
-                className={`story-compact-stat flex items-center gap-1 text-[11px] font-semibold transition-all active:scale-95 disabled:pointer-events-none ${
-                  stat.active && stat.tone === 'like'
-                    ? 'text-pink-400'
-                    : stat.active && stat.tone === 'favorite'
-                    ? 'text-amber-400'
-                    : 'text-app-muted hover:text-app-text'
-                }`}
-              >
-                <Icon className={`h-3.5 w-3.5 shrink-0 ${stat.active ? 'fill-current' : ''}`} />
-                <span className="font-heading tracking-wide">{stat.value}</span>
-              </button>
-            );
-          })}
-        </div>
-      );
-    }
-
-    if (variant === 'card') {
-      return (
-        <div className="story-card-stat-list">
-          {stats.map((stat) => {
-            const Icon = stat.icon;
-            const onClick = stat.key === 'like' ? actions?.onLike : stat.key === 'favorite' ? actions?.onFavorite : stat.key === 'share' ? actions?.onShare : undefined;
-            return (
-              <button
-                key={stat.key}
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onClick?.();
-                }}
-                disabled={!onClick}
-                data-active={stat.active ? 'true' : undefined}
-                data-tone={stat.tone}
-                className="story-card-stat text-left transition-colors disabled:cursor-default"
-              >
-                <div className="story-card-stat-label">
-                  <Icon className={`h-3.5 w-3.5 shrink-0 ${stat.active ? 'fill-current' : ''}`} />
-                  <span className="truncate">{stat.active ? stat.activeLabel || stat.label : stat.label}</span>
-                </div>
-                <div className="story-card-stat-value">{stat.value}</div>
-              </button>
-            );
-          })}
-        </div>
-      );
-    }
-
-    return (
-      <div className="story-detail-stat-grid sm:grid-cols-1">
-        {stats.map((stat) => {
-          const Icon = stat.icon;
-          const isAction = stat.key === 'like' || stat.key === 'favorite' || stat.key === 'share';
-          const onClick = stat.key === 'like' ? actions?.onLike : stat.key === 'favorite' ? actions?.onFavorite : stat.key === 'share' ? actions?.onShare : undefined;
-          const content = (
-            <>
-              <div className={`story-detail-stat-label transition-colors ${stat.active && stat.tone === 'like' ? 'text-pink-300' : stat.active && stat.tone === 'favorite' ? 'text-amber-300' : ''}`}>
-                {stat.active ? stat.activeLabel || stat.label : stat.detailLabel || stat.label}
-                <Icon className={`h-3.5 w-3.5 transition-transform ${stat.active ? 'scale-110 fill-current' : ''}`} />
-              </div>
-              <div className="story-detail-stat-value">{stat.value}{stat.valueSuffix && stat.value !== '未知' ? stat.valueSuffix : ''}</div>
-            </>
-          );
-
-          if (isAction && onClick) {
-            return (
-              <button
-                key={stat.key}
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onClick?.();
-                }}
-                data-active={stat.active ? 'true' : undefined}
-                data-tone={stat.tone}
-                className="story-detail-stat group text-left transition-all active:scale-[0.98]"
-              >
-                {content}
-              </button>
-            );
-          }
-
-          return (
-            <div key={stat.key} className="story-detail-stat">
-              {content}
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
-
-  const renderStoryBiasBar = (story: any) => {
-    if (isSingleEndingStory(story)) {
-      return (
-        <div className="story-bias-bar story-bias-single" aria-label="唯一走向结构">
-          <div className="story-bias-side story-bias-center" data-active="true">
-            <span>{tr('唯一走向', 'Fixed-ending path')}</span>
-          </div>
-        </div>
-      );
-    }
-    const labels = endingBiasStoryCardLabels(story);
-    const left = labels.find((bias) => bias.side === 'left');
-    const right = labels.find((bias) => bias.side === 'right');
-    if (!left && !right) return null;
-    return (
-      <div className="story-bias-bar" aria-label="作品结局倾向">
-        <div className="story-bias-side story-bias-left" data-active={left?.active ? 'true' : undefined}>
-          <span>{left?.label || '左域'}</span>
-          <strong>{left?.value || '普通'}</strong>
-        </div>
-        <div className="story-bias-divider" />
-        <div className="story-bias-side story-bias-right" data-active={right?.active ? 'true' : undefined}>
-          <strong>{right?.value || '普通'}</strong>
-          <span>{right?.label || '右域'}</span>
-        </div>
-      </div>
-    );
-  };
-
-  const renderStoryCard = (story: any, isPublic: boolean) => (
-    <StoryLibraryCard
-      story={story}
-      tr={tr}
-      t={t}
-      formatBookTitle={formatBookTitle}
-      getStoryCoverUrl={getStoryCoverUrl}
-      getStoryTags={getStoryTags}
-      getStoryTitle={getStoryTitle}
-      getStoryAuthorName={getStoryAuthorName}
-      getStoryMainAxis={getStoryMainAxis}
-      hasStoryCardAction={hasStoryCardAction}
-      getSequelRequirementFromMeta={getSequelRequirementFromMeta}
-      renderStoryStats={renderStoryStats}
-      renderStoryBiasBar={renderStoryBiasBar}
-      AuthorNameButton={AuthorNameButton}
-      onOpenDetail={setStoryDetailStory}
-      onStartStory={(storyId) => void startStoryPlay(storyId)}
-      onStoryInteraction={(kind, storyId, storyItem) => handleStoryInteraction(kind, storyId, storyItem)}
-      onShareStory={(storyItem) => void shareStoryCardWithFeedback(storyItem)}
-    />
-  );
-
-  const renderStoryDetailModal = () => {
-    const coverUrl = storyDetailStory ? getStoryCoverUrl(storyDetailStory) : '';
-    const tags = storyDetailStory ? getStoryTags(storyDetailStory) : [];
-    const title = storyDetailStory ? formatBookTitle(getStoryTitle(storyDetailStory)) : '';
-    const detailStoryId = storyDetailStory?.id || storyDetailStory?.storyId || storyDetailStory?.sourceStoryId;
-    const detailSequelRequirement = storyDetailStory ? getSequelRequirementFromMeta(storyDetailStory) : null;
-
-    const handleShareFromDetail = async () => {
-      if (!storyDetailStory) return;
-      try {
-        setIsSharing(true);
-        setGlobalLoadingMessage(isEnglish ? 'Preparing story share...' : '????????...');
-        setGlobalLoadingDetail(isEnglish ? 'Creating the story link and opening the system share sheet.' : '???????????????????');
-        await shareOriginalStoryByCard(storyDetailStory);
-      } catch (error: any) {
-        console.error(error);
-        showError(error?.message || '?????');
-      } finally {
-        setIsSharing(false);
-        setGlobalLoadingMessage(null);
-        setGlobalLoadingDetail(null);
-      }
-    };
-
-    const handleAdminDeleteFromDetail = () => {
-      if (!isAdminUser || !detailStoryId) return;
-      setStoryDetailStory(null);
-      setConfirmationModal({
-        isOpen: true,
-        title: '????',
-        message: '?????' + stripBookTitle(title) + '?????????????????????????????????',
-        onConfirm: () => {
-          void (async () => {
-            try {
-              setGlobalLoadingMessage(isEnglish ? 'Deleting story...' : '??????...');
-              await deleteStoryCartridge(db as any, detailStoryId);
-              setPublicStories((prev) => prev.filter((story: any) => story.id !== detailStoryId));
-              setMyStories((prev) => prev.filter((story: any) => story.id !== detailStoryId));
-              setMySharedStories((prev) => prev.filter((story: any) => story.sourceStoryId !== detailStoryId && story.id !== detailStoryId));
-              setStoryDetailStory(null);
-              showError('??????');
-            } catch (error: any) {
-              console.error(error);
-              showError(error?.message || '???????');
-            } finally {
-              setGlobalLoadingMessage(null);
-            }
-          })();
-        },
-      });
-    };
-
-    return (
-      <StoryDetailModal
-        story={storyDetailStory}
-        coverUrl={coverUrl}
-        tags={tags}
-        title={title}
-        mainAxis={storyDetailStory ? getStoryMainAxis(storyDetailStory) : ''}
-        authorId={storyDetailStory?.authorId || storyDetailStory?.meta?.authorId}
-        authorName={storyDetailStory ? getStoryAuthorName(storyDetailStory) : ''}
-        isSharing={isSharing}
-        isAdmin={Boolean(isAdminUser && detailStoryId)}
-        sequelRequirement={detailSequelRequirement}
-        statsNode={storyDetailStory ? renderStoryStats(storyDetailStory, 'detail', {
-          storyId: detailStoryId,
-          onLike: () => handleStoryInteraction('like', detailStoryId, storyDetailStory),
-          onFavorite: () => handleStoryInteraction('favorite', detailStoryId, storyDetailStory),
-          onShare: handleShareFromDetail,
-        }) : null}
-        tr={tr}
-        t={t}
-        stripBookTitle={stripBookTitle}
-        AuthorNameButton={AuthorNameButton}
-        onClose={() => setStoryDetailStory(null)}
-        onPlay={() => {
-          if (!detailStoryId) return;
-          setStoryDetailStory(null);
-          void startStoryPlay(detailStoryId);
-        }}
-        onShare={handleShareFromDetail}
-        onAdminDelete={handleAdminDeleteFromDetail}
-      />
-    );
-  };
-  const renderSequelGateModal = () => (
-    <SequelGateModal
-      modal={sequelGateModal}
-      stripBookTitle={stripBookTitle}
-      onGoSource={(sourceStoryId) => {
-        setSequelGateModal(null);
-        void startStoryPlay(sourceStoryId);
-      }}
-      onShowSourceDetail={(sourceStoryId) => {
-        const sourceStory = findStoryListItemById(sourceStoryId);
-        if (sourceStory) setStoryDetailStory(sourceStory);
-        setSequelGateModal(null);
-      }}
-      onClose={() => setSequelGateModal(null)}
-    />
-  );
-
-  const getVisibleStoryLibraryItems = () => {
-    let source = storyLibraryTab === 'mine' ? myStories : publicStories;
-    const keyword = storyLibrarySearch.trim().toLowerCase();
-    return [...source]
-      .filter((story: any) => {
-        if (!storyMatchesLanguage(story, appLanguage)) return false;
-        if (storyLibraryTab === 'mine' && storyLibraryVisibilityFilter !== 'all' && story.visibility !== storyLibraryVisibilityFilter) return false;
-        if (!keyword) return true;
-        const haystack = `${getStoryTitle(story)}\n${getStoryAuthorName(story)}\n${getStoryMainAxis(story)}\n${getStoryTags(story).join(' ')}`.toLowerCase();
-        return haystack.includes(keyword);
-      })
-      .sort((a: any, b: any) => {
-        if (storyLibrarySort === 'likes') return getStoryLikeCount(b) - getStoryLikeCount(a);
-        if (storyLibrarySort === 'interventions') return getStoryInterventionCount(b) - getStoryInterventionCount(a);
-        if (storyLibrarySort === 'favorites') return getStoryFavoriteCount(b) - getStoryFavoriteCount(a);
-        if (storyLibrarySort === 'shares') return getStoryShareCount(b) - getStoryShareCount(a);
-        if (storyLibrarySort === 'words') return getStoryAverageChapterWords(b) - getStoryAverageChapterWords(a);
-        return getStoryUpdatedMs(b) - getStoryUpdatedMs(a);
-      });
-  };
-
-  const handleStoryLibrarySortChange = (nextSort: StoryLibrarySort) => {
-    setStoryLibrarySort(nextSort);
-    if (storyLibraryTab === 'public') {
-      void refreshStories({ force: true, publicSort: nextSort });
-    }
-  };
-
-  const renderStorySelectView = () => {
-    const visibleStories = getVisibleStoryLibraryItems();
-    const languagePublicCount = publicStories.filter((story) => storyMatchesLanguage(story, appLanguage)).length;
-    const languageMineCount = myStories.filter((story) => storyMatchesLanguage(story, appLanguage)).length;
-    return (
-      <StorySelectView
-        t={t}
-        isEnglish={isEnglish}
-        storyLibraryTab={storyLibraryTab}
-        setStoryLibraryTab={setStoryLibraryTab}
-        storyLibrarySearch={storyLibrarySearch}
-        setStoryLibrarySearch={setStoryLibrarySearch}
-        storyLibraryVisibilityFilter={storyLibraryVisibilityFilter}
-        setStoryLibraryVisibilityFilter={setStoryLibraryVisibilityFilter}
-        storyLibrarySort={storyLibrarySort}
-        onSortChange={handleStoryLibrarySortChange}
-        isLoadingStories={isLoadingStories}
-        storyListLoadError={storyListLoadError}
-        visibleStories={visibleStories}
-        languagePublicCount={languagePublicCount}
-        languageMineCount={languageMineCount}
-        onRefresh={() => refreshStories({ force: true })}
-        renderStoryCard={renderStoryCard}
-      />
-    );
-  };
   const renderArchiveView = () => (
     <ArchiveView
       archiveSearch={archiveSearch}
@@ -8545,1000 +7829,99 @@ export default function App() {
       onEnable={() => void enablePushNotificationsFromPrompt()}
     />
   );
-  const renderSeriesWorldView = () => {
-    const seriesGenreText = (seriesForm.genreTags || []).join('，');
-    const worldBibleDraft = parseEditableJson<Record<string, any>>(seriesWorldBibleText, seriesForm.worldBible || {});
-    const baselineRuleDrafts = asSafeArray<any>(worldBibleDraft.baselineRules).length > 0
-      ? asSafeArray<any>(worldBibleDraft.baselineRules)
-      : asSafeArray<any>(worldBibleDraft.coreRules || worldBibleDraft.ironLaws).map((rule, index) => ({
-          id: (rule as any)?.id || `rule_${index + 1}`,
-          title: (rule as any)?.title || (rule as any)?.rule || `${tr('世界基准', 'Baseline rule')} ${index + 1}`,
-          kind: (rule as any)?.kind || tr('世界', 'World'),
-          detail: (rule as any)?.detail || (rule as any)?.rule || String(rule || ''),
-        }));
-    const characterCardDrafts = asSafeArray<any>(worldBibleDraft.characterPool).length > 0
-      ? asSafeArray<any>(worldBibleDraft.characterPool)
-      : (asSafeArray<any>(worldBibleDraft.characters).length > 0
-          ? asSafeArray<any>(worldBibleDraft.characters)
-          : asSafeArray<any>(worldBibleDraft.recurringCharacterSeeds)
-        ).map((card, index) => ({
-          id: (card as any)?.id || `char_${index + 1}`,
-          name: (card as any)?.name || (card as any)?.title || `${tr('角色', 'Character')} ${index + 1}`,
-          role: (card as any)?.role || (card as any)?.type || '',
-          desc: (card as any)?.desc || (card as any)?.description || (card as any)?.profile || String(card || ''),
-          status: (card as any)?.status || '',
-        }));
-    const plotNoteDrafts = asSafeArray<any>(worldBibleDraft.plotNotes).map(normalizeSeriesPlotMaterial);
-    const updateWorldBibleDraft = (patch: Record<string, any>) => {
-      setSeriesWorldBibleText(JSON.stringify({ ...worldBibleDraft, ...patch }, null, 2));
-    };
-    const updateBaselineRuleDraft = (index: number, patch: Record<string, any>) => {
-      updateWorldBibleDraft({
-        baselineRules: baselineRuleDrafts.map((rule, ruleIndex) => ruleIndex === index ? { ...rule, ...patch } : rule),
-      });
-    };
-    const updateCharacterCardDraft = (index: number, patch: Record<string, any>) => {
-      updateWorldBibleDraft({
-        characterPool: characterCardDrafts.map((card, cardIndex) => cardIndex === index ? { ...card, ...patch } : card),
-      });
-    };
-    const updatePlotNoteDraft = (index: number, patch: Record<string, any>) => {
-      updateWorldBibleDraft({
-        plotNotes: plotNoteDrafts.map((note, noteIndex) => noteIndex === index ? { ...note, ...patch } : note),
-      });
-    };
-    const organizeSourceLabel = seriesSourceStoryId
-      ? tr('提取世界观', 'Extract world setting')
-      : tr('生成世界观', 'Generate world setting');
-    const isSeriesWorldListPage = gameState === 'SERIES_WORLD_LIST';
-    const isSeriesWorldGeneratePage = gameState === 'SERIES_WORLD_GENERATE';
-    const isSeriesWorldEditPage = gameState === 'SERIES_WORLD_EDIT';
-    const pageTitle = isSeriesWorldListPage
-      ? tr('世界观列表', 'World Settings')
-      : isSeriesWorldGeneratePage
-        ? tr('生成 / 提取世界观设定', 'Generate / Extract World Setting')
-        : tr('编辑世界观仓库', 'Edit World Setting Archive');
-    const pageDescription = isSeriesWorldListPage
-      ? tr('这里集中管理已经保存的世界观设定。选择一个进入编辑；新建或提取请进入生成页。', 'Manage saved world settings here. Choose one to edit, or open the generation page to create/extract a new one.')
-      : isSeriesWorldGeneratePage
-        ? tr('从基本概况生成全新的世界观仓库，或导入已有作品提取世界基准、角色卡池和情节素材。生成完成后会进入编辑页。', 'Generate a new setting archive from an overview, or import an existing story to extract baseline rules, character cards, and plot material. After generation, the editor opens.')
-        : tr('这里只编辑世界观仓库条目。后续生成作品时，再到高级创作设置里选择要套用的世界观设定。', 'Edit archive items here. Later, apply the world setting from Advanced creation when generating a story.');
-    return (
-      <div className="mx-auto min-h-[100dvh] max-w-6xl px-5 pb-[calc(7.5rem+env(safe-area-inset-bottom))] pt-[max(5rem,calc(env(safe-area-inset-top)+4rem))] sm:px-6 lg:px-8">
-        <div className="mb-8 flex items-center justify-between gap-3">
-          <BackNavButton
-            label={tr('返回上一页', 'Back')}
-            onClick={() => goBack('STORY_SELECT')}
-          />
-          <div className="flex flex-wrap justify-end gap-2">
-            {!isSeriesWorldGeneratePage && (
-              <button type="button" onClick={() => navigateTo('SERIES_WORLD_GENERATE')} className={semanticButtonClass('secondary', { compact: true })}>
-                <Sparkles className="h-4 w-4" />
-                {tr('生成 / 提取', 'Generate / Extract')}
-              </button>
-            )}
-            <button type="button" onClick={() => void loadSeriesWorlds()} className={semanticButtonClass('ghost', { compact: true })}>
-              <RefreshCcw className="h-4 w-4" />
-              {tr('刷新', 'Refresh')}
-            </button>
-          </div>
-        </div>
-
-        <div className="mb-8 rounded-[2rem] border border-indigo-300/15 bg-indigo-500/10 p-6">
-          <div className="inline-flex items-center gap-2 rounded-full border border-indigo-300/20 bg-indigo-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-indigo-200">
-            <GitBranch className="h-3.5 w-3.5" />
-            {tr('世界观设定', 'World Settings')}
-          </div>
-          <h1 className="mt-4 text-3xl font-black text-white sm:text-4xl">{pageTitle}</h1>
-          <p className="mt-3 max-w-3xl text-sm leading-relaxed text-app-muted">
-            {pageDescription}
-          </p>
-        </div>
-        {isSeriesWorldGeneratePage && renderInlineHelp('world-generator', '世界观生成与提取指引', '在此页面，你可以让AI自动生成一套全新的世界观蓝图，或者通过提取已有故事的章节来抓取其中的人物设定、世界法则。生成好的世界观可以在后续创建『续作』或『新篇章』故事时在高级设置里套用。')}
-
-        <div className="grid gap-6">
-          <section className="space-y-4">
-            {isSeriesWorldListPage && (
-            <div className="rounded-[1.5rem] border border-app-border bg-app-bg/60 p-4">
-              <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <div className="text-sm font-black text-white">{tr('已保存设定', 'Saved settings')}</div>
-                  <p className="mt-1 text-xs leading-relaxed text-app-muted">{tr('这是独立的收录页，只负责查找、进入编辑和删除后的管理。', 'This is a dedicated library page for finding, opening, and managing saved settings.')}</p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <button type="button" onClick={() => navigateTo('SERIES_WORLD_GENERATE')} className={semanticButtonClass('primary', { compact: true })}>
-                    <Sparkles className="h-4 w-4" />
-                    {tr('生成新世界观', 'Create new setting')}
-                  </button>
-                  <button type="button" onClick={resetSeriesWorldDraft} className={semanticButtonClass('secondary', { compact: true })}>
-                    <PenSquare className="h-4 w-4" />
-                    {tr('手动建立', 'Manual create')}
-                  </button>
-                </div>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {seriesWorlds.length === 0 && <div className="rounded-2xl bg-app-surface/60 p-4 text-sm text-app-muted sm:col-span-2 lg:col-span-3">{tr('还没有世界观设定，可以先生成或手动建立一个。', 'No world setting yet. Generate one or create a manual draft first.')}</div>}
-                {seriesWorlds.map((series) => (
-                  <button
-                    key={series.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedSeriesId(series.id);
-                      setSeriesForm(series);
-                      setSeriesWorldBibleText(JSON.stringify(series.worldBible || {}, null, 2));
-                      setSeriesIronLawsText(JSON.stringify(series.ironLaws || [], null, 2));
-                      setSeriesFutureDirectionsText(JSON.stringify(series.futureDirections || [], null, 2));
-                      navigateTo('SERIES_WORLD_EDIT');
-                      void loadContinuityNodesForSeries(series.id);
-                    }}
-                    className={`w-full rounded-2xl border p-4 text-left transition-all hover:-translate-y-0.5 active:scale-[0.98] ${selectedSeriesId === series.id ? 'border-indigo-400 bg-indigo-500/15' : 'border-app-border bg-app-surface/40 hover:border-zinc-600'}`}
-                  >
-                    <div className="text-sm font-black text-white">{series.title}</div>
-                    <div className="mt-1 line-clamp-2 text-xs leading-relaxed text-app-muted">{(series.worldBible as any)?.worldview || series.pitch || tr('尚未填写世界观概况', 'No world overview yet')}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-            )}
-
-            {isSeriesWorldGeneratePage && (
-            <div className="rounded-[1.5rem] border border-app-border bg-app-bg/60 p-4">
-              <div className="mb-4">
-                <div className="text-lg font-black text-white">{tr('世界观生成', 'World setting generation')}</div>
-                <p className="mt-1 text-xs leading-relaxed text-app-muted">{tr('填写世界观概况即可生成新设定；如果选择来源作品，则会直接从该作品提取世界观概况、角色卡池、支线和结局素材。', 'Write an overview to generate a new setting. If a source story is selected, the app extracts the overview, character cards, branches, and ending material from that story.')}</p>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <input value={seriesForm.title || ''} onChange={(event) => setSeriesForm((prev) => ({ ...prev, title: event.target.value }))} placeholder={tr('世界观设定名称', 'World setting title')} className="rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500" />
-                <input value={seriesGenreText} onChange={(event) => setSeriesForm((prev) => ({ ...prev, genreTags: event.target.value.split(/[,，]/).map((tag) => tag.trim()).filter(Boolean) }))} placeholder={tr('题材标签，以逗号分隔', 'Genre tags, comma-separated')} className="rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500" />
-              </div>
-              <textarea
-                value={worldBibleDraft.worldview || ''}
-                onChange={(event) => updateWorldBibleDraft({ worldview: event.target.value })}
-                placeholder={tr('世界观概况：简单描述这个世界的核心感觉、规则、时代、冲突或创作方向。', 'World overview: briefly describe the world’s feel, rules, era, conflict, or creative direction.')}
-                className="mt-3 min-h-32 w-full resize-y rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
-              />
-              <div className="mt-4 rounded-2xl border border-app-border bg-app-surface/35 p-4">
-                <label className="mb-2 block text-xs font-black uppercase tracking-[0.18em] text-app-muted">{tr('来源作品（可选）', 'Source story (optional)')}</label>
-                <p className="mb-3 text-xs leading-relaxed text-app-muted">
-                  {tr('不选择作品时，按上方概况生成世界观；选择作品后，主按钮会改为从该作品提取。', 'Without a story, the button generates from the overview. With a story selected, it extracts from that story.')}
-                </p>
-                <select
-                  value={seriesSourceStoryId}
-                  onChange={(event) => setSeriesSourceStoryId(event.target.value)}
-                  className="w-full rounded-xl border border-app-border bg-app-input-bg px-3 py-3 text-sm text-app-text outline-none"
-                >
-                  <option value="">{tr('不导入作品，生成全新世界观设定', 'No story import; generate a new world setting')}</option>
-                  {myStories.map((story: any) => (
-                    <option key={story.id} value={story.id}>{getStoryTitle(story)}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                <button type="button" onClick={() => void handleGenerateSeriesWorld(seriesSourceStoryId ? 'extract' : 'new')} disabled={seriesGenerating} className={semanticButtonClass('primary', { compact: true, fullWidth: true })}>
-                  {seriesGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                  {organizeSourceLabel}
-                </button>
-                <button type="button" onClick={resetSeriesWorldDraft} className={semanticButtonClass('secondary', { compact: true, fullWidth: true })}>
-                  <PenSquare className="h-4 w-4" />
-                  {tr('手动建立空白仓库', 'Create blank archive')}
-                </button>
-              </div>
-            </div>
-            )}
-          </section>
-
-          <section className="space-y-6">
-            {isSeriesWorldEditPage && (
-            <div className="rounded-[2rem] border border-app-border bg-app-bg/60 p-5">
-              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <div className="text-lg font-black text-white">{tr('世界观设定草稿', 'World Setting Draft')}</div>
-                  <div className="mt-1 text-xs text-app-muted">{tr('所有内容都可以手动编辑，保存后才能用于绑定作品。', 'Everything can be edited manually. Save it before binding stories.')}</div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {selectedSeriesId && (
-                    <button type="button" onClick={() => handleDeleteSeriesWorld()} disabled={seriesSaving} className={semanticButtonClass('danger', { compact: true })}>
-                      <Trash2 className="h-4 w-4" />
-                      {tr('删除世界观', 'Delete setting')}
-                    </button>
-                  )}
-                  <button type="button" onClick={() => void handleSaveSeriesWorld()} disabled={seriesSaving} className={semanticButtonClass('primary', { compact: true })}>
-                    {seriesSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                    {tr('保存世界观设定', 'Save world setting')}
-                  </button>
-                </div>
-              </div>
-              {renderInlineHelp('world-editor', '世界观仓库编辑指引', '在此编辑世界观的关键要素。其中【世界基准规则】是AI创作故事时绝对遵守的铁律（例如：魔法在这个世界上已被禁止）；【角色卡池】存放该世界里登场的主要配角与背景；【故事大纲与素材】能为后续作品提供线索。修改完成后，切记点击最下方的『保存世界观』，才能让改动生效。')}
-              <div className="grid gap-3 sm:grid-cols-2">
-                <input value={seriesForm.title || ''} onChange={(event) => setSeriesForm((prev) => ({ ...prev, title: event.target.value }))} placeholder={tr('世界观设定名称', 'World setting title')} className="rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500" />
-                <input value={seriesGenreText} onChange={(event) => setSeriesForm((prev) => ({ ...prev, genreTags: event.target.value.split(/[,，]/).map((tag) => tag.trim()).filter(Boolean) }))} placeholder={tr('题材标签，以逗号分隔', 'Genre tags, comma-separated')} className="rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500" />
-              </div>
-              <textarea
-                value={worldBibleDraft.worldview || ''}
-                onChange={(event) => updateWorldBibleDraft({ worldview: event.target.value })}
-                placeholder={tr('世界观概况：简单描述这个世界的核心感觉、规则、时代、冲突或创作方向，用来让 AI 整理下方三类仓库条目。', 'World overview: briefly describe the world’s feel, rules, era, conflict, or creative direction so AI can organize the archive items below.')}
-                className="mt-3 min-h-32 w-full resize-y rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
-              />
-              <div className="mt-5 space-y-5">
-                <div className="rounded-[1.5rem] border border-app-border bg-app-bg/55 p-4">
-                  <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <div className="text-sm font-black text-white">{tr('世界基准', 'World baseline')}</div>
-                      <p className="mt-1 text-xs leading-relaxed text-app-muted">{tr('一条一条记录这个世界允许什么、禁止什么、哪些设定必须被遵守。生成作品时可以按需勾选。', 'Record reusable rules one by one: what is allowed, forbidden, or must be obeyed. They can be selected during generation.')}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => updateWorldBibleDraft({ baselineRules: [...baselineRuleDrafts, { id: `rule_${baselineRuleDrafts.length + 1}`, detail: '', tags: [] }] })}
-                      className={semanticButtonClass('secondary', { compact: true })}
-                    >
-                      <Sparkles className="h-4 w-4" />
-                      {tr('新增基准', 'Add rule')}
-                    </button>
-                  </div>
-                  <div className="grid gap-3">
-                    {baselineRuleDrafts.length === 0 && (
-                      <div className="rounded-2xl border border-dashed border-app-border p-4 text-xs leading-relaxed text-app-muted">
-                        {tr('还没有世界基准。可以手动新增，或点击左侧从零生成世界观。', 'No baseline rules yet. Add one manually or generate a world setting from scratch.')}
-                      </div>
-                    )}
-                    {baselineRuleDrafts.map((rule, index) => (
-                      <div key={rule.id || index} className="rounded-2xl border border-app-border bg-app-surface/40 p-4">
-                        <div className="mb-3 flex items-center justify-between gap-3">
-                          <div className="text-xs font-black uppercase tracking-[0.18em] text-indigo-300">{tr('世界基准', 'Rule')} {index + 1}</div>
-                          <button
-                            type="button"
-                            onClick={() => updateWorldBibleDraft({ baselineRules: baselineRuleDrafts.filter((_, ruleIndex) => ruleIndex !== index) })}
-                            className={semanticIconButtonClass('ghost')}
-                            aria-label={tr('删除基准', 'Delete rule')}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                        <div className="hidden">
-                          <input
-                            value={rule.title || ''}
-                            onChange={(event) => updateBaselineRuleDraft(index, { title: event.target.value, id: rule.id || `rule_${index + 1}` })}
-                            placeholder={tr('基准标题，例如：王都在第二部前不可陷落', 'Rule title, e.g. The capital cannot fall before Part 2')}
-                            className="rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
-                          />
-                          <input
-                            value={rule.kind || ''}
-                            onChange={(event) => updateBaselineRuleDraft(index, { kind: event.target.value })}
-                            placeholder={tr('类别', 'Kind')}
-                            className="rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
-                          />
-                        </div>
-                        <textarea
-                          value={rule.detail || rule.rule || ''}
-                          onChange={(event) => updateBaselineRuleDraft(index, { detail: event.target.value })}
-                          placeholder={tr('具体说明：这条基准如何限制或保护后续作品生成。', 'Details: how this rule limits or protects later story generation.')}
-                          className="min-h-24 w-full resize-y rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
-                        />
-                        <input
-                          value={normalizeTagList(Array.isArray(rule.tags) ? rule.tags : String(rule.tags || rule.kind || '').split(/[,，]/)).join('，')}
-                          onChange={(event) => updateBaselineRuleDraft(index, { tags: normalizeTagList(event.target.value.split(/[,，]/)), kind: '' })}
-                          placeholder={tr('标签，可选，例如：角色限制，时间限制，势力规则', 'Tags, optional: character limit, timeline, faction rule')}
-                          className="mt-3 w-full rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="rounded-[1.5rem] border border-app-border bg-app-bg/55 p-4">
-                  <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <div className="text-sm font-black text-white">{tr('角色卡池', 'Character pool')}</div>
-                      <p className="mt-1 text-xs leading-relaxed text-app-muted">{tr('保存系列内可复用角色。续作默认可以从这里沿用主要角色，不再每次重新发明。', 'Store reusable characters for the series. Sequels can inherit major characters from here by default.')}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => updateWorldBibleDraft({ characterPool: [...characterCardDrafts, createEmptySeriesCharacterCard(characterCardDrafts.length)] })}
-                      className={semanticButtonClass('secondary', { compact: true })}
-                    >
-                      <Sparkles className="h-4 w-4" />
-                      {tr('新增角色卡', 'Add character')}
-                    </button>
-                  </div>
-                  <div className="grid gap-3">
-                    {characterCardDrafts.length === 0 && (
-                      <div className="rounded-2xl border border-dashed border-app-border p-4 text-xs leading-relaxed text-app-muted">
-                        {tr('还没有角色卡。可以加入主角、重要配角、势力代表或会贯穿多部作品的角色。', 'No character cards yet. Add protagonists, key supporting characters, faction representatives, or recurring figures.')}
-                      </div>
-                    )}
-                    {characterCardDrafts.map((card, index) => (
-                      <div key={card.id || index} className="rounded-2xl border border-app-border bg-app-surface/40 p-4">
-                        <div className="mb-3 flex items-center justify-between gap-3">
-                          <div className="text-xs font-black uppercase tracking-[0.18em] text-amber-300">{tr('角色卡', 'Character')} {index + 1}</div>
-                          <button
-                            type="button"
-                            onClick={() => updateWorldBibleDraft({ characterPool: characterCardDrafts.filter((_, cardIndex) => cardIndex !== index) })}
-                            className={semanticIconButtonClass('ghost')}
-                            aria-label={tr('删除角色卡', 'Delete character card')}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <input
-                            value={card.name || ''}
-                            onChange={(event) => updateCharacterCardDraft(index, { name: event.target.value, id: card.id || `char_${index + 1}` })}
-                            placeholder={tr('角色名', 'Character name')}
-                            className="rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
-                          />
-                          <input
-                            value={card.role || ''}
-                            onChange={(event) => updateCharacterCardDraft(index, { role: event.target.value })}
-                            placeholder={tr('系列定位，例如：主角/导师/宿敌', 'Series role, e.g. protagonist / mentor / rival')}
-                            className="rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
-                          />
-                        </div>
-                        <textarea
-                          value={card.desc || ''}
-                          onChange={(event) => updateCharacterCardDraft(index, { desc: event.target.value })}
-                          placeholder={tr('角色说明：身份、动机、矛盾点，以及后续作品可如何使用。', 'Profile: identity, motive, contradiction, and how later stories may use this character.')}
-                          className="mt-3 min-h-24 w-full resize-y rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
-                        />
-                        <input
-                          value={card.status || ''}
-                          onChange={(event) => updateCharacterCardDraft(index, { status: event.target.value })}
-                          placeholder={tr('默认状态，例如：仍在王都、失踪、被封印', 'Default status, e.g. in the capital / missing / sealed away')}
-                          className="mt-3 w-full rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="rounded-[1.5rem] border border-app-border bg-app-bg/55 p-4">
-                  <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <div className="text-sm font-black text-white">{tr('情节素材', 'Plot material')}</div>
-                      <p className="mt-1 text-xs leading-relaxed text-app-muted">{tr('记录可复用的伏笔、历史事件、未解谜团或适合未来作品调用的情节素材。', 'Store reusable foreshadowing, historical events, unresolved mysteries, or plot material for future stories.')}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => updateWorldBibleDraft({ plotNotes: [...plotNoteDrafts, createEmptySeriesPlotMaterial(plotNoteDrafts.length)] })}
-                      className={semanticButtonClass('secondary', { compact: true })}
-                    >
-                      <Sparkles className="h-4 w-4" />
-                      {tr('新增概况', 'Add note')}
-                    </button>
-                  </div>
-                  <div className="grid gap-3">
-                    {plotNoteDrafts.length === 0 && (
-                      <div className="rounded-2xl border border-dashed border-app-border p-4 text-xs leading-relaxed text-app-muted">
-                        {tr('还没有情节素材。可以记录“某场旧战争”“某个未解预言”“某角色的失踪原因”等。', 'No plot material yet. You can record old wars, unsolved prophecies, missing-character causes, and similar material.')}
-                      </div>
-                    )}
-                    {plotNoteDrafts.map((note, index) => (
-                      <div key={note.id || index} className="grid gap-2 rounded-2xl border border-app-border bg-app-surface/40 p-3">
-                        <div className="grid gap-2 sm:grid-cols-[1fr_9rem_auto]">
-                          <input
-                            value={note.title || ''}
-                            onChange={(event) => updatePlotNoteDraft(index, { title: event.target.value, id: note.id || `plot_${index + 1}` })}
-                            placeholder={tr('素材标题', 'Material title')}
-                            className="rounded-xl border border-app-border bg-app-input-bg px-3 py-2 text-sm text-app-text outline-none focus:border-indigo-500"
-                          />
-                          <input
-                            value={note.tag || ''}
-                            onChange={(event) => updatePlotNoteDraft(index, { tag: event.target.value })}
-                            placeholder={tr('标签', 'Tag')}
-                            className="rounded-xl border border-app-border bg-app-input-bg px-3 py-2 text-sm text-app-text outline-none focus:border-indigo-500"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => updateWorldBibleDraft({ plotNotes: plotNoteDrafts.filter((_, noteIndex) => noteIndex !== index) })}
-                            className={semanticIconButtonClass('ghost')}
-                            aria-label={tr('删除情节素材', 'Delete plot material')}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                        <textarea
-                          value={note.detail || ''}
-                          onChange={(event) => updatePlotNoteDraft(index, { detail: event.target.value })}
-                          placeholder={tr('情节素材内容', 'Plot material details')}
-                          className="min-h-20 w-full resize-y rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-              </div>
-            </div>
-            )}
-          </section>
-        </div>
-      </div>
-    );
-  };
-
-  const renderThemeSelectionView = () => (
-    <div className="mx-auto flex min-h-[100dvh] max-w-5xl flex-col justify-center px-6 pb-[calc(7.5rem+env(safe-area-inset-bottom))] pt-[max(7rem,calc(env(safe-area-inset-top)+6rem))] text-center lg:px-8">
-      <div className="mb-8 flex items-center justify-between">
-        <BackNavButton label={tr('返回上一页', 'Back')} onClick={() => goBack('STORY_SELECT')} />
-        <div className="h-10 w-10" />
-      </div>
-      <div className="mx-auto max-w-2xl space-y-4">
-        <div className="inline-flex items-center gap-2 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-4 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-indigo-300">
-          <Wand2 className="h-4 w-4" />
-          {tr('命运引擎', 'Fate Engine')}
-        </div>
-        <h1 className="text-4xl font-black text-white sm:text-5xl">{tr('快速生成故事', 'Quick Story Generation')}</h1>
-        <p className="text-sm leading-relaxed text-app-muted sm:text-base">
-          {tr('选择 1 到 4 个主题，或直接输入故事大纲。系统会先生成完整蓝图，再预先写好前 3 章供玩家开始干涉。', 'Choose 1 to 4 tags or enter an outline. The system creates a full blueprint, then writes the first 3 chapters so play can begin quickly.')}
-        </p>
-      </div>
-
-      <div className="mx-auto mt-8 flex w-full max-w-xl rounded-full border border-app-border bg-app-bg/70 p-1 text-xs font-black">
-        {([
-          { id: 'quiz' as const, label: appLanguage === 'en-US' ? 'Play by quiz' : '想玩故事' },
-          { id: 'advanced' as const, label: appLanguage === 'en-US' ? 'Advanced creation' : '高级创作设置' },
-        ]).map((mode) => (
-          <button
-            key={mode.id}
-            type="button"
-            onClick={() => setQuickGenerationMode(mode.id)}
-            className={`flex-1 rounded-full px-3 py-2 transition-colors ${quickGenerationMode === mode.id ? 'bg-indigo-500 text-white' : 'text-app-muted hover:text-app-text'}`}
-          >
-            {mode.label}
-          </button>
-        ))}
-      </div>
-
-      {quickGenerationMode === 'quiz' ? (() => {
-        const step = QUICK_QUIZ_STEPS[Math.min(quickQuizStepIndex, QUICK_QUIZ_STEPS.length - 1)];
-        const selected = asSafeArray<string>(quickQuizAnswers[step.id]);
-        const isLastStep = quickQuizStepIndex >= QUICK_QUIZ_STEPS.length - 1;
-        return (
-          <div className="mx-auto mt-8 w-full max-w-4xl rounded-[2rem] border border-app-border bg-app-surface/30 p-5 text-left shadow-2xl shadow-black/10 sm:p-6">
-            <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <div className="text-sm font-black text-amber-100">
-                  {appLanguage === 'en-US' ? 'Want a surprise?' : '想来点惊喜？'}
-                </div>
-                <p className="mt-1 text-xs leading-relaxed text-amber-100/70">
-                  {appLanguage === 'en-US'
-                    ? 'Randomly draw every preference layer and start generating immediately.'
-                    : '从每一层偏好中随机抽取设定，并直接开始生成故事。'}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={handleRandomQuickGeneration}
-                className={semanticButtonClass('secondary', { compact: true })}
-              >
-                <Sparkles className="h-4 w-4" />
-                {appLanguage === 'en-US' ? 'Fully random' : '全随机生成'}
-              </button>
-            </div>
-            <div className="mb-5 rounded-2xl border border-app-border bg-app-bg/55 p-4">
-              <button
-                type="button"
-                onClick={() => setQuickCharacterSeed((prev) => ({ ...prev, enabled: !prev.enabled }))}
-                className="flex w-full items-center justify-between gap-3 text-left"
-              >
-                <div>
-                  <div className="text-sm font-black text-app-text">
-                    {appLanguage === 'en-US' ? 'Use a character idea?' : '有想放进故事的人物吗？'}
-                  </div>
-                  <p className="mt-1 text-xs leading-relaxed text-app-muted">
-                    {appLanguage === 'en-US'
-                      ? 'Optional. Add a person, relationship, or character seed for the story to build around.'
-                      : '可选。可以填一个人物、关系或人设需求，让故事围绕它自然展开。'}
-                  </p>
-                </div>
-                <span className={`rounded-full px-3 py-1 text-xs font-black ${quickCharacterSeed.enabled ? 'bg-indigo-500 text-white' : 'bg-app-surface-soft text-app-muted'}`}>
-                  {quickCharacterSeed.enabled ? (appLanguage === 'en-US' ? 'On' : '已开启') : (appLanguage === 'en-US' ? 'Skip' : '跳过')}
-                </span>
-              </button>
-              {quickCharacterSeed.enabled && (
-                <div className="mt-4 grid gap-3">
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <input
-                      value={quickCharacterSeed.name}
-                      onChange={(event) => setQuickCharacterSeed((prev) => ({ ...prev, name: event.target.value }))}
-                      placeholder={appLanguage === 'en-US' ? 'Character name, e.g. my sister' : '人物名称，例如：妹妹'}
-                      className="w-full rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none transition-colors focus:border-indigo-500"
-                    />
-                    <input
-                      value={quickCharacterSeed.role}
-                      onChange={(event) => setQuickCharacterSeed((prev) => ({ ...prev, role: event.target.value }))}
-                      placeholder={appLanguage === 'en-US' ? 'Identity or relationship' : '身份或关系，例如：主角的妹妹'}
-                      className="w-full rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none transition-colors focus:border-indigo-500"
-                    />
-                  </div>
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    {([
-                      { value: 'protagonist' as const, label: appLanguage === 'en-US' ? 'Protagonist' : '作为主角' },
-                      { value: 'important' as const, label: appLanguage === 'en-US' ? 'Key character' : '重要角色' },
-                      { value: 'mystery' as const, label: appLanguage === 'en-US' ? 'Mystery role' : '神秘人物' },
-                    ]).map((option) => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        onClick={() => setQuickCharacterSeed((prev) => ({ ...prev, position: option.value }))}
-                        className={`rounded-xl border px-3 py-2 text-xs font-black transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
-                          quickCharacterSeed.position === option.value
-                            ? 'border-indigo-400 bg-indigo-500/15 text-indigo-100'
-                            : 'border-app-border bg-app-surface/50 text-app-muted hover:border-zinc-600 hover:text-app-text'
-                        }`}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                  <textarea
-                    value={quickCharacterSeed.note}
-                    onChange={(event) => setQuickCharacterSeed((prev) => ({ ...prev, note: event.target.value }))}
-                    placeholder={appLanguage === 'en-US' ? 'Optional note: personality, secret, wish, conflict...' : '可选补充：性格、秘密、愿望、矛盾点……'}
-                    className="min-h-24 w-full resize-y rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none transition-colors focus:border-indigo-500"
-                  />
-                </div>
-              )}
-            </div>
-            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <div className="text-[10px] font-black uppercase tracking-[0.24em] text-indigo-300">
-                  {appLanguage === 'en-US' ? `Step ${quickQuizStepIndex + 1}/${QUICK_QUIZ_STEPS.length}` : `第 ${quickQuizStepIndex + 1}/${QUICK_QUIZ_STEPS.length} 步`}
-                </div>
-                <h2 className="mt-2 text-2xl font-black text-white">{quickText(step.title)}</h2>
-                <p className="mt-2 text-sm leading-relaxed text-app-muted">{quickText(step.subtitle)}</p>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-app-surface-soft sm:w-40">
-                <div
-                  className="h-full rounded-full bg-indigo-400 transition-all"
-                  style={{ width: `${((quickQuizStepIndex + 1) / QUICK_QUIZ_STEPS.length) * 100}%` }}
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {step.options.map((option) => {
-                const active = selected.includes(option.id);
-                return (
-                  <button
-                    key={option.id}
-                    type="button"
-                    onClick={() => toggleQuickQuizAnswer(step, option.id)}
-                    className={`min-h-16 rounded-2xl border px-4 py-3 text-left transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
-                      active
-                        ? 'border-indigo-400 bg-indigo-500/15 text-indigo-100 shadow-lg shadow-indigo-950/30'
-                        : 'border-app-border bg-app-bg/60 text-app-text hover:border-zinc-600 hover:bg-app-surface'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-sm font-black">{quickText(option.label)}</span>
-                      {active && <Check className="h-4 w-4 shrink-0 text-indigo-200" />}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <button
-                type="button"
-                onClick={() => setQuickQuizStepIndex((prev) => Math.max(0, prev - 1))}
-                disabled={quickQuizStepIndex === 0}
-                className={semanticButtonClass('ghost', { compact: true })}
-              >
-                <ChevronLeft className="h-4 w-4" />
-                {appLanguage === 'en-US' ? 'Previous' : '上一步'}
-              </button>
-              <div className="flex flex-col gap-3 sm:flex-row">
-                {!isLastStep ? (
-                  <button
-                    type="button"
-                    onClick={() => setQuickQuizStepIndex((prev) => Math.min(QUICK_QUIZ_STEPS.length - 1, prev + 1))}
-                    disabled={selected.length < 1}
-                    className={semanticButtonClass('primary', { compact: true })}
-                  >
-                    {appLanguage === 'en-US' ? 'Next' : '下一步'}
-                    <ChevronLeft className="h-4 w-4 rotate-180" />
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleGenerateBlueprint}
-                    disabled={selected.length < 1}
-                    className={semanticButtonClass('primary', { compact: true })}
-                  >
-                    <Sparkles className="h-4 w-4" />
-                    {appLanguage === 'en-US' ? 'Generate my story' : '生成想玩的故事'}
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      })() : (
-      <>
-      <div className="mx-auto mt-8 grid w-full max-w-4xl gap-3 px-4 text-left md:grid-cols-3">
-        {QUICK_STORY_TEMPLATES.map((template) => (
-          <button
-            key={template.id}
-            type="button"
-            onClick={() => applyQuickStoryTemplate(template)}
-            className="group rounded-[1.5rem] border border-app-border bg-app-surface/40 p-4 text-left transition-all hover:-translate-y-1 hover:border-indigo-400/50 hover:bg-indigo-500/10 active:scale-[0.98]"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-base font-black text-app-text group-hover:text-white">{isEnglish ? QUICK_STORY_TEMPLATE_EN[template.id]?.label || template.label : template.label}</span>
-              <span className="rounded-full border border-indigo-400/20 bg-indigo-500/10 px-2 py-1 text-[10px] font-black text-indigo-200">
-                {isEnglish ? QUICK_STORY_TEMPLATE_EN[template.id]?.badge || template.badge : template.badge}
-              </span>
-            </div>
-            <p className="mt-3 text-xs leading-relaxed text-app-muted group-hover:text-app-text">{isEnglish ? QUICK_STORY_TEMPLATE_EN[template.id]?.hint || template.hint : template.hint}</p>
-            <div className="mt-4 flex flex-wrap gap-1.5">
-              {(isEnglish ? QUICK_STORY_TEMPLATE_EN[template.id]?.tags || template.tags : template.tags).map((tag) => (
-                <span key={tag} className="rounded-full bg-app-bg px-2 py-1 text-[10px] font-bold text-app-muted">
-                  {tag}
-                </span>
-              ))}
-            </div>
-          </button>
-        ))}
-      </div>
-
-      <div className="mx-auto mt-6 w-full max-w-2xl px-4 text-left">
-        <label className="mb-3 block text-sm font-bold text-app-text">{tr('主题与标签（以逗号分隔）', 'Themes and tags, comma-separated')}</label>
-        <input
-          value={themeInputText}
-          onChange={(event) => {
-             const val = event.target.value;
-             setThemeInputText(val);
-             setSelectedThemes(val.split(/[,，]/).map(s => s.trim()).filter(Boolean));
-          }}
-          placeholder={tr('在此手动输入标签或点击下方快速添加', 'Enter tags here or tap quick tags below')}
-          className="w-full rounded-2xl border border-app-border bg-app-input-bg px-4 py-4 text-sm text-app-text outline-none transition-colors focus:border-indigo-500"
-        />
-        <div className="mt-4 flex flex-wrap gap-2">
-          {THEMES.map(tag => (
-            <button
-              key={tag}
-              type="button"
-              onClick={() => {
-                 const current = themeInputText.trim();
-                 const displayTag = isEnglish ? THEME_LABEL_EN[tag] || tag : tag;
-                 let newText = current;
-                 if (!current) newText = displayTag;
-                 else if (!current.includes(displayTag)) newText = current + (current.endsWith('，') || current.endsWith(',') ? '' : (isEnglish ? ', ' : '，')) + displayTag;
-                 setThemeInputText(newText);
-                 setSelectedThemes(newText.split(/[,，]/).map(s => s.trim()).filter(Boolean));
-              }}
-              className="rounded-lg bg-app-surface-soft/50 px-3 py-1.5 text-xs text-app-text transition-colors hover:bg-app-surface-soft hover:text-white"
-            >
-              + {isEnglish ? THEME_LABEL_EN[tag] || tag : tag}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="mx-auto mt-10 w-full max-w-2xl px-4 text-left">
-        <div className="mb-6 rounded-2xl border border-indigo-300/15 bg-indigo-500/10 p-4">
-          <label className="mb-2 block text-sm font-black text-indigo-100">{tr('套用世界观设定', 'Apply world setting')}</label>
-          <select
-            value={quickSeriesBindingId}
-            onChange={(event) => setQuickSeriesBindingId(event.target.value)}
-            className="w-full rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
-          >
-            <option value="">{tr('不套用世界观设定', 'No world setting')}</option>
-            {seriesWorlds.map((series) => (
-              <option key={series.id} value={series.id}>{series.title || tr('未命名世界观设定', 'Untitled world setting')}</option>
-            ))}
-          </select>
-          <p className="mt-2 text-xs leading-relaxed text-indigo-100/65">
-                {tr('世界观设定是可复用设定仓库。可勾选本次生成要遵守的世界基准、沿用角色卡，并在续作时加入继承节点。', 'A world setting is a reusable setting archive. Pick the rules and character cards this generation should obey, and add a continuity node for sequels.')}
-          </p>
-          {quickSeriesBindingId && (() => {
-            const selected = seriesWorlds.find((series) => series.id === quickSeriesBindingId) || null;
-            const baselineRules = getSeriesBaselineRules(selected);
-            const characterCards = getSeriesCharacterCards(selected);
-            const seriesStoryOptions = myStories.filter((story: any) => String(story?.seriesId || story?.series_id || story?.meta?.seriesId || story?.meta?.series_id || '') === quickSeriesBindingId);
-            const continuityBranches = asSafeArray<any>(quickContinuitySourceStory?.branches);
-            const continuityEndings = asSafeArray<any>(quickContinuitySourceStory?.endings);
-            return (
-              <div className="mt-4 space-y-4">
-                <div className="border-t border-app-border pt-4">
-                  <div className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-app-muted">{tr('世界基准', 'World baseline')}</div>
-                  {baselineRules.length === 0 ? (
-                    <div className="text-xs leading-relaxed text-app-muted">{tr('该世界观设定还没有条目化基准；生成时只会参考世界观概况。', 'No itemized baseline rules yet; generation will only use the world overview as reference.')}</div>
-                  ) : (
-                    <div className="grid gap-2">
-                      {baselineRules.map((rule) => (
-                        <label key={rule.id} className="flex items-start gap-2 rounded-xl border border-app-border bg-app-surface/50 p-3 text-xs text-app-text">
-                          <input
-                            type="checkbox"
-                            checked={quickSeriesSelection.baselineRuleIds.includes(rule.id)}
-                            onChange={(event) => setQuickSeriesSelection((prev) => ({
-                              ...prev,
-                              baselineRuleIds: event.target.checked
-                                ? [...new Set([...prev.baselineRuleIds, rule.id])]
-                                : prev.baselineRuleIds.filter((id) => id !== rule.id),
-                            }))}
-                            className="mt-1 accent-indigo-500"
-                          />
-                          <span>
-                            <span className="block font-black leading-relaxed text-app-text">{rule.detail || rule.title}</span>
-                            {normalizeTagList(Array.isArray(rule.tags) ? rule.tags : String(rule.tags || rule.kind || '').split(/[,，]/)).length > 0 && (
-                              <span className="mt-2 flex flex-wrap gap-1.5">
-                                {normalizeTagList(Array.isArray(rule.tags) ? rule.tags : String(rule.tags || rule.kind || '').split(/[,，]/)).map((tag) => (
-                                  <span key={tag} className="rounded-full bg-indigo-500/10 px-2 py-0.5 text-[10px] font-bold text-indigo-200">{tag}</span>
-                                ))}
-                              </span>
-                            )}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="rounded-2xl border border-app-border bg-app-bg/60 p-3">
-                  <div className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-app-muted">{tr('角色卡池', 'Character pool')}</div>
-                  {characterCards.length === 0 ? (
-                    <div className="text-xs leading-relaxed text-app-muted">{tr('该世界观设定还没有角色卡；生成时会根据本次情节重新设计角色。', 'No character cards yet; this story will create its own cast.')}</div>
-                  ) : (
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {characterCards.map((card) => (
-                        <label key={card.id} className="flex items-start gap-2 rounded-xl border border-app-border bg-app-surface/50 p-3 text-xs text-app-text">
-                          <input
-                            type="checkbox"
-                            checked={quickSeriesSelection.characterIds.includes(card.id)}
-                            onChange={(event) => setQuickSeriesSelection((prev) => ({
-                              ...prev,
-                              characterIds: event.target.checked
-                                ? [...new Set([...prev.characterIds, card.id])]
-                                : prev.characterIds.filter((id) => id !== card.id),
-                            }))}
-                            className="mt-1 accent-indigo-500"
-                          />
-                          <span>
-                            <span className="block font-black text-app-text">{card.name}</span>
-                            <span className="mt-1 block leading-relaxed text-app-muted">{card.desc || card.role || tr('系列角色', 'Series character')}</span>
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="rounded-2xl border border-app-border bg-app-bg/60 p-3">
-                  <label className="flex items-center gap-2 text-sm font-black text-app-text">
-                    <input
-                      type="checkbox"
-                      checked={quickSeriesSelection.useContinuity}
-                      onChange={(event) => setQuickSeriesSelection((prev) => ({ ...prev, useContinuity: event.target.checked }))}
-                      className="accent-indigo-500"
-                    />
-                    {tr('作为续作生成，设置前作继承锚点', 'Generate as sequel with previous-story anchors')}
-                  </label>
-                  {quickSeriesSelection.useContinuity && (
-                    <div className="mt-3 space-y-3">
-                      <select
-                        value={quickSeriesSelection.sourceStoryId}
-                        onChange={(event) => setQuickSeriesSelection((prev) => ({ ...prev, sourceStoryId: event.target.value, requiredBranchIds: [], endingId: '', continuityNodeId: '' }))}
-                        className="rounded-xl border border-app-border bg-app-input-bg px-3 py-3 text-sm text-app-text outline-none"
-                      >
-                        <option value="">{tr('选择前作', 'Choose previous story')}</option>
-                        {seriesStoryOptions.map((story: any) => (
-                          <option key={story.id} value={story.id}>{getStoryTitle(story)}</option>
-                        ))}
-                      </select>
-                      {seriesStoryOptions.length === 0 && (
-                        <div className="text-xs leading-relaxed text-app-muted">{tr('该世界观下还没有可作为前作的作品。请先生成或绑定第一部。', 'No previous story is bound to this world setting yet.')}</div>
-                      )}
-                      {quickContinuityLoading && (
-                        <div className="flex items-center gap-2 text-xs font-bold text-indigo-200"><Loader2 className="h-3.5 w-3.5 animate-spin" />{tr('正在读取前作支线与结局...', 'Loading branches and endings...')}</div>
-                      )}
-                      {quickSeriesSelection.sourceStoryId && !quickContinuityLoading && (
-                        <div className="grid gap-3">
-                          <div>
-                            <div className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-app-muted">{tr('前置支线，可复选', 'Required branches')}</div>
-                            {continuityBranches.length === 0 ? (
-                              <div className="text-xs leading-relaxed text-app-muted">{tr('该前作没有可选支线。', 'This previous story has no branches.')}</div>
-                            ) : (
-                              <div className="grid gap-2 sm:grid-cols-2">
-                                {continuityBranches.map((branch: any) => {
-                                  const branchId = String(branch.id || '');
-                                  return (
-                                    <label key={branchId} className="flex items-start gap-2 rounded-xl border border-app-border bg-app-surface/50 p-3 text-xs text-app-text">
-                                      <input
-                                        type="checkbox"
-                                        checked={quickSeriesSelection.requiredBranchIds.includes(branchId)}
-                                        onChange={(event) => setQuickSeriesSelection((prev) => ({
-                                          ...prev,
-                                          requiredBranchIds: event.target.checked
-                                            ? [...new Set([...prev.requiredBranchIds, branchId])]
-                                            : prev.requiredBranchIds.filter((id) => id !== branchId),
-                                        }))}
-                                        className="mt-1 accent-indigo-500"
-                                      />
-                                      <span className="font-bold text-app-text">{branch.name || branch.title || branchId}</span>
-                                    </label>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </div>
-                          <div>
-                            <div className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-app-muted">{tr('前置结局，单选', 'Required ending')}</div>
-                            <div className="grid gap-2 sm:grid-cols-3">
-                              {continuityEndings.map((ending: any) => {
-                                const endingId = String(ending.id || '');
-                                return (
-                                  <label key={endingId} className="flex items-start gap-2 rounded-xl border border-app-border bg-app-surface/50 p-3 text-xs text-app-text">
-                                    <input
-                                      type="radio"
-                                      name="quick-continuity-ending"
-                                      checked={quickSeriesSelection.endingId === endingId}
-                                      onChange={() => setQuickSeriesSelection((prev) => ({ ...prev, endingId }))}
-                                      className="mt-1 accent-indigo-500"
-                                    />
-                                    <span className="font-bold text-app-text">{ending.title || endingId}</span>
-                                  </label>
-                                );
-                              })}
-                            </div>
-                          </div>
-                          <textarea
-                            value={quickSeriesSelection.hardSettings}
-                            onChange={(event) => setQuickSeriesSelection((prev) => ({ ...prev, hardSettings: event.target.value }))}
-                            placeholder={tr('继承硬设定：一行一条，例如「前作中阵亡的人物不能无解释复活」或「第二部开场必须承认王都已陷落」。', 'Continuity hard rules: one per line, e.g. “Dead characters cannot return without explanation.”')}
-                            className="min-h-24 w-full resize-y rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })()}
-        </div>
-        <label className="mb-3 block text-sm font-bold text-app-text">{tr('专属故事大纲', 'Custom story outline')}</label>
-        <textarea
-          value={customOutline}
-          onChange={(event) => setCustomOutline(event.target.value)}
-          placeholder={tr('例如：一位在现代都市经营神秘书店的青年，某夜遇见来自未来的顾客，自此被卷入一场会改写现实的命运试炼。', 'Example: A young bookseller in a modern city meets a customer from the future and is drawn into a fate trial that can rewrite reality.')}
-          className="min-h-[140px] w-full rounded-2xl border border-app-border bg-app-input-bg px-4 py-4 text-sm text-app-text outline-none transition-colors focus:border-indigo-500"
-        />
-        <div className="mt-6 space-y-3">
-          <div className="space-y-3 rounded-2xl border border-app-border bg-app-bg/70 p-4">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-sm font-bold text-app-muted">{tr('叙事人称', 'Narrative voice')}</span>
-              <span className="text-xs font-black text-indigo-300">
-                {quickText(NARRATIVE_PERSON_OPTIONS.find((option) => option.value === narrativePerson)?.label)}
-              </span>
-            </div>
-            <div className="grid gap-2 sm:grid-cols-3">
-              {NARRATIVE_PERSON_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setNarrativePerson(option.value)}
-                  className={`rounded-2xl border px-3 py-3 text-left transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
-                    narrativePerson === option.value
-                      ? 'border-indigo-400 bg-indigo-500/15 text-indigo-100 shadow-lg shadow-indigo-950/30'
-                      : 'border-app-border bg-app-surface/50 text-app-muted hover:border-zinc-600 hover:text-app-text'
-                  }`}
-                >
-                  <div className="text-sm font-black">{quickText(option.label)}</div>
-                  <div className="mt-1 text-[11px] leading-relaxed opacity-70">{quickText(option.hint)}</div>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-        <div className="mt-6 space-y-3">
-          <div className="space-y-3 rounded-2xl border border-app-border bg-app-bg/70 p-4">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-sm font-bold text-app-muted">{tr('结局结构', 'Ending structure')}</span>
-              <span className="text-xs font-black text-indigo-300">
-                {quickEndingMode === 'single' ? tr('唯一走向', 'Fixed-ending path') : tr('三域走向', 'Three-domain path')}
-              </span>
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {([
-                {
-                  value: 'single',
-                  label: tr('唯一走向', 'Fixed-ending path'),
-                  hint: tr('所有干涉最终都会自然收束到唯一结局，重点在过程变化、角色经历与支线展开。', 'All interference naturally converges to one fixed ending; the focus is path changes, character experience, and branches.'),
-                },
-                {
-                  value: 'dual',
-                  label: tr('三域走向', 'Three-domain path'),
-                  hint: tr('使用中域、左域、右域三类收束，并为每一域保留扩展更多具体结局的空间。', 'Uses middle, left, and right domains while leaving room for more concrete endings later.'),
-                },
-              ] as const).map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setQuickEndingMode(option.value)}
-                  className={`rounded-2xl border px-3 py-3 text-left transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
-                    quickEndingMode === option.value
-                      ? 'border-indigo-400 bg-indigo-500/15 text-indigo-100 shadow-lg shadow-indigo-950/30'
-                      : 'border-app-border bg-app-surface/50 text-app-muted hover:border-zinc-600 hover:text-app-text'
-                  }`}
-                >
-                  <div className="text-sm font-black">{option.label}</div>
-                  <div className="mt-1 text-[11px] leading-relaxed opacity-70">{option.hint}</div>
-                </button>
-              ))}
-            </div>
-            {quickEndingMode === 'dual' && (
-              <div className="mt-4 rounded-2xl border border-app-border/80 bg-app-bg/60 p-3 text-xs font-bold text-app-muted">
-                {(() => {
-                  const axis = endingBiasAxisFromBias(quickEndingBias);
-                  const bias = endingBiasFromAxis(axis);
-                  return (
-                    <>
-                      <div className="flex items-center justify-between gap-3">
-                        <span>{tr('主线倾向', 'Mainline tendency')}</span>
-                        <span className="text-sm font-black text-indigo-200">{endingBiasAxisLabel(axis)}</span>
-                      </div>
-                      <input
-                        type="range"
-                        min={-70}
-                        max={70}
-                        step={10}
-                        value={axis}
-                        onChange={(event) => setQuickEndingBias(endingBiasFromAxis(Number(event.target.value)))}
-                        className="mt-3 w-full accent-indigo-500"
-                      />
-                      <div className="mt-2 flex justify-between text-[10px] font-black text-zinc-600">
-                        <span>{tr('右域强', 'Right strong')}</span>
-                        <span>{tr('中性', 'Neutral')}</span>
-                        <span>{tr('左域强', 'Left strong')}</span>
-                      </div>
-                      <div className="mt-2 text-[11px] leading-relaxed text-app-muted">
-                        {tr(`左域 ${bias.leftBaseWeight}% / 右域 ${bias.rightBaseWeight}%；支线会瓜分各自剩余空间来撬动走向。`, `Left ${bias.leftBaseWeight}% / Right ${bias.rightBaseWeight}%. Branches use each side's remaining room to shift the path.`)}
-                      </div>
-                    </>
-                  );
-                })()}
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="mt-6 space-y-3">
-          <div className="flex items-center justify-between text-sm">
-            <span className="font-bold text-app-muted">{tr('每章目标字数', 'Target words per chapter')}</span>
-            <span className="font-black text-indigo-300">{targetWordCount} {tr('字', 'words')}</span>
-          </div>
-          <input
-            type="range"
-            min="600"
-            max="1200"
-            step="100"
-            value={targetWordCount}
-            onChange={(event) => setTargetWordCount(parseInt(event.target.value, 10))}
-            className="w-full accent-indigo-500"
-          />
-          <div className="flex justify-between text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-600">
-            <span>{tr('精简', 'Lean')}</span>
-            <span>{tr('宏大', 'Epic')}</span>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={handleGenerateBlueprint}
-          disabled={
-            (selectedThemes.length < 1 && customOutline.trim().length === 0 && !quickSeriesBindingId) ||
-            selectedThemes.length > 4 ||
-            (quickSeriesSelection.useContinuity && (!quickSeriesSelection.sourceStoryId || !quickSeriesSelection.endingId))
-          }
-          className={`${semanticButtonClass('primary', { fullWidth: true })} mt-6`}
-        >
-          <Sparkles className="h-4 w-4" />
-          {tr('生成世界蓝图', 'Generate story blueprint')}
-        </button>
-      </div>
-      </>
-      )}
-    </div>
+  const renderSeriesWorldView = () => (
+    <SeriesWorldView
+      seriesForm={seriesForm}
+      seriesWorldBibleText={seriesWorldBibleText}
+      parseEditableJson={parseEditableJson}
+      asSafeArray={asSafeArray}
+      tr={tr}
+      normalizeSeriesPlotMaterial={normalizeSeriesPlotMaterial}
+      setSeriesWorldBibleText={setSeriesWorldBibleText}
+      seriesSourceStoryId={seriesSourceStoryId}
+      gameState={gameState}
+      goBack={goBack}
+      navigateTo={navigateTo}
+      loadSeriesWorlds={loadSeriesWorlds}
+      renderInlineHelp={renderInlineHelp}
+      seriesWorlds={seriesWorlds}
+      resetSeriesWorldDraft={resetSeriesWorldDraft}
+      selectedSeriesId={selectedSeriesId}
+      setSelectedSeriesId={setSelectedSeriesId}
+      setSeriesForm={setSeriesForm}
+      setSeriesIronLawsText={setSeriesIronLawsText}
+      setSeriesFutureDirectionsText={setSeriesFutureDirectionsText}
+      loadContinuityNodesForSeries={loadContinuityNodesForSeries}
+      myStories={myStories}
+      getStoryTitle={getStoryTitle}
+      setSeriesSourceStoryId={setSeriesSourceStoryId}
+      handleGenerateSeriesWorld={handleGenerateSeriesWorld}
+      seriesGenerating={seriesGenerating}
+      handleDeleteSeriesWorld={handleDeleteSeriesWorld}
+      seriesSaving={seriesSaving}
+      handleSaveSeriesWorld={handleSaveSeriesWorld}
+      createEmptySeriesCharacterCard={createEmptySeriesCharacterCard}
+      normalizeTagList={normalizeTagList}
+      createEmptySeriesPlotMaterial={createEmptySeriesPlotMaterial}
+    />
   );
-
+  const renderThemeSelectionView = () => (
+    <ThemeSelectionView
+      tr={tr}
+      goBack={goBack}
+      appLanguage={appLanguage}
+      quickGenerationMode={quickGenerationMode}
+      setQuickGenerationMode={setQuickGenerationMode}
+      QUICK_QUIZ_STEPS={QUICK_QUIZ_STEPS}
+      quickQuizStepIndex={quickQuizStepIndex}
+      asSafeArray={asSafeArray}
+      quickQuizAnswers={quickQuizAnswers}
+      handleRandomQuickGeneration={handleRandomQuickGeneration}
+      quickCharacterSeed={quickCharacterSeed}
+      setQuickCharacterSeed={setQuickCharacterSeed}
+      quickText={quickText}
+      setQuickQuizStepIndex={setQuickQuizStepIndex}
+      toggleQuickQuizAnswer={toggleQuickQuizAnswer}
+      handleGenerateBlueprint={handleGenerateBlueprint}
+      QUICK_STORY_TEMPLATES={QUICK_STORY_TEMPLATES}
+      applyQuickStoryTemplate={applyQuickStoryTemplate}
+      isEnglish={isEnglish}
+      QUICK_STORY_TEMPLATE_EN={QUICK_STORY_TEMPLATE_EN}
+      themeInputText={themeInputText}
+      setThemeInputText={setThemeInputText}
+      setSelectedThemes={setSelectedThemes}
+      THEMES={THEMES}
+      THEME_LABEL_EN={THEME_LABEL_EN}
+      quickSeriesBindingId={quickSeriesBindingId}
+      setQuickSeriesBindingId={setQuickSeriesBindingId}
+      seriesWorlds={seriesWorlds}
+      getSeriesBaselineRules={getSeriesBaselineRules}
+      getSeriesCharacterCards={getSeriesCharacterCards}
+      myStories={myStories}
+      quickContinuitySourceStory={quickContinuitySourceStory}
+      quickSeriesSelection={quickSeriesSelection}
+      setQuickSeriesSelection={setQuickSeriesSelection}
+      quickContinuityLoading={quickContinuityLoading}
+      getStoryTitle={getStoryTitle}
+      authoringEndingIdToLabel={authoringEndingIdToLabel}
+      customOutline={customOutline}
+      setCustomOutline={setCustomOutline}
+      narrativePerson={narrativePerson}
+      NARRATIVE_PERSON_OPTIONS={NARRATIVE_PERSON_OPTIONS}
+      setNarrativePerson={setNarrativePerson}
+      quickEndingMode={quickEndingMode}
+      setQuickEndingMode={setQuickEndingMode}
+      quickEndingBias={quickEndingBias}
+      endingBiasAxisFromBias={endingBiasAxisFromBias}
+      endingBiasFromAxis={endingBiasFromAxis}
+      endingBiasAxisLabel={endingBiasAxisLabel}
+      setQuickEndingBias={setQuickEndingBias}
+      targetWordCount={targetWordCount}
+      setTargetWordCount={setTargetWordCount}
+      selectedThemes={selectedThemes}
+      normalizeTagList={normalizeTagList}
+    />
+  );
   const isSystemSettingsMode = accountCenterMode === 'settings';
   const renderAccountCenterContent = (mode: 'page' | 'modal' = 'modal') => (
     <AccountCenterContent
@@ -10393,264 +8776,6 @@ export default function App() {
     </div>
   );
 
-  const renderBranchForm = (isNew: boolean) => (
-    <div className="rounded-[1.5rem] border border-app-border bg-app-bg/40 p-5 space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="text-sm font-black text-white">{isNew ? tr('新建支线', 'New branch') : tr('编辑支线', 'Edit branch')}</div>
-        <button type="button" onClick={() => setExpandedBranchId(null)} className={semanticButtonClass('ghost', { compact: true })}>
-          <X className="h-4 w-4" />
-          {tr('取消', 'Cancel')}
-        </button>
-      </div>
-      <div>
-        <input value={branchForm.name} onChange={(event) => setBranchForm((prev) => ({ ...prev, name: event.target.value }))} className="w-full rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500" placeholder={tr('支线名', 'Branch name')} />
-      </div>
-      <div className="grid gap-3 md:grid-cols-2">
-        <select value={branchForm.side} onChange={(event) => setBranchForm((prev) => ({ ...prev, side: event.target.value as 'left' | 'right' }))} className="rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500">
-          <option value="left">{tr('左域支线', 'Left-domain branch')}</option>
-          <option value="right">{tr('右域支线', 'Right-domain branch')}</option>
-        </select>
-        <select value={branchForm.tier} onChange={(event) => setBranchForm((prev) => ({ ...prev, tier: event.target.value as 'small' | 'medium' | 'large' }))} className="rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500">
-          <option value="small">{tr('影响：小', 'Impact: small')}</option>
-          <option value="medium">{tr('影响：中', 'Impact: medium')}</option>
-          <option value="large">{tr('影响：大', 'Impact: large')}</option>
-        </select>
-      </div>
-      <label className="flex items-start gap-3 rounded-2xl border border-amber-500/15 bg-amber-500/5 p-4 text-sm text-app-text">
-        <input
-          type="checkbox"
-          checked={branchForm.isHidden}
-          onChange={(event) => setBranchForm((prev) => ({ ...prev, isHidden: event.target.checked }))}
-          className="mt-1 h-4 w-4 accent-amber-500"
-        />
-        <span>
-          <span className="block font-black text-amber-200">{tr('隐藏支线', 'Hidden branch')}</span>
-          <span className="mt-1 block text-xs leading-relaxed text-app-muted">{tr('隐藏支线不会提前暴露完整内容；玩家需要在游玩中触发后，才会看到这条支线的具体情节。', 'Hidden branches do not reveal full content early. Players see the details only after triggering them during play.')}</span>
-        </span>
-      </label>
-      <div className="rounded-2xl border border-app-border bg-app-surface/30 p-4">
-        <label className="block space-y-2 text-sm font-bold text-app-text">
-          <span>{tr('导向结局绑定', 'Ending binding')}</span>
-          <select
-            value={branchForm.endingId}
-            onChange={(event) => setBranchForm((prev) => ({ ...prev, endingId: event.target.value }))}
-            className="w-full rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
-          >
-            <option value="">{tr('自动进入该域的默认结局', 'Auto-use the default ending in this domain')}</option>
-            {(authoringCartridge?.endings || []).map((ending: any) => (
-              <option key={ending.id} value={ending.id}>
-                {tr('绑定', 'Bind')} {ending.title || authoringEndingIdToLabel(ending.id)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <p className="mt-2 text-xs leading-relaxed text-app-muted">{tr('支线可以只影响左域/右域走向，也可以进一步绑定到某个具体结局。没有绑定时，会自动进入该域的默认结局。', 'A branch can affect only left/right direction, or bind to a specific ending. Without a binding, it uses that domain’s default ending.')}</p>
-      </div>
-      <textarea value={branchForm.sceneText} onChange={(event) => setBranchForm((prev) => ({ ...prev, sceneText: event.target.value }))} className="authoring-resizable-textarea min-h-[180px] w-full resize-y rounded-2xl border border-app-border bg-app-input-bg px-4 py-4 text-sm text-app-text outline-none focus:border-indigo-500" placeholder={tr('支线情节（300 字以内）', 'Branch scene (within 300 words)')} />
-      <div className="space-y-3">
-        <div className="text-sm font-black text-white">{tr('触发条件', 'Trigger Conditions')}</div>
-        {branchConditions.map((condition, idx) => (
-          <div key={idx} className="rounded-2xl border border-app-border bg-app-surface/30 p-4 space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <div className="text-xs font-black text-app-muted">{tr('条件组', 'Condition group')} {idx + 1}</div>
-              {branchConditions.length > 1 && (
-                <button type="button" onClick={() => setBranchConditions((prev) => prev.filter((_, itemIdx) => itemIdx !== idx))} className={semanticButtonClass('danger', { compact: true })}>
-                  <Trash2 className="h-4 w-4" />
-                  {tr('删除条件', 'Delete condition')}
-                </button>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <select value={condition.kind} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, kind: event.target.value as 'single' | 'count' } : item))} className="rounded-xl border border-app-border bg-app-input-bg px-3 py-2 text-sm text-app-text outline-none focus:border-indigo-500 min-w-[120px]">
-                <option value="single">{tr('单次判定', 'Single check')}</option>
-                <option value="count">{tr('累计判定', 'Cumulative check')}</option>
-              </select>
-              <select value={condition.kind === 'single' ? condition.singleChapterNum : condition.upToChapterNum} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? (condition.kind === 'single' ? { ...item, singleChapterNum: Number(event.target.value) } : { ...item, upToChapterNum: Number(event.target.value) }) : item))} className="rounded-xl border border-app-border bg-app-input-bg px-3 py-2 text-sm text-app-text outline-none focus:border-indigo-500 min-w-[100px]">
-                {chapterOptions.map((chapterNum) => <option key={chapterNum} value={chapterNum}>{isEnglish ? `Chapter ${chapterNum}` : `第${chapterNum}章`}</option>)}
-              </select>
-              <select value={condition.kind === 'single' ? condition.singleCharId : condition.countCharId} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? (condition.kind === 'single' ? { ...item, singleCharId: event.target.value } : { ...item, countCharId: event.target.value }) : item))} className="rounded-xl border border-app-border bg-app-input-bg px-3 py-2 text-sm text-app-text outline-none focus:border-indigo-500 min-w-[140px]">
-                <option value="">{tr('选择角色', 'Choose character')}</option>
-                {normalizeCharacters(authoringCartridge?.meta?.characters || []).map((character: any) => <option key={character.id} value={character.id}>{character.name}</option>)}
-              </select>
-              {condition.kind === 'single' ? (
-                <select value={condition.singleAction} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, singleAction: event.target.value as 'bless' | 'curse' } : item))} className="rounded-xl border border-app-border bg-app-input-bg px-3 py-2 text-sm text-app-text outline-none focus:border-indigo-500 min-w-[100px]">
-                  <option value="bless">{tr('庇佑', 'Bless')}</option>
-                  <option value="curse">{tr('磨难', 'Hardship')}</option>
-                </select>
-              ) : (
-                <>
-                  <select value={condition.countAction} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, countAction: event.target.value as 'bless' | 'curse' } : item))} className="rounded-xl border border-app-border bg-app-input-bg px-3 py-2 text-sm text-app-text outline-none focus:border-indigo-500 min-w-[100px]">
-                    <option value="bless">{tr('庇佑', 'Bless')}</option>
-                    <option value="curse">{tr('磨难', 'Hardship')}</option>
-                  </select>
-                  <input type="number" min={1} value={condition.minCount} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, minCount: Math.max(1, Number(event.target.value) || 1) } : item))} className="w-24 rounded-xl border border-app-border bg-app-input-bg px-3 py-2 text-sm text-app-text outline-none focus:border-indigo-500" placeholder={tr('累计次数', 'Count')} />
-                </>
-              )}
-            </div>
-            <div>
-              <input
-                type="text"
-                value={condition.hint || ''}
-                onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, hint: event.target.value } : item))}
-                className="w-full rounded-xl border border-app-border bg-app-input-bg px-4 py-2 text-sm text-app-text outline-none focus:border-indigo-500"
-                placeholder={tr('提示（可选，在触发条件中设置，多条件时可针对不同条件设置提示）', 'Hint (optional, set in trigger conditions. Multi-conditions can have different hints)')}
-              />
-            </div>
-            <div className="text-xs text-indigo-300">
-              {triggerPreview({
-                triggerType: condition.kind,
-                singleChapterNum: condition.singleChapterNum,
-                singleCharId: condition.singleCharId,
-                singleAction: condition.singleAction,
-                countCharId: condition.countCharId,
-                countAction: condition.countAction,
-                minCount: condition.minCount,
-                upToChapterNum: condition.upToChapterNum,
-                characters: normalizeCharacters(authoringCartridge?.meta?.characters || []),
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="flex flex-wrap gap-3">
-        <button type="button" onClick={() => setBranchConditions((prev) => prev.length >= 3 ? prev : [...prev, { kind: 'single', singleChapterNum: 2, singleCharId: '', singleAction: 'bless', countCharId: '', countAction: 'bless', minCount: 1, upToChapterNum: 6 }])} className={semanticButtonClass('ghost', { compact: true })}>
-          {tr('新增条件组', 'Add condition group')}
-        </button>
-        <button
-          type="button"
-          onClick={async () => {
-            if (!authoringStoryId || !branchForm.name.trim()) {
-              showError(tr('请先填写支线名。', 'Please enter a branch name first.'));
-              return;
-            }
-            const payload = {
-              side: branchForm.side,
-              tier: normalizeBranchTier(branchForm.tier),
-              is_hidden: branchForm.isHidden,
-              endingId: branchForm.endingId || undefined,
-              name: branchForm.name,
-              desc: branchForm.sceneText.slice(0, 80) || branchForm.name,
-              common: false,
-              hint: '',
-              trigger: normalizeBranchConditionsForStorage(branchConditions)[0],
-              triggerGroups: normalizeBranchConditionsForStorage(branchConditions),
-              inject: { mustHappen: branchForm.sceneText ? [branchForm.sceneText] : [], mustReveal: [], mustChange: [], hidden: branchForm.isHidden, endingId: branchForm.endingId || undefined },
-              sceneText: branchForm.sceneText,
-            } as any;
-            if (isNew) {
-              const newId = await createStoryBranch(db as any, authoringStoryId, payload);
-              await selectAuthoringStory(authoringStoryId, { keepTab: true, keepBranchSelection: false });
-              setExpandedBranchId(null);
-              showError(tr('支线已创建。', 'Branch created.'));
-            } else {
-              await upsertStoryBranch(db as any, authoringStoryId, branchForm.id, payload);
-              await selectAuthoringStory(authoringStoryId, { keepTab: true, keepBranchSelection: true });
-              showError(tr('支线已保存。', 'Branch saved.'));
-            }
-          }}
-          className={semanticButtonClass('primary', { compact: true })}
-        >
-          {isNew ? tr('创建支线', 'Create branch') : tr('保存修改', 'Save changes')}
-        </button>
-      </div>
-    </div>
-  );
-
-  const getFilteredAuthoringStories = () => {
-    const query = authoringListSearch.trim().toLowerCase();
-    const getAuthoringStorySeriesId = (story: any) => String(story?.seriesId || story?.series_id || story?.meta?.seriesId || story?.meta?.series_id || '').trim();
-    return [...myStories]
-      .filter((story: any) => {
-        const seriesId = getAuthoringStorySeriesId(story);
-        if (authoringSeriesKindFilter === 'standalone' && seriesId) return false;
-        if (authoringSeriesKindFilter === 'series' && !seriesId) return false;
-        if (authoringSeriesWorldFilter !== 'all' && seriesId !== authoringSeriesWorldFilter) return false;
-        if (authoringListVisibilityFilter !== 'all' && (story.visibility || 'private') !== authoringListVisibilityFilter) return false;
-        if (authoringCreatedFilter !== 'all') {
-          const createdAt = getStoryCreatedMs(story);
-          const maxAgeMs = authoringCreatedFilter === '7d'
-            ? 7 * 24 * 60 * 60 * 1000
-            : authoringCreatedFilter === '30d'
-            ? 30 * 24 * 60 * 60 * 1000
-            : 365 * 24 * 60 * 60 * 1000;
-          if (!createdAt || Date.now() - createdAt > maxAgeMs) return false;
-        }
-        if (!query) return true;
-        const haystack = [
-          getStoryTitle(story),
-          story?.authorName,
-          story?.mainAxis,
-          ...(story?.tags || story?.meta?.tags || []),
-        ].join(' ').toLowerCase();
-        return haystack.includes(query);
-      })
-      .sort((a: any, b: any) => {
-        if (authoringListSort === 'created') return getStoryCreatedMs(b) - getStoryCreatedMs(a);
-        if (authoringListSort === 'likes') return getStoryLikeCount(b) - getStoryLikeCount(a);
-        if (authoringListSort === 'favorites') return getStoryFavoriteCount(b) - getStoryFavoriteCount(a);
-        if (authoringListSort === 'shares') return getStoryShareCount(b) - getStoryShareCount(a);
-        if (authoringListSort === 'interventions') return getStoryInterventionCount(b) - getStoryInterventionCount(a);
-        return getStoryUpdatedMs(b) - getStoryUpdatedMs(a);
-      });
-  };
-
-  const getAuthoringStorySeriesId = (story: any) => String(story?.seriesId || story?.series_id || story?.meta?.seriesId || story?.meta?.series_id || '').trim();
-  const getAuthoringStorySeriesName = (story: any) => {
-    const seriesId = getAuthoringStorySeriesId(story);
-    if (!seriesId) return tr('单独作品', 'Standalone');
-    return seriesWorlds.find((series) => series.id === seriesId)?.title || tr('世界观作品', 'World setting work');
-  };
-
-  const renderAuthoringStatChip = (label: string, value: string | number, Icon: any, tone = 'text-app-text') => (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-app-border/80 bg-app-bg/55 px-2.5 py-1 text-[11px] font-black text-app-text">
-      <Icon className={`h-3.5 w-3.5 ${tone}`} />
-      <span className="text-app-muted">{label}</span>
-      <span className="text-app-text">{value}</span>
-    </span>
-  );
-
-  const renderAuthorPulsePanel = () => {
-    if (authorPulseNotifications.length === 0) return null;
-    return (
-      <div className="mb-5 grid gap-2">
-        {authorPulseNotifications.map((notification) => (
-          <div
-            key={notification.id}
-            className={`app-card flex items-start justify-between gap-3 rounded-2xl px-4 py-3 ${
-              notification.tone === 'like'
-                ? 'border-rose-400/25 bg-rose-500/10'
-                : notification.tone === 'favorite'
-                ? 'border-amber-400/25 bg-amber-500/10'
-                : notification.tone === 'share'
-                ? 'border-cyan-400/25 bg-cyan-500/10'
-                : notification.tone === 'intervention'
-                ? 'border-indigo-400/25 bg-indigo-500/10'
-                : 'border-emerald-400/25 bg-emerald-500/10'
-            }`}
-          >
-            <div className="flex min-w-0 items-start gap-3">
-              <div className="mt-0.5 rounded-full border border-white/10 bg-white/10 p-2">
-                <Bell className="h-4 w-4 text-app-text" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-sm font-black text-white">{notification.title}</div>
-                <div className="mt-1 text-xs font-semibold leading-relaxed text-app-text">{notification.detail}</div>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => dismissAuthorPulseNotification(notification.id)}
-              className="rounded-full p-1 text-app-muted transition-colors hover:bg-white/10 hover:text-app-text active:scale-95"
-              aria-label="关闭通知"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        ))}
-      </div>
-    );
-  };
-
   const AuthorNameButton = ({ authorId, authorName, prefix = '作者：' }: { authorId?: string | null; authorName?: string; prefix?: string }) => (
     <span className="inline-flex items-center gap-1">
       {prefix}
@@ -10725,1397 +8850,161 @@ export default function App() {
   );
 
   const renderAuthoringView = () => (
-    <div className="authoring-studio mx-auto max-w-5xl px-6 pb-[calc(7.5rem+env(safe-area-inset-bottom))] pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] lg:px-8">
-      {!authoringCartridge ? (
-        <>
-          {renderInlineHelp('authoring-list', '创作者后台指引', '欢迎来到命运馆的作者工坊。在这里你可以新建单独的叙事卡带，或者建立并绑定自定义的世界观体系。你发布的作品将展示在公共书库中。数据面板可以帮你评估哪些命运走向和分支吸引了最多执行官的干涉。')}
-          <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
-            <BackNavButton label={tr('返回上一页', 'Back')} onClick={() => goBack('STORY_SELECT')} />
-            <div className="flex flex-wrap gap-3">
-              <button type="button" onClick={() => handleCreateAuthoringStory()} disabled={authoringSaving} className={semanticButtonClass('secondary', { compact: true })}>
-                <Sparkles className="h-4 w-4" />
-                {tr('新建作品', 'New work')}
-              </button>
-              <button type="button" onClick={() => void openSeriesWorldView()} disabled={authoringSaving} className={semanticButtonClass('ghost', { compact: true })}>
-                <GitBranch className="h-4 w-4" />
-                {tr('世界观设定', 'World settings')}
-              </button>
-              <button type="button" onClick={() => refreshStories({ force: true })} disabled={authoringSaving} className={semanticButtonClass('ghost', { compact: true })}>
-                <RefreshCcw className="h-4 w-4" />
-                {tr('刷新列表', 'Refresh list')}
-              </button>
-            </div>
-          </div>
-
-          <div>
-            <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2 text-2xl font-black text-white">
-                  <BarChart3 className="h-5 w-5 text-indigo-300" />
-                  {tr('我的作品', 'My Works')}
-                </div>
-                <div className="mt-1 text-xs font-semibold text-app-muted">{tr('用数据判断哪些命运线值得继续扩写、改版或推广。', 'Use stats to decide which fate lines deserve expansion, revision, or promotion.')}</div>
-              </div>
-              <div className="text-xs font-black text-app-muted">{myStories.length} {tr('部作品', 'works')}</div>
-            </div>
-            <div className="mb-5 grid gap-3 lg:grid-cols-2 xl:grid-cols-[1.2fr_auto_auto_auto_auto_auto]">
-              <label className="relative block">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-app-muted" />
-                <input
-                  value={authoringListSearch}
-                  onChange={(event) => setAuthoringListSearch(event.target.value)}
-                  placeholder={tr('搜索作品、标签或主轴', 'Search works, tags, or premise')}
-                  className="w-full rounded-2xl border border-app-border bg-app-input-bg/60 py-3 pl-10 pr-4 text-sm font-semibold text-app-text outline-none transition-colors placeholder:text-zinc-600 focus:border-indigo-400/70"
-                />
-              </label>
-              <select
-                value={authoringSeriesKindFilter}
-                onChange={(event) => {
-                  const value = event.target.value as typeof authoringSeriesKindFilter;
-                  setAuthoringSeriesKindFilter(value);
-                  if (value !== 'series') setAuthoringSeriesWorldFilter('all');
-                }}
-                className="rounded-2xl border border-app-border bg-app-input-bg/60 px-4 py-3 text-sm font-black text-app-text outline-none focus:border-indigo-400/70"
-              >
-                <option value="all">{tr('全部作品', 'All works')}</option>
-                <option value="standalone">{tr('单独作品', 'Standalone')}</option>
-                <option value="series">{tr('世界观作品', 'World setting')}</option>
-              </select>
-              <select
-                value={authoringSeriesWorldFilter}
-                onChange={(event) => {
-                  setAuthoringSeriesWorldFilter(event.target.value);
-                  if (event.target.value !== 'all') setAuthoringSeriesKindFilter('series');
-                }}
-                className="rounded-2xl border border-app-border bg-app-input-bg/60 px-4 py-3 text-sm font-black text-app-text outline-none focus:border-indigo-400/70"
-              >
-                <option value="all">{tr('全部世界观', 'All settings')}</option>
-                {seriesWorlds.map((series) => (
-                  <option key={series.id} value={series.id}>{series.title || tr('未命名世界观', 'Untitled setting')}</option>
-                ))}
-              </select>
-              <select
-                value={authoringListVisibilityFilter}
-                onChange={(event) => setAuthoringListVisibilityFilter(event.target.value as typeof authoringListVisibilityFilter)}
-                className="rounded-2xl border border-app-border bg-app-input-bg/60 px-4 py-3 text-sm font-black text-app-text outline-none focus:border-indigo-400/70"
-              >
-                <option value="all">{tr('全部可见性', 'All visibility')}</option>
-                <option value="public">{tr('公开', 'Public')}</option>
-                <option value="unlisted">{tr('非公开链接', 'Unlisted link')}</option>
-                <option value="private">{tr('私人', 'Private')}</option>
-              </select>
-              <select
-                value={authoringCreatedFilter}
-                onChange={(event) => setAuthoringCreatedFilter(event.target.value as typeof authoringCreatedFilter)}
-                className="rounded-2xl border border-app-border bg-app-input-bg/60 px-4 py-3 text-sm font-black text-app-text outline-none focus:border-indigo-400/70"
-              >
-                <option value="all">{tr('全部创作日期', 'All creation dates')}</option>
-                <option value="7d">{tr('近 7 天', 'Last 7 days')}</option>
-                <option value="30d">{tr('近 30 天', 'Last 30 days')}</option>
-                <option value="365d">{tr('近 1 年', 'Last year')}</option>
-              </select>
-              <select
-                value={authoringListSort}
-                onChange={(event) => setAuthoringListSort(event.target.value as AuthoringListSort)}
-                className="rounded-2xl border border-app-border bg-app-input-bg/60 px-4 py-3 text-sm font-black text-app-text outline-none focus:border-indigo-400/70"
-              >
-                <option value="updated">{tr('最近更新', 'Recently updated')}</option>
-                <option value="created">{tr('创作日期', 'Creation date')}</option>
-                <option value="likes">{tr('点赞最多', 'Most liked')}</option>
-                <option value="favorites">{tr('收藏最多', 'Most favorited')}</option>
-                <option value="shares">{tr('分享最多', 'Most shared')}</option>
-                <option value="interventions">{tr('干涉最多', 'Most intervened')}</option>
-              </select>
-            </div>
-            {myStories.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-app-border bg-app-bg/40 p-10 text-center text-app-muted">
-                {tr('还没有作品，点击“新建作品”开始创作。', 'No works yet. Click “New work” to start creating.')}
-              </div>
-            ) : getFilteredAuthoringStories().length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-app-border bg-app-bg/40 p-8 text-center text-sm font-semibold text-app-muted">
-                {tr('没有符合当前筛选的作品。', 'No works match the current filters.')}
-              </div>
-            ) : (
-              <div className="grid gap-4 sm:grid-cols-2">
-                {getFilteredAuthoringStories().map((story: any) => (
-                  <button
-                    key={story.id}
-                    type="button"
-                    disabled={authoringLoadingStoryId === story.id}
-                    onClick={async () => {
-                      setAuthoringLoadingStoryId(story.id);
-                      await selectAuthoringStory(story.id);
-                      setAuthoringLoadingStoryId(null);
-                    }}
-                    className={`app-card relative flex min-h-44 flex-col justify-between overflow-hidden rounded-2xl p-5 text-left transition-all hover:-translate-y-1 hover:border-indigo-500/50 hover:bg-indigo-500/10 hover:shadow-xl active:scale-[0.98] ${authoringLoadingStoryId === story.id ? 'opacity-70 pointer-events-none' : ''}`}
-                  >
-                    {authoringLoadingStoryId === story.id && (
-                      <div className="absolute inset-0 z-10 flex items-center justify-center bg-app-bg/60 backdrop-blur-sm">
-                        <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
-                      </div>
-                    )}
-                    <span className={`absolute right-3 top-3 rounded-full border px-2.5 py-1 text-[10px] font-black shadow-lg backdrop-blur-md ${
-                      story.visibility === 'public'
-                        ? 'border-emerald-400/25 bg-emerald-500/15 text-emerald-200'
-                        : story.visibility === 'unlisted'
-                        ? 'border-sky-400/25 bg-sky-500/15 text-sky-200'
-                        : 'border-app-border bg-app-surface/80 text-app-text'
-                    }`}>
-                      {getVisibilityLabel(story.visibility)}
-                    </span>
-                    <div className="pr-24">
-                      <div className="line-clamp-3 text-lg font-black text-white leading-tight">{formatBookTitle(getStoryTitle(story))}</div>
-                      <div className="mt-2 text-xs font-semibold text-app-muted">{tr('创作', 'Created')} {formatShortDate(getStoryCreatedMs(story))} · {tr('更新', 'Updated')} {formatShortDate(getStoryUpdatedMs(story))}</div>
-                      <div className={`mt-2 inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-black ${
-                        getAuthoringStorySeriesId(story)
-                          ? 'border-indigo-400/25 bg-indigo-500/10 text-indigo-200'
-                          : 'border-app-border bg-app-surface/70 text-app-muted'
-                      }`}>
-                        <GitBranch className="h-3 w-3 shrink-0" />
-                        <span className="truncate">{getAuthoringStorySeriesName(story)}</span>
-                      </div>
-                    </div>
-                    <div className="mt-5 flex flex-wrap gap-2">
-                      {renderAuthoringStatChip(tr('点赞', 'Likes'), getStoryLikeCount(story), Heart, 'text-rose-300')}
-                      {renderAuthoringStatChip(tr('收藏', 'Favorites'), getStoryFavoriteCount(story), Bookmark, 'text-amber-300')}
-                      {renderAuthoringStatChip(tr('分享', 'Shares'), getStoryShareCount(story), ExternalLink, 'text-cyan-300')}
-                      {renderAuthoringStatChip(tr('干涉', 'Interventions'), getStoryInterventionCount(story), Sparkles, 'text-indigo-300')}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </>
-      ) : (
-        <>
-          {renderInlineHelp('authoring-editor', '故事编辑器指南', '这里是故事的核心编织区。你可以设置【作品设置】里的题材与登场人物，编写【主线和结局】（第 1 至第 7 章基础正文与结局名称）。通过【角色和支线】选项卡，你可以配置“命运分支规则”，设定玩家施加庇佑（Bless）或磨难（Curse）时被解锁，并注入改动覆盖指定章节，引导出截然相异的终章结局。')}
-          <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
-            <BackNavButton
-              label={tr('返回列表', 'Back to list')}
-              onClick={() => {
-                if (authoringDirty) {
-                  setConfirmationModal({
-                    isOpen: true,
-                    title: tr('放弃未保存的更改', 'Discard unsaved changes'),
-                    message: tr('退出编辑模式将丢失当前未保存的内容，确定要离开吗？', 'Leaving the editor will discard unsaved changes. Continue?'),
-                    onConfirm: () => {
-                      setAuthoringDirty(false);
-                      setAuthoringStoryId(null);
-                      setAuthoringCartridge(null);
-                    },
-                  });
-                } else {
-                  setAuthoringStoryId(null);
-                  setAuthoringCartridge(null);
-                }
-              }}
-            />
-            <div className="flex flex-wrap items-center gap-3">
-              <div
-                className="authoring-save-pill inline-flex min-h-10 items-center gap-2 rounded-full px-3 py-2 text-xs font-black"
-                data-state={authoringSaving ? 'saving' : authoringDirty ? 'dirty' : 'saved'}
-              >
-                {authoringSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : authoringDirty ? <AlertCircle className="h-4 w-4" /> : <Check className="h-4 w-4" />}
-                {authoringSaving ? tr('保存中', 'Saving') : authoringDirty ? tr('有未保存更改', 'Unsaved changes') : tr('已保存', 'Saved')}
-              </div>
-              <button type="button" onClick={() => handleDeleteAuthoringStory()} disabled={authoringSaving} className={semanticButtonClass('danger', { compact: true })}>
-                <Trash2 className="h-4 w-4" />
-                {tr('删除作品', 'Delete work')}
-              </button>
-              <button type="button" onClick={handleSaveAuthoringChanges} disabled={authoringSaving} className={semanticButtonClass('primary', { compact: true })}>
-                {authoringSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                {tr('保存更改', 'Save changes')}
-              </button>
-            </div>
-          </div>
-
-          <div className="authoring-tabbar mb-8">
-            <button type="button" onClick={() => setAuthoringTab('settings')} className={`authoring-tab-button ${authoringTab === 'settings' ? 'is-active' : ''}`}>
-              <Copy className="mb-1 h-4 w-4 shrink-0" />{tr('作品设置', 'Settings')}
-            </button>
-            <button type="button" onClick={() => setAuthoringTab('series')} className={`authoring-tab-button ${authoringTab === 'series' ? 'is-active' : ''}`}>
-              <GitBranch className="mb-1 h-4 w-4 shrink-0" />{tr('系列设置', 'Series')}
-            </button>
-            <button type="button" onClick={() => setAuthoringTab('mainline')} className={`authoring-tab-button ${authoringTab === 'mainline' ? 'is-active' : ''}`}>
-              <BookOpen className="mb-1 h-4 w-4 shrink-0" />{tr('主线和结局', 'Mainline & Endings')}
-            </button>
-            <button type="button" onClick={() => setAuthoringTab('branches')} className={`authoring-tab-button ${authoringTab === 'branches' ? 'is-active' : ''}`}>
-              <Sparkles className="mb-1 h-4 w-4 shrink-0" />{tr('角色和支线', 'Characters & Branches')}
-            </button>
-          </div>
-
-          <div className="fixed bottom-[calc(max(0.85rem,env(safe-area-inset-bottom))+5rem)] left-8 z-[1700]">
-            <button
-              type="button"
-              onClick={() => {
-                if (authoringFindCompact) {
-                  setAuthoringFindCompact(false);
-                  setAuthoringFindReplaceOpen(true);
-                  return;
-                }
-                setAuthoringFindReplaceOpen((prev) => !prev);
-              }}
-              aria-label={tr('查找 / 替换', 'Find / Replace')}
-              className={`flex h-12 w-12 items-center justify-center rounded-full border shadow-2xl backdrop-blur-md transition-all hover:-translate-y-0.5 active:scale-95 ${
-                authoringFindReplaceOpen || authoringFindCompact
-                  ? 'border-indigo-400 bg-indigo-500 text-white'
-                  : 'border-app-border bg-app-bg/90 text-app-text hover:border-indigo-500 hover:text-white'
-              }`}
-            >
-              {authoringFindCompact ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
-            </button>
-            {authoringFindCompact && (
-              <div className="absolute bottom-16 left-0 grid w-44 gap-1.5 rounded-[1.25rem] border border-indigo-500/30 bg-app-bg/95 p-2 shadow-2xl shadow-black/40 backdrop-blur-xl">
-                <button type="button" onClick={() => moveAuthoringFindMatch(-1)} className={semanticButtonClass('ghost', { compact: true, fullWidth: true })}>
-                  {tr('上一个', 'Previous')}
-                </button>
-                <button type="button" onClick={() => moveAuthoringFindMatch(1)} className={semanticButtonClass('ghost', { compact: true, fullWidth: true })}>
-                  {tr('下一个', 'Next')}
-                </button>
-                <button
-                  type="button"
-                  onClick={replaceCurrentAuthoringMatch}
-                  disabled={!authoringFindQuery}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-400/40 bg-amber-500/15 px-3 py-2 text-xs font-black text-amber-100 transition-all hover:border-amber-300 hover:bg-amber-500/25 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {tr('替换', 'Replace')}
-                </button>
-                <div className="px-1 text-center text-[10px] font-bold text-app-muted">
-                  {tr('点击左下角 X 返回设置', 'Tap the X to return to settings')}
-                </div>
-              </div>
-            )}
-            {authoringFindReplaceOpen && (
-              <div className="absolute bottom-16 left-0 grid max-h-[min(76dvh,680px)] w-[min(92vw,44rem)] gap-3 overflow-y-auto rounded-[1.75rem] border border-indigo-500/30 bg-app-bg/95 p-4 shadow-2xl shadow-black/40 backdrop-blur-xl sm:p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-lg font-black text-white">{tr('查找 / 替换', 'Find / Replace')}</div>
-                    <p className="mt-1 text-xs leading-relaxed text-app-muted">{tr('可指定章节、结局或角色范围，避免误改其他段落。', 'Choose chapter, ending, or character scope to avoid changing unrelated text.')}</p>
-                  </div>
-                  <button type="button" onClick={() => setAuthoringFindReplaceOpen(false)} className={semanticIconButtonClass('ghost')}>
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="space-y-1 text-xs font-bold text-app-muted">
-                    <span>{tr('查找文字', 'Find text')}</span>
-                    <input
-                      value={authoringFindQuery}
-                      onChange={(event) => setAuthoringFindQuery(event.target.value)}
-                      className="w-full rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
-                      placeholder={tr('输入要查找的文字', 'Enter text to find')}
-                    />
-                  </label>
-                  <label className="space-y-1 text-xs font-bold text-app-muted">
-                    <span>{tr('替换成', 'Replace with')}</span>
-                    <input
-                      value={authoringReplaceQuery}
-                      onChange={(event) => setAuthoringReplaceQuery(event.target.value)}
-                      className="w-full rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
-                      placeholder={tr('留空则删除查找文字', 'Leave blank to delete matched text')}
-                    />
-                  </label>
-                </div>
-                <div className="grid gap-3">
-                  <div className="flex flex-wrap gap-2">
-                    {([
-                      ['chapters', tr('章节', 'Chapters')],
-                      ['endings', tr('结局', 'Endings')],
-                      ['characters', tr('角色', 'Characters')],
-                    ] as const).map(([key, label]) => (
-                      <label key={key} className="flex items-center gap-2 rounded-xl border border-app-border bg-app-surface/50 px-3 py-2 text-xs font-bold text-app-text">
-                        <input
-                          type="checkbox"
-                          checked={authoringFindScope[key]}
-                          onChange={(event) => setAuthoringFindScope((prev) => ({ ...prev, [key]: event.target.checked }))}
-                          className="accent-indigo-500"
-                        />
-                        {label}
-                      </label>
-                    ))}
-                  </div>
-                  {authoringFindScope.chapters && (
-                    <div className="rounded-2xl border border-app-border bg-app-surface/35 p-3">
-                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                        <div className="text-[11px] font-black uppercase tracking-[0.18em] text-app-muted">{tr('章节范围', 'Chapter scope')}</div>
-                        <button
-                          type="button"
-                          onClick={() => setAuthoringFindChapterNums((authoringCartridge.chapters || []).map((chapter: any) => Number(chapter.chapter_num)).filter((chapterNum: number) => Number.isFinite(chapterNum)))}
-                          className="text-xs font-black text-indigo-300 hover:text-indigo-100"
-                        >
-                          {tr('全选章节', 'Select all chapters')}
-                        </button>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {(authoringCartridge.chapters || []).map((chapter: any) => {
-                          const chapterNum = Number(chapter.chapter_num);
-                          const selected = authoringFindChapterNums.includes(chapterNum);
-                          return (
-                            <label key={chapterNum} className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold transition-colors ${selected ? 'border-indigo-500/50 bg-indigo-500/15 text-indigo-100' : 'border-app-border bg-app-bg/60 text-app-muted'}`}>
-                              <input
-                                type="checkbox"
-                                checked={selected}
-                                onChange={(event) => setAuthoringFindChapterNums((prev) => event.target.checked ? [...new Set([...prev, chapterNum])].sort((a, b) => a - b) : prev.filter((item) => item !== chapterNum))}
-                                className="accent-indigo-500"
-                              />
-                              {isEnglish ? `Chapter ${chapterNum}` : `第${chapterNum}章`}
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                  {authoringFindScope.endings && (
-                    <div className="rounded-2xl border border-app-border bg-app-surface/35 p-3">
-                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                        <div className="text-[11px] font-black uppercase tracking-[0.18em] text-app-muted">{tr('结局范围', 'Ending scope')}</div>
-                        <button
-                          type="button"
-                          onClick={() => setAuthoringFindEndingIds((authoringCartridge.endings || []).map((ending: any) => String(ending.id || '')).filter(Boolean))}
-                          className="text-xs font-black text-indigo-300 hover:text-indigo-100"
-                        >
-                          {tr('全选结局', 'Select all endings')}
-                        </button>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {(authoringCartridge.endings || []).map((ending: any) => {
-                          const endingId = String(ending.id || '');
-                          const selected = authoringFindEndingIds.includes(endingId);
-                          return (
-                            <label key={endingId} className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold transition-colors ${selected ? 'border-indigo-500/50 bg-indigo-500/15 text-indigo-100' : 'border-app-border bg-app-bg/60 text-app-muted'}`}>
-                              <input
-                                type="checkbox"
-                                checked={selected}
-                                onChange={(event) => setAuthoringFindEndingIds((prev) => event.target.checked ? [...new Set([...prev, endingId])] : prev.filter((item) => item !== endingId))}
-                                className="accent-indigo-500"
-                              />
-                              {ending.title || authoringEndingIdToLabel(ending.id)}
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <button
-                    type="button"
-                    onClick={openCompactFindMode}
-                    disabled={
-                      !authoringFindQuery ||
-                      !(
-                        (authoringFindScope.chapters && authoringFindChapterNums.length > 0) ||
-                        (authoringFindScope.endings && authoringFindEndingIds.length > 0) ||
-                        authoringFindScope.characters
-                      )
-                    }
-                    className={semanticButtonClass('secondary', { compact: true })}
-                  >
-                    {tr('查找', 'Find')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleAuthoringReplaceAll}
-                    disabled={
-                      !authoringFindQuery ||
-                      !(
-                        (authoringFindScope.chapters && authoringFindChapterNums.length > 0) ||
-                        (authoringFindScope.endings && authoringFindEndingIds.length > 0) ||
-                        authoringFindScope.characters
-                      )
-                    }
-                    className={semanticButtonClass('primary', { compact: true })}
-                  >
-                    {tr('全部替换', 'Replace all')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAuthoringFindQuery('');
-                      setAuthoringReplaceQuery('');
-                    }}
-                    className={semanticButtonClass('ghost', { compact: true })}
-                  >
-                    {tr('清空', 'Clear')}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-8">
-              {authoringTab === 'settings' && (
-                <section className="space-y-4">
-
-                  <div className="pt-2">
-                    <h3 className="text-xl font-black text-white">{tr('作品设置', 'Story Settings')}</h3>
-                    <p className="mt-1 text-xs leading-relaxed text-app-muted">{tr('正式作品可选择私人、非公开链接或公开；收藏命运记录不会出现在这里。', 'Formal works can be private, unlisted, or public. Saved fate records do not appear here.')}</p>
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <label className="space-y-2 text-sm text-app-muted">
-                      <div>{tr('作品标题', 'Story title')}</div>
-                      <input
-                        value={stripBookTitle(authoringCartridge.meta?.title || '')}
-                        onChange={(event) => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, title: event.target.value } }))}
-                        className="w-full rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-app-text outline-none focus:border-indigo-500"
-                      />
-                    </label>
-                    <label className="space-y-2 text-sm text-app-muted">
-                      <div>{tr('标签（以中文逗号分隔）', 'Tags (comma-separated)')}</div>
-                      <input
-                        value={authoringCustomTagsInput}
-                        onChange={(event) => setAuthoringCustomTagsInput(event.target.value)}
-                        placeholder={tr('在此手动输入标签或点击下方快速添加', 'Type tags here, or use quick tags below')}
-                        className="w-full rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-app-text outline-none focus:border-indigo-500"
-                      />
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {['生存', '末日', '异界', '恋爱', '悬疑', '推理', '赛博朋克', '奇幻', '惊悚', '治愈'].map(tag => (
-                          <button
-                            key={tag}
-                            type="button"
-                            onClick={() => {
-                               const current = authoringCustomTagsInput.trim();
-                               if (!current) setAuthoringCustomTagsInput(tag);
-                               else if (!current.includes(tag)) setAuthoringCustomTagsInput(current + (current.endsWith('，') || current.endsWith(',') ? '' : '，') + tag);
-                            }}
-                            className="rounded-lg bg-app-surface-soft/50 px-3 py-1.5 text-[11px] text-app-text transition-colors hover:bg-app-surface-soft hover:text-white"
-                          >
-                            + {tag}
-                          </button>
-                        ))}
-                      </div>
-                    </label>
-                  </div>
-                  <section className="app-card-quiet rounded-2xl p-4" tabIndex={0} onPaste={handleAuthoringCoverPaste}>
-                    <div className="mb-4 flex flex-col gap-4 sm:flex-row">
-                      <div className="h-32 w-32 shrink-0 overflow-hidden rounded-2xl border border-app-border bg-gradient-to-br from-zinc-800 via-zinc-950 to-indigo-950">
-                        {authoringCartridge.meta?.coverUrl ? (
-                          <img src={authoringCartridge.meta.coverUrl} alt={tr('作品封面预览', 'Story cover preview')} className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center p-4 text-center text-[10px] font-black uppercase tracking-[0.18em] text-app-muted">
-                            NO COVER
-                          </div>
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1 space-y-3">
-                        <div>
-                          <h4 className="text-lg font-black text-white">{tr('作品封面', 'Story Cover')}</h4>
-                          <p className="mt-1 text-xs leading-relaxed text-app-muted">{tr('用于作品卡和分享预览，建议 1:1。可上传图片，或直接粘贴剪贴板图片。', 'Used for story cards and share previews. 1:1 is recommended. Upload an image or paste from clipboard.')}</p>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          <label className={`${semanticButtonClass('secondary', { compact: true })} cursor-pointer`}>
-                            <BookOpen className="h-4 w-4" />
-                            {tr('上传封面', 'Upload cover')}
-                            <input
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={(event) => {
-                                void handleAuthoringCoverUpload(event.target.files?.[0]);
-                                event.currentTarget.value = '';
-                              }}
-                            />
-                          </label>
-                          {authoringCartridge.meta?.coverUrl && (
-                            <button type="button" onClick={() => applyAuthoringCover('')} className={semanticButtonClass('ghost', { compact: true })}>
-                              <X className="h-4 w-4" />
-                              {tr('移除封面', 'Remove cover')}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    {canUseCoverGeneration && (
-                      <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-                        <input
-                          value={authoringCoverPrompt}
-                          onChange={(event) => setAuthoringCoverPrompt(event.target.value)}
-                          placeholder={tr('描述封面画面...', 'Describe the cover image...')}
-                          className="w-full rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
-                        />
-                        <button type="button" onClick={handleGenerateAuthoringCover} disabled={isGeneratingCover} className={semanticButtonClass('primary', { compact: true })}>
-                          {isGeneratingCover ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                          {tr('AI 生成', 'AI Generate')}
-                        </button>
-                      </div>
-                    )}
-                  </section>
-                  <label className="block space-y-2 text-sm text-app-muted">
-                    <div>{tr('故事主轴', 'Story premise')}</div>
-                    <textarea
-                      value={authoringCartridge.meta?.main_axis || ''}
-                      onChange={(event) => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, main_axis: event.target.value } }))}
-                      className="authoring-resizable-textarea min-h-[180px] w-full resize-y rounded-2xl border border-app-border bg-app-input-bg px-4 py-4 text-app-text outline-none focus:border-indigo-500"
-                    />
-                  </label>
-                  <section className="app-card-quiet rounded-2xl p-4">
-                    <div className="mb-3 text-sm font-black text-app-text">{tr('结局结构', 'Ending Structure')}</div>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {([
-                        {
-                          value: 'single',
-                          label: tr('唯一走向', 'Fixed-ending path'),
-                          hint: tr('所有干涉最终都会自然收束到唯一结局，适合宿命感或强主线作品。', 'All interventions naturally converge to one fixed ending. Best for fated or strong-mainline stories.'),
-                        },
-                        {
-                          value: 'dual',
-                          label: tr('三域走向', 'Three-domain path'),
-                          hint: tr('使用中域、左域、右域三类收束，每一域都可以继续扩展具体结局。', 'Uses middle, left, and right domains. Each domain can later expand into specific endings.'),
-                        },
-                      ] as const).map((option) => {
-                        const selected = (authoringCartridge.meta?.endingMode || 'dual') === option.value;
-                        return (
-                          <button
-                            key={option.value}
-                            type="button"
-                            onClick={() => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, endingMode: option.value } }))}
-                            className={`rounded-2xl border px-3 py-3 text-left transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
-                              selected
-                                ? 'border-indigo-400 bg-indigo-500/15 text-indigo-100'
-                                : 'border-app-border bg-app-surface/40 text-app-muted hover:border-zinc-600 hover:text-app-text'
-                            }`}
-                          >
-                            <div className="text-sm font-black">{option.label}</div>
-                            <div className="mt-1 text-[11px] leading-relaxed opacity-70">{option.hint}</div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                    {(authoringCartridge.meta?.endingMode || 'dual') !== 'single' && (
-                    <div className="app-card-quiet mt-4 rounded-2xl p-4">
-                      <div className="text-sm font-black text-app-text">{tr('故事倾向', 'Story Tendency')}</div>
-                      <p className="mt-1 text-xs leading-relaxed text-app-muted">{tr('设置作品本身比较容易走向哪一种收束。读者只会感受到故事倾向，不会看到具体数值。', 'Set which ending direction the work naturally leans toward. Readers feel the tendency but do not see exact values.')}</p>
-                      <div className="mt-3 rounded-2xl border border-app-border/60 bg-app-bg/45 p-3 text-xs font-bold text-app-muted">
-                        {(() => {
-                          const axis = endingBiasAxisFromBias(authoringCartridge.meta?.endingBias || authoringCartridge.meta?.endingRates);
-                          const bias = endingBiasFromAxis(axis);
-                          return (
-                            <>
-                              <div className="flex items-center justify-between gap-3">
-                                <span>{tr('主线倾向', 'Mainline tendency')}</span>
-                                <span className="text-sm font-black text-app-text">{endingBiasAxisLabel(axis)}</span>
-                              </div>
-                              <input
-                                type="range"
-                                min={-70}
-                                max={70}
-                                step={10}
-                                value={axis}
-                                onChange={(event) => {
-                                  const nextBias = endingBiasFromAxis(Number(event.target.value));
-                                  setAuthoringCartridge((prev: any) => ({
-                                    ...prev,
-                                    meta: { ...prev.meta, endingBias: nextBias, endingRates: nextBias },
-                                  }));
-                                }}
-                                className="mt-3 w-full accent-indigo-400"
-                              />
-                              <div className="mt-2 flex justify-between text-[10px] font-black text-zinc-600">
-                                <span>{tr('右域强', 'Right strong')}</span>
-                                <span>{tr('中性', 'Neutral')}</span>
-                                <span>{tr('左域强', 'Left strong')}</span>
-                              </div>
-                              <div className="mt-2 text-[11px] leading-relaxed text-app-muted">
-                                {tr(`左域 ${bias.leftBaseWeight}% / 右域 ${bias.rightBaseWeight}%；主线越偏一侧，另一侧越需要靠支线撬动。`, `Left ${bias.leftBaseWeight}% / Right ${bias.rightBaseWeight}%. The stronger one side's mainline is, the more the other side relies on branches to push back.`)}
-                              </div>
-                            </>
-                          );
-                        })()}
-                      </div>
-                      <p className="mt-3 text-[11px] leading-relaxed text-app-muted">{tr('如果不确定，保持中性即可；支线与玩家干涉会继续影响故事最终走向。', 'If unsure, keep it neutral. Branches and player interventions still affect the final direction.')}</p>
-                    </div>
-                    )}
-                  </section>
-                  <section className="app-card-quiet rounded-2xl p-4">
-                    <div className="mb-3 text-sm font-black text-app-text">{tr('作品可见性', 'Visibility')}</div>
-                    <div className="grid gap-2 sm:grid-cols-3">
-                      {[
-                        { value: 'private', label: tr('私人', 'Private'), hint: tr('只有作者自己可见。', 'Only the author can view it.') },
-                        { value: 'unlisted', label: tr('非公开链接', 'Unlisted link'), hint: tr('不进公开列表，但链接可读。', 'Not listed publicly, but readable by link.') },
-                        { value: 'public', label: tr('公开', 'Public'), hint: tr('会出现在公开作品库。', 'Appears in the public library.') },
-                      ].map((option) => {
-                        const selected = (authoringCartridge.meta?.visibility || 'private') === option.value;
-                        return (
-                          <button
-                            key={option.value}
-                            type="button"
-                            onClick={() => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, visibility: option.value } }))}
-                            className={`rounded-2xl border px-3 py-3 text-left transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
-                              selected
-                                ? 'border-emerald-400 bg-emerald-500/10 text-emerald-100'
-                                : 'border-app-border bg-app-surface/40 text-app-muted hover:border-zinc-600 hover:text-app-text'
-                            }`}
-                          >
-                            <div className="text-sm font-black">{option.label}</div>
-                            <div className="mt-1 text-[11px] leading-relaxed opacity-70">{option.hint}</div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </section>
-                  <label className="flex items-start gap-3 rounded-2xl border border-app-border bg-app-bg/50 p-4 text-sm text-app-muted">
-                    <input
-                      type="checkbox"
-                      checked={Boolean(authoringCartridge.meta?.allowAdaptation)}
-                      onChange={(event) => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, allowAdaptation: event.target.checked } }))}
-                      className="mt-1 h-4 w-4 accent-indigo-500"
-                    />
-                    <span>
-                      <span className="block font-black text-app-text">{tr('开放一键改编权限', 'Allow one-click adaptation')}</span>
-                      <span className="mt-1 block text-xs leading-relaxed text-app-muted">{tr('开启后，其他已登录用户可以把这篇作品改编成个人草稿继续创作。', 'When enabled, other logged-in users can adapt this work into their own draft.')}</span>
-                    </span>
-                  </label>
-                  
-                  <div className="border-t border-app-border pt-6">
-                    <h3 className="text-xl font-black text-white">{tr('一键导入', 'One-click Import')}</h3>
-                    <p className="mt-1 text-xs leading-relaxed text-app-muted">{tr('支持按“主线设置 / 支线设置”范本格式自动解析并写入当前作品。', 'Parse and import text using the “Mainline / Branch Settings” template format.')}</p>
-                  </div>
-                  <textarea
-                    value={authoringImportText}
-                    onChange={(event) => setAuthoringImportText(event.target.value)}
-                    placeholder={tr('把其他 AI 生成的完整文本粘贴到这里...', 'Paste a complete generated story here...')}
-                    className="authoring-resizable-textarea min-h-[320px] w-full resize-y rounded-2xl border border-app-border bg-app-input-bg p-5 text-sm text-app-text outline-none transition-colors focus:border-indigo-500"
-                  />
-                  <label className="flex items-center gap-2 text-xs text-app-muted">
-                    <input
-                      type="checkbox"
-                      checked={authoringImportReplaceBranches}
-                      onChange={(event) => setAuthoringImportReplaceBranches(event.target.checked)}
-                    />
-                    {tr('导入时尝试覆盖支线结构', 'Try replacing branch structure during import')}
-                  </label>
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <button type="button" onClick={handleAuthoringImport} className={semanticButtonClass('primary', { fullWidth: true })}>
-                      <Copy className="h-4 w-4" />
-                      {tr('解析并导入', 'Parse and import')}
-                    </button>
-                    <button type="button" onClick={() => {
-                        const template = `# 主线设置\n## 标题\n作品名称\n\n## 主轴\n一句话描述故事核心冲突\n\n## 主要角色\n### 角色1\n- 名字: 角色名A\n- 简介: 角色A的简介\n\n### 角色2\n- 名字: 角色名B\n- 简介: 角色B的简介\n\n## 默认故事\n### 第 1 章 标题一\n第一章大纲或正文\n\n### 第 2 章 标题二\n第二章大纲或正文\n\n## 结局设置\n### 中域默认结局\n中域默认结局正文\n### 左域默认结局\n左域默认结局正文\n### 右域默认结局\n右域默认结局正文\n\n# 支线设置\n## 支线1\n- 支线名: 支线名称\n- 倾向: 左域\n- 影响: 中\n- 隐藏: 否\n- 导向结局: 左域默认结局\n- 提示短句: 留意这里的变化\n- 支线情节: 这里写支线发生时的具体剧情\n- 条件组1: 第 2 章 角色名A 庇佑`;
-                        navigator.clipboard.writeText(template);
-                        showError(tr('蓝本格式已复制到剪贴板！', 'Template format copied to clipboard.'));
-                    }} className={semanticButtonClass('secondary', { fullWidth: true })}>
-                      <Copy className="h-4 w-4" />
-                      {tr('拷贝蓝本格式', 'Copy template format')}
-                    </button>
-                  </div>
-                </section>
-              )}
-
-              {authoringTab === 'series' && (
-                <section className="space-y-6">
-                  <div>
-                    <h3 className="text-xl font-black text-white">{tr('系列设置', 'Series Settings')}</h3>
-                    <p className="mt-1 text-xs leading-relaxed text-app-muted">{tr('管理本作套用的世界观设定、角色卡和继承节点。这里记录的是系列层级的限制，不是本作情节主轴。', 'Manage the world setting, character cards, and continuity node used by this work. These are series-level constraints, not this story premise.')}</p>
-                  </div>
-                  <div className="rounded-[1.5rem] border border-indigo-300/15 bg-indigo-500/10 p-4">
-                    <label className="mb-2 block text-sm font-black text-indigo-100">{tr('套用世界观设定', 'Apply world setting')}</label>
-                    <select
-                      value={authoringCartridge.meta?.seriesId || ''}
-                      onChange={(event) => {
-                        const seriesId = event.target.value;
-                        const series = seriesWorlds.find((item) => item.id === seriesId) || null;
-                        const baselineRuleIds = series ? getSeriesBaselineRules(series).map((rule) => rule.id) : [];
-                        const characterIds = series ? getSeriesCharacterCards(series).map((card) => card.id) : [];
-                        setAuthoringCartridge((prev: any) => ({
-                          ...prev,
-                          meta: {
-                            ...prev.meta,
-                            seriesId: seriesId || null,
-                            seriesRole: seriesId ? (prev.meta?.seriesRole === 'sequel' ? 'sequel' : 'main') : 'standalone',
-                            seriesConstraints: seriesId ? {
-                              ...(prev.meta?.seriesConstraints || {}),
-                              seriesTitle: series?.title || '',
-                              baselineRuleIds,
-                              characterIds,
-                              selectedBaselineRules: getSeriesBaselineRules(series),
-                              selectedCharacterCards: getSeriesCharacterCards(series),
-                            } : {},
-                          },
-                        }));
-                      }}
-                      className="w-full rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
-                    >
-                      <option value="">{tr('不套用世界观设定', 'No world setting')}</option>
-                      {seriesWorlds.map((series) => (
-                        <option key={series.id} value={series.id}>{series.title || tr('未命名世界观设定', 'Untitled world setting')}</option>
-                      ))}
-                    </select>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button type="button" onClick={() => void openSeriesWorldView()} className={semanticButtonClass('ghost', { compact: true })}>
-                        <GitBranch className="h-4 w-4" />
-                        {tr('管理世界观设定', 'Manage world settings')}
-                      </button>
-                      <button type="button" onClick={() => void loadSeriesWorlds()} className={semanticButtonClass('ghost', { compact: true })}>
-                        <RefreshCcw className="h-4 w-4" />
-                        {tr('刷新', 'Refresh')}
-                      </button>
-                    </div>
-                  </div>
-                  {authoringCartridge.meta?.seriesId ? (() => {
-                    const selected = seriesWorlds.find((series) => series.id === authoringCartridge.meta?.seriesId) || null;
-                    const baselineRules = getSeriesBaselineRules(selected);
-                    const characterCards = getSeriesCharacterCards(selected);
-                    const constraints = authoringCartridge.meta?.seriesConstraints || {};
-                    const selectedRuleIds = asSafeArray<string>(constraints.baselineRuleIds);
-                    const selectedCharacterIds = asSafeArray<string>(constraints.characterIds);
-                    const authoringSeriesStoryOptions = myStories.filter((story: any) => String(story?.id || '') !== String(authoringStoryId || '') && String(story?.seriesId || story?.series_id || story?.meta?.seriesId || story?.meta?.series_id || '') === String(authoringCartridge.meta?.seriesId || ''));
-                    const authoringContinuityBranches = asSafeArray<any>(authoringContinuitySourceStory?.branches);
-                    const authoringContinuityEndings = asSafeArray<any>(authoringContinuitySourceStory?.endings);
-                    const updateSeriesConstraints = (patch: Record<string, any>) => setAuthoringCartridge((prev: any) => ({
-                      ...prev,
-                      meta: {
-                        ...prev.meta,
-                        seriesConstraints: {
-                          ...(prev.meta?.seriesConstraints || {}),
-                          ...patch,
-                        },
-                      },
-                    }));
-                    const updateAuthoringSourceStory = (sourceStoryId: string) => {
-                      const sourceStory = authoringSeriesStoryOptions.find((story: any) => String(story.id || '') === sourceStoryId);
-                      setAuthoringCartridge((prev: any) => ({
-                        ...prev,
-                        meta: {
-                          ...prev.meta,
-                          continuityNodeId: null,
-                          seriesConstraints: {
-                            ...(prev.meta?.seriesConstraints || {}),
-                            continuityNodeId: '',
-                            continuityTitle: '',
-                            sourceStoryId: sourceStoryId || '',
-                            sourceTitle: sourceStory ? getStoryTitle(sourceStory) : '',
-                            endingId: '',
-                            endingTitle: '',
-                            endingDomain: '',
-                            requiredBranchIds: [],
-                            requiredBranches: [],
-                            bridgeSummary: '',
-                            previousStorySummary: [],
-                            previousCharacters: [],
-                          },
-                        },
-                      }));
-                    };
-                    return (
-                      <>
-                        <div className="rounded-[1.5rem] border border-app-border bg-app-bg/40 p-4">
-                          <div className="mb-3 text-sm font-black text-white">{tr('本作套用的世界基准', 'World baseline used by this work')}</div>
-                          {baselineRules.length === 0 ? (
-                            <p className="text-xs leading-relaxed text-app-muted">{tr('该世界观设定还没有条目化基准。', 'This world setting has no itemized baseline rules yet.')}</p>
-                          ) : (
-                            <div className="grid gap-2">
-                              {baselineRules.map((rule) => (
-                                <label key={rule.id} className="flex items-start gap-2 rounded-xl border border-app-border bg-app-surface/50 p-3 text-xs text-app-text">
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedRuleIds.includes(rule.id)}
-                                    onChange={(event) => {
-                                      const nextIds = event.target.checked
-                                        ? [...new Set([...selectedRuleIds, rule.id])]
-                                        : selectedRuleIds.filter((id) => id !== rule.id);
-                                      updateSeriesConstraints({
-                                        baselineRuleIds: nextIds,
-                                        selectedBaselineRules: baselineRules.filter((item) => nextIds.includes(item.id)),
-                                      });
-                                    }}
-                                    className="mt-1 accent-indigo-500"
-                                  />
-                                  <span>
-                                    <span className="block font-black leading-relaxed text-app-text">{rule.detail || rule.title}</span>
-                                    {normalizeTagList(Array.isArray(rule.tags) ? rule.tags : String(rule.tags || rule.kind || '').split(/[,，]/)).length > 0 && (
-                                      <span className="mt-2 flex flex-wrap gap-1.5">
-                                        {normalizeTagList(Array.isArray(rule.tags) ? rule.tags : String(rule.tags || rule.kind || '').split(/[,，]/)).map((tag) => (
-                                          <span key={tag} className="rounded-full bg-indigo-500/10 px-2 py-0.5 text-[10px] font-bold text-indigo-200">{tag}</span>
-                                        ))}
-                                      </span>
-                                    )}
-                                  </span>
-                                </label>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        <div className="rounded-[1.5rem] border border-app-border bg-app-bg/40 p-4">
-                          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                            <div>
-                              <div className="text-sm font-black text-white">{tr('角色卡池', 'Character pool')}</div>
-                              <p className="mt-1 text-xs text-app-muted">{tr('勾选后可导入到本作角色列表；续作默认沿用主要角色。', 'Selected cards can be imported into this work; sequels inherit major characters by default.')}</p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => setAuthoringCartridge((prev: any) => {
-                                const existing = asSafeArray(prev.meta?.characters);
-                                const existingNames = new Set(existing.map((character: any) => String(character.name || '').trim()).filter(Boolean));
-                                const imported = characterCards
-                                  .filter((card) => selectedCharacterIds.includes(card.id))
-                                  .filter((card) => !existingNames.has(card.name))
-                                  .map((card, index) => ({
-                                    id: `c${existing.length + index + 1}`,
-                                    name: card.name,
-                                    desc: card.desc || card.role || '系列角色',
-                                  }));
-                                return {
-                                  ...prev,
-                                  meta: {
-                                    ...prev.meta,
-                                    characters: [...existing, ...imported].slice(0, 8),
-                                  },
-                                };
-                              })}
-                              disabled={characterCards.length === 0}
-                              className={semanticButtonClass('secondary', { compact: true })}
-                            >
-                              <Sparkles className="h-4 w-4" />
-                              {tr('导入勾选角色', 'Import selected')}
-                            </button>
-                          </div>
-                          {characterCards.length === 0 ? (
-                            <p className="text-xs leading-relaxed text-app-muted">{tr('该世界观设定还没有角色卡。', 'This world setting has no character cards yet.')}</p>
-                          ) : (
-                            <div className="grid gap-2 sm:grid-cols-2">
-                              {characterCards.map((card) => (
-                                <label key={card.id} className="flex items-start gap-2 rounded-xl border border-app-border bg-app-surface/50 p-3 text-xs text-app-text">
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedCharacterIds.includes(card.id)}
-                                    onChange={(event) => {
-                                      const nextIds = event.target.checked
-                                        ? [...new Set([...selectedCharacterIds, card.id])]
-                                        : selectedCharacterIds.filter((id) => id !== card.id);
-                                      updateSeriesConstraints({
-                                        characterIds: nextIds,
-                                        selectedCharacterCards: characterCards.filter((item) => nextIds.includes(item.id)),
-                                      });
-                                    }}
-                                    className="mt-1 accent-indigo-500"
-                                  />
-                                  <span>
-                                    <span className="block font-black text-app-text">{card.name}</span>
-                                    <span className="mt-1 block leading-relaxed text-app-muted">{card.desc || card.role || tr('系列角色', 'Series character')}</span>
-                                  </span>
-                                </label>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        <div className="rounded-[1.5rem] border border-app-border bg-app-bg/40 p-4">
-                          <div className="mb-3">
-                            <div className="text-sm font-black text-white">{tr('续作开启条件', 'Sequel unlock conditions')}</div>
-                            <p className="mt-1 text-xs leading-relaxed text-app-muted">{tr('如果本作是续作，可指定需要先完成哪一部前作、哪一个结局，以及哪些支线，玩家才可以干涉本作。', 'If this work is a sequel, choose the previous story, ending, and branches required before players can interfere with it.')}</p>
-                          </div>
-                          <select
-                            value={authoringCartridge.meta?.seriesRole || 'main'}
-                            onChange={(event) => setAuthoringCartridge((prev: any) => ({
-                              ...prev,
-                              meta: {
-                                ...prev.meta,
-                                seriesRole: event.target.value,
-                                ...(event.target.value !== 'sequel' ? { continuityNodeId: null } : {}),
-                              },
-                            }))}
-                            className="w-full rounded-xl border border-app-border bg-app-input-bg px-3 py-3 text-sm text-app-text outline-none"
-                          >
-                            <option value="main">{tr('第一部 / 正篇', 'First installment')}</option>
-                            <option value="sequel">{tr('续作', 'Sequel')}</option>
-                            <option value="side">{tr('外传', 'Side story')}</option>
-                          </select>
-                          {authoringCartridge.meta?.seriesRole === 'sequel' && (
-                            <div className="mt-4 space-y-4">
-                              <select
-                                value={constraints.sourceStoryId || ''}
-                                onChange={(event) => updateAuthoringSourceStory(event.target.value)}
-                                className="w-full rounded-xl border border-app-border bg-app-input-bg px-3 py-3 text-sm text-app-text outline-none"
-                              >
-                                <option value="">{tr('选择前作', 'Choose previous story')}</option>
-                                {authoringSeriesStoryOptions.map((story: any) => (
-                                  <option key={story.id} value={story.id}>{getStoryTitle(story)}</option>
-                                ))}
-                              </select>
-                              {authoringSeriesStoryOptions.length === 0 && (
-                                <p className="text-xs leading-relaxed text-app-muted">{tr('该世界观下还没有其他作品可作为前作。', 'No other work in this world setting can be used as the previous story yet.')}</p>
-                              )}
-                              {authoringContinuityLoading && (
-                                <div className="flex items-center gap-2 text-xs font-bold text-indigo-200"><Loader2 className="h-3.5 w-3.5 animate-spin" />{tr('正在读取前作支线与结局...', 'Loading previous branches and endings...')}</div>
-                              )}
-                              {constraints.sourceStoryId && !authoringContinuityLoading && (
-                                <div className="grid gap-4">
-                                  <div>
-                                    <div className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-app-muted">{tr('可开启续作的前作支线', 'Required previous-story branches')}</div>
-                                    {authoringContinuityBranches.length === 0 ? (
-                                      <p className="text-xs leading-relaxed text-app-muted">{tr('该前作没有可选择的支线。', 'This previous story has no selectable branches.')}</p>
-                                    ) : (
-                                      <div className="grid gap-2 sm:grid-cols-2">
-                                        {authoringContinuityBranches.map((branch: any) => {
-                                          const branchId = String(branch.id || '');
-                                          const checked = asSafeArray<string>(constraints.requiredBranchIds).includes(branchId);
-                                          return (
-                                            <label key={branchId} className="flex items-start gap-2 rounded-xl border border-app-border bg-app-surface/50 p-3 text-xs text-app-text">
-                                              <input
-                                                type="checkbox"
-                                                checked={checked}
-                                                onChange={(event) => {
-                                                  const currentIds = asSafeArray<string>(constraints.requiredBranchIds);
-                                                  const nextIds = event.target.checked
-                                                    ? [...new Set([...currentIds, branchId])]
-                                                    : currentIds.filter((id) => id !== branchId);
-                                                  updateSeriesConstraints({
-                                                    requiredBranchIds: nextIds,
-                                                    requiredBranches: authoringContinuityBranches.filter((item) => nextIds.includes(String(item.id || ''))).map((item) => ({
-                                                      id: String(item.id || ''),
-                                                      name: item.name || item.title || item.id || '',
-                                                      desc: item.desc || item.description || '',
-                                                    })),
-                                                  });
-                                                }}
-                                                className="mt-1 accent-indigo-500"
-                                              />
-                                              <span>
-                                                <span className="block font-bold text-app-text">{branch.name || branch.title || branchId}</span>
-                                                {(branch.desc || branch.description) && <span className="mt-1 block leading-relaxed text-app-muted">{branch.desc || branch.description}</span>}
-                                              </span>
-                                            </label>
-                                          );
-                                        })}
-                                      </div>
-                                    )}
-                                  </div>
-                                  <div>
-                                    <div className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-app-muted">{tr('可开启续作的前作结局', 'Required previous-story ending')}</div>
-                                    <div className="grid gap-2 sm:grid-cols-3">
-                                      {authoringContinuityEndings.map((ending: any) => {
-                                        const endingId = String(ending.id || '');
-                                        return (
-                                          <label key={endingId} className="flex items-start gap-2 rounded-xl border border-app-border bg-app-surface/50 p-3 text-xs text-app-text">
-                                            <input
-                                              type="radio"
-                                              name="authoring-continuity-ending"
-                                              checked={constraints.endingId === endingId}
-                                              onChange={() => updateSeriesConstraints({
-                                                endingId,
-                                                endingTitle: ending.title || endingId,
-                                                endingDomain: endingDomainFromId(endingId),
-                                              })}
-                                              className="mt-1 accent-indigo-500"
-                                            />
-                                            <span className="font-bold text-app-text">{ending.title || endingId}</span>
-                                          </label>
-                                        );
-                                      })}
-                                    </div>
-                                  </div>
-                                  <textarea
-                                    value={constraints.sequelSeedPrompt || asSafeArray<any>(constraints.repairRules).map((rule) => rule?.rule || rule?.text || rule).filter(Boolean).join('\n')}
-                                    onChange={(event) => {
-                                      const lines = event.target.value.split(/\n+/).map((line) => line.trim()).filter(Boolean);
-                                      updateSeriesConstraints({
-                                        sequelSeedPrompt: event.target.value,
-                                        repairRules: lines.map((rule) => ({ rule })),
-                                      });
-                                    }}
-                                    placeholder={tr('继承硬设定：一行一条，例如「前作中阵亡的人物不能无解释复活」。', 'Continuity hard rules: one per line, e.g. dead characters cannot return without explanation.')}
-                                    className="authoring-resizable-textarea min-h-[120px] w-full resize-y rounded-xl border border-app-border bg-app-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
-                                  />
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </>
-                    );
-                  })() : (
-                    <div className="rounded-2xl border border-dashed border-app-border bg-app-bg/40 p-6 text-sm leading-relaxed text-app-muted">
-                      {tr('本作尚未套用世界观设定。普通单篇作品可以保持为空；若是系列作品，请先选择一个世界观设定。', 'This work is not using a world setting. Standalone stories can leave this empty; choose one for series works.')}
-                    </div>
-                  )}
-                </section>
-              )}
-
-              {authoringTab === 'mainline' && (
-                <div className="relative">
-                  {authoringTocOpen && (
-                    <div className="fixed inset-0 z-[99]" onClick={() => setAuthoringTocOpen(false)} />
-                  )}
-                  <div className={`fixed bottom-[calc(max(0.85rem,env(safe-area-inset-bottom))+13.5rem)] left-8 z-[1600] max-h-[min(52dvh,26rem)] flex-col gap-2 overflow-y-auto rounded-2xl border border-app-border bg-app-bg/90 p-2 shadow-2xl backdrop-blur-md transition-all ${authoringTocOpen ? 'flex' : 'hidden'}`}>
-                     <div className="mb-1 text-center text-[10px] font-black text-app-muted">目录导航</div>
-                     {(authoringCartridge.chapters || []).map((c: any) => (
-                        <button type="button" key={c.chapter_num} onClick={() => { setAuthoringTocOpen(false); document.getElementById(`authoring-chapter-${c.chapter_num}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} className="rounded-xl px-3 py-2 text-xs font-bold text-app-muted transition-colors hover:bg-app-surface-soft hover:text-white">
-                           第 {c.chapter_num} 章
-                        </button>
-                     ))}
-                     <div className="mx-2 my-1 h-px bg-app-surface-soft" />
-                        <button type="button" onClick={() => { setAuthoringTocOpen(false); document.getElementById('authoring-endings')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} className="rounded-xl px-3 py-2 text-xs font-bold text-app-muted transition-colors hover:bg-app-surface-soft hover:text-white">
-                       结局设置
-                     </button>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setAuthoringTocOpen(!authoringTocOpen)}
-                    className="fixed bottom-[calc(max(0.85rem,env(safe-area-inset-bottom))+9.5rem)] left-8 z-[1601] flex h-12 w-12 items-center justify-center rounded-full bg-indigo-600 text-white shadow-xl hover:bg-indigo-500 active:scale-95"
-                  >
-                    {authoringTocOpen ? <X className="h-5 w-5" /> : <BookOpen className="h-5 w-5" />}
-                  </button>
-
-                <section className="space-y-6">
-                  <div>
-                    <h3 className="text-xl font-black text-white">主线与结局</h3>
-                    <p className="mt-1 text-xs leading-relaxed text-app-muted">这里负责章节正文与结局的编写。其他基本设定请前往「作品设置」修改。</p>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="text-lg font-black text-white">章节正文</div>
-                    {(authoringCartridge.chapters || []).map((chapter: any) => (
-                      <div id={`authoring-chapter-${chapter.chapter_num}`} key={chapter.chapter_num} className="rounded-[1.5rem] border border-app-border bg-app-bg/40 p-4 space-y-3">
-                        <div className="text-sm font-black text-white">{formatStoryHeading(chapter)}</div>
-                        <input
-                          id={`authoring-chapter-${chapter.chapter_num}-title`}
-                          value={chapter.title || ''}
-                          onChange={(event) => setAuthoringCartridge((prev: any) => ({
-                            ...prev,
-                            chapters: prev.chapters.map((item: any) => item.chapter_num === chapter.chapter_num ? { ...item, title: event.target.value } : item),
-                          }))}
-                          className="w-full rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
-                          placeholder="章节标题"
-                        />
-                        <textarea
-                          id={`authoring-chapter-${chapter.chapter_num}-text`}
-                          value={chapter.text || ''}
-                          onChange={(event) => setAuthoringCartridge((prev: any) => ({
-                            ...prev,
-                            chapters: prev.chapters.map((item: any) => item.chapter_num === chapter.chapter_num ? { ...item, text: event.target.value } : item),
-                          }))}
-                          className="authoring-resizable-textarea min-h-[240px] w-full resize-y rounded-2xl border border-app-border bg-app-input-bg px-4 py-4 text-sm text-app-text outline-none focus:border-indigo-500"
-                          placeholder={`第${chapter.chapter_num}章正文`}
-                        />
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="space-y-4">
-                    <div id="authoring-endings" className="text-lg font-black text-white">结局设置</div>
-                    <div className="grid gap-3 lg:grid-cols-3">
-                      {endingDomainCards(authoringCartridge.meta).map((domain) => (
-                        <div key={domain.id} className="rounded-2xl border border-app-border bg-app-bg/45 p-4">
-                          <div className="text-xs font-black uppercase tracking-[0.18em] text-app-muted">{domain.title}</div>
-                          <div className="mt-2 text-sm font-black text-app-text">{domain.label}</div>
-                          <p className="mt-3 text-xs leading-relaxed text-app-muted">{domain.hint}</p>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/5 p-4 text-xs leading-relaxed text-indigo-100/75">
-                      可先编辑“中域默认 / 左域默认 / 右域默认”三个结局原型。每一域都可承载更多具体结局，并可由支线绑定来决定最终收束；已设置的支线倾向会继续沿用。
-                    </div>
-                    {authoringCartridge.meta?.endingMode === 'single' && (
-                      (() => {
-                        const hiddenEndings = (authoringCartridge.endings || []).filter(
-                          (e: any) => e.id !== 'default' && (e.title || e.text)
-                        );
-                        return hiddenEndings.length > 0 ? (
-                          <div className="flex items-start gap-2 rounded-2xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-xs leading-relaxed text-amber-300/80">
-                            <span className="mt-0.5 shrink-0">⚠️</span>
-                            <span>其他结局的内容已暂时保留在内存中（共 {hiddenEndings.length} 个结局有未保存的内容）。如需取回，请在离开此页前切换回“多线结局”。</span>
-                          </div>
-                        ) : null;
-                      })()
-                    )}
-                    {(['middle', 'left', 'right'] as const)
-                      .filter((domain) => authoringCartridge.meta?.endingMode === 'single' ? domain === 'middle' : true)
-                      .map((domain) => {
-                        const endingsInDomain = (authoringCartridge.endings || []).filter((ending: any) => endingDomainFromId(String(ending.id || '')) === domain);
-                        const defaultEndingId = domain === 'middle' ? 'default' : domain;
-                        const visibleEndings = endingsInDomain.length > 0
-                          ? endingsInDomain
-                          : [{ id: defaultEndingId, title: '', text: '' }];
-                        return (
-                          <div key={domain} className="space-y-3 rounded-[1.5rem] border border-app-border bg-app-bg/25 p-4">
-                            <div className="flex flex-wrap items-center justify-between gap-3">
-                              <div>
-                                <div className="text-base font-black text-white">{endingDomainTitle(domain)}</div>
-                                <p className="mt-1 text-xs leading-relaxed text-app-muted">
-                                  {domain === 'middle' ? '故事没有明显偏向左右时，会进入中结局域；可设置多个余韵型具体结局。' : `故事偏向${endingDomainTitle(domain)}后，会根据已触发支线绑定选择具体结局。`}
-                                </p>
-                              </div>
-                              {authoringCartridge.meta?.endingMode !== 'single' && (
-                                <button
-                                  type="button"
-                                  onClick={() => setAuthoringCartridge((prev: any) => {
-                                    const endings = [...(prev.endings || [])];
-                                    endings.push({
-                                      id: createEndingIdForDomain(domain),
-                                      chapter_num: 7,
-                                      title: `${endingDomainTitle(domain)}的新结局`,
-                                      text: '',
-                                    });
-                                    return { ...prev, endings };
-                                  })}
-                                  className={semanticButtonClass('secondary', { compact: true })}
-                                >
-                                  <Sparkles className="h-4 w-4" />
-                                  新增具体结局
-                                </button>
-                              )}
-                            </div>
-
-                            {visibleEndings.map((ending: any) => (
-                              <div id={`authoring-ending-${ending.id}`} key={ending.id} className="rounded-[1.25rem] border border-app-border bg-app-bg/50 p-4 space-y-3">
-                                <div className="text-sm font-black text-white">{authoringEndingIdToLabel(ending.id)}</div>
-                                <input
-                                  id={`authoring-ending-${ending.id}-title`}
-                                  value={ending.title || ''}
-                                  onChange={(event) => setAuthoringCartridge((prev: any) => ({
-                                    ...prev,
-                                    endings: prev.endings.map((item: any) => item.id === ending.id ? { ...item, title: event.target.value } : item),
-                                  }))}
-                                  className="w-full rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
-                                  placeholder="结局标题"
-                                />
-                                <textarea
-                                  id={`authoring-ending-${ending.id}-text`}
-                                  value={ending.text || ''}
-                                  onChange={(event) => setAuthoringCartridge((prev: any) => ({
-                                    ...prev,
-                                    endings: prev.endings.map((item: any) => item.id === ending.id ? { ...item, text: event.target.value } : item),
-                                  }))}
-                                  className="authoring-resizable-textarea min-h-[240px] w-full resize-y rounded-2xl border border-app-border bg-app-input-bg px-4 py-4 text-sm text-app-text outline-none focus:border-indigo-500"
-                                  placeholder="结局正文"
-                                />
-                              </div>
-                            ))}
-                          </div>
-                        );
-                      })}
-                  </div>
-                </section>
-              </div>
-              )}
-
-              {authoringTab === 'branches' && (
-                <section className="space-y-6">
-                  <div>
-                    <h3 className="text-xl font-black text-white">角色和支线</h3>
-                    <p className="mt-1 text-xs leading-relaxed text-app-muted">角色会作为干涉对象和支线条件基础；支线会根据触发条件在游玩时被判定解锁。</p>
-                  </div>
-
-                  <div className="space-y-3 rounded-[1.5rem] border border-app-border bg-app-bg/40 p-5">
-                    <div className="flex items-center justify-between">
-                      <div className="text-lg font-black text-white">角色设定</div>
-                      <button
-                        type="button"
-                        onClick={() => setAuthoringCartridge((prev: any) => {
-                          const characters = [...(prev.meta?.characters || [])];
-                          if (characters.length >= 5) return prev;
-                          characters.push({ name: `角色${characters.length + 1}`, desc: '（待填写简介）' });
-                          return { ...prev, meta: { ...prev.meta, characters } };
-                        })}
-                        className={semanticButtonClass('ghost', { compact: true })}
-                      >
-                        <Sparkles className="h-4 w-4" />
-                        新增角色
-                      </button>
-                    </div>
-                    {(authoringCartridge.meta?.characters || []).map((character: any, index: number) => (
-                      <div id={`authoring-character-${index}`} key={index} className="grid gap-3 md:grid-cols-[1fr_1.4fr_auto]">
-                        <input
-                          id={`authoring-character-${index}-name`}
-                          value={character.name || ''}
-                          onChange={(event) => setAuthoringCartridge((prev: any) => ({
-                            ...prev,
-                            meta: {
-                              ...prev.meta,
-                              characters: prev.meta.characters.map((item: any, itemIndex: number) => itemIndex === index ? { ...item, name: event.target.value } : item),
-                            },
-                          }))}
-                          className="rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
-                          placeholder="角色名"
-                        />
-                        <textarea
-                          id={`authoring-character-${index}-desc`}
-                          value={character.desc || ''}
-                          onChange={(event) => setAuthoringCartridge((prev: any) => ({
-                            ...prev,
-                            meta: {
-                              ...prev.meta,
-                              characters: prev.meta.characters.map((item: any, itemIndex: number) => itemIndex === index ? { ...item, desc: event.target.value } : item),
-                            },
-                          }))}
-                          className="authoring-resizable-textarea min-h-[96px] w-full resize-y rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
-                          placeholder="角色简介"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setAuthoringCartridge((prev: any) => ({
-                            ...prev,
-                            meta: { ...prev.meta, characters: prev.meta.characters.filter((_: any, itemIndex: number) => itemIndex !== index) },
-                          }))}
-                          disabled={(authoringCartridge.meta?.characters || []).length <= 1}
-                          className={semanticButtonClass('danger', { compact: true })}
-                        >
-                          删除
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div className="text-lg font-black text-white">支线列表</div>
-                    {expandedBranchId !== 'NEW' && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setExpandedBranchId('NEW');
-                          setBranchForm({
-                            id: '',
-                            name: '',
-                            side: 'left',
-                            tier: 'small',
-                            isHidden: false,
-                            endingId: '',
-                            triggerType: 'single',
-                            singleChapterNum: 2,
-                            singleCharId: '',
-                            singleAction: 'bless',
-                            countCharId: '',
-                            countAction: 'bless',
-                            minCount: 1,
-                            upToChapterNum: 6,
-                            hint: '',
-                            sceneText: '',
-                          });
-                          setBranchConditions([{
-                            kind: 'single',
-                            singleChapterNum: 2,
-                            singleCharId: '',
-                            singleAction: 'bless',
-                            countCharId: '',
-                            countAction: 'bless',
-                            minCount: 1,
-                            upToChapterNum: 6,
-                            hint: '',
-                          }]);
-                        }}
-                        className={semanticButtonClass('secondary', { compact: true })}
-                      >
-                        <Sparkles className="h-4 w-4" />
-                        新增支线
-                      </button>
-                    )}
-                  </div>
-
-                  {expandedBranchId === 'NEW' && renderBranchForm(true)}
-
-                  <div className="space-y-3">
-                    {(authoringCartridge.branches || []).map((branch: any) => (
-                      <div key={branch.id} className="transition-all">
-                        {expandedBranchId === branch.id ? (
-                          renderBranchForm(false)
-                        ) : (
-                          <div className="rounded-[1.5rem] border border-app-border bg-app-bg/40 p-4 flex flex-wrap items-center justify-between gap-3">
-                            <div>
-                              <div className="text-sm font-black text-white">{branch.name}</div>
-                              <div className="mt-1 flex flex-wrap gap-1.5 text-xs text-app-muted">
-                                <span>{branch.side === 'left' ? '左域' : '右域'} / 影响：{branchTierLabel(branch.tier)}</span>
-                                {(branch.is_hidden || branch.hidden || branch.tier === 'hidden' || branch.inject?.hidden) && (
-                                  <span className="rounded-full bg-amber-500/10 px-2 py-0.5 font-black text-amber-200">隐藏支线</span>
-                                )}
-                              </div>
-                              <div className="mt-1 text-xs text-indigo-300">
-                                导向：{authoringEndingIdToLabel(branch.endingId || branch.inject?.endingId || branch.inject?.targetEndingId || branch.side)}
-                              </div>
-                              <div className="mt-2 text-xs leading-relaxed text-app-muted max-w-xl line-clamp-2">{branch.sceneText || branch.hint || '暂无内容'}</div>
-                            </div>
-                            <div className="flex gap-2 shrink-0">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSelectedBranchId(branch.id);
-                                  setExpandedBranchId(branch.id);
-                                  setBranchForm({
-                                    id: branch.id,
-                                    name: branch.name || '',
-                                    side: branch.side || 'left',
-                                    tier: normalizeBranchTier(branch.tier || 'small'),
-                                    isHidden: Boolean(branch.is_hidden || branch.hidden || branch.tier === 'hidden' || branch.inject?.hidden),
-                                    endingId: branch.endingId || branch.inject?.endingId || branch.inject?.targetEndingId || '',
-                                    triggerType: 'single',
-                                    singleChapterNum: branch.trigger?.single?.chapterNum || 2,
-                                    singleCharId: branch.trigger?.single?.charId || '',
-                                    singleAction: branch.trigger?.single?.action || 'bless',
-                                    countCharId: branch.trigger?.count?.charId || '',
-                                    countAction: branch.trigger?.count?.action || 'bless',
-                                    minCount: branch.trigger?.count?.minCount || 1,
-                                    upToChapterNum: branch.trigger?.count?.upToChapterNum || 6,
-                                    hint: branch.hint || '',
-                                    sceneText: branch.sceneText || '',
-                                  });
-                                  const rawGroups = (branch.triggerGroups && branch.triggerGroups.length > 0)
-                                    ? branch.triggerGroups
-                                    : (branch.trigger ? [branch.trigger] : []);
-                                  setBranchConditions(rawGroups.length > 0
-                                    ? rawGroups.map((group: any) => group.type === 'count'
-                                      ? {
-                                          kind: 'count',
-                                          singleChapterNum: 2,
-                                          singleCharId: '',
-                                          singleAction: 'bless',
-                                          countCharId: group.count?.charId || '',
-                                          countAction: group.count?.action || 'bless',
-                                          minCount: group.count?.minCount || 1,
-                                          upToChapterNum: group.count?.upToChapterNum || 6,
-                                          hint: group.hint || branch.hint || '',
-                                        }
-                                      : {
-                                          kind: 'single',
-                                          singleChapterNum: group.single?.chapterNum || 2,
-                                          singleCharId: group.single?.charId || '',
-                                          singleAction: group.single?.action || 'bless',
-                                          countCharId: '',
-                                          countAction: 'bless',
-                                          minCount: 1,
-                                          upToChapterNum: 6,
-                                          hint: group.hint || branch.hint || '',
-                                        })
-                                    : [{
-                                        kind: 'single',
-                                        singleChapterNum: 2,
-                                        singleCharId: '',
-                                        singleAction: 'bless',
-                                        countCharId: '',
-                                        countAction: 'bless',
-                                        minCount: 1,
-                                        upToChapterNum: 6,
-                                        hint: branch.hint || '',
-                                      }]
-                                  );
-                                }}
-                                className={semanticButtonClass('secondary', { compact: true })}
-                              >
-                                编辑
-                              </button>
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  if (!authoringStoryId) return;
-                                  await deleteStoryBranch(db as any, authoringStoryId, branch.id);
-                                  await selectAuthoringStory(authoringStoryId);
-                                  showError('支线已删除。');
-                                }}
-                                className={semanticButtonClass('danger', { compact: true })}
-                              >
-                                删除
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              )}
-          </div>
-        </>
-      )}
-    </div>
+    <AuthoringView
+      ctx={{
+        tr,
+        t,
+        isEnglish,
+        renderInlineHelp,
+        goBack,
+        handleCreateAuthoringStory,
+        authoringSaving,
+        dismissAuthorPulseNotification,
+        authorPulseNotifications,
+        openSeriesWorldView,
+        refreshStories,
+        authoringListSearch,
+        setAuthoringListSearch,
+        authoringSeriesKindFilter,
+        setAuthoringSeriesKindFilter,
+        seriesWorlds,
+        authoringSeriesWorldFilter,
+        setAuthoringSeriesWorldFilter,
+        authoringListVisibilityFilter,
+        setAuthoringListVisibilityFilter,
+        authoringCreatedFilter,
+        setAuthoringCreatedFilter,
+        authoringListSort,
+        setAuthoringListSort,
+        setAuthoringLoadingStoryId,
+        selectAuthoringStory,
+        authoringLoadingStoryId,
+        formatShortDate,
+        getStoryTitle,
+        getStoryLikeCount,
+        getStoryFavoriteCount,
+        getStoryShareCount,
+        getStoryInterventionCount,
+        handleDeleteAuthoringStory,
+        authoringCartridge,
+        setAuthoringCartridge,
+        authoringStoryId,
+        setAuthoringStoryId,
+        authoringDirty,
+        authoringTab,
+        setAuthoringTab,
+        handleSaveAuthoringChanges,
+        authoringFindReplaceOpen,
+        setAuthoringFindReplaceOpen,
+        authoringTocOpen,
+        setAuthoringTocOpen,
+        authoringFindCompact,
+        setAuthoringFindCompact,
+        getAuthoringFindMatches,
+        authoringFindMatchIndex,
+        moveAuthoringFindMatch,
+        replaceCurrentAuthoringMatch,
+        authoringFindQuery,
+        setAuthoringFindQuery,
+        authoringReplaceQuery,
+        setAuthoringReplaceQuery,
+        authoringFindScope,
+        setAuthoringFindScope,
+        authoringFindChapterNums,
+        setAuthoringFindChapterNums,
+        authoringFindEndingIds,
+        setAuthoringFindEndingIds,
+        handleAuthoringReplaceAll,
+        stripBookTitle,
+        authoringCustomTagsInput,
+        setAuthoringCustomTagsInput,
+        parseTagInput,
+        authoringCoverPrompt,
+        setAuthoringCoverPrompt,
+        handleAuthoringCoverPaste,
+        handleAuthoringCoverUpload,
+        applyAuthoringCover,
+        isGeneratingCover,
+        handleGenerateAuthoringCover,
+        canUseCoverGeneration,
+        endingBiasAxisFromBias,
+        endingBiasFromAxis,
+        endingBiasAxisLabel,
+        handleAuthoringImport,
+        authoringImportText,
+        setAuthoringImportText,
+        authoringImportReplaceBranches,
+        setAuthoringImportReplaceBranches,
+        showError,
+        getSeriesBaselineRules,
+        getSeriesCharacterCards,
+        authoringContinuitySourceStory,
+        authoringContinuityLoading,
+        normalizeTagList,
+        asSafeArray,
+        loadContinuityNodesForSeries,
+        authoringEndingIdToLabel,
+        endingDomainFromId,
+        endingDomainCards,
+        expandedBranchId,
+        setExpandedBranchId,
+        branchForm,
+        setBranchForm,
+        branchConditions,
+        setBranchConditions,
+        myStories,
+        getVisibilityLabel,
+        formatBookTitle,
+        getStoryCreatedMs,
+        getStoryUpdatedMs,
+        setConfirmationModal,
+        setAuthoringDirty,
+        openCompactFindMode,
+        loadSeriesWorlds,
+        formatStoryHeading,
+        endingDomainTitle,
+        createEndingIdForDomain,
+        setSelectedBranchId,
+        normalizeBranchTier,
+        db,
+        chapterOptions,
+        normalizeCharacters,
+        triggerPreview,
+        normalizeBranchConditionsForStorage,
+        branchTierLabel,
+        formatTriggerCondition,
+        setIsActionMenuOpen,
+        handleStoryInteraction,
+        user,
+        isCurrentStoryActive,
+        isSharing,
+        endingDomainUserLabel,
+        endingDomainToneClass,
+        semanticIconButtonClass,
+        setShowSummaryModal,
+        showSummaryModal,
+        endingDomainFromValue,
+        handleSaveWorkAndReturn,
+        handleSaveProgressAndReturn,
+        resetGame,
+        setShowLeaveGameModal,
+        showLeaveGameModal,
+        startNewStoryPlay,
+        inheritedEndingDisplayLabel,
+        startSequelWithInheritedRecord,
+        setPendingSequelInheritance,
+        pendingSequelInheritance,
+        startFreshFromPendingProgress,
+        resumeStoryPlay,
+        safeModalBackdropClass,
+        setPendingProgressToLoad,
+        pendingProgressToLoad,
+        handleShareSavedAuthoringStory,
+        setAuthoringSaveSuccessStory,
+        authoringSaveSuccessStory,
+        handleShareStory,
+      }}
+    />
   );
 
   const actionMenuOverlay = (
@@ -12226,6 +9115,99 @@ export default function App() {
     </AnimatePresence>
   );
 
+  const storyLibraryCtx = {
+        tr,
+        t,
+        isEnglish,
+        db,
+        appLanguage,
+        publicStories,
+        myStories,
+        storyLibraryTab,
+        setStoryLibraryTab,
+        storyLibrarySearch,
+        setStoryLibrarySearch,
+        storyLibraryVisibilityFilter,
+        setStoryLibraryVisibilityFilter,
+        storyLibrarySort,
+        setStoryLibrarySort,
+        isLoadingStories,
+        storyListLoadError,
+        refreshStories,
+        storyMatchesLanguage,
+        formatBookTitle,
+        stripBookTitle,
+        getStoryCoverUrl,
+        getStoryTags,
+        getStoryTitle,
+        getStoryAuthorName,
+        getStoryMainAxis,
+        getSequelRequirementFromMeta,
+        hasStoryCardAction,
+        getStoryLikeCount,
+        getStoryFavoriteCount,
+        getStoryShareCount,
+        getStoryInterventionCount,
+        getStoryUnlockedBranchCount,
+        getStoryBranchCount,
+        getStoryUnlockedEndingCount,
+        getStoryEndingCount,
+        getStoryAverageChapterWords,
+        getStoryUpdatedMs,
+        isSingleEndingStory,
+        endingBiasStoryCardLabels,
+        AuthorNameButton,
+        setStoryDetailStory,
+        startStoryPlay,
+        handleStoryInteraction,
+        shareStoryCardWithFeedback,
+        storyDetailStory,
+        setIsSharing,
+        setGlobalLoadingMessage,
+        setGlobalLoadingDetail,
+        shareOriginalStoryByCard,
+        showError,
+        isSharing,
+        endingDomainUserLabel,
+        endingDomainToneClass,
+        semanticIconButtonClass,
+        setShowSummaryModal,
+        showSummaryModal,
+        endingDomainFromValue,
+        handleSaveWorkAndReturn,
+        handleSaveProgressAndReturn,
+        resetGame,
+        setShowLeaveGameModal,
+        showLeaveGameModal,
+        startNewStoryPlay,
+        inheritedEndingDisplayLabel,
+        startSequelWithInheritedRecord,
+        setPendingSequelInheritance,
+        pendingSequelInheritance,
+        startFreshFromPendingProgress,
+        resumeStoryPlay,
+        safeModalBackdropClass,
+        setPendingProgressToLoad,
+        pendingProgressToLoad,
+        handleShareSavedAuthoringStory,
+        setAuthoringSaveSuccessStory,
+        authoringSaveSuccessStory,
+        isAdminUser,
+        setConfirmationModal,
+        setPublicStories,
+        setMyStories,
+        setMySharedStories,
+        sequelGateModal,
+        setSequelGateModal,
+        findStoryListItemById,
+      };
+
+  const renderStoryDetailModal = () => <StoryLibraryView ctx={storyLibraryCtx} part="detail" />;
+
+  const renderSequelGateModal = () => <StoryLibraryView ctx={storyLibraryCtx} part="sequel" />;
+
+  const renderStorySelectView = () => <StoryLibraryView ctx={storyLibraryCtx} />;
+
   const renderAuthView = () => (
     <Suspense fallback={<StartupShell message={appLanguage === 'en-US' ? 'Loading account entry...' : '正在准备账号入口...'} title={t('app.name')} subtitle={t('startup.default')} />}>
       <AuthView
@@ -12252,7 +9234,7 @@ export default function App() {
     <ScrollToTopButton
       show={showScrollTopButton}
       isPlaying={gameState === 'PLAYING'}
-      label={tr('????', 'Back to top')}
+      label={tr('返回顶部', 'Back to top')}
     />
   );
   const renderPlayingQuickNav = () => (
@@ -12464,14 +9446,7 @@ export default function App() {
           />
           {renderOnboardingGuide()}
           {renderPushPermissionPrompt()}
-          {renderConfirmationModal()}
-          {renderAuthoringSaveSuccessModal()}
-          {renderResumePromptModal()}
-          {renderSequelInheritanceModal()}
-          {renderLeaveGameModal()}
-          {renderBranchUnlockModal()}
-          {renderInterventionStatusNotice()}
-          {renderSummaryModal()}
+          {renderGameplayModals()}
           {renderTourOverlay()}
           {renderHelpCenterDrawer()}
           {renderHelpFloatingButton()}
