@@ -79,6 +79,16 @@ try {
 }
 
 try {
+  if (existsSync(resolve(root, 'dist/index.html'))) {
+    execFileSync(process.execPath, ['scripts/e2e-smoke.mjs'], { cwd: root, stdio: 'inherit' });
+  } else {
+    console.log('E2E smoke skipped: dist/index.html missing. Run npm run build first.');
+  }
+} catch (error) {
+  process.exitCode = 1;
+}
+
+try {
   execFileSync(process.execPath, ['scripts/check-secret-hygiene.mjs'], { cwd: root, stdio: 'inherit' });
 } catch (error) {
   process.exitCode = 1;

@@ -13,6 +13,7 @@
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "lint": "tsc --noEmit",
     "test:engine": "tsx scripts/test-story-run-engine.ts",
+    "test:e2e": "node scripts/e2e-smoke.mjs",
     "check:theme-contrast": "node scripts/check-theme-contrast.mjs",
     "check:core-flows": "node scripts/check-core-flows.mjs",
     "check:secret-hygiene": "node scripts/check-secret-hygiene.mjs",
