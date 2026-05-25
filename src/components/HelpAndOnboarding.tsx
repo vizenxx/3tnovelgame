@@ -1,0 +1,321 @@
+import React from 'react';
+import { AnimatePresence, motion } from 'motion/react';
+import { Bell, Loader2, Search, Sparkles, Wand2, X } from 'lucide-react';
+import { semanticButtonClass, semanticIconButtonClass } from './semanticClasses';
+
+const safeModalBackdropClass = "fixed inset-0 flex items-center justify-center overflow-y-auto overscroll-contain px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]";
+type Translator = (zh: string, en: string) => string;
+
+export const InlineHelpCard = ({
+  hidden,
+  title,
+  content,
+  isEnglish,
+  onDismiss,
+}: {
+  hidden: boolean;
+  title: string;
+  content: React.ReactNode;
+  isEnglish: boolean;
+  onDismiss: () => void;
+}) => {
+  if (hidden) return null;
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -10 }}
+      className="mb-6 flex gap-3 rounded-2xl border border-indigo-500/15 bg-indigo-500/5 p-4 text-sm text-indigo-200/90 shadow-[inset_0_1px_1px_rgba(99,102,241,0.05)] transition-all"
+    >
+      <Sparkles className="h-5 w-5 shrink-0 text-indigo-400" />
+      <div className="flex-1 leading-relaxed">
+        <div className="font-black text-indigo-100">{title}</div>
+        <div className="mt-1 text-xs text-indigo-200/80">{content}</div>
+      </div>
+      <button
+        type="button"
+        onClick={onDismiss}
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-indigo-500/10 bg-indigo-500/10 text-indigo-300 transition-all hover:border-indigo-400/30 hover:text-white focus-visible:ring-1 focus-visible:ring-indigo-400"
+        title={isEnglish ? 'Dismiss' : '我知道了'}
+        aria-label={isEnglish ? 'Dismiss' : '我知道了'}
+      >
+        <X className="h-4 w-4" />
+      </button>
+    </motion.div>
+  );
+};
+
+export const OnboardingGuide = ({
+  open,
+  tr,
+  onDismiss,
+  onQuickGenerate,
+}: {
+  open: boolean;
+  tr: Translator;
+  onDismiss: () => void;
+  onQuickGenerate: () => void;
+}) => (
+  <AnimatePresence>
+    {open && (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className={`${safeModalBackdropClass} z-[3600] bg-black/70 backdrop-blur-md`}
+        onClick={onDismiss}
+      >
+        <motion.div
+          initial={{ opacity: 0, y: 18, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 18, scale: 0.98 }}
+          className="app-modal-surface app-modal-safe-height w-full max-w-2xl overflow-y-auto rounded-[2rem] border border-indigo-300/20 p-5 shadow-2xl sm:p-6"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="mb-5 flex items-start justify-between gap-4">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-indigo-400/20 bg-indigo-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-indigo-200">
+                <Sparkles className="h-3.5 w-3.5" />
+                {tr('初次进入', 'First visit')}
+              </div>
+              <h2 className="mt-4 text-2xl font-black text-white">{tr('欢迎来到命运故事台', 'Welcome to the Fate Story Stage')}</h2>
+              <p className="mt-2 text-sm leading-relaxed text-app-muted">
+                {tr('这里可以阅读故事、干涉章节、收藏命运线，也可以生成或改编作品。', 'Read stories, interfere with chapters, collect fate lines, or generate and adapt works.')}
+              </p>
+            </div>
+            <button type="button" onClick={onDismiss} className={semanticIconButtonClass('ghost')} aria-label={tr('关闭引导', 'Close guide')}>
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {[
+              { title: tr('选一篇作品', 'Pick a story'), desc: tr('从作品库点击“干涉命运”进入游玩。', 'Tap “Interfere with Fate” from the library.') },
+              { title: tr('干涉章节', 'Interfere'), desc: tr('每局最多三次，故事会根据选择发生变化。', 'Each run has up to three interventions; the story changes with choices.') },
+              { title: tr('收藏与分享', 'Collect and share'), desc: tr('满意的命运可收藏到馆藏，或分享给其他读者。', 'Collect satisfying fate lines or share them with readers.') },
+            ].map((item) => (
+              <div key={item.title} className="rounded-2xl border border-app-border bg-app-surface/40 p-4">
+                <div className="text-sm font-black text-app-text">{item.title}</div>
+                <div className="mt-2 text-xs leading-relaxed text-app-muted">{item.desc}</div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+            <button type="button" onClick={onDismiss} className={semanticButtonClass('primary', { fullWidth: true })}>
+              {tr('去作品库看看', 'Browse library')}
+            </button>
+            <button type="button" onClick={onQuickGenerate} className={semanticButtonClass('secondary', { fullWidth: true })}>
+              <Wand2 className="h-4 w-4" />
+              {tr('快速生成故事', 'Quick generate')}
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    )}
+  </AnimatePresence>
+);
+
+export const PushPermissionPrompt = ({
+  open,
+  busy,
+  onDismiss,
+  onEnable,
+}: {
+  open: boolean;
+  busy: boolean;
+  onDismiss: () => void;
+  onEnable: () => void;
+}) => (
+  <AnimatePresence>
+    {open && (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className={`${safeModalBackdropClass} z-[3550] bg-black/65 backdrop-blur-md`}
+        onClick={onDismiss}
+      >
+        <motion.div
+          initial={{ opacity: 0, y: 18, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 18, scale: 0.98 }}
+          className="app-modal-surface app-modal-safe-height w-full max-w-lg overflow-y-auto rounded-[2rem] border border-app-border p-5 shadow-2xl sm:p-6"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="mb-5 flex items-start gap-4">
+            <div className="rounded-2xl border border-indigo-400/20 bg-indigo-500/10 p-3 text-indigo-200">
+              <Bell className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-xl font-black text-white">接收作品动态提醒？</h2>
+              <p className="mt-2 text-sm leading-relaxed text-app-muted">
+                开启后，作者更新、作品被点赞收藏、追踪作者发布新作时，可以在手机收到提醒。也可以之后到系统设置里开启。
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <button type="button" onClick={onDismiss} className={semanticButtonClass('ghost', { fullWidth: true })}>
+              稍后再说
+            </button>
+            <button type="button" onClick={onEnable} disabled={busy} className={semanticButtonClass('primary', { fullWidth: true })}>
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
+              开启手机通知
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    )}
+  </AnimatePresence>
+);
+
+export const AuthoringTourOverlay = ({
+  tourStep,
+  setTourStep,
+  setAuthoringTab,
+  showMessage,
+}: {
+  tourStep: number | null;
+  setTourStep: (step: number | null) => void;
+  setAuthoringTab: (tab: any) => void;
+  showMessage: (message: string) => void;
+}) => {
+  if (tourStep === null) return null;
+  const guidedSteps = [
+    { tab: 'settings', title: '第一步：整理作品门面', text: '先确认作品名、简介、封面、标签、可见性与改编权限。', placement: 'right' },
+    { tab: 'series', title: '第二步：套用世界观设定', text: '如作品属于长篇系列，可以在这里选择世界观设定、角色卡和继承条件。', placement: 'right' },
+    { tab: 'mainline', title: '第三步：编排主线与结局', text: '在这里编辑七章基础正文和结局域，让作品具备完整可读的主线。', placement: 'left' },
+    { tab: 'branches', title: '第四步：设计角色与支线', text: '支线条件决定玩家在某章对某个角色行动时，可能开启怎样的隐藏情节或伏笔。', placement: 'left' },
+    { tab: 'settings', title: '第五步：保存与发布', text: '确认内容后保存更改；需要被首页发现时，再把可见性设为公开。', placement: 'right' },
+  ];
+  const currentStep = guidedSteps[tourStep];
+  if (!currentStep) return null;
+  const placementClass = currentStep.placement === 'left'
+    ? 'left-[max(1rem,env(safe-area-inset-left))] top-[max(5.5rem,calc(env(safe-area-inset-top)+4rem))]'
+    : 'right-[max(1rem,env(safe-area-inset-right))] top-[max(5.5rem,calc(env(safe-area-inset-top)+4rem))]';
+  const finish = () => {
+    setTourStep(null);
+    localStorage.setItem('completed-authoring-tour', 'true');
+  };
+  return (
+    <div className="pointer-events-none fixed inset-0 z-[9999] p-4">
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className={`pointer-events-auto fixed w-[min(24rem,calc(100vw-2rem))] ${placementClass} rounded-[2rem] border border-indigo-500/25 bg-app-surface/92 p-5 shadow-2xl backdrop-blur-md`}
+      >
+        <div className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300">
+          <Sparkles className="h-3 w-3" />
+          创作者引导 ({tourStep + 1} / {guidedSteps.length})
+        </div>
+        <h3 className="text-xl font-black text-white">{currentStep.title}</h3>
+        <p className="mt-3 text-sm leading-relaxed text-app-text">{currentStep.text}</p>
+        <div className="mt-6 flex justify-between gap-3">
+          <button type="button" onClick={finish} className={semanticButtonClass('ghost', { compact: true })}>
+            跳过引导
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (tourStep < guidedSteps.length - 1) {
+                const nextStep = tourStep + 1;
+                setTourStep(nextStep);
+                setAuthoringTab(guidedSteps[nextStep].tab);
+              } else {
+                finish();
+                showMessage('向导完成！祝创作愉快！');
+              }
+            }}
+            className={semanticButtonClass('primary', { compact: true })}
+          >
+            {tourStep === guidedSteps.length - 1 ? '完成' : '下一步'}
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+export const HelpFloatingButton = () => null;
+
+export const HelpCenterDrawer = ({
+  open,
+  search,
+  dismissedCount,
+  tr,
+  onSearchChange,
+  onClose,
+  onRestore,
+}: {
+  open: boolean;
+  search: string;
+  dismissedCount: number;
+  tr: Translator;
+  onSearchChange: (value: string) => void;
+  onClose: () => void;
+  onRestore: () => void;
+}) => {
+  const qas = [
+    { q: '玩家应该怎样开始一部作品？', a: '从作品库选择感兴趣的作品，点击“干涉命运”进入阅读。读到可干涉章节时，选择角色和行动。', tags: '玩家 作品库 干涉命运 阅读 收藏 分享' },
+    { q: '作者如何设计一部可玩的故事？', a: '先整理标题、简介、封面和可见性；再写好主线章节与结局域；最后设置角色和支线条件。', tags: '作者 作品设置 主线 结局 支线 角色' },
+    { q: '世界观设定怎样连接多部作品？', a: '世界观设定像系列仓库，可以保存世界基准、角色卡池和情节素材。创作新作或续作时，作者可以勾选要套用的条目。', tags: '世界观 系列 角色卡 世界基准 续作' },
+    { q: '续作的前置条件应该怎么设？', a: '在系列设置里选择前作，再指定需要完成的结局和支线。玩家进入续作前，会先确认是否经历过对应前情。', tags: '续作 前作 继承 结局 支线' },
+  ];
+  const keyword = search.trim().toLowerCase();
+  const filteredQas = qas.filter((item) => !keyword || `${item.q}\n${item.a}\n${item.tags}`.toLowerCase().includes(keyword));
+  return (
+    <AnimatePresence>
+      {open && (
+        <div className="fixed inset-0 z-[6500] flex justify-end bg-app-bg/60 backdrop-blur-[1px]">
+          <div className="absolute inset-0" onClick={onClose} />
+          <motion.div
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ type: 'tween', duration: 0.3, ease: 'easeOut' }}
+            className="relative z-10 flex h-full w-full flex-col border-l border-app-border bg-app-surface/95 p-6 shadow-2xl backdrop-blur-md sm:max-w-md"
+          >
+            <div className="flex items-center justify-between border-b border-app-border pb-4">
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-400">
+                  <Sparkles className="h-4 w-4" />
+                </div>
+                <h2 className="text-lg font-black text-white">{tr('命运馆帮助中心', 'Help Center')}</h2>
+              </div>
+              <button type="button" onClick={onClose} className="rounded-lg p-2 text-app-muted transition-colors hover:bg-app-surface-soft hover:text-white" aria-label={tr('关闭帮助中心', 'Close Help Center')}>
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="relative mt-4">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-app-muted" />
+              <input
+                type="search"
+                value={search}
+                onChange={(event) => onSearchChange(event.target.value)}
+                placeholder={tr('搜索想了解的功能或名词...', 'Search features or terms...')}
+                className="w-full rounded-xl border border-app-border bg-app-input-bg/60 py-2.5 pl-9 pr-4 text-xs font-semibold text-app-text outline-none transition-colors focus:border-indigo-400/70"
+              />
+            </div>
+            <div className="mt-6 flex-1 space-y-4 overflow-y-auto pr-1 scrollbar-thin">
+              {filteredQas.length === 0 ? (
+                <div className="py-12 text-center text-xs text-app-muted">{tr('没有找到匹配内容。', 'No matches found.')}</div>
+              ) : (
+                filteredQas.map((qa, index) => (
+                  <div key={index} className="rounded-2xl border border-app-border/80 bg-app-bg/20 p-4 transition-colors hover:border-app-border">
+                    <h3 className="flex gap-2 text-sm font-black text-app-text"><span className="text-indigo-400">Q:</span>{qa.q}</h3>
+                    <p className="mt-2 text-xs leading-relaxed text-app-muted">{qa.a}</p>
+                  </div>
+                ))
+              )}
+            </div>
+            {dismissedCount > 0 && (
+              <div className="mt-4 shrink-0 px-2">
+                <button type="button" onClick={onRestore} className="w-full rounded-xl border border-app-border bg-app-bg/40 py-2.5 text-xs font-semibold text-app-muted transition-colors hover:border-indigo-500/30 hover:text-indigo-300">
+                  {tr('恢复所有被折叠的教学提示', 'Restore all dismissed tips')}
+                </button>
+              </div>
+            )}
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+};

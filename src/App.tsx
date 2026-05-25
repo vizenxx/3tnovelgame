@@ -1,7 +1,7 @@
 import React, { Suspense, lazy, useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, ChevronRight, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp, Download, Sun, Moon, Search, GitBranch, Trophy, Bell, BarChart3, WifiOff } from 'lucide-react';
+import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, ChevronRight, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, Download, Sun, Moon, Search, GitBranch, Trophy, Bell, BarChart3, WifiOff } from 'lucide-react';
 import { auth, db, firebaseInitError } from './firebase';
 import { createEmptyStory, createSharedStoryRecord, createStorySnapshot, adaptBlueprintToStory, createStoryBranch, deleteAllNotifications, deleteNotification, deleteSharedStoryRecord, deleteStoryBranch, deleteStoryCartridge, deleteSeriesWorld, favoriteStory, unfavoriteStory, followAuthor, getAppSettings, getAuthorFollowState, getPushConfig, getSharedStoryRecord, getStoryCartridge as getStoryCartridgeStore, getStoryMeta, getUserProgress as getUserProgressStore, incrementShareMetric, incrementStoryMetric, likeStory, unlikeStory, listAuthorStories, listContinuityNodes, listFollowedAuthors, listMySeriesWorlds, listMySharedStories, listMyStories, listNotifications, listPublicStories, markNotificationsRead, refundCoverGenerationUsage, reportStory, reserveCoverGenerationUsage, saveAppSettings, saveContinuityNode, savePushSubscription, saveSeriesWorld, saveStoryMainlineBundle, saveStoryMeta, saveUserProgress as saveUserProgressStore, unfollowAuthor, updateAuthorNameEverywhere, updateSharedStoryVisibility, upsertStoryBranch, type ContinuityNodeRecord, type SeriesWorldRecord } from './storyStore';
 import { normalizeEndingBias, type EndingBias } from './storyCartridge';
@@ -45,6 +45,21 @@ import { StartupShell } from './components/StartupShell';
 import { BackNavButton } from './components/BackNavButton';
 import { GlobalError, InstallAppBanner, PwaUpdateModal } from './components/AppChrome';
 import { DevMetricsPanel } from './components/DevMetricsPanel';
+import { AccountProfileModals } from './components/AccountModals';
+import { StoryLibraryCard } from './components/StoryLibraryCard';
+import { StorySelectView } from './components/StorySelectView';
+import { StoryDetailModal } from './components/StoryDetailModal';
+import { AuthoringSaveSuccessModal, ConfirmationModal, SequelGateModal, type SequelGateModalState } from './components/GeneralModals';
+import { AuthorProfileModal, NotificationCenterModal, ShareComposerModal } from './components/SocialModals';
+import {
+  AuthoringTourOverlay,
+  HelpCenterDrawer,
+  HelpFloatingButton,
+  InlineHelpCard,
+  OnboardingGuide,
+  PushPermissionPrompt,
+} from './components/HelpAndOnboarding';
+import { ScrollToTopButton } from './components/FloatingControls';
 import {
   BlockingSyncOverlay,
   ConnectivityDrawer,
@@ -161,14 +176,6 @@ type SeriesSelectionState = {
   requiredBranchIds: string[];
   endingId: string;
   hardSettings: string;
-};
-
-type SequelGateModalState = {
-  storyId: string;
-  sourceStoryId: string;
-  sourceTitle: string;
-  missingBranches: Array<{ id: string; name: string }>;
-  missingEnding?: { id: string; name: string };
 };
 
 type FateCompletionRecord = {
@@ -7705,116 +7712,28 @@ export default function App() {
   }, []);
 
   const renderConfirmationModal = () => (
-    <AnimatePresence>
-      {confirmationModal.isOpen && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className={`${safeModalBackdropClass} z-[5000] bg-black/80 backdrop-blur-md`}
-        >
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="app-modal-surface app-modal-safe-height w-full max-w-sm overflow-y-auto rounded-3xl border border-app-border p-5 shadow-2xl sm:p-6"
-          >
-            <h3 className="mb-2 text-xl font-black text-white">{confirmationModal.title}</h3>
-            <p className="mb-6 text-sm text-app-muted leading-relaxed">{confirmationModal.message}</p>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setConfirmationModal(prev => ({ ...prev, isOpen: false }))}
-                className="flex-1 rounded-xl bg-app-surface py-3 text-sm font-bold text-app-muted"
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  confirmationModal.onConfirm();
-                  setConfirmationModal(prev => ({ ...prev, isOpen: false }));
-                }}
-                className="flex-1 rounded-xl bg-white py-3 text-sm font-bold text-black"
-              >
-                确认
-              </button>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    <ConfirmationModal
+      modal={confirmationModal}
+      onClose={() => setConfirmationModal((prev) => ({ ...prev, isOpen: false }))}
+    />
   );
 
-  const renderAuthoringSaveSuccessModal = () => {
-    const story = authoringSaveSuccessStory;
-    const isPrivate = (story?.meta?.visibility || 'private') === 'private';
-    const title = story ? formatBookTitle(story.meta?.title || '未命名作品') : '';
-    return (
-      <AnimatePresence>
-        {story && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className={`${safeModalBackdropClass} z-[5300] bg-black/80 backdrop-blur-md`}
-          >
-            <motion.div
-              initial={{ y: 18, opacity: 0, scale: 0.96 }}
-              animate={{ y: 0, opacity: 1, scale: 1 }}
-              exit={{ y: 12, opacity: 0, scale: 0.98 }}
-              className="app-modal-surface app-modal-safe-height w-full max-w-md overflow-y-auto rounded-[2rem] border border-emerald-500/25 p-5 shadow-2xl sm:p-6"
-            >
-              <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-300">
-                <CheckCircle2 className="h-6 w-6" />
-              </div>
-              <div className="text-xs font-black uppercase tracking-[0.22em] text-emerald-300">作品已保存</div>
-              <h3 className="mt-2 break-words text-2xl font-black text-white">{title}</h3>
-              <p className="mt-3 text-sm leading-relaxed text-app-muted">
-                更改已经写入作品档案。可以马上分享作品，或回到首页继续查看作品库。
-              </p>
-              {isPrivate && (
-                <p className="mt-3 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs font-bold leading-relaxed text-amber-100/80">
-                  当前作品仍是私人状态；点击分享时会先改为“非公开链接”，这样收到链接的人才能阅读，但作品不会出现在公开列表。
-                </p>
-              )}
-              <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={handleShareSavedAuthoringStory}
-                  disabled={isSharing}
-                  className={semanticButtonClass('primary', { fullWidth: true })}
-                >
-                  {isSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
-                  分享作品
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAuthoringSaveSuccessStory(null);
-                    setAuthoringStoryId(null);
-                    setAuthoringCartridge(null);
-                    resetToHome();
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  className={semanticButtonClass('secondary', { fullWidth: true })}
-                >
-                  <BookOpen className="h-4 w-4" />
-                  回到首页
-                </button>
-              </div>
-              <button
-                type="button"
-                onClick={() => setAuthoringSaveSuccessStory(null)}
-                className={`${semanticButtonClass('ghost', { fullWidth: true })} mt-3`}
-              >
-                继续编辑
-              </button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    );
-  };
+  const renderAuthoringSaveSuccessModal = () => (
+    <AuthoringSaveSuccessModal
+      story={authoringSaveSuccessStory}
+      isSharing={isSharing}
+      formatBookTitle={formatBookTitle}
+      onShare={handleShareSavedAuthoringStory}
+      onReturnHome={() => {
+        setAuthoringSaveSuccessStory(null);
+        setAuthoringStoryId(null);
+        setAuthoringCartridge(null);
+        resetToHome();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }}
+      onClose={() => setAuthoringSaveSuccessStory(null)}
+    />
+  );
 
   const renderResumePromptModal = () => (
     <AnimatePresence>
@@ -8380,86 +8299,28 @@ export default function App() {
     );
   };
 
-  const renderStoryCard = (story: any, isPublic: boolean) => {
-    const coverUrl = getStoryCoverUrl(story);
-    const tags = getStoryTags(story);
-    const storyId = story?.id || story?.storyId || story?.sourceStoryId;
-    const isLiked = hasStoryCardAction('like', story);
-    const isFavorited = hasStoryCardAction('favorite', story);
-    const sequelRequirement = getSequelRequirementFromMeta(story);
-    const seriesId = String(story?.seriesId || story?.series_id || story?.meta?.seriesId || story?.meta?.series_id || '').trim();
-    const isSeriesStory = Boolean(seriesId || story?.seriesTitle || story?.seriesConstraints?.seriesTitle || story?.meta?.seriesConstraints?.seriesTitle);
-    return (
-      <motion.div
-        key={storyId || story.id}
-        whileHover={{ y: -4, scale: 1.01 }}
-        onClick={() => setStoryDetailStory(story)}
-        className={`story-library-card group p-4 transition-all cursor-pointer ${
-          isLiked ? 'ring-1 ring-pink-500/18' : isFavorited ? 'ring-1 ring-amber-500/18' : ''
-        }`}
-      >
-        <div className="relative flex h-full min-h-0 gap-4">
-          <div className="w-28 shrink-0 sm:w-32">
-            <div className="story-card-kind-badge" data-kind={isSeriesStory ? 'series' : 'standalone'}>
-              {isSeriesStory ? tr('系列作品', 'Series') : tr('单篇作品', 'Standalone')}
-            </div>
-            <button type="button" onClick={(e) => { e.stopPropagation(); setStoryDetailStory(story); }} className="story-library-cover h-28 w-28 cursor-pointer transition-all hover:ring-2 hover:ring-indigo-400/70 hover:ring-offset-2 hover:ring-offset-zinc-950 sm:h-32 sm:w-32">
-              {coverUrl ? (
-                <img src={coverUrl} alt={`${formatBookTitle(getStoryTitle(story))} 封面`} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center p-4 text-center text-[11px] font-black uppercase tracking-[0.18em] text-app-muted">
-                  3T NOVEL
-                </div>
-              )}
-            </button>
-            {renderStoryStats(story, 'card', {
-              storyId,
-              onLike: () => handleStoryInteraction('like', storyId, story),
-              onFavorite: () => handleStoryInteraction('favorite', storyId, story),
-              onShare: () => void shareStoryCardWithFeedback(story),
-            })}
-          </div>
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-            {renderStoryBiasBar(story)}
-            <h3 className="mb-1 line-clamp-2 whitespace-normal break-words text-[1.35rem] font-black leading-tight text-white transition-colors group-hover:text-indigo-200 sm:text-[1.45rem]">
-              {formatBookTitle(getStoryTitle(story))}
-            </h3>
-            <div className="mb-1 truncate text-sm font-bold text-app-muted/85">
-              <AuthorNameButton authorId={story.authorId || story.meta?.authorId} authorName={getStoryAuthorName(story)} />
-            </div>
-            {/* Middle zone: flexes to fill remaining space, shrinks when needed */}
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              <p className="story-library-desc-fade mb-2 text-[0.92rem] leading-relaxed text-app-text/85 transition-colors group-hover:text-app-text sm:text-[0.96rem]">
-                {getStoryMainAxis(story)}
-              </p>
-              {sequelRequirement && (
-                <div className="mb-2 shrink-0 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs font-black text-amber-100">
-                  续作：需完成前作条件
-                </div>
-              )}
-            </div>
-            <div className="mb-2 flex min-w-0 shrink-0 flex-wrap gap-1.5">
-              {(tags.length > 0 ? tags.slice(0, 3) : ['未标签']).map((tag: string) => (
-                <span key={tag} className="rounded-lg border border-indigo-400/15 bg-indigo-500/10 px-2.5 py-1 text-[11px] font-black text-indigo-200">
-                  {tag}
-                </span>
-              ))}
-            </div>
-            <div className="grid shrink-0 gap-2 sm:grid-cols-2">
-              <button type="button" onClick={(e) => { e.stopPropagation(); setStoryDetailStory(story); }} className={`${semanticButtonClass('secondary', { fullWidth: true, compact: true })} text-sm`}>
-                <BookOpen className="h-4 w-4" />
-                {t('library.details')}
-              </button>
-              <button type="button" onClick={(e) => { e.stopPropagation(); startStoryPlay(story.id); }} className={`${semanticButtonClass('primary', { fullWidth: true, compact: true })} text-sm`}>
-                <Sparkles className="h-4 w-4" />
-                {t('library.intervene')}
-              </button>
-            </div>
-          </div>
-        </div>
-      </motion.div>
-    );
-  };
+  const renderStoryCard = (story: any, isPublic: boolean) => (
+    <StoryLibraryCard
+      story={story}
+      tr={tr}
+      t={t}
+      formatBookTitle={formatBookTitle}
+      getStoryCoverUrl={getStoryCoverUrl}
+      getStoryTags={getStoryTags}
+      getStoryTitle={getStoryTitle}
+      getStoryAuthorName={getStoryAuthorName}
+      getStoryMainAxis={getStoryMainAxis}
+      hasStoryCardAction={hasStoryCardAction}
+      getSequelRequirementFromMeta={getSequelRequirementFromMeta}
+      renderStoryStats={renderStoryStats}
+      renderStoryBiasBar={renderStoryBiasBar}
+      AuthorNameButton={AuthorNameButton}
+      onOpenDetail={setStoryDetailStory}
+      onStartStory={(storyId) => void startStoryPlay(storyId)}
+      onStoryInteraction={(kind, storyId, storyItem) => handleStoryInteraction(kind, storyId, storyItem)}
+      onShareStory={(storyItem) => void shareStoryCardWithFeedback(storyItem)}
+    />
+  );
 
   const renderStoryDetailModal = () => {
     const coverUrl = storyDetailStory ? getStoryCoverUrl(storyDetailStory) : '';
@@ -8467,48 +8328,44 @@ export default function App() {
     const title = storyDetailStory ? formatBookTitle(getStoryTitle(storyDetailStory)) : '';
     const detailStoryId = storyDetailStory?.id || storyDetailStory?.storyId || storyDetailStory?.sourceStoryId;
     const detailSequelRequirement = storyDetailStory ? getSequelRequirementFromMeta(storyDetailStory) : null;
-    const handlePlayFromDetail = () => {
-      const targetStoryId = detailStoryId;
-      if (!targetStoryId) return;
-      setStoryDetailStory(null);
-      void startStoryPlay(targetStoryId);
-    };
+
     const handleShareFromDetail = async () => {
       if (!storyDetailStory) return;
       try {
         setIsSharing(true);
-        setGlobalLoadingMessage(isEnglish ? 'Preparing story share...' : '正在准备分享作品...');
-        setGlobalLoadingDetail(isEnglish ? 'Creating the story link and opening the system share sheet.' : '正在生成作品链接，并尝试调用系统分享。');
+        setGlobalLoadingMessage(isEnglish ? 'Preparing story share...' : '????????...');
+        setGlobalLoadingDetail(isEnglish ? 'Creating the story link and opening the system share sheet.' : '???????????????????');
         await shareOriginalStoryByCard(storyDetailStory);
       } catch (error: any) {
         console.error(error);
-        showError(error?.message || '分享失败。');
+        showError(error?.message || '?????');
       } finally {
         setIsSharing(false);
         setGlobalLoadingMessage(null);
         setGlobalLoadingDetail(null);
       }
     };
+
     const handleAdminDeleteFromDetail = () => {
       if (!isAdminUser || !detailStoryId) return;
       setStoryDetailStory(null);
       setConfirmationModal({
         isOpen: true,
-        title: '删除作品',
-        message: `确认删除《${stripBookTitle(title)}》吗？管理员删除会移除这部正式作品，建议只在违规或明显错误时使用。`,
+        title: '????',
+        message: '?????' + stripBookTitle(title) + '?????????????????????????????????',
         onConfirm: () => {
           void (async () => {
             try {
-              setGlobalLoadingMessage(isEnglish ? 'Deleting story...' : '正在删除作品...');
+              setGlobalLoadingMessage(isEnglish ? 'Deleting story...' : '??????...');
               await deleteStoryCartridge(db as any, detailStoryId);
               setPublicStories((prev) => prev.filter((story: any) => story.id !== detailStoryId));
               setMyStories((prev) => prev.filter((story: any) => story.id !== detailStoryId));
               setMySharedStories((prev) => prev.filter((story: any) => story.sourceStoryId !== detailStoryId && story.id !== detailStoryId));
               setStoryDetailStory(null);
-              showError('作品已删除。');
+              showError('??????');
             } catch (error: any) {
               console.error(error);
-              showError(error?.message || '删除作品失败。');
+              showError(error?.message || '???????');
             } finally {
               setGlobalLoadingMessage(null);
             }
@@ -8518,179 +8375,53 @@ export default function App() {
     };
 
     return (
-      <AnimatePresence>
-        {storyDetailStory && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className={`${safeModalBackdropClass} z-[5400] bg-black/70 backdrop-blur-md`}
-        >
-          <motion.div
-            initial={{ y: 18, opacity: 0, scale: 0.96 }}
-            animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: 12, opacity: 0, scale: 0.98 }}
-            className="app-modal-surface app-modal-safe-height relative mt-[env(safe-area-inset-top)] w-full max-w-3xl overflow-y-auto rounded-[2rem] p-5 backdrop-blur-xl sm:p-7"
-          >
-            <button
-              type="button"
-              onClick={() => setStoryDetailStory(null)}
-              aria-label="关闭作品详情"
-              className={`${semanticIconButtonClass('secondary')} absolute right-4 top-4 z-10`}
-            >
-              <X className="h-5 w-5" />
-            </button>
-            <div className="grid gap-5 sm:grid-cols-[180px_minmax(0,1fr)]">
-              <div>
-                <div className="aspect-square overflow-hidden rounded-3xl border border-app-border bg-gradient-to-br from-zinc-800 via-zinc-950 to-indigo-950 shadow-xl">
-                  {coverUrl ? (
-                    <img src={coverUrl} alt={`${title} 封面`} className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center p-5 text-center text-xs font-black uppercase tracking-[0.2em] text-app-muted">
-                      3T NOVEL
-                    </div>
-                  )}
-                </div>
-                {renderStoryStats(storyDetailStory, 'detail', {
-                  storyId: detailStoryId,
-                  onLike: () => handleStoryInteraction('like', detailStoryId, storyDetailStory),
-                  onFavorite: () => handleStoryInteraction('favorite', detailStoryId, storyDetailStory),
-                  onShare: handleShareFromDetail,
-                })}
-              </div>
-
-              <div className="min-w-0">
-                <div className="mb-3 flex flex-wrap gap-2">
-                  {(tags.length > 0 ? tags : ['未标签']).map((tag: string) => (
-                    <span key={tag} className="rounded-lg bg-indigo-500/10 px-2.5 py-1 text-xs font-black text-indigo-300">
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-                <h3 className="break-words text-3xl font-black leading-tight text-white">{title}</h3>
-                <div className="mt-2 text-sm font-bold text-app-muted">
-                  <AuthorNameButton authorId={storyDetailStory.authorId || storyDetailStory.meta?.authorId} authorName={getStoryAuthorName(storyDetailStory)} />
-                </div>
-                <div className="mt-5 max-h-[40vh] overflow-y-auto rounded-3xl border border-app-border/60 bg-app-surface/25 p-4 text-base leading-relaxed text-app-text">
-                  {getStoryMainAxis(storyDetailStory) || '这部作品暂时还没有填写完整介绍。'}
-                </div>
-                {detailSequelRequirement && (
-                  <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4 text-sm leading-relaxed text-amber-100">
-                    <div className="font-black">续作前置条件</div>
-                    <p className="mt-1 text-amber-100/80">
-                      干涉前需先完成《{stripBookTitle(detailSequelRequirement.sourceTitle || '前作')}》的指定结局与支线。
-                    </p>
-                  </div>
-                )}
-                <div className="mt-5 grid gap-3">
-                  <button type="button" onClick={handlePlayFromDetail} className={semanticButtonClass('primary', { fullWidth: true })}>
-                    <Sparkles className="h-4 w-4" />
-                    {t('library.intervene')}
-                  </button>
-                  {isAdminUser && detailStoryId && (
-                    <button type="button" onClick={handleAdminDeleteFromDetail} className={semanticButtonClass('danger', { fullWidth: true })}>
-                      <Trash2 className="h-4 w-4" />
-                      管理员删除作品
-                    </button>
-                  )}
-                  <div className="grid grid-cols-2 gap-3">
-                    <button type="button" onClick={handleShareFromDetail} disabled={isSharing} className={semanticButtonClass('secondary', { fullWidth: true })}>
-                      {isSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
-                      分享作品
-                    </button>
-                    <button type="button" onClick={() => setStoryDetailStory(null)} className={semanticButtonClass('ghost', { fullWidth: true })}>
-                      关闭
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        </motion.div>
-        )}
-      </AnimatePresence>
+      <StoryDetailModal
+        story={storyDetailStory}
+        coverUrl={coverUrl}
+        tags={tags}
+        title={title}
+        mainAxis={storyDetailStory ? getStoryMainAxis(storyDetailStory) : ''}
+        authorId={storyDetailStory?.authorId || storyDetailStory?.meta?.authorId}
+        authorName={storyDetailStory ? getStoryAuthorName(storyDetailStory) : ''}
+        isSharing={isSharing}
+        isAdmin={Boolean(isAdminUser && detailStoryId)}
+        sequelRequirement={detailSequelRequirement}
+        statsNode={storyDetailStory ? renderStoryStats(storyDetailStory, 'detail', {
+          storyId: detailStoryId,
+          onLike: () => handleStoryInteraction('like', detailStoryId, storyDetailStory),
+          onFavorite: () => handleStoryInteraction('favorite', detailStoryId, storyDetailStory),
+          onShare: handleShareFromDetail,
+        }) : null}
+        tr={tr}
+        t={t}
+        stripBookTitle={stripBookTitle}
+        AuthorNameButton={AuthorNameButton}
+        onClose={() => setStoryDetailStory(null)}
+        onPlay={() => {
+          if (!detailStoryId) return;
+          setStoryDetailStory(null);
+          void startStoryPlay(detailStoryId);
+        }}
+        onShare={handleShareFromDetail}
+        onAdminDelete={handleAdminDeleteFromDetail}
+      />
     );
   };
-
   const renderSequelGateModal = () => (
-    <AnimatePresence>
-      {sequelGateModal && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className={`${safeModalBackdropClass} z-[5600] bg-black/70 backdrop-blur-md`}
-        >
-          <motion.div
-            initial={{ y: 16, opacity: 0, scale: 0.97 }}
-            animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: 10, opacity: 0, scale: 0.98 }}
-            className="app-modal-surface app-modal-safe-height w-full max-w-lg overflow-y-auto rounded-[2rem] p-6"
-          >
-            <div className="flex items-start gap-3">
-              <div className="rounded-full bg-amber-500/15 p-3 text-amber-200">
-                <Lock className="h-5 w-5" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <h3 className="text-xl font-black text-white">续作尚未解锁</h3>
-                <p className="mt-2 text-sm leading-relaxed text-app-muted">
-                  这部续作需要先在《{stripBookTitle(sequelGateModal.sourceTitle || '前作')}》完成指定前置情节，才可继承记录并干涉命运。
-                </p>
-              </div>
-            </div>
-            <div className="mt-5 space-y-3 rounded-3xl border border-white/10 bg-white/[0.03] p-4">
-              {sequelGateModal.missingEnding && (
-                <div>
-                  <div className="text-xs font-black uppercase tracking-[0.16em] text-app-muted">需要结局</div>
-                  <div className="mt-1 text-sm font-bold text-app-text">{sequelGateModal.missingEnding.name}</div>
-                </div>
-              )}
-              {sequelGateModal.missingBranches.length > 0 && (
-                <div>
-                  <div className="text-xs font-black uppercase tracking-[0.16em] text-app-muted">需要支线</div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {sequelGateModal.missingBranches.map((branch) => (
-                      <span key={branch.id} className="rounded-full border border-indigo-400/20 bg-indigo-500/10 px-3 py-1 text-xs font-black text-indigo-100">
-                        {branch.name}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-            <div className="mt-6 grid gap-3 sm:grid-cols-3">
-              <button
-                type="button"
-                onClick={() => {
-                  const sourceStoryId = sequelGateModal.sourceStoryId;
-                  if (!sourceStoryId) return;
-                  setSequelGateModal(null);
-                  void startStoryPlay(sourceStoryId);
-                }}
-                disabled={!sequelGateModal.sourceStoryId}
-                className={semanticButtonClass('primary', { fullWidth: true })}
-              >
-                前往前作
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const sourceStory = findStoryListItemById(sequelGateModal.sourceStoryId);
-                  if (sourceStory) setStoryDetailStory(sourceStory);
-                  setSequelGateModal(null);
-                }}
-                className={semanticButtonClass('secondary', { fullWidth: true })}
-              >
-                查看详情
-              </button>
-              <button type="button" onClick={() => setSequelGateModal(null)} className={semanticButtonClass('ghost', { fullWidth: true })}>
-                关闭
-              </button>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    <SequelGateModal
+      modal={sequelGateModal}
+      stripBookTitle={stripBookTitle}
+      onGoSource={(sourceStoryId) => {
+        setSequelGateModal(null);
+        void startStoryPlay(sourceStoryId);
+      }}
+      onShowSourceDetail={(sourceStoryId) => {
+        const sourceStory = findStoryListItemById(sourceStoryId);
+        if (sourceStory) setStoryDetailStory(sourceStory);
+        setSequelGateModal(null);
+      }}
+      onClose={() => setSequelGateModal(null)}
+    />
   );
 
   const getVisibleStoryLibraryItems = () => {
@@ -8726,188 +8457,27 @@ export default function App() {
     const languagePublicCount = publicStories.filter((story) => storyMatchesLanguage(story, appLanguage)).length;
     const languageMineCount = myStories.filter((story) => storyMatchesLanguage(story, appLanguage)).length;
     return (
-    <div className="story-library-page mx-auto max-w-7xl px-5 pb-[calc(8.5rem+env(safe-area-inset-bottom))] pt-[max(3rem,calc(env(safe-area-inset-top)+3rem))] sm:px-6 lg:px-8">
-      <div className="story-library-hero relative mb-10 p-2 sm:p-4 lg:p-6">
-        <div className="max-w-3xl">
-          <h2 className="story-library-title text-4xl font-black leading-[1.15] sm:text-5xl lg:text-6xl">
-            {t('library.titleA')}<br />
-            <span className="story-library-title-accent">{t('library.titleB')}</span>
-          </h2>
-          <p className="mt-5 max-w-2xl text-base font-medium leading-relaxed text-app-muted sm:text-lg">
-            {t('library.subtitle')}
-          </p>
-        </div>
-      </div>
-
-      {user?.isAnonymous && (
-        <div className="mb-10 rounded-3xl border border-amber-500/30 bg-amber-500/10 p-5">
-          <div className="mb-4">
-            <div className="text-sm font-black text-amber-100">注册成用户</div>
-              <div className="mt-1 text-xs leading-relaxed text-amber-100/70">
-                当前游客记录会保留在同一个账号下，注册后可在其他设备继续游玩和查看作品。
-              </div>
-              <div className="mt-2 rounded-2xl border border-amber-400/20 bg-amber-400/10 p-3 text-xs leading-relaxed text-amber-50/80">
-                {GUEST_RETENTION_NOTICE}
-              </div>
-            </div>
-          <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
-            <input
-              type="email"
-              value={authEmail}
-              onChange={(event) => setAuthEmail(event.target.value)}
-              placeholder="邮箱"
-              className="rounded-xl border border-amber-500/20 bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none transition-colors focus:border-amber-400"
-            />
-            <input
-              type="password"
-              value={authPassword}
-              onChange={(event) => setAuthPassword(event.target.value)}
-              placeholder="密码（至少 6 位）"
-              className="rounded-xl border border-amber-500/20 bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none transition-colors focus:border-amber-400"
-            />
-            <button
-              type="button"
-              onClick={handleEmailPasswordLogin}
-              disabled={isLoggingIn}
-              className={semanticButtonClass('primary', { compact: true })}
-            >
-              {isLoggingIn ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
-              注册
-            </button>
-          </div>
-          {!isIosDevice() && (
-            <button
-              type="button"
-              onClick={handleGoogleLogin}
-              disabled={isLoggingIn}
-              className={`${semanticButtonClass('secondary', { compact: true })} mt-3`}
-            >
-              <LogIn className="h-4 w-4" />
-              用 Google 绑定当前游客记录
-            </button>
-          )}
-        </div>
-      )}
-
-      <section className="space-y-5">
-        <div className="story-library-toolbar flex flex-col gap-4 p-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="story-library-tabbar">
-            {[
-              { id: 'public', label: t('library.publicWorks'), count: languagePublicCount },
-              { id: 'mine', label: t('library.myWorks'), count: languageMineCount },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setStoryLibraryTab(tab.id as 'public' | 'mine')}
-                data-active={storyLibraryTab === tab.id ? 'true' : undefined}
-                className="story-library-tab focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70"
-              >
-                {tab.label} <span className="ml-1 text-[10px] opacity-70">{tab.count}</span>
-              </button>
-            ))}
-          </div>
-          <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto_auto]">
-            <input
-              type="search"
-              value={storyLibrarySearch}
-              onChange={(event) => setStoryLibrarySearch(event.target.value)}
-              placeholder={isEnglish ? 'Search title, author, tags, or premise' : '搜索标题、作者、标签或主轴'}
-              className="story-library-control min-w-0 px-3 py-2 text-sm sm:w-72"
-            />
-            {storyLibraryTab === 'mine' && (
-              <select
-                value={storyLibraryVisibilityFilter}
-                onChange={(event) => setStoryLibraryVisibilityFilter(event.target.value as any)}
-                className="story-library-control px-3 py-2 text-sm"
-              >
-                <option value="all">{isEnglish ? 'All visibility' : '全部权限'}</option>
-                <option value="private">{isEnglish ? 'Private' : '私密'}</option>
-                <option value="public">{isEnglish ? 'Public' : '公开'}</option>
-                <option value="unlisted">{isEnglish ? 'Unlisted link' : '非公开链接'}</option>
-              </select>
-            )}
-            <select
-              value={storyLibrarySort}
-              onChange={(event) => handleStoryLibrarySortChange(event.target.value as StoryLibrarySort)}
-              className="story-library-control px-3 py-2 text-sm"
-            >
-              <option value="updated">{isEnglish ? 'Recently updated' : '最近更新'}</option>
-              <option value="interventions">{isEnglish ? 'Most intervened' : '干涉最多'}</option>
-              <option value="likes">{isEnglish ? 'Most liked' : '点赞最多'}</option>
-              <option value="favorites">{isEnglish ? 'Most favorited' : '收藏最多'}</option>
-              <option value="shares">{isEnglish ? 'Most shared' : '分享最多'}</option>
-              <option value="words">{isEnglish ? 'Avg. words' : '平均字数'}</option>
-            </select>
-            <button
-              type="button"
-              onClick={() => refreshStories({ force: true })}
-              disabled={isLoadingStories}
-              className={semanticButtonClass('ghost', { compact: true })}
-            >
-              <RefreshCcw className={`h-4 w-4 ${isLoadingStories ? 'animate-spin' : ''}`} />
-              {isEnglish ? 'Refresh' : '刷新'}
-            </button>
-          </div>
-        </div>
-        {isLoadingStories && visibleStories.length === 0 ? (
-          <ListSkeleton count={6} />
-        ) : storyListLoadError && visibleStories.length === 0 ? (
-          <InlineSyncState
-            tone="error"
-            title={isEnglish ? 'Story list could not sync' : '作品列表暂时无法同步'}
-            detail={storyListLoadError}
-            actionLabel={isEnglish ? 'Reload library' : '重新读取作品库'}
-            onAction={() => refreshStories({ force: true })}
-          />
-        ) : visibleStories.length === 0 ? (
-          <InlineSyncState
-            tone="empty"
-            title={isEnglish ? 'No matching stories' : '没有符合条件的作品'}
-            detail={isEnglish ? 'Try changing the search, filters, or sorting.' : '可以调整搜索、筛选或排序条件后再试。'}
-          />
-        ) : (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {visibleStories.map((story) => renderStoryCard(story, storyLibraryTab === 'public'))}
-          </div>
-        )}
-      </section>
-
-      <div className="hidden">
-        {myStories.length > 0 && (
-          <section>
-            <div className="mb-6 flex items-center gap-3">
-              <div className="h-px flex-1 bg-app-surface-soft" />
-              <h3 className="text-sm font-black uppercase tracking-[0.2em] text-app-muted">我的创作</h3>
-              <div className="h-px flex-1 bg-app-surface-soft" />
-            </div>
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {myStories.map(s => renderStoryCard(s, false))}
-            </div>
-          </section>
-        )}
-
-        <section>
-          <div className="mb-6 flex items-center gap-3">
-            <div className="h-px flex-1 bg-app-surface-soft" />
-            <h3 className="text-sm font-black uppercase tracking-[0.2em] text-app-muted">最新作品</h3>
-            <div className="h-px flex-1 bg-app-surface-soft" />
-          </div>
-          {isLoadingStories ? (
-            <div className="flex h-64 items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-zinc-700" />
-            </div>
-          ) : (
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {publicStories.map(s => renderStoryCard(s, true))}
-            </div>
-          )}
-        </section>
-      </div>
-    </div>
-  );
+      <StorySelectView
+        t={t}
+        isEnglish={isEnglish}
+        storyLibraryTab={storyLibraryTab}
+        setStoryLibraryTab={setStoryLibraryTab}
+        storyLibrarySearch={storyLibrarySearch}
+        setStoryLibrarySearch={setStoryLibrarySearch}
+        storyLibraryVisibilityFilter={storyLibraryVisibilityFilter}
+        setStoryLibraryVisibilityFilter={setStoryLibraryVisibilityFilter}
+        storyLibrarySort={storyLibrarySort}
+        onSortChange={handleStoryLibrarySortChange}
+        isLoadingStories={isLoadingStories}
+        storyListLoadError={storyListLoadError}
+        visibleStories={visibleStories}
+        languagePublicCount={languagePublicCount}
+        languageMineCount={languageMineCount}
+        onRefresh={() => refreshStories({ force: true })}
+        renderStoryCard={renderStoryCard}
+      />
+    );
   };
-
   const renderArchiveView = () => {
     const keyword = archiveSearch.trim().toLowerCase();
     const archiveStories = Array.isArray(mySharedStories) ? mySharedStories.filter(Boolean) : [];
@@ -9278,107 +8848,21 @@ export default function App() {
   };
 
   const renderOnboardingGuide = () => (
-    <AnimatePresence>
-      {showOnboardingGuide && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className={`${safeModalBackdropClass} z-[3600] bg-black/70 backdrop-blur-md`}
-          onClick={dismissOnboardingGuide}
-        >
-          <motion.div
-            initial={{ opacity: 0, y: 18, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 18, scale: 0.98 }}
-            className="app-modal-surface app-modal-safe-height w-full max-w-2xl overflow-y-auto rounded-[2rem] border border-indigo-300/20 p-5 shadow-2xl sm:p-6"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="mb-5 flex items-start justify-between gap-4">
-              <div>
-                <div className="inline-flex items-center gap-2 rounded-full border border-indigo-400/20 bg-indigo-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-indigo-200">
-                  <Sparkles className="h-3.5 w-3.5" />
-                  初次进入
-                </div>
-                <h2 className="mt-4 text-2xl font-black text-white">欢迎来到命运故事台</h2>
-                <p className="mt-2 text-sm leading-relaxed text-app-muted">
-                  这里不是普通阅读器：可阅读故事、干涉章节、收藏命运线，也可生成或改编作品。
-                </p>
-              </div>
-              <button type="button" onClick={dismissOnboardingGuide} className={semanticIconButtonClass('ghost')} aria-label="关闭引导">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-3">
-              {[
-                { title: '选一篇作品', desc: '从作品库点「干涉命运」进入游玩。' },
-                { title: '干涉章节', desc: '每局最多三次，系统会重写相关命运线。' },
-                { title: '收藏与分享', desc: '满意的命运可收藏到馆藏，或分享给其他读者。' },
-              ].map((item) => (
-                <div key={item.title} className="rounded-2xl border border-app-border bg-app-surface/40 p-4">
-                  <div className="text-sm font-black text-app-text">{item.title}</div>
-                  <div className="mt-2 text-xs leading-relaxed text-app-muted">{item.desc}</div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-              <button type="button" onClick={dismissOnboardingGuide} className={semanticButtonClass('primary', { fullWidth: true })}>
-                {tr('去作品库看看', 'Browse library')}
-              </button>
-              <button type="button" onClick={startQuickGenerationFromOnboarding} className={semanticButtonClass('secondary', { fullWidth: true })}>
-                <Wand2 className="h-4 w-4" />
-                {tr('快速生成故事', 'Quick generate')}
-              </button>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    <OnboardingGuide
+      open={showOnboardingGuide}
+      tr={tr}
+      onDismiss={dismissOnboardingGuide}
+      onQuickGenerate={startQuickGenerationFromOnboarding}
+    />
   );
-
   const renderPushPermissionPrompt = () => (
-    <AnimatePresence>
-      {showPushPermissionPrompt && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className={`${safeModalBackdropClass} z-[3550] bg-black/65 backdrop-blur-md`}
-          onClick={dismissPushPermissionPrompt}
-        >
-          <motion.div
-            initial={{ opacity: 0, y: 18, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 18, scale: 0.98 }}
-            className="app-modal-surface app-modal-safe-height w-full max-w-lg overflow-y-auto rounded-[2rem] border border-app-border p-5 shadow-2xl sm:p-6"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="mb-5 flex items-start gap-4">
-              <div className="rounded-2xl border border-indigo-400/20 bg-indigo-500/10 p-3 text-indigo-200">
-                <Bell className="h-5 w-5" />
-              </div>
-              <div>
-                <h2 className="text-xl font-black text-white">接收作品动态提醒？</h2>
-                <p className="mt-2 text-sm leading-relaxed text-app-muted">
-                  开启后，作者更新、作品被点赞收藏、追踪作者发布新作时，可以在手机收到提醒。也可以之后到个人中心的设置里开启。
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <button type="button" onClick={dismissPushPermissionPrompt} className={semanticButtonClass('ghost', { fullWidth: true })}>
-                稍后再说
-              </button>
-              <button type="button" onClick={() => void enablePushNotificationsFromPrompt()} disabled={pushSubscribeBusy} className={semanticButtonClass('primary', { fullWidth: true })}>
-                {pushSubscribeBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
-                开启手机通知
-              </button>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    <PushPermissionPrompt
+      open={showPushPermissionPrompt}
+      busy={pushSubscribeBusy}
+      onDismiss={dismissPushPermissionPrompt}
+      onEnable={() => void enablePushNotificationsFromPrompt()}
+    />
   );
-
   const renderSeriesWorldView = () => {
     const seriesGenreText = (seriesForm.genreTags || []).join('，');
     const worldBibleDraft = parseEditableJson<Record<string, any>>(seriesWorldBibleText, seriesForm.worldBible || {});
@@ -10794,504 +10278,37 @@ export default function App() {
     </AnimatePresence>
   );
 
-  const renderInlineHelp = (key: string, title: string, content: React.ReactNode) => {
-    if (dismissedHelpCards[key]) return null;
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -10 }}
-        className="mb-6 flex gap-3 rounded-2xl border border-indigo-500/15 bg-indigo-500/5 p-4 text-sm text-indigo-200/90 shadow-[inset_0_1px_1px_rgba(99,102,241,0.05)] transition-all"
-      >
-        <Sparkles className="h-5 w-5 shrink-0 text-indigo-400" />
-        <div className="flex-1 leading-relaxed">
-          <div className="font-black text-indigo-100">{title}</div>
-          <div className="mt-1 text-xs text-indigo-200/80">{content}</div>
-        </div>
-        <button
-          type="button"
-          onClick={() => dismissHelpCard(key)}
-          className="h-8 w-8 shrink-0 rounded-lg border border-indigo-500/10 bg-indigo-500/10 text-indigo-300 hover:border-indigo-400/30 hover:text-white transition-all flex items-center justify-center focus-visible:ring-1 focus-visible:ring-indigo-400"
-          title={isEnglish ? "Dismiss" : "我知道了"}
-          aria-label={isEnglish ? "Dismiss" : "我知道了"}
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </motion.div>
-    );
-  };
-
-  const renderTourOverlay = () => {
-    if (tourStep === null || !authoringCartridge) return null;
-
-    const steps = [
-      {
-        tab: 'settings',
-        title: '第一步：配置故事基础 (Settings)',
-        text: '在这个选项卡下，你可以设置故事标题、主轴（如“自由 VS 妥协”）、题材标签，以及添加或修改故事的登场人物。人物卡是触发干涉的实体，请务必先在此处配置角色。',
-      },
-      {
-        tab: 'mainline',
-        title: '第二步：编写正史主线 (Mainline)',
-        text: '在这里编写故事的主线章节（第 1 到第 7 章）。这是整个世界线的基础架构。第 7 章还可以设置双向模式下的左域/右域终章结局名称。',
-      },
-      {
-        tab: 'branches',
-        title: '第三步：编织命运分支 (Branches & Rules)',
-        text: '在此处添加命运支线规则。你可以绑定某个角色在特定章节（第 2-6 章）遭遇庇佑(Bless)或磨难(Curse)作为触发器。一旦触发，分支的注入条件（mustHappen 等）将改写下游章节的正文走向。',
-      },
-      {
-        tab: 'settings',
-        title: '第四步：保存并发布 (Save & Publish)',
-        text: '编辑完所有规则与文本后，请记得点击右上角的『保存更改』以保存至云端。当作品开发完毕，修改其可见性为“公开”即可发布在书库中！',
-      }
-    ];
-
-    const guidedSteps = [
-      {
-        tab: 'settings',
-        title: '第一步：整理作品门面',
-        text: '先确认作品名、简介、封面、标签、可见性与改编权限。这里决定读者在作品库看到什么，也决定作品是否公开、非公开链接访问，或只保留给作者自己。',
-        placement: 'right',
-      },
-      {
-        tab: 'series',
-        title: '第二步：套用世界观设定',
-        text: '如果作品属于长篇系列，可以在这里选择世界观设定、角色卡和继承条件。世界观负责约束“什么可以发生”，本作主线负责讲“这一次发生什么”。',
-        placement: 'right',
-      },
-      {
-        tab: 'mainline',
-        title: '第三步：编排主线与结局',
-        text: '在这里编辑七章基础正文和结局域。左域、右域代表故事可能走向的两种倾向；中域代表没有明显偏向时的收束。作者可以设置左右两域的默认倾向，让读者大致理解作品的命运气质。',
-        placement: 'left',
-      },
-      {
-        tab: 'branches',
-        title: '第四步：设计角色与支线',
-        text: '支线条件决定玩家在某章、对某个角色行动时，可能触发怎样的隐藏情节、伏笔或转折。提示应该帮助玩家判断方向，但不需要揭开全部答案。',
-        placement: 'left',
-      },
-      {
-        tab: 'settings',
-        title: '第五步：保存与发布',
-        text: '确认内容后，使用“保存更改”。如果要让读者在首页发现作品，可把可见性设为公开；若只想给特定读者访问，可使用非公开链接。',
-        placement: 'right',
-      },
-    ];
-
-    const currentStep = guidedSteps[tourStep];
-    if (!currentStep) return null;
-    const tourPlacementClass = currentStep.placement === 'left'
-      ? 'left-[max(1rem,env(safe-area-inset-left))] top-[max(5.5rem,calc(env(safe-area-inset-top)+4rem))]'
-      : 'right-[max(1rem,env(safe-area-inset-right))] top-[max(5.5rem,calc(env(safe-area-inset-top)+4rem))]';
-
-    const handleNext = () => {
-      if (tourStep < guidedSteps.length - 1) {
-        const nextStep = tourStep + 1;
-        setTourStep(nextStep);
-        setAuthoringTab(guidedSteps[nextStep].tab as any);
-      } else {
-        setTourStep(null);
-        localStorage.setItem('completed-authoring-tour', 'true');
-        showError('向导完成！祝你创作愉快！');
-      }
-    };
-
-    const handleSkip = () => {
-      setTourStep(null);
-      localStorage.setItem('completed-authoring-tour', 'true');
-    };
-
-    return (
-      <div className="pointer-events-none fixed inset-0 z-[9999] p-4">
-        <motion.div
-          initial={{ scale: 0.95, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className={`pointer-events-auto fixed w-[min(24rem,calc(100vw-2rem))] ${tourPlacementClass} rounded-[2rem] border border-indigo-500/25 bg-app-surface/92 p-5 shadow-2xl backdrop-blur-md`}
-        >
-          <div className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300">
-            <Sparkles className="h-3 w-3" />
-            创作者引导 ({tourStep + 1} / {guidedSteps.length})
-          </div>
-          <h3 className="text-xl font-black text-white">{currentStep.title}</h3>
-          <p className="mt-3 text-sm leading-relaxed text-app-text">
-            {currentStep.text}
-          </p>
-          <div className="mt-6 flex justify-between gap-3">
-            <button
-              type="button"
-              onClick={handleSkip}
-              className={semanticButtonClass('ghost', { compact: true })}
-            >
-              跳过引导
-            </button>
-            <button
-              type="button"
-              onClick={handleNext}
-              className={semanticButtonClass('primary', { compact: true })}
-            >
-              {tourStep === guidedSteps.length - 1 ? '完成' : '下一步'}
-            </button>
-          </div>
-        </motion.div>
-      </div>
-    );
-  };
-
-  const renderHelpFloatingButton = () => {
-    return null;
-    if (gameState === 'PLAYING' || gameState === 'GENERATING_BLUEPRINT' || tourStep !== null) return null;
-    return (
-      <button
-        type="button"
-        onClick={() => setIsHelpDrawerOpen(true)}
-        className="fixed bottom-[calc(max(0.85rem,env(safe-area-inset-bottom))+5rem)] right-8 z-[1500] flex h-12 w-12 items-center justify-center rounded-full border border-indigo-500/30 bg-app-bg/80 text-indigo-300 shadow-2xl backdrop-blur-md transition-all hover:border-indigo-400 hover:text-white hover:scale-105 active:scale-95 animate-pulse"
-        title={isEnglish ? "Help Center" : "帮助中心"}
-        aria-label={isEnglish ? "Help Center" : "帮助中心"}
-      >
-        <span className="relative flex h-5 w-5 items-center justify-center">
-          <span className="relative text-lg font-black leading-none">?</span>
-        </span>
-      </button>
-    );
-  };
-
-  const renderHelpCenterDrawer = () => {
-    const qas = [
-      {
-        q: '什么是干涉值（Ending Value）与命运走向？',
-        a: '在命运馆中，每一部双向结局的作品都有【左域】和【右域】两条因果走向。玩家在第 2 至第 6 章中，对登场角色施加的「庇佑 (Bless)」或「磨难 (Curse)」会让故事逐渐偏向不同结局域。最终在第 7 章，系统会根据本局走向推演出对应的终章故事。',
-        tags: '干涉 庇佑 磨难 命运走向 结局 ending value bless curse'
-      },
-      {
-        q: '怎么让故事分支（Branch）被成功解锁？',
-        a: '每个分支都有其『触发条件』。触发条件由作者在创作故事时指定（例如：林晓在第 2 章遭遇庇佑）。当你在游玩过程中做出了符合条件的干涉时，该分支就会即时解锁。解锁的分支会通过“注入动作（inject）”强制改写下游章节的故事内容，展示出非同寻常的历史细节。一些高阶分支甚至有『多重干涉组合条件』。',
-        tags: '分支 解锁 条件 触发器 注入 剧情改动 trigger inject'
-      },
-      {
-        q: '如何使用世界观设定（World Bible）创作续作？',
-        a: '世界观仓库是多部作品共用的因果基座。当你生成或手动创建了一套世界观（包含世界基准规则、角色卡池和故事大纲素材）后，你可以新建作品，并在『系列/世界观设置』中选择该世界观。AI 在生成故事章节时，会绝对遵守世界观中的【世界基准规则】（例如：魔法在这个世界上已被禁止），并自动从角色池中引入人物。',
-        tags: '世界观 世界基准 角色池 续作 创作 创作者 world bible rules'
-      },
-      {
-        q: '续作是如何“继承前作”结局和设定状态的？',
-        a: '当你在创作者后台为一部作品勾选了『此作品是续作』，并关联了前作时，系统会在续作开始时自动建立【命运继承规则】。续作的第 1 章会静默继承你在前作中走出的结局文本、曾解锁的分支以及人物的死活存留状态。AI 将自动分析这些前置因果，作为续作开篇的剧情前奏，实现真正的内容传承。',
-        tags: '继承 续作 前作 结局 人物状态 关联 命运继承 inheritance sequel'
-      },
-      {
-        q: 'AI 快速生成故事的流程是怎样的？',
-        a: '当你输入故事标题和主轴概念后，系统将先为你生成一份『世界线蓝图 (Blueprint)』，里面包含 7 个章节的大纲梗概、初始登场人物和若干预置分支规则。在蓝图建立后，你可以自由调整其章节或分支设置。点击『开发/干涉』时，系统将根据你当前的配置，渲染并填充前几章 of 初始主干正文。后续的重写也是基于此蓝图逻辑展开的。',
-        tags: '快速生成 世界蓝图 创作 章节大纲 ai 流程 blueprint'
-      }
-    ];
-
-    const safeHelpQas = [
-      {
-        q: '玩家应该怎样开始一部作品？',
-        a: '从作品库选择感兴趣的作品，点击“干涉命运”进入阅读。读到可干涉章节时，选择角色和行动；完成后可以继续阅读变化后的故事，并在结算后收藏命运或分享。',
-        tags: '玩家 作品库 干涉命运 阅读 收藏 分享',
-      },
-      {
-        q: '作者如何设计一部可玩的故事？',
-        a: '先在作品设置里整理标题、简介、封面、标签和可见性；再写好主线章节与结局域；最后在角色和支线里设置哪些角色、章节和条件会开启特殊情节。',
-        tags: '作者 作品设置 主线 结局 支线 角色',
-      },
-      {
-        q: '支线条件有什么作用？',
-        a: '支线条件用于告诉作品：玩家在某章对某个角色做出特定行动时，可以开启一段隐藏情节、伏笔、关系变化或结局铺垫。提示应该帮助玩家判断方向，但不需要剧透全部内容。',
-        tags: '支线 条件 提示 隐藏情节 伏笔',
-      },
-      {
-        q: '世界观设定怎样连接多部作品？',
-        a: '世界观设定像系列仓库，可以保存世界基准、角色卡池和情节素材。创作新作或续作时，作者可以勾选要套用的条目，让不同作品共享同一套世界规则和角色基础。',
-        tags: '世界观 系列 角色卡 世界基准 续作',
-      },
-      {
-        q: '续作的前置条件应该怎么设？',
-        a: '在系列设置里选择前作，再指定需要完成的结局和支线。这样玩家进入续作前，会先确认是否已经经历过对应前情；作者也可以补充继承硬设定，让续作开场衔接更自然。',
-        tags: '续作 前作 继承 结局 支线',
-      },
-    ];
-
-    const keyword = helpSearch.trim().toLowerCase();
-    const filteredQas = safeHelpQas.filter(item => {
-      if (!keyword) return true;
-      return `${item.q}\n${item.a}\n${item.tags}`.toLowerCase().includes(keyword);
-    });
-
-    return (
-      <AnimatePresence>
-        {isHelpDrawerOpen && (
-          <div className="fixed inset-0 z-[6500] flex justify-end bg-app-bg/60 backdrop-blur-[1px]">
-            <div className="absolute inset-0" onClick={() => setIsHelpDrawerOpen(false)} />
-            
-            <motion.div
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'tween', duration: 0.3, ease: 'easeOut' }}
-              className="relative z-10 flex h-full w-full flex-col border-l border-app-border bg-app-surface/95 p-6 shadow-2xl backdrop-blur-md sm:max-w-md"
-            >
-              <div className="flex items-center justify-between border-b border-app-border pb-4">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-400">
-                    <Sparkles className="h-4 w-4" />
-                  </div>
-                  <h2 className="text-lg font-black text-white">{tr('命运馆帮助中心', 'Help Center')}</h2>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsHelpDrawerOpen(false)}
-                  className="rounded-lg p-2 text-app-muted hover:bg-app-surface-soft hover:text-white transition-colors"
-                  aria-label={isEnglish ? "Close Help Center" : "关闭帮助中心"}
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              <div className="relative mt-4">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-app-muted" />
-                <input
-                  type="search"
-                  value={helpSearch}
-                  onChange={(event) => setHelpSearch(event.target.value)}
-                  placeholder={tr('搜索您想知道的规则或名词...', 'Search terms, rules...')}
-                  className="w-full rounded-xl border border-app-border bg-app-input-bg/60 py-2.5 pl-9 pr-4 text-xs font-semibold text-app-text outline-none transition-colors focus:border-indigo-400/70"
-                />
-              </div>
-
-              <div className="mt-6 flex-1 overflow-y-auto pr-1 space-y-4 scrollbar-thin">
-                {filteredQas.length === 0 ? (
-                  <div className="py-12 text-center text-xs text-app-muted">
-                    {tr('没有找到匹配的内容，换个词试试吧？', 'No matches found. Try another search term.')}
-                  </div>
-                ) : (
-                  filteredQas.map((qa, index) => (
-                    <div key={index} className="rounded-2xl border border-app-border/80 bg-app-bg/20 p-4 transition-colors hover:border-app-border">
-                      <h3 className="text-sm font-black text-app-text flex gap-2">
-                        <span className="text-indigo-400">Q:</span>
-                        {qa.q}
-                      </h3>
-                      <p className="mt-2 text-xs leading-relaxed text-app-muted">
-                        {qa.a}
-                      </p>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              {Object.keys(dismissedHelpCards).length > 0 && (
-                <div className="mt-4 shrink-0 px-2">
-                  <button
-                    type="button"
-                    onClick={restoreHelpCards}
-                    className="w-full rounded-xl border border-app-border bg-app-bg/40 py-2.5 text-xs font-semibold text-app-muted hover:border-indigo-500/30 hover:text-indigo-300 transition-colors"
-                  >
-                    {tr('恢复所有被折叠的教学提示', 'Restore All Dismissed Tips')}
-                  </button>
-                </div>
-              )}
-
-              <div className="mt-4 border-t border-app-border pt-4 text-center">
-                <p className="text-[10px] text-zinc-600">
-                  {tr('命运馆执行官专用工具集 · 离线引导版本', 'Fate interference toolkit · Offline version')}
-                </p>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-    );
-  };
-
-  const renderEditNameModal = () => (
-    <AnimatePresence>
-      {isEditNameModalOpen && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className={`${safeModalBackdropClass} z-[6100] bg-black/70 backdrop-blur-md`}
-          onClick={() => setIsEditNameModalOpen(false)}
-        >
-          <motion.div
-            initial={{ y: 16, opacity: 0, scale: 0.97 }}
-            animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: 12, opacity: 0, scale: 0.98 }}
-            className="app-modal-surface app-modal-safe-height w-full max-w-md overflow-y-auto rounded-[2rem] border border-app-border p-5 shadow-2xl sm:p-6"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="mb-4 flex items-start justify-between gap-4">
-              <div>
-                <h3 className="text-xl font-black text-white">{tr('修改昵称', 'Change Display Name')}</h3>
-                <p className="mt-1 text-xs text-app-muted">{tr('修改后，您生成的作品和干涉记录都会显示新昵称（最多5字）。', 'After change, your works and records will display the new name (max 5 chars).')}</p>
-              </div>
-              <button type="button" onClick={() => setIsEditNameModalOpen(false)} className={semanticIconButtonClass('ghost')} aria-label={tr('关闭', 'Close')}>
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="space-y-4">
-              <input
-                value={profileDisplayName}
-                onChange={(event) => setProfileDisplayName(event.target.value)}
-                placeholder={tr('输入新昵称', 'New display name')}
-                maxLength={5}
-                className="w-full rounded-xl border border-app-border bg-app-surface px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
-              />
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setIsEditNameModalOpen(false)} className={semanticButtonClass('secondary', { fullWidth: true })}>
-                  {tr('取消', 'Cancel')}
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await handleUpdateProfileDisplayName();
-                    setIsEditNameModalOpen(false);
-                  }}
-                  className={semanticButtonClass('primary', { fullWidth: true })}
-                >
-                  {tr('确认修改', 'Save')}
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+  const renderInlineHelp = (key: string, title: string, content: React.ReactNode) => (
+    <InlineHelpCard
+      hidden={Boolean(dismissedHelpCards[key])}
+      title={title}
+      content={content}
+      isEnglish={isEnglish}
+      onDismiss={() => dismissHelpCard(key)}
+    />
   );
-
-  const renderEditBioModal = () => (
-    <AnimatePresence>
-      {isEditBioModalOpen && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className={`${safeModalBackdropClass} z-[6100] bg-black/70 backdrop-blur-md`}
-          onClick={() => setIsEditBioModalOpen(false)}
-        >
-          <motion.div
-            initial={{ y: 16, opacity: 0, scale: 0.97 }}
-            animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: 12, opacity: 0, scale: 0.98 }}
-            className="app-modal-surface app-modal-safe-height w-full max-w-md overflow-y-auto rounded-[2rem] border border-app-border p-5 shadow-2xl sm:p-6"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="mb-4 flex items-start justify-between gap-4">
-              <div>
-                <h3 className="text-xl font-black text-white">{tr('修改个性签名', 'Edit Bio')}</h3>
-                <p className="mt-1 text-xs text-app-muted">{tr('用于展示在您的作者档案中，告诉大家关于您的一两件事（最多120字）。', 'Displayed on your author profile to tell others a bit about yourself (max 120 chars).')}</p>
-              </div>
-              <button type="button" onClick={() => setIsEditBioModalOpen(false)} className={semanticIconButtonClass('ghost')} aria-label={tr('关闭', 'Close')}>
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="space-y-4">
-              <textarea
-                value={editingBio}
-                onChange={(e) => setEditingBio(e.target.value)}
-                placeholder={tr('写点什么向别人介绍自己吧...', 'Write something to introduce yourself...')}
-                maxLength={120}
-                className="w-full h-28 resize-none rounded-xl border border-app-border bg-app-surface px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
-              />
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setIsEditBioModalOpen(false)} className={semanticButtonClass('secondary', { fullWidth: true })}>
-                  {tr('取消', 'Cancel')}
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await handleUpdateBio();
-                    setIsEditBioModalOpen(false);
-                  }}
-                  className={semanticButtonClass('primary', { fullWidth: true })}
-                >
-                  {tr('确认修改', 'Save')}
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+  const renderTourOverlay = () => (
+    <AuthoringTourOverlay
+      tourStep={authoringCartridge ? tourStep : null}
+      setTourStep={setTourStep}
+      setAuthoringTab={setAuthoringTab}
+      showMessage={showError}
+    />
   );
-
-  const renderSecurityModal = () => (
-    <AnimatePresence>
-      {isSecurityModalOpen && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className={`${safeModalBackdropClass} z-[6100] bg-black/70 backdrop-blur-md`}
-          onClick={() => setIsSecurityModalOpen(false)}
-        >
-          <motion.div
-            initial={{ y: 16, opacity: 0, scale: 0.97 }}
-            animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: 12, opacity: 0, scale: 0.98 }}
-            className="app-modal-surface app-modal-safe-height w-full max-w-md overflow-y-auto rounded-[2rem] border border-app-border p-5 shadow-2xl sm:p-6"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="mb-4 flex items-start justify-between gap-4">
-              <div>
-                <h3 className="text-xl font-black text-white">{tr('修改账户密码', 'Security Settings')}</h3>
-                <p className="mt-1 text-xs text-app-muted">{tr('修改账户登录密码或发送密码重设邮件。', 'Change account password or send reset email.')}</p>
-              </div>
-              <button type="button" onClick={() => setIsSecurityModalOpen(false)} className={semanticIconButtonClass('ghost')} aria-label={tr('关闭', 'Close')}>
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="space-y-4">
-              <input
-                type="password"
-                value={profileCurrentPassword}
-                onChange={(event) => setProfileCurrentPassword(event.target.value)}
-                placeholder={tr('当前密码', 'Current password')}
-                className="w-full rounded-xl border border-app-border bg-app-surface px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
-              />
-              <input
-                type="password"
-                value={profileNewPassword}
-                onChange={(event) => setProfileNewPassword(event.target.value)}
-                placeholder={tr('新密码（至少 6 位）', 'New password (at least 6 characters)')}
-                className="w-full rounded-xl border border-app-border bg-app-surface px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
-              />
-              <button
-                type="button"
-                onClick={async () => {
-                  await handleUpdateAccountPassword();
-                  if (!profileNewPassword) {
-                    setIsSecurityModalOpen(false);
-                  }
-                }}
-                className={semanticButtonClass('secondary', { fullWidth: true })}
-              >
-                <Lock className="h-4 w-4" />
-                {tr('确认修改密码', 'Confirm change password')}
-              </button>
-              
-              <div className="border-t border-app-border/60 my-2"></div>
-              
-              <button
-                type="button"
-                onClick={async () => {
-                  await handlePasswordResetForEmail(user?.email || '');
-                  setIsSecurityModalOpen(false);
-                }}
-                className={semanticButtonClass('ghost', { fullWidth: true })}
-              >
-                <Mail className="h-4 w-4" />
-                {tr('发送重设密码邮件', 'Send reset email')}
-              </button>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+  const renderHelpFloatingButton = () => (
+    <HelpFloatingButton />
   );
-
+  const renderHelpCenterDrawer = () => (
+    <HelpCenterDrawer
+      open={isHelpDrawerOpen}
+      search={helpSearch}
+      dismissedCount={Object.keys(dismissedHelpCards).length}
+      tr={tr}
+      onSearchChange={setHelpSearch}
+      onClose={() => setIsHelpDrawerOpen(false)}
+      onRestore={restoreHelpCards}
+    />
+  );
   const renderAccountCenterView = () => (
     <div className="mx-auto max-w-4xl px-6 pb-[calc(8.5rem+env(safe-area-inset-bottom))] pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] lg:px-8">
       {renderAccountCenterContent('page')}
@@ -12414,227 +11431,60 @@ export default function App() {
   );
 
   const renderAuthorProfileModal = () => (
-    <AnimatePresence>
-      {authorProfileTarget && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className={`${safeModalBackdropClass} z-[5400] bg-black/65 backdrop-blur-md`}
-          onClick={() => setAuthorProfileTarget(null)}
-        >
-          <motion.div
-            initial={{ y: 20, opacity: 0, scale: 0.96 }}
-            animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: 14, opacity: 0, scale: 0.98 }}
-            className="app-modal-surface app-modal-safe-height w-full max-w-xl overflow-y-auto rounded-[2rem] border border-app-border p-5 shadow-2xl sm:p-6"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="mb-5 flex items-start justify-between gap-4">
-              <div>
-                <div className="text-xs font-black uppercase tracking-[0.2em] text-indigo-300">{tr('作者档案', 'Author Profile')}</div>
-                <h3 className="mt-2 text-2xl font-black text-white">{authorProfileTarget.authorName}</h3>
-                {authorProfileBio && (
-                  <p className="mt-1.5 text-xs text-indigo-200/90 italic">
-                    「 {authorProfileBio} 」
-                  </p>
-                )}
-                <p className="mt-2 text-xs font-semibold text-app-muted">{tr('查看这个作者公开或非公开链接作品，并决定是否追踪后续更新。', 'View this author’s public or unlisted works, and decide whether to follow future updates.')}</p>
-              </div>
-              <button type="button" onClick={() => setAuthorProfileTarget(null)} className={semanticIconButtonClass('secondary')} aria-label={tr('关闭作者档案', 'Close author profile')}>
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="mb-5 flex flex-wrap gap-2">
-              {authorProfileTarget.authorId !== user?.uid && (
-                <button type="button" onClick={toggleAuthorFollow} disabled={authorProfileBusy} className={`${semanticButtonClass(authorProfileFollowing ? 'secondary' : 'primary', { compact: true })} ${authorProfileFollowing ? 'app-button-followed' : ''}`}>
-                  {authorProfileBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
-                  {authorProfileFollowing ? tr('已追踪', 'Following') : tr('追踪作者', 'Follow author')}
-                </button>
-              )}
-            </div>
-            {authorProfileLoading ? (
-              <div className="flex items-center justify-center gap-2 rounded-2xl border border-app-border bg-app-surface/40 p-8 text-sm font-black text-app-muted">
-                <Loader2 className="h-5 w-5 animate-spin" />
-                {isEnglish ? 'Loading author works...' : '正在读取作者作品...'}
-              </div>
-            ) : authorProfileStories.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-app-border bg-app-surface/30 p-8 text-center text-sm font-semibold text-app-muted">
-                {tr('暂时没有可查看的作者作品。', 'No viewable works from this author yet.')}
-              </div>
-            ) : (
-              <div className="grid max-h-[50vh] gap-3 overflow-y-auto pr-1">
-                {authorProfileStories.map((story: any) => (
-                  <button
-                    key={story.id}
-                    type="button"
-                    onClick={() => {
-                      setAuthorProfileTarget(null);
-                      void startStoryPlay(story.id);
-                    }}
-                    className="rounded-2xl border border-app-border bg-app-surface/40 p-4 text-left transition-colors hover:border-indigo-400/50 hover:bg-indigo-500/10"
-                  >
-                    <div className="font-black text-app-text">{formatBookTitle(getStoryTitle(story))}</div>
-                    <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-black text-app-muted">
-                      <span>{tr('点赞', 'Likes')} {getStoryLikeCount(story)}</span>
-                      <span>{tr('收藏', 'Favorites')} {getStoryFavoriteCount(story)}</span>
-                      <span>{tr('分享', 'Shares')} {getStoryShareCount(story)}</span>
-                      <span>{tr('干涉', 'Interventions')} {getStoryInterventionCount(story)}</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    <AuthorProfileModal
+      target={authorProfileTarget}
+      bio={authorProfileBio}
+      loading={authorProfileLoading}
+      stories={authorProfileStories}
+      currentUserId={user?.uid}
+      following={authorProfileFollowing}
+      busy={authorProfileBusy}
+      isEnglish={isEnglish}
+      tr={tr}
+      shortUserId={shortUserId}
+      formatBookTitle={formatBookTitle}
+      getStoryTitle={getStoryTitle}
+      getStoryLikeCount={getStoryLikeCount}
+      getStoryFavoriteCount={getStoryFavoriteCount}
+      getStoryShareCount={getStoryShareCount}
+      getStoryInterventionCount={getStoryInterventionCount}
+      onClose={() => setAuthorProfileTarget(null)}
+      onToggleFollow={toggleAuthorFollow}
+      onOpenStory={(storyId) => {
+        setAuthorProfileTarget(null);
+        void startStoryPlay(storyId);
+      }}
+    />
   );
 
   const renderNotificationCenter = () => (
-    <AnimatePresence>
-      {notificationCenterOpen && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className={`${safeModalBackdropClass} z-[5500] bg-black/65 backdrop-blur-md`}
-          onClick={() => setNotificationCenterOpen(false)}
-        >
-          <motion.div
-            initial={{ y: 20, opacity: 0, scale: 0.96 }}
-            animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: 14, opacity: 0, scale: 0.98 }}
-            className="app-modal-surface app-modal-safe-height w-full max-w-lg overflow-y-auto rounded-[2rem] border border-app-border p-5 shadow-2xl sm:p-6"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="mb-5 flex items-start justify-between gap-4">
-              <div>
-                <div className="text-xs font-black uppercase tracking-[0.2em] text-indigo-300">{tr('通知', 'Notifications')}</div>
-                <h3 className="mt-2 text-2xl font-black text-white">{tr('命运动态', 'Fate Updates')}</h3>
-                <p className="mt-1 text-xs font-semibold text-app-muted">{tr('点赞、收藏、分享、追踪作者更新和创作提醒都会集中在这里。', 'Likes, favorites, shares, followed author updates, and creation nudges gather here.')}</p>
-              </div>
-              <button type="button" onClick={() => setNotificationCenterOpen(false)} className={semanticIconButtonClass('ghost')} aria-label={tr('关闭通知', 'Close notifications')}>
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="mb-3 grid grid-cols-3 gap-2">
-              <button type="button" onClick={() => void refreshNotificationCenter()} className={semanticButtonClass('ghost', { compact: true })} disabled={notificationLoading}>
-                {notificationLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
-                {tr('刷新通知', 'Refresh')}
-              </button>
-              <button type="button" onClick={() => void markAllNotificationsRead()} className={semanticButtonClass('secondary', { compact: true })} disabled={notificationLoading || notificationItems.every((item) => item.readAt)}>
-                <CheckCircle2 className="h-4 w-4" />
-                {tr('全部已读', 'Mark all read')}
-              </button>
-              <button type="button" onClick={() => void clearAllNotifications()} className={semanticButtonClass('danger', { compact: true })} disabled={notificationLoading || notificationItems.length === 0}>
-                <Trash2 className="h-4 w-4" />
-                {tr('清空', 'Clear')}
-              </button>
-            </div>
-            <div className="flex min-h-[420px] flex-col">
-              {notificationLoading && notificationItems.length === 0 ? (
-                <ListSkeleton count={4} compact />
-              ) : notificationItems.length === 0 ? (
-                <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-app-border bg-app-surface/30 p-8 text-center text-sm font-semibold text-app-muted">
-                  {tr('暂时没有新的通知。', 'No new notifications yet.')}
-                </div>
-              ) : (
-                <div className="grid max-h-[56vh] gap-3 overflow-y-auto pr-1">
-                  {notificationItems.map((item) => (
-                    <div
-                      key={item.id}
-                      className={`flex items-start gap-2 rounded-2xl border p-3 transition-colors hover:border-indigo-400/50 hover:bg-indigo-500/10 ${
-                        item.readAt ? 'border-app-border bg-app-surface/30' : 'border-indigo-400/30 bg-indigo-500/10'
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setNotificationCenterOpen(false);
-                          if (item.storyId) void startStoryPlay(item.storyId);
-                        }}
-                        className="flex min-w-0 flex-1 items-start gap-3 text-left"
-                      >
-                        <div className="mt-0.5 rounded-full border border-white/10 bg-white/10 p-2">
-                          <Bell className="h-4 w-4 text-indigo-200" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="font-black text-app-text">{item.title || tr('新的通知', 'New notification')}</div>
-                          <div className="mt-1 text-xs font-semibold leading-relaxed text-app-muted">{item.body || tr('有新的命运动态。', 'There is a new fate update.')}</div>
-                          <div className="mt-2 text-[10px] font-black uppercase tracking-[0.16em] text-zinc-600">
-                            {new Date(item.createdAt || Date.now()).toLocaleString()}
-                          </div>
-                        </div>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void deleteNotificationItem(item.id)}
-                        className="shrink-0 rounded-full p-2 text-app-muted transition-colors hover:bg-rose-500/10 hover:text-rose-200 active:scale-95"
-                        aria-label={tr('删除通知', 'Delete notification')}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    <NotificationCenterModal
+      open={notificationCenterOpen}
+      loading={notificationLoading}
+      items={notificationItems}
+      tr={tr}
+      onClose={() => setNotificationCenterOpen(false)}
+      onRefresh={() => void refreshNotificationCenter()}
+      onMarkAllRead={() => void markAllNotificationsRead()}
+      onClearAll={() => void clearAllNotifications()}
+      onDelete={(id) => void deleteNotificationItem(id)}
+      onOpenStory={(storyId) => {
+        setNotificationCenterOpen(false);
+        void startStoryPlay(storyId);
+      }}
+    />
   );
 
   const renderShareComposer = () => (
-    <AnimatePresence>
-      {shareComposer && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className={`${safeModalBackdropClass} z-[5600] bg-black/70 backdrop-blur-md`}
-          onClick={() => closeShareComposer(false)}
-        >
-          <motion.div
-            initial={{ y: 20, opacity: 0, scale: 0.96 }}
-            animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: 14, opacity: 0, scale: 0.98 }}
-            className="app-modal-surface app-modal-safe-height w-full max-w-lg overflow-y-auto rounded-[2rem] border border-app-border p-5 shadow-2xl sm:p-6"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="mb-5 flex items-start justify-between gap-4">
-              <div>
-                <div className="text-xs font-black uppercase tracking-[0.2em] text-indigo-300">{tr('分享前确认', 'Share Preview')}</div>
-                <h3 className="mt-2 text-2xl font-black text-white">{String(shareComposer.title || t('play.share'))}</h3>
-                <p className="mt-1 text-xs font-semibold text-app-muted">{tr('可以先调整要发出去的文字；确认分享后才会调用设备分享功能，并在成功后计入分享数。', 'Edit the share text first. The device share sheet opens only after confirmation, and successful shares count toward stats.')}</p>
-              </div>
-              <button type="button" onClick={() => closeShareComposer(false)} className={semanticIconButtonClass('ghost')} aria-label={tr('关闭分享编辑', 'Close share editor')}>
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <label className="mb-3 block text-xs font-black uppercase tracking-[0.16em] text-app-muted">{tr('分享文字', 'Share text')}</label>
-            <textarea
-              value={shareComposerText}
-              onChange={(event) => setShareComposerText(event.target.value)}
-              className="min-h-44 w-full resize-y rounded-2xl border border-app-border bg-app-surface/60 p-4 text-sm font-semibold leading-relaxed text-app-text outline-none transition-colors focus:border-indigo-400/70"
-            />
-            <div className="mt-3 rounded-2xl border border-app-border bg-app-surface/35 p-3 text-xs font-semibold leading-relaxed text-app-muted break-all">
-              {String(shareComposer.url || '')}
-            </div>
-            <div className="mt-5 grid grid-cols-2 gap-3">
-              <button type="button" onClick={() => closeShareComposer(false)} className={semanticButtonClass('ghost', { fullWidth: true })}>
-                {tr('取消', 'Cancel')}
-              </button>
-              <button type="button" onClick={() => void confirmShareComposer()} className={semanticButtonClass('primary', { fullWidth: true })}>
-                <ExternalLink className="h-4 w-4" />
-                {tr('确认分享', 'Share now')}
-              </button>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    <ShareComposerModal
+      shareComposer={shareComposer}
+      text={shareComposerText}
+      tr={tr}
+      t={t}
+      onTextChange={setShareComposerText}
+      onClose={() => closeShareComposer(false)}
+      onConfirm={() => void confirmShareComposer()}
+    />
   );
 
   const renderAuthoringView = () => (
@@ -14162,23 +13012,12 @@ export default function App() {
     </Suspense>
   );
   const renderScrollToTopButton = () => (
-    <AnimatePresence>
-      {showScrollTopButton && (
-        <motion.button
-          type="button"
-          initial={{ opacity: 0, y: 12, scale: 0.92 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 12, scale: 0.92 }}
-          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          className={`play-float-button ${gameState === 'PLAYING' ? 'play-scroll-top-button' : 'app-scroll-top-button'}`}
-          aria-label={tr('返回顶端', 'Back to top')}
-        >
-          <ArrowUp className="h-5 w-5" />
-        </motion.button>
-      )}
-    </AnimatePresence>
+    <ScrollToTopButton
+      show={showScrollTopButton}
+      isPlaying={gameState === 'PLAYING'}
+      label={tr('????', 'Back to top')}
+    />
   );
-
   const renderPlayingQuickNav = () => (
     <AnimatePresence>
       {gameState === 'PLAYING' && chapters.length > 0 && (
@@ -14365,9 +13204,27 @@ export default function App() {
           {renderNotificationCenter()}
           {renderShareComposer()}
           {accountCenterModal}
-          {renderEditNameModal()}
-          {renderEditBioModal()}
-          {renderSecurityModal()}
+          <AccountProfileModals
+            tr={tr}
+            isEditNameModalOpen={isEditNameModalOpen}
+            setIsEditNameModalOpen={setIsEditNameModalOpen}
+            profileDisplayName={profileDisplayName}
+            setProfileDisplayName={setProfileDisplayName}
+            onSaveName={handleUpdateProfileDisplayName}
+            isEditBioModalOpen={isEditBioModalOpen}
+            setIsEditBioModalOpen={setIsEditBioModalOpen}
+            editingBio={editingBio}
+            setEditingBio={setEditingBio}
+            onSaveBio={handleUpdateBio}
+            isSecurityModalOpen={isSecurityModalOpen}
+            setIsSecurityModalOpen={setIsSecurityModalOpen}
+            profileCurrentPassword={profileCurrentPassword}
+            setProfileCurrentPassword={setProfileCurrentPassword}
+            profileNewPassword={profileNewPassword}
+            setProfileNewPassword={setProfileNewPassword}
+            onUpdatePassword={handleUpdateAccountPassword}
+            onPasswordReset={() => handlePasswordResetForEmail(user?.email || '')}
+          />
           {renderOnboardingGuide()}
           {renderPushPermissionPrompt()}
           {renderConfirmationModal()}
