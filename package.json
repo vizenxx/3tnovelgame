@@ -14,6 +14,7 @@
     "lint": "tsc --noEmit",
     "test:engine": "tsx scripts/test-story-run-engine.ts",
     "check:frontend-safety": "node scripts/check-frontend-safety.mjs",
+    "check:supabase-health": "node scripts/check-supabase-health.mjs",
     "check:industrial": "node scripts/industrial-check.mjs",
     "migrate:firestore:export": "node scripts/export-firestore.mjs",
     "migrate:supabase:dry-run": "node scripts/import-supabase.mjs --dry-run",

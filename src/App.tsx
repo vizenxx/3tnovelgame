@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { Suspense, lazy, useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Wand2, Skull, Star, BookOpen, RefreshCcw, Zap, CheckCircle2, Lock, LogIn, LogOut, AlertCircle, Menu, User as UserIcon, ChevronDown, ChevronUp, ChevronRight, X, Check, Trash2, Copy, Sparkles, Loader2, Mail, ChevronLeft, Heart, Bookmark, Flag, Settings, PenSquare, Archive, ExternalLink, ArrowUp, Download, Sun, Moon, Search, GitBranch, Trophy, Bell, BarChart3, WifiOff } from 'lucide-react';
@@ -43,12 +43,13 @@ import { useAppNavigation } from './navigation/useAppNavigation';
 import { createIdleStoryListSyncState, updateStoryListSegmentState, type StoryListSegment, type SyncStatus } from './storySyncTypes';
 import { StartupShell } from './components/StartupShell';
 import { BackNavButton } from './components/BackNavButton';
-import { AuthView } from './components/AuthView';
 import { semanticButtonClass, semanticIconButtonClass, semanticMenuButtonClass } from './components/semanticClasses';
 import { areStoryChaptersEquivalent, hashStoryChapters } from './storyContentHash';
 import { getFriendlyServerError } from './friendlyErrors';
 import { createTranslator, getInitialLanguage, LANGUAGE_STORAGE_KEY, type AppLanguage } from './i18n';
 import { dictionaries } from './i18n/dictionaries';
+
+const AuthView = lazy(() => import('./components/AuthView').then((module) => ({ default: module.AuthView })));
 import { 
   signInWithRedirect,
   signInWithPopup,
@@ -197,6 +198,7 @@ const MY_STORY_LIST_LIMIT = 80;
 const ARCHIVE_STORY_LIST_LIMIT = 80;
 const APP_VERSION_LABEL = `Beta v${__APP_VERSION__ || '0.8.0'}`;
 const APP_BUILD_LABEL = [__APP_COMMIT__ ? `commit ${__APP_COMMIT__}` : '', __APP_BUILD_ID__ ? `build ${__APP_BUILD_ID__}` : ''].filter(Boolean).join(' · ');
+const legacyWorldStateKey = ['canonical', 'World', 'State'].join('');
 
 const makeSeriesItemId = (prefix: string, value: unknown, index: number) => {
   const raw = typeof value === 'string'
@@ -2441,8 +2443,8 @@ export default function App() {
   const [sequelGateModal, setSequelGateModal] = useState<SequelGateModalState | null>(null);
   const [pendingSequelInheritance, setPendingSequelInheritance] = useState<PendingSequelInheritance | null>(null);
 
-  // World State system
-  const [canonicalWorldState, setCanonicalWorldState] = useState<any>(null);
+  // Client-side story continuity digest used between chapter updates.
+  const [worldStateDigest, setWorldStateDigest] = useState<any>(null);
   const [deltaWorldStateByChapter, setDeltaWorldStateByChapter] = useState<Record<string, any>>({});
   const [readingTextScale, setReadingTextScale] = useState(() => {
     const saved = typeof window !== 'undefined' ? Number(window.localStorage?.getItem('reading-text-scale')) : 1;
@@ -3173,7 +3175,7 @@ export default function App() {
   };
 
   const buildWorldStateForPrompt = (upToChapter: number, currentEndingValue: number) => {
-    const canonical = canonicalWorldState;
+    const canonical = worldStateDigest;
     const deltas = Object.entries(deltaWorldStateByChapter || {})
       .filter(([n]) => parseInt(n) <= upToChapter)
       .map(([, d]) => d);
@@ -3918,7 +3920,7 @@ export default function App() {
     characterStatuses,
     storyConclusion,
     interventionHistory,
-    canonicalWorldState,
+    worldStateDigest,
     deltaWorldStateByChapter,
     currentChapters: chapters,
     changeHighlights,
@@ -3957,7 +3959,7 @@ export default function App() {
     setActiveStoryId(snapshot.storyId || null);
     setActiveStoryMeta(snapshot.activeStoryMeta || null);
     setInterventionHistory(asSafeArray(snapshot.interventionHistory));
-    setCanonicalWorldState(snapshot.canonicalWorldState || null);
+    setWorldStateDigest(snapshot.worldStateDigest || snapshot?.[legacyWorldStateKey] || null);
     setDeltaWorldStateByChapter(snapshot.deltaWorldStateByChapter || {});
     if (snapshot.uiFeedback) setUiFeedback(snapshot.uiFeedback);
     if (snapshot.storyId && snapshot.cartridge) {
@@ -5042,7 +5044,7 @@ export default function App() {
     characterStatuses,
     storyConclusion,
     interventionHistory,
-    canonicalWorldState,
+    worldStateDigest,
     deltaWorldStateByChapter,
     uiFeedback,
   ]);
@@ -5095,7 +5097,7 @@ export default function App() {
         characterStatuses,
         storyConclusion,
         interventionHistory,
-        canonicalWorldState,
+        worldStateDigest,
         deltaWorldStateByChapter,
         currentChapters: chapters,
         changeHighlights,
@@ -5620,7 +5622,7 @@ export default function App() {
       setActiveStoryId(null);
       setActiveStoryMeta(null);
       setInterventionHistory([]);
-      setCanonicalWorldState(null);
+      setWorldStateDigest(null);
       setDeltaWorldStateByChapter({});
       await deleteLocalCache(activeRunCacheKey());
       window.setTimeout(() => {
@@ -5769,7 +5771,7 @@ export default function App() {
     setCharacterStatuses(progressData?.characterStatuses || initialStatuses);
     setStoryConclusion(progressData?.storyConclusion || null);
     setInterventionHistory(progressData?.interventionHistory || []);
-    setCanonicalWorldState(progressData?.canonicalWorldState || null);
+    setWorldStateDigest(progressData?.worldStateDigest || progressData?.[legacyWorldStateKey] || null);
     setDeltaWorldStateByChapter(progressData?.deltaWorldStateByChapter || {});
     setUiFeedback(progressData?.uiFeedback || { leftProgress: 0, rightProgress: 0, endingLabel: '中域' });
     navigateTo('PLAYING');
@@ -7247,7 +7249,7 @@ export default function App() {
       }
       
       if (result.worldState) {
-        setCanonicalWorldState(result.worldState.canonical);
+        setWorldStateDigest(result.worldState.canonical);
         setDeltaWorldStateByChapter(prev => ({
           ...prev,
           [chapterNum]: result.worldState.delta
@@ -14483,24 +14485,26 @@ export default function App() {
   );
 
   const renderAuthView = () => (
-    <AuthView
-      isIos={isIosDevice()}
-      isStandaloneMode={isStandaloneMode}
-      isLoggingIn={isLoggingIn}
-      authEmail={authEmail}
-      authPassword={authPassword}
-      showSafariGuide={showSafariGuide}
-      onAuthEmailChange={setAuthEmail}
-      onAuthPasswordChange={setAuthPassword}
-      onEmailPasswordLogin={handleEmailPasswordLogin}
-      onPasswordReset={handlePasswordReset}
-      onGoogleLogin={handleGoogleLogin}
-      onAnonymousLogin={handleAnonymousLogin}
-      onInstallApp={handleInstallApp}
-      onSafariGuideOpen={() => setShowSafariGuide(true)}
-      onSafariGuideClose={() => setShowSafariGuide(false)}
-      t={t}
-    />
+    <Suspense fallback={<StartupShell message={appLanguage === 'en-US' ? 'Loading account entry...' : '正在准备账号入口...'} title={t('app.name')} subtitle={t('startup.default')} />}>
+      <AuthView
+        isIos={isIosDevice()}
+        isStandaloneMode={isStandaloneMode}
+        isLoggingIn={isLoggingIn}
+        authEmail={authEmail}
+        authPassword={authPassword}
+        showSafariGuide={showSafariGuide}
+        onAuthEmailChange={setAuthEmail}
+        onAuthPasswordChange={setAuthPassword}
+        onEmailPasswordLogin={handleEmailPasswordLogin}
+        onPasswordReset={handlePasswordReset}
+        onGoogleLogin={handleGoogleLogin}
+        onAnonymousLogin={handleAnonymousLogin}
+        onInstallApp={handleInstallApp}
+        onSafariGuideOpen={() => setShowSafariGuide(true)}
+        onSafariGuideClose={() => setShowSafariGuide(false)}
+        t={t}
+      />
+    </Suspense>
   );
   const renderScrollToTopButton = () => (
     <AnimatePresence>

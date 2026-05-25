@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const root = process.cwd();
@@ -43,6 +43,20 @@ if (existsSync(appPath)) {
   }
 }
 
+const apiDir = resolve(root, 'api');
+if (existsSync(apiDir)) {
+  const functionFiles = readdirSync(apiDir)
+    .filter((file) => /\.(?:ts|js|mjs|cjs)$/.test(file))
+    .filter((file) => !file.endsWith('.d.ts'));
+  const maxVercelHobbyFunctions = 12;
+  if (functionFiles.length > maxVercelHobbyFunctions) {
+    console.error(`Vercel Hobby function limit exceeded: ${functionFiles.length}/${maxVercelHobbyFunctions}. Keep API routes aggregated.`);
+    process.exitCode = 1;
+  } else {
+    console.log(`Vercel function count OK: ${functionFiles.length}/${maxVercelHobbyFunctions}.`);
+  }
+}
+
 const requiredEnvExamples = [
   'VITE_STORY_BACKEND',
   'SUPABASE_URL',
@@ -60,6 +74,12 @@ console.log(`Industrial guardrail check complete. Required production env keys: 
 
 try {
   execFileSync(process.execPath, ['scripts/check-frontend-safety.mjs'], { cwd: root, stdio: 'inherit' });
+} catch (error) {
+  process.exitCode = 1;
+}
+
+try {
+  execFileSync(process.execPath, ['scripts/check-supabase-health.mjs', '--static'], { cwd: root, stdio: 'inherit' });
 } catch (error) {
   process.exitCode = 1;
 }
