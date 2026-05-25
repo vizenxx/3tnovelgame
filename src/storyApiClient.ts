@@ -1,4 +1,5 @@
 import { auth } from './firebase';
+import { recordApiMetric } from './devMetrics';
 
 export type StoryApiOptions = {
   auth?: boolean;
@@ -68,6 +69,23 @@ export async function storyApi<T = any>(
 ) {
   const stage = options.stage || action;
   const requestId = createRequestId();
+  const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  let metricRecorded = false;
+  const recordMetric = (args: { ok: boolean; status?: number; code?: string }) => {
+    if (metricRecorded) return;
+    metricRecorded = true;
+    const endedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    recordApiMetric({
+      kind: 'story',
+      endpoint: '/api/story-store',
+      action,
+      stage,
+      ok: args.ok,
+      status: args.status,
+      code: args.code,
+      durationMs: endedAt - startedAt,
+    });
+  };
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'x-client-request-id': requestId,
@@ -84,6 +102,7 @@ export async function storyApi<T = any>(
       if (token) headers.Authorization = `Bearer ${token}`;
     } catch (error) {
       if (options.auth) {
+        recordMetric({ ok: false, code: 'AUTH_REQUIRED' });
         throw new StoryApiError({
           action,
           stage,
@@ -109,6 +128,7 @@ export async function storyApi<T = any>(
     const data = await response.json().catch(() => null);
     if (!response.ok) {
       const code = data?.code || (response.status === 401 ? 'AUTH_REQUIRED' : 'STORY_API_FAILED');
+      recordMetric({ ok: false, status: response.status, code });
       throw new StoryApiError({
         action,
         stage,
@@ -118,9 +138,11 @@ export async function storyApi<T = any>(
         message: friendlyStoryApiError(stage, code, data?.error || data?.message || `story-store ${action} failed`),
       });
     }
+    recordMetric({ ok: true, status: response.status });
     return data as T;
   } catch (error) {
     if (error instanceof StoryApiError) {
+      recordMetric({ ok: false, status: error.status, code: error.code });
       console.error('storyApi failed:', {
         action: error.action,
         stage: error.stage,
@@ -141,6 +163,7 @@ export async function storyApi<T = any>(
       requestId,
       message: friendlyStoryApiError(stage, code, rawMessage),
     });
+    recordMetric({ ok: false, code });
     console.error('storyApi failed:', { action, stage, code, requestId, error });
     throw wrapped;
   } finally {

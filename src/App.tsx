@@ -43,7 +43,9 @@ import { useAppNavigation } from './navigation/useAppNavigation';
 import { createIdleStoryListSyncState, updateStoryListSegmentState, type StoryListSegment, type SyncStatus } from './storySyncTypes';
 import { StartupShell } from './components/StartupShell';
 import { BackNavButton } from './components/BackNavButton';
+import { DevMetricsPanel } from './components/DevMetricsPanel';
 import { semanticButtonClass, semanticIconButtonClass, semanticMenuButtonClass } from './components/semanticClasses';
+import { recordApiMetric } from './devMetrics';
 import { areStoryChaptersEquivalent, hashStoryChapters } from './storyContentHash';
 import { getFriendlyServerError } from './friendlyErrors';
 import { createTranslator, getInitialLanguage, LANGUAGE_STORAGE_KEY, type AppLanguage } from './i18n';
@@ -2596,10 +2598,38 @@ export default function App() {
   };
 
   const apiFetch = async (url: string, init: RequestInit = {}, ms = 60000) => {
-    const headers = await getAuthHeaders(init.headers);
+    const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const action = (() => {
+      try {
+        return new URL(url, window.location.origin).searchParams.get('action') || undefined;
+      } catch {
+        return undefined;
+      }
+    })();
     try {
-      return await fetchWithTimeout(url, { ...init, headers }, ms);
+      const headers = await getAuthHeaders(init.headers);
+      const response = await fetchWithTimeout(url, { ...init, headers }, ms);
+      recordApiMetric({
+        kind: url.includes('/api/ai') ? 'ai' : 'other',
+        endpoint: url.split('?')[0] || url,
+        action,
+        stage: action,
+        ok: response.ok,
+        status: response.status,
+        durationMs: (typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt,
+      });
+      return response;
     } catch (e: any) {
+      const isTimeout = e.name === 'AbortError' || /abort/i.test(e.message);
+      recordApiMetric({
+        kind: url.includes('/api/ai') ? 'ai' : 'other',
+        endpoint: url.split('?')[0] || url,
+        action,
+        stage: action,
+        ok: false,
+        code: isTimeout ? 'TIMEOUT' : 'NETWORK_ERROR',
+        durationMs: (typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt,
+      });
       if (e.name === 'AbortError' || /abort/i.test(e.message)) {
         throw new Error('AI 响应耗时过长，连接超时（这通常是服务器拥挤或生成内容过多导致，请稍后重试）。');
       }
@@ -14657,6 +14687,7 @@ export default function App() {
 
   return (
     <div data-theme={appTheme} className="min-h-screen bg-app-bg text-app-text selection:bg-indigo-500/30 selection:text-indigo-200">
+      <DevMetricsPanel />
       <GlobalError errorMsg={errorMsg} />
       {installGuideModal}
       <ConnectivityDrawer

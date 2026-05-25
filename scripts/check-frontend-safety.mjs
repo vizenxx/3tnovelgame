@@ -3,6 +3,7 @@ import { join, resolve } from 'node:path';
 
 const root = process.cwd();
 const assetsDir = resolve(root, 'dist/assets');
+const distDir = resolve(root, 'dist');
 
 const forbiddenNeedles = [
   'GEMINI_API_KEY',
@@ -42,6 +43,10 @@ if (!existsSync(assetsDir)) {
 const files = readdirSync(assetsDir)
   .filter((file) => /\.(?:js|css|map)$/i.test(file))
   .map((file) => join(assetsDir, file));
+
+for (const file of readdirSync(distDir).filter((file) => /\.(?:html|js|css)$/i.test(file))) {
+  files.push(join(distDir, file));
+}
 
 const hits = [];
 for (const file of files) {
