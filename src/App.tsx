@@ -8750,6 +8750,8 @@ export default function App() {
     const isLiked = hasStoryCardAction('like', story);
     const isFavorited = hasStoryCardAction('favorite', story);
     const sequelRequirement = getSequelRequirementFromMeta(story);
+    const seriesId = String(story?.seriesId || story?.series_id || story?.meta?.seriesId || story?.meta?.series_id || '').trim();
+    const isSeriesStory = Boolean(seriesId || story?.seriesTitle || story?.seriesConstraints?.seriesTitle || story?.meta?.seriesConstraints?.seriesTitle);
     return (
       <motion.div
         key={storyId || story.id}
@@ -8759,8 +8761,11 @@ export default function App() {
           isLiked ? 'ring-1 ring-pink-500/18' : isFavorited ? 'ring-1 ring-amber-500/18' : ''
         }`}
       >
-        <div className="relative flex gap-4">
+        <div className="relative flex h-full min-h-0 gap-4">
           <div className="w-28 shrink-0 sm:w-32">
+            <div className="story-card-kind-badge" data-kind={isSeriesStory ? 'series' : 'standalone'}>
+              {isSeriesStory ? tr('系列作品', 'Series') : tr('单篇作品', 'Standalone')}
+            </div>
             <button type="button" onClick={(e) => { e.stopPropagation(); setStoryDetailStory(story); }} className="story-library-cover h-28 w-28 cursor-pointer transition-all hover:ring-2 hover:ring-indigo-400/70 hover:ring-offset-2 hover:ring-offset-zinc-950 sm:h-32 sm:w-32">
               {coverUrl ? (
                 <img src={coverUrl} alt={`${formatBookTitle(getStoryTitle(story))} 封面`} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
@@ -8777,17 +8782,17 @@ export default function App() {
               onShare: () => void shareStoryCardWithFeedback(story),
             })}
           </div>
-          <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             {renderStoryBiasBar(story)}
-            <h3 className="mb-1 whitespace-normal break-words text-[1.45rem] font-black leading-tight text-white transition-colors group-hover:text-indigo-200 sm:text-2xl">
+            <h3 className="mb-1 line-clamp-2 whitespace-normal break-words text-[1.35rem] font-black leading-tight text-white transition-colors group-hover:text-indigo-200 sm:text-[1.45rem]">
               {formatBookTitle(getStoryTitle(story))}
             </h3>
-            <div className="mb-2 text-sm font-bold text-app-muted/85">
+            <div className="mb-1 truncate text-sm font-bold text-app-muted/85">
               <AuthorNameButton authorId={story.authorId || story.meta?.authorId} authorName={getStoryAuthorName(story)} />
             </div>
             {/* Middle zone: flexes to fill remaining space, shrinks when needed */}
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              <p className="story-library-desc-fade mb-2 flex-1 text-[0.98rem] leading-relaxed text-app-text/85 transition-colors group-hover:text-app-text">
+              <p className="story-library-desc-fade mb-2 text-[0.92rem] leading-relaxed text-app-text/85 transition-colors group-hover:text-app-text sm:text-[0.96rem]">
                 {getStoryMainAxis(story)}
               </p>
               {sequelRequirement && (
@@ -8796,14 +8801,14 @@ export default function App() {
                 </div>
               )}
             </div>
-            <div className="mb-3 flex min-w-0 shrink-0 flex-wrap gap-1.5">
+            <div className="mb-2 flex min-w-0 shrink-0 flex-wrap gap-1.5">
               {(tags.length > 0 ? tags.slice(0, 3) : ['未标签']).map((tag: string) => (
                 <span key={tag} className="rounded-lg border border-indigo-400/15 bg-indigo-500/10 px-2.5 py-1 text-[11px] font-black text-indigo-200">
                   {tag}
                 </span>
               ))}
             </div>
-            <div className="shrink-0 grid gap-2 sm:grid-cols-2">
+            <div className="grid shrink-0 gap-2 sm:grid-cols-2">
               <button type="button" onClick={(e) => { e.stopPropagation(); setStoryDetailStory(story); }} className={`${semanticButtonClass('secondary', { fullWidth: true, compact: true })} text-sm`}>
                 <BookOpen className="h-4 w-4" />
                 {t('library.details')}
