@@ -50,6 +50,10 @@ import { StoryLibraryCard } from './components/StoryLibraryCard';
 import { StorySelectView } from './components/StorySelectView';
 import { StoryDetailModal } from './components/StoryDetailModal';
 import { StoryLibraryView } from './components/StoryLibraryView';
+import { SocialOverlayLayer } from './components/SocialOverlayLayer';
+import { AccountCenterLayer } from './components/AccountCenterLayer';
+import { StoryInfoPanelLayer } from './components/StoryInfoPanelLayer';
+import { PrimaryBottomDock } from './components/PrimaryBottomDock';
 import { ArchiveView } from './components/ArchiveView';
 import { AccountCenterContent } from './components/AccountCenterView';
 import { ReadonlyStoryView } from './components/ReadonlyStoryView';
@@ -57,6 +61,7 @@ import { SeriesWorldView } from './components/SeriesWorldView';
 import { ThemeSelectionView } from './components/ThemeSelectionView';
 import { AuthoringView } from './components/AuthoringView';
 import { GameplayModals } from './components/GameplayModals';
+import { SummaryView } from './components/SummaryView';
 import { AuthoringSaveSuccessModal, ConfirmationModal, SequelGateModal, type SequelGateModalState } from './components/GeneralModals';
 import { AuthorProfileModal, NotificationCenterModal, ShareComposerModal } from './components/SocialModals';
 import {
@@ -67,6 +72,8 @@ import {
   OnboardingGuide,
   PushPermissionPrompt,
 } from './components/HelpAndOnboarding';
+import { HelpOverlayLayer } from './components/HelpOverlayLayer';
+import { OnboardingPromptLayer } from './components/OnboardingPromptLayer';
 import { ScrollToTopButton } from './components/FloatingControls';
 import {
   BlockingSyncOverlay,
@@ -7813,22 +7820,21 @@ export default function App() {
       }}
     />
   );
-  const renderOnboardingGuide = () => (
-    <OnboardingGuide
-      open={showOnboardingGuide}
-      tr={tr}
-      onDismiss={dismissOnboardingGuide}
-      onQuickGenerate={startQuickGenerationFromOnboarding}
+  const renderOnboardingPromptLayer = () => (
+    <OnboardingPromptLayer
+      ctx={{
+        showOnboardingGuide,
+        tr,
+        dismissOnboardingGuide,
+        startQuickGenerationFromOnboarding,
+        showPushPermissionPrompt,
+        pushSubscribeBusy,
+        dismissPushPermissionPrompt,
+        enablePushNotificationsFromPrompt,
+      }}
     />
   );
-  const renderPushPermissionPrompt = () => (
-    <PushPermissionPrompt
-      open={showPushPermissionPrompt}
-      busy={pushSubscribeBusy}
-      onDismiss={dismissPushPermissionPrompt}
-      onEnable={() => void enablePushNotificationsFromPrompt()}
-    />
-  );
+
   const renderSeriesWorldView = () => (
     <SeriesWorldView
       seriesForm={seriesForm}
@@ -7922,92 +7928,48 @@ export default function App() {
       normalizeTagList={normalizeTagList}
     />
   );
-  const isSystemSettingsMode = accountCenterMode === 'settings';
-  const renderAccountCenterContent = (mode: 'page' | 'modal' = 'modal') => (
-    <AccountCenterContent
-      mode={mode}
-      accountCenterMode={accountCenterMode}
-      user={user}
-      myBio={myBio}
-      mySharedStories={mySharedStories}
-      followedAuthorsCount={followedAuthors.length}
-      myStoriesCount={myStories.length}
-      appLanguage={appLanguage}
-      appTheme={appTheme}
-      pushSubscribeBusy={pushSubscribeBusy}
-      isAdminUser={isAdminUser}
-      adminFeatureDraft={adminFeatureDraft}
-      isSavingAdminSettings={isSavingAdminSettings}
-      appVersionLabel={APP_VERSION_LABEL}
-      appBuildLabel={APP_BUILD_LABEL}
-      guestRetentionNotice={GUEST_RETENTION_NOTICE}
-      tr={tr}
-      t={t}
-      getUserAuthorName={getUserAuthorName}
-      onClose={() => setIsAccountCenterOpen(false)}
-      onBackPage={() => goBack('STORY_SELECT')}
-      onEditName={() => setIsEditNameModalOpen(true)}
-      onEditBio={() => setIsEditBioModalOpen(true)}
-      onSecurity={() => setIsSecurityModalOpen(true)}
-      onOpenArchiveFavorite={(returnTarget) => {
-        setArchiveTab('favorite');
-        openArchiveView(returnTarget);
-      }}
-      onOpenArchiveSaved={(returnTarget) => {
-        setArchiveTab('saved');
-        openArchiveView(returnTarget);
-      }}
-      onOpenArchiveAuthors={(returnTarget) => {
-        setArchiveTab('authors');
-        openArchiveView(returnTarget);
-      }}
-      onEnterAuthoring={() => {
-        setIsAccountCenterOpen(false);
-        void enterAuthoring();
-      }}
-      onSetLanguage={setAppLanguage}
-      onSetTheme={setAppTheme}
-      onEnablePushNotifications={enablePushNotifications}
-      onOpenHelpCenter={() => {
-        if (mode === 'modal') setIsAccountCenterOpen(false);
-        setIsHelpDrawerOpen(true);
-      }}
-      onLogout={() => {
-        if (mode === 'modal') setIsAccountCenterOpen(false);
-        handleLogout();
-      }}
-      onStartTutorial={() => {
-        if (mode === 'modal') setIsAccountCenterOpen(false);
-        void startStoryPlay('tutorial-cartridge');
-      }}
-      onToggleCoverGeneration={() => setAdminFeatureDraft((prev) => ({ ...prev, coverGenerationEnabled: !prev.coverGenerationEnabled }))}
-      onSaveAdminSettings={handleSaveAdminSettings}
-    />
-  );
-  const accountCenterModal = (
-    <AnimatePresence>
-      {isAccountCenterOpen && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className={`${safeModalBackdropClass} ${isSystemSettingsMode ? 'z-[3200] bg-black/80' : 'z-[2400] bg-black/45'} backdrop-blur-md`}
-          style={!isSystemSettingsMode ? { paddingBottom: 'calc(max(1rem, env(safe-area-inset-bottom)) + 6.1rem)' } : undefined}
-          onClick={() => setIsAccountCenterOpen(false)}
-        >
-          <motion.div
-            initial={{ opacity: 0, y: 16, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 16, scale: 0.97 }}
-            className={`app-modal-surface app-modal-safe-height w-full max-w-4xl overflow-y-auto rounded-[2rem] border border-app-border p-5 shadow-2xl sm:p-6`}
-            onClick={(event) => event.stopPropagation()}
-          >
-            {renderAccountCenterContent('modal')}
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
+  const accountCenterCtx = {
+        accountCenterMode,
+        user,
+        myBio,
+        mySharedStories,
+        followedAuthors,
+        myStories,
+        appLanguage,
+        appTheme,
+        pushSubscribeBusy,
+        isAdminUser,
+        adminFeatureDraft,
+        isSavingAdminSettings,
+        APP_VERSION_LABEL,
+        APP_BUILD_LABEL,
+        GUEST_RETENTION_NOTICE,
+        tr,
+        t,
+        getUserAuthorName,
+        setIsAccountCenterOpen,
+        goBack,
+        setIsEditNameModalOpen,
+        setIsEditBioModalOpen,
+        setIsSecurityModalOpen,
+        setArchiveTab,
+        openArchiveView,
+        enterAuthoring,
+        setAppLanguage,
+        setAppTheme,
+        enablePushNotifications,
+        setIsHelpDrawerOpen,
+        handleLogout,
+        startStoryPlay,
+        setAdminFeatureDraft,
+        handleSaveAdminSettings,
+        isAccountCenterOpen,
+        safeModalBackdropClass,
+      };
+
+  const accountCenterModal = <AccountCenterLayer ctx={accountCenterCtx} />;
+
+  const renderAccountCenterView = () => <AccountCenterLayer ctx={accountCenterCtx} part="page" />;
 
   const renderInlineHelp = (key: string, title: string, content: React.ReactNode) => (
     <InlineHelpCard
@@ -8018,32 +7980,23 @@ export default function App() {
       onDismiss={() => dismissHelpCard(key)}
     />
   );
-  const renderTourOverlay = () => (
-    <AuthoringTourOverlay
-      tourStep={authoringCartridge ? tourStep : null}
-      setTourStep={setTourStep}
-      setAuthoringTab={setAuthoringTab}
-      showMessage={showError}
+  const renderHelpOverlayLayer = () => (
+    <HelpOverlayLayer
+      ctx={{
+        authoringCartridge,
+        tourStep,
+        setTourStep,
+        setAuthoringTab,
+        showError,
+        isHelpDrawerOpen,
+        helpSearch,
+        dismissedHelpCards,
+        tr,
+        setHelpSearch,
+        setIsHelpDrawerOpen,
+        restoreHelpCards,
+      }}
     />
-  );
-  const renderHelpFloatingButton = () => (
-    <HelpFloatingButton />
-  );
-  const renderHelpCenterDrawer = () => (
-    <HelpCenterDrawer
-      open={isHelpDrawerOpen}
-      search={helpSearch}
-      dismissedCount={Object.keys(dismissedHelpCards).length}
-      tr={tr}
-      onSearchChange={setHelpSearch}
-      onClose={() => setIsHelpDrawerOpen(false)}
-      onRestore={restoreHelpCards}
-    />
-  );
-  const renderAccountCenterView = () => (
-    <div className="mx-auto max-w-4xl px-6 pb-[calc(8.5rem+env(safe-area-inset-bottom))] pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] lg:px-8">
-      {renderAccountCenterContent('page')}
-    </div>
   );
 
   const renderReadonlyStoryView = () => (
@@ -8089,175 +8042,19 @@ export default function App() {
     />
   );
   const storyInfoPanel = (
-    <AnimatePresence>
-      {isStoryInfoOpen && (
-        <motion.div
-          initial={{ x: '100%' }}
-          animate={{ x: 0 }}
-          exit={{ x: '100%' }}
-          transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-          className="fixed inset-y-0 right-0 z-[2200] w-full max-w-sm border-l border-app-border bg-app-bg/90 shadow-2xl backdrop-blur-xl"
-        >
-          <div className="flex h-full flex-col">
-            <div className="flex items-center justify-between border-b border-app-border px-6 pb-6 pt-[max(1.5rem,calc(env(safe-area-inset-top)+1rem))]">
-              <h3 className="text-xl font-black text-white">{tr('故事信息', 'Story Info')}</h3>
-              <button
-                type="button"
-                onClick={() => setIsStoryInfoOpen(false)}
-                className={semanticIconButtonClass('ghost')}
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-6 space-y-8">
-              {blueprint && (
-                <>
-                  <section className="space-y-3">
-                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-app-muted">{tr('故事背景', 'Story Background')}</h4>
-                    <p className="text-sm leading-relaxed text-app-text">{blueprint.main_axis}</p>
-                  </section>
-                  <section className="space-y-3">
-                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-app-muted">{tr('作者预设倾向', 'Author Tendency')}</h4>
-                    <div className="grid grid-cols-2 gap-3">
-                      {endingBiasStoryCardLabels(blueprint).map((bias) => (
-                        <div
-                          key={bias.side}
-                          className={`rounded-2xl border p-4 ${
-                            bias.side === 'left'
-                              ? 'border-indigo-400/20 bg-indigo-500/10 text-indigo-100'
-                              : bias.side === 'right'
-                                ? 'border-rose-400/20 bg-rose-500/10 text-rose-100'
-                                : 'border-indigo-400/20 bg-indigo-500/10 text-indigo-100'
-                          }`}
-                        >
-                          <div className="text-[11px] font-black text-app-muted">{bias.label}</div>
-                          <div className="mt-1 text-lg font-black">{bias.value}</div>
-                        </div>
-                      ))}
-                    </div>
-                    {isSingleEndingStory(blueprint) && (
-                      <p className="text-xs leading-relaxed text-app-muted">
-                        {tr('本作采用唯一走向，干涉会改变过程、角色经历与支线展开，但最终会自然收束到唯一结局。', 'This work uses a fixed-ending path; interference changes the journey, character experience, and branches, but ultimately converges to one ending.')}
-                      </p>
-                    )}
-                    {!isSingleEndingStory(blueprint) && (
-                    <p className="text-xs leading-relaxed text-app-muted">
-                      {tr('这是作者为左域与右域设置的基础倾向，只作为命运走向参考，不代表最终结局必然落点。', 'This is the author’s base tendency for left/right ending domains. It is a reference, not a guaranteed final outcome.')}
-                    </p>
-                    )}
-                  </section>
-                  <section className="space-y-4">
-                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-app-muted">{tr('登场角色', 'Characters')}</h4>
-                    <div className="grid gap-3">
-                      {blueprint.characters.map(char => (
-                        <div key={char.id} className="rounded-2xl border border-app-border bg-app-surface/40 p-4">
-                          <div className="mb-1 flex items-start justify-between">
-                            <div className="font-bold text-indigo-300">{char.name}</div>
-                            {characterStatuses[char.id] && (
-                              <div className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${characterStatuses[char.id].isDead ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
-                                {characterStatuses[char.id].status || tr('在场', 'Present')}
-                              </div>
-                            )}
-                          </div>
-                          <div className="text-xs text-app-muted leading-relaxed">{char.desc}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                  <section className="space-y-4">
-                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-app-muted">{tr('命运支线', 'Fate Branches')}</h4>
-                    <div className="grid gap-3">
-                      {(blueprint.branches || []).length === 0 ? (
-                        <div className="rounded-2xl border border-app-border bg-app-surface/30 p-4 text-sm text-app-muted">
-                          {tr('暂无支线记录。', 'No branch records yet.')}
-                        </div>
-                      ) : (
-                        (blueprint.branches || []).filter((branch: any) => {
-                          const isUnlocked = unlockedBranches.some((item: any) => item.id === branch.id);
-                          const wasUnlocked = historicallyUnlockedBranches.some((item: any) => item.id === branch.id);
-                          const isHidden = branch.is_hidden || branch.hidden || branch.tier === 'hidden' || branch.inject?.hidden;
-                          return !isHidden || isUnlocked || wasUnlocked;
-                        }).map((branch: any) => {
-                          const isUnlocked = unlockedBranches.some((item: any) => item.id === branch.id);
-                          const wasUnlocked = historicallyUnlockedBranches.some((item: any) => item.id === branch.id);
-                          const isHidden = branch.is_hidden || branch.hidden || branch.tier === 'hidden' || branch.inject?.hidden;
-                          const canRevealBranchContent = isUnlocked || wasUnlocked;
-                          const visibleName = isHidden && !canRevealBranchContent ? tr('隐藏支线', 'Hidden branch') : branch.name;
-                          const visibleDesc = canRevealBranchContent
-                            ? (branch.desc || branch.sceneText || branch.hint || tr('尚无支线描述。', 'No branch description yet.'))
-                            : (branch.hint || tr('继续干涉命运，寻找这条支线的触发契机。', 'Keep interfering with fate to find the trigger for this branch.'));
-                          return (
-                            <div
-                              key={branch.id || branch.name}
-                              className={`rounded-2xl border p-4 ${
-                                isUnlocked
-                                  ? 'border-indigo-500/40 bg-indigo-950/30'
-                                  : wasUnlocked
-                                    ? 'border-app-border bg-app-surface/60'
-                                    : 'border-app-border bg-app-surface/30'
-                              }`}
-                            >
-                              <div className="mb-2 flex items-center justify-between gap-3">
-                                <div className="font-bold text-app-text">{visibleName}</div>
-                                <div className={`rounded-full px-2 py-1 text-[10px] font-black ${
-                                  isUnlocked
-                                    ? 'bg-indigo-500/20 text-indigo-200'
-                                    : wasUnlocked
-                                      ? 'bg-app-surface-soft/60 text-app-text'
-                                      : 'bg-app-surface-soft text-app-muted'
-                                }`}>
-                                  {isUnlocked ? tr('已解锁', 'Unlocked') : wasUnlocked ? tr('曾解锁', 'Previously unlocked') : tr('待解锁', 'Locked')}
-                                </div>
-                              </div>
-                              <div className="text-xs leading-relaxed text-app-muted">{visibleDesc}</div>
-                              {canRevealBranchContent && (
-                                <div className="mt-2.5 rounded-xl border border-app-border bg-app-bg/40 p-2.5 space-y-1">
-                                  <div className="text-[10px] font-black text-indigo-400 uppercase tracking-wider">
-                                    {tr('解锁方法：', 'Unlock Method: ')}
-                                  </div>
-                                  <div className="text-[11px] text-app-muted space-y-0.5">
-                                    {(() => {
-                                      const triggers = branch.triggerGroups || (branch.trigger ? [branch.trigger] : []);
-                                      if (triggers.length === 0) return <div className="italic text-zinc-650">{tr('无判定条件', 'No trigger conditions')}</div>;
-                                      return triggers.map((tg: any, tIdx: number) => (
-                                        <div key={tIdx} className="flex items-start gap-1">
-                                          <span className="text-zinc-600">•</span>
-                                          <span>{formatTriggerCondition(tg, blueprint.characters || [], isEnglish)}</span>
-                                        </div>
-                                      ));
-                                    })()}
-                                  </div>
-                                </div>
-                              )}
-                              {canRevealBranchContent && (
-                                <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-black">
-                                  <span className="rounded-full bg-app-surface-soft px-2 py-1 text-app-text">
-                                    {branch.side === 'left' ? tr('左域支线', 'Left branch') : tr('右域支线', 'Right branch')}
-                                  </span>
-                                  <span className="rounded-full bg-indigo-500/10 px-2 py-1 text-indigo-200">
-                                    {tr('影响：', 'Impact: ')}{branchTierLabel(branch.tier)}
-                                  </span>
-                                  <span className="rounded-full bg-sky-500/10 px-2 py-1 text-sky-200">
-                                    {tr('导向', 'Leads to')} {authoringEndingIdToLabel(branch.endingId || branch.inject?.endingId || branch.inject?.targetEndingId || branch.side)}
-                                  </span>
-                                  {(branch.is_hidden || branch.hidden || branch.tier === 'hidden' || branch.inject?.hidden) && (
-                                    <span className="rounded-full bg-amber-500/10 px-2 py-1 text-amber-200">{tr('隐藏支线', 'Hidden branch')}</span>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  </section>
-                </>
-              )}
-            </div>
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    <StoryInfoPanelLayer
+      ctx={{
+        isStoryInfoOpen,
+        setIsStoryInfoOpen,
+        tr,
+        blueprint,
+        endingBiasStoryCardLabels,
+        isSingleEndingStory,
+        characterStatuses,
+        unlockedBranches,
+        historicallyUnlockedBranches,
+      }}
+    />
   );
 
   const notificationUnreadCount = notificationItems.filter((item) => !item.readAt).length;
@@ -8335,89 +8132,22 @@ export default function App() {
     </div>
   ) : null;
 
-  const shouldShowPrimaryBottomDock = Boolean(user && !['PLAYING', 'READONLY_STORY', 'GENERATING_BLUEPRINT', 'SUMMARY'].includes(gameState));
-  const primaryBottomDock = shouldShowPrimaryBottomDock && typeof document !== 'undefined'
-    ? createPortal(
-      <div className="primary-bottom-dock-wrap">
-        <AnimatePresence>
-          {isCreationDockOpen && (
-            <motion.div
-              initial={{ opacity: 0, y: 12, scale: 0.97 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 12, scale: 0.97 }}
-              className="primary-bottom-dock-menu"
-            >
-              <div className="grid gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsCreationDockOpen(false);
-                    navigateTo('THEME_SELECTION');
-                  }}
-                  className={semanticMenuButtonClass('primary')}
-                >
-                  <Wand2 className="h-4 w-4" />
-                  {tr('快速生成故事', 'Quick story')}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsCreationDockOpen(false);
-                    void openSeriesWorldCreateView();
-                  }}
-                  className={semanticMenuButtonClass('ghost')}
-                >
-                  <GitBranch className="h-4 w-4" />
-                  {tr('创建世界观', 'Create world setting')}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsCreationDockOpen(false);
-                    void enterAuthoring();
-                  }}
-                  className={semanticMenuButtonClass('ghost')}
-                >
-                  <PenSquare className="h-4 w-4" />
-                  {tr('作者后台', 'Author studio')}
-                </button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-        <div className="primary-bottom-dock-shell">
-          <button
-            type="button"
-            onClick={() => {
-              setIsCreationDockOpen(false);
-              resetToHome();
-            }}
-            className={`primary-bottom-dock-item ${gameState === 'STORY_SELECT' ? 'is-active' : ''}`}
-          >
-            <BookOpen className="h-4 w-4" />
-            {tr('作品首页', 'Library')}
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsCreationDockOpen((prev) => !prev)}
-            className={`primary-bottom-dock-item is-default ${isCreationDockOpen || ['THEME_SELECTION', 'AUTHORING', 'SERIES_WORLD_GENERATE', 'SERIES_WORLD_EDIT', 'SERIES_WORLD_LIST'].includes(gameState) ? 'is-active' : ''}`}
-          >
-            <Sparkles className="h-4 w-4" />
-            {tr('创作工台', 'Create')}
-          </button>
-          <button
-            type="button"
-            onClick={openPersonalCenter}
-            className={`primary-bottom-dock-item ${gameState === 'ACCOUNT_CENTER' ? 'is-active' : ''}`}
-          >
-            <UserIcon className="h-4 w-4" />
-            {tr('个人中心', 'Profile')}
-          </button>
-        </div>
-      </div>,
-      document.body
-    )
-    : null;
+  const primaryBottomDock = (
+    <PrimaryBottomDock
+      ctx={{
+        user,
+        gameState,
+        isCreationDockOpen,
+        setIsCreationDockOpen,
+        navigateTo,
+        openSeriesWorldCreateView,
+        enterAuthoring,
+        resetToHome,
+        tr,
+        openPersonalCenter,
+      }}
+    />
+  );
 
   const floatingInterventionPanel = blueprint && gameState === 'PLAYING' && typeof document !== 'undefined'
     ? createPortal(
@@ -8724,56 +8454,17 @@ export default function App() {
   );
 
   const renderSummaryView = () => (
-    <div className="mx-auto max-w-4xl px-6 pb-[calc(7.5rem+env(safe-area-inset-bottom))] pt-[max(7rem,calc(env(safe-area-inset-top)+6rem))] sm:px-8">
-      <div className="mb-10 text-center space-y-4">
-        <div className="inline-block rounded-full bg-amber-500/10 px-4 py-1 text-[10px] font-bold tracking-[0.2em] text-amber-500 uppercase">
-          {tr('命运之卷已封存', 'Fate volume sealed')}
-        </div>
-        <h1 className="text-4xl font-black text-white sm:text-6xl">{tr('最终命运总结', 'Final Fate Summary')}</h1>
-      </div>
-
-      <div className="relative rounded-[3rem] border border-app-border bg-app-surface/30 p-10 shadow-2xl backdrop-blur-xl sm:p-12">
-        {isGeneratingConclusion ? (
-          <div className="flex h-64 flex-col items-center justify-center gap-6">
-            <Loader2 className="h-10 w-10 animate-spin text-zinc-700" />
-            <p className="text-sm font-bold text-app-muted">{generationStatus}</p>
-          </div>
-        ) : (
-          <div className="space-y-8">
-            <section className="space-y-4">
-              <div className="flex items-center gap-4">
-                <div className="h-px flex-1 bg-app-surface-soft" />
-                <h2 className="text-xs font-black uppercase tracking-[0.3em] text-app-muted">时空回响</h2>
-                <div className="h-px flex-1 bg-app-surface-soft" />
-              </div>
-              <div className="prose prose-invert max-w-none text-xl font-medium leading-relaxed italic text-amber-200/90">
-                {String(storyConclusion || '').split('\n').map((p, i) => (
-                  <p key={i}>{p}</p>
-                ))}
-              </div>
-            </section>
-
-            <div className="grid gap-6 sm:grid-cols-2">
-              <button
-                onClick={handleShareStory}
-                disabled={isSharing}
-                className="flex items-center justify-center gap-3 rounded-2xl bg-indigo-600 py-5 text-lg font-black text-white shadow-xl shadow-indigo-600/20 transition-all hover:bg-indigo-500 hover:scale-[1.02]"
-              >
-                {isSharing ? <Loader2 className="h-6 w-6 animate-spin" /> : <Copy className="h-6 w-6" />}
-                分享这段命运
-              </button>
-              <button
-                onClick={resetGame}
-                className="flex items-center justify-center gap-3 rounded-2xl bg-app-surface-soft py-5 text-lg font-black text-app-text transition-all hover:bg-app-surface-soft hover:scale-[1.02]"
-              >
-                <RefreshCcw className="h-6 w-6" />
-                开启新轮回
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
+    <SummaryView
+      ctx={{
+        tr,
+        isGeneratingConclusion,
+        generationStatus,
+        storyConclusion,
+        handleShareStory,
+        isSharing,
+        resetGame,
+      }}
+    />
   );
 
   const AuthorNameButton = ({ authorId, authorName, prefix = '作者：' }: { authorId?: string | null; authorName?: string; prefix?: string }) => (
@@ -8792,60 +8483,43 @@ export default function App() {
     </span>
   );
 
-  const renderAuthorProfileModal = () => (
-    <AuthorProfileModal
-      target={authorProfileTarget}
-      bio={authorProfileBio}
-      loading={authorProfileLoading}
-      stories={authorProfileStories}
-      currentUserId={user?.uid}
-      following={authorProfileFollowing}
-      busy={authorProfileBusy}
-      isEnglish={isEnglish}
-      tr={tr}
-      shortUserId={shortUserId}
-      formatBookTitle={formatBookTitle}
-      getStoryTitle={getStoryTitle}
-      getStoryLikeCount={getStoryLikeCount}
-      getStoryFavoriteCount={getStoryFavoriteCount}
-      getStoryShareCount={getStoryShareCount}
-      getStoryInterventionCount={getStoryInterventionCount}
-      onClose={() => setAuthorProfileTarget(null)}
-      onToggleFollow={toggleAuthorFollow}
-      onOpenStory={(storyId) => {
-        setAuthorProfileTarget(null);
-        void startStoryPlay(storyId);
+  const renderSocialOverlayLayer = () => (
+    <SocialOverlayLayer
+      ctx={{
+        authorProfileTarget,
+        authorProfileBio,
+        authorProfileLoading,
+        authorProfileStories,
+        user,
+        authorProfileFollowing,
+        authorProfileBusy,
+        isEnglish,
+        tr,
+        shortUserId,
+        formatBookTitle,
+        getStoryTitle,
+        getStoryLikeCount,
+        getStoryFavoriteCount,
+        getStoryShareCount,
+        getStoryInterventionCount,
+        setAuthorProfileTarget,
+        toggleAuthorFollow,
+        startStoryPlay,
+        notificationCenterOpen,
+        notificationLoading,
+        notificationItems,
+        setNotificationCenterOpen,
+        refreshNotificationCenter,
+        markAllNotificationsRead,
+        clearAllNotifications,
+        deleteNotificationItem,
+        shareComposer,
+        shareComposerText,
+        t,
+        setShareComposerText,
+        closeShareComposer,
+        confirmShareComposer,
       }}
-    />
-  );
-
-  const renderNotificationCenter = () => (
-    <NotificationCenterModal
-      open={notificationCenterOpen}
-      loading={notificationLoading}
-      items={notificationItems}
-      tr={tr}
-      onClose={() => setNotificationCenterOpen(false)}
-      onRefresh={() => void refreshNotificationCenter()}
-      onMarkAllRead={() => void markAllNotificationsRead()}
-      onClearAll={() => void clearAllNotifications()}
-      onDelete={(id) => void deleteNotificationItem(id)}
-      onOpenStory={(storyId) => {
-        setNotificationCenterOpen(false);
-        void startStoryPlay(storyId);
-      }}
-    />
-  );
-
-  const renderShareComposer = () => (
-    <ShareComposerModal
-      shareComposer={shareComposer}
-      text={shareComposerText}
-      tr={tr}
-      t={t}
-      onTextChange={setShareComposerText}
-      onClose={() => closeShareComposer(false)}
-      onConfirm={() => void confirmShareComposer()}
     />
   );
 
@@ -9377,9 +9051,7 @@ export default function App() {
           {renderReadonlyStoryView()}
           {renderScrollToTopButton()}
           {accountEntryButton}
-          {renderAuthorProfileModal()}
-          {renderNotificationCenter()}
-          {renderShareComposer()}
+          {renderSocialOverlayLayer()}
           {accountCenterModal}
         </>
       ) : !user ? (
@@ -9419,9 +9091,7 @@ export default function App() {
           {storyInfoPanel}
           {renderStoryDetailModal()}
           {renderSequelGateModal()}
-          {renderAuthorProfileModal()}
-          {renderNotificationCenter()}
-          {renderShareComposer()}
+          {renderSocialOverlayLayer()}
           {accountCenterModal}
           <AccountProfileModals
             tr={tr}
@@ -9444,12 +9114,9 @@ export default function App() {
             onUpdatePassword={handleUpdateAccountPassword}
             onPasswordReset={() => handlePasswordResetForEmail(user?.email || '')}
           />
-          {renderOnboardingGuide()}
-          {renderPushPermissionPrompt()}
+          {renderOnboardingPromptLayer()}
           {renderGameplayModals()}
-          {renderTourOverlay()}
-          {renderHelpCenterDrawer()}
-          {renderHelpFloatingButton()}
+          {renderHelpOverlayLayer()}
           
           <AnimatePresence>
             {storyLaunchOverlay && (
