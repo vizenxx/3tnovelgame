@@ -1828,9 +1828,9 @@ html[data-theme="light"] .play-float-button {
 html[data-theme="light"] input,
 html[data-theme="light"] textarea,
 html[data-theme="light"] select {
-  background-color: color-mix(in srgb, var(--app-surface) 97%, white) !important;
+  background-color: #ffffff !important;
   color: var(--app-readable-text) !important;
-  border-color: var(--app-shell-border-soft) !important;
+  border-color: var(--app-shell-border) !important;
 }
 
 html[data-theme="light"] input::placeholder,
@@ -2054,4 +2054,13 @@ html[data-theme="light"] .app-button-followed {
   border-color: rgba(86, 100, 194, 0.4) !important;
   background-color: rgba(86, 100, 194, 0.08) !important;
   color: var(--light-primary) !important;
+}
+
+/* Light theme high contrast overrides for active left/right story bias labels */
+html[data-theme="light"] .story-bias-left[data-active="true"] {
+  color: var(--light-primary) !important;
+}
+
+html[data-theme="light"] .story-bias-right[data-active="true"] {
+  color: var(--light-danger) !important;
 }

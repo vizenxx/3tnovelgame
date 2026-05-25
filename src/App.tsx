@@ -8894,7 +8894,7 @@ export default function App() {
               type="button"
               onClick={() => setStoryDetailStory(null)}
               aria-label="关闭作品详情"
-              className={`${semanticIconButtonClass('ghost')} absolute right-4 top-4 z-10`}
+              className={`${semanticIconButtonClass('secondary')} absolute right-4 top-4 z-10`}
             >
               <X className="h-5 w-5" />
             </button>
@@ -12799,7 +12799,7 @@ export default function App() {
                 )}
                 <p className="mt-2 text-xs font-semibold text-zinc-500">{tr('查看这个作者公开或非公开链接作品，并决定是否追踪后续更新。', 'View this author’s public or unlisted works, and decide whether to follow future updates.')}</p>
               </div>
-              <button type="button" onClick={() => setAuthorProfileTarget(null)} className={semanticIconButtonClass('ghost')} aria-label={tr('关闭作者档案', 'Close author profile')}>
+              <button type="button" onClick={() => setAuthorProfileTarget(null)} className={semanticIconButtonClass('secondary')} aria-label={tr('关闭作者档案', 'Close author profile')}>
                 <X className="h-5 w-5" />
               </button>
             </div>
