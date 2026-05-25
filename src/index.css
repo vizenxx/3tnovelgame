@@ -1506,6 +1506,23 @@ html[data-theme="light"] .app-boot-title {
   text-shadow: none;
 }
 
+html[data-theme="light"] .app-boot-mark img,
+html[data-theme="light"] .app-boot-logo-svg {
+  filter:
+    drop-shadow(0 0 18px rgba(79, 95, 187, 0.28))
+    drop-shadow(0 0 48px rgba(79, 95, 187, 0.08))
+    drop-shadow(0 8px 24px rgba(88, 76, 61, 0.16)) !important;
+}
+
+html[data-theme="light"] .app-boot-mark::before {
+  background: radial-gradient(
+    circle,
+    rgba(79, 95, 187, 0.35) 0%,
+    rgba(180, 113, 76, 0.1) 42%,
+    transparent 72%
+  ) !important;
+}
+
 /* ── Keyframes ── */
 @keyframes app-boot-text-in {
   from { opacity: 0; transform: translateY(14px); }
@@ -2000,4 +2017,41 @@ html[data-theme="light"] .app-button-primary *,
 html[data-theme="light"] .bg-emerald-600 *,
 html[data-theme="light"] .bg-emerald-500 * {
   color: #f8f4ed !important;
+}
+
+/* Active states for story details / interactions / follow buttons */
+.app-button-liked {
+  border-color: rgba(244, 114, 182, 0.3) !important;
+  background-color: rgba(244, 114, 182, 0.08) !important;
+  color: #f9a8d4 !important;
+}
+
+.app-button-favorited {
+  border-color: rgba(251, 191, 36, 0.3) !important;
+  background-color: rgba(251, 191, 36, 0.08) !important;
+  color: #fcd34d !important;
+}
+
+.app-button-followed {
+  border-color: rgba(99, 118, 240, 0.4) !important;
+  background-color: rgba(99, 118, 240, 0.08) !important;
+  color: var(--app-accent) !important;
+}
+
+html[data-theme="light"] .app-button-liked {
+  border-color: rgba(171, 55, 119, 0.36) !important;
+  background-color: rgba(171, 55, 119, 0.08) !important;
+  color: #ab3777 !important;
+}
+
+html[data-theme="light"] .app-button-favorited {
+  border-color: rgba(158, 105, 17, 0.36) !important;
+  background-color: rgba(158, 105, 17, 0.08) !important;
+  color: #9e6911 !important;
+}
+
+html[data-theme="light"] .app-button-followed {
+  border-color: rgba(86, 100, 194, 0.4) !important;
+  background-color: rgba(86, 100, 194, 0.08) !important;
+  color: var(--light-primary) !important;
 }

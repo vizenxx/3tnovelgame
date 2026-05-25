@@ -2482,6 +2482,19 @@ export default function App() {
     document.documentElement.dataset.theme = appTheme;
     document.documentElement.style.colorScheme = appTheme;
     window.localStorage?.setItem('app-theme', appTheme);
+
+    // Dynamic theme-color meta tag
+    const themeColor = appTheme === 'light' ? '#f3eee6' : '#050508';
+    let meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) {
+      meta.setAttribute('content', themeColor);
+    }
+
+    // Dynamic PWA webmanifest link
+    const manifestLink = document.querySelector('link[rel="manifest"]');
+    if (manifestLink) {
+      manifestLink.setAttribute('href', appTheme === 'light' ? '/manifest-light.webmanifest' : '/manifest.webmanifest');
+    }
   }, [appTheme]);
 
   useEffect(() => {
@@ -12401,10 +12414,10 @@ export default function App() {
             <div className="text-xs text-zinc-600">{tr('平均每章', 'Avg. per chapter')} {getAverageChapterWords(chapters) || tr('未知', 'unknown')} {tr('字', 'words')}</div>
           </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <button type="button" onClick={() => handleStoryInteraction('like')} className={`${semanticButtonClass(isCurrentStoryActive('like') ? 'secondary' : 'ghost', { compact: true })} ${isCurrentStoryActive('like') ? 'text-pink-200' : ''}`}>
+            <button type="button" onClick={() => handleStoryInteraction('like')} className={`${semanticButtonClass(isCurrentStoryActive('like') ? 'secondary' : 'ghost', { compact: true })} ${isCurrentStoryActive('like') ? 'text-pink-200 app-button-liked' : ''}`}>
               <Heart className={`h-4 w-4 ${isCurrentStoryActive('like') ? 'fill-current' : ''}`} /> {tr('点赞', 'Like')}
             </button>
-            <button type="button" onClick={() => handleStoryInteraction('favorite')} className={`${semanticButtonClass(isCurrentStoryActive('favorite') ? 'secondary' : 'ghost', { compact: true })} ${isCurrentStoryActive('favorite') ? 'text-amber-200' : ''}`}>
+            <button type="button" onClick={() => handleStoryInteraction('favorite')} className={`${semanticButtonClass(isCurrentStoryActive('favorite') ? 'secondary' : 'ghost', { compact: true })} ${isCurrentStoryActive('favorite') ? 'text-amber-200 app-button-favorited' : ''}`}>
               <Bookmark className={`h-4 w-4 ${isCurrentStoryActive('favorite') ? 'fill-current' : ''}`} /> {tr('收藏原作', 'Favorite original')}
             </button>
             <button type="button" onClick={handleShareStory} disabled={isSharing || !blueprint} className={semanticButtonClass('secondary', { compact: true })}>
@@ -12792,7 +12805,7 @@ export default function App() {
             </div>
             <div className="mb-5 flex flex-wrap gap-2">
               {authorProfileTarget.authorId !== user?.uid && (
-                <button type="button" onClick={toggleAuthorFollow} disabled={authorProfileBusy} className={semanticButtonClass(authorProfileFollowing ? 'secondary' : 'primary', { compact: true })}>
+                <button type="button" onClick={toggleAuthorFollow} disabled={authorProfileBusy} className={`${semanticButtonClass(authorProfileFollowing ? 'secondary' : 'primary', { compact: true })} ${authorProfileFollowing ? 'app-button-followed' : ''}`}>
                   {authorProfileBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
                   {authorProfileFollowing ? tr('已追踪', 'Following') : tr('追踪作者', 'Follow author')}
                 </button>
@@ -14427,10 +14440,10 @@ export default function App() {
                 <>
                   <section className="grid gap-2">
                     <div className="px-1 text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">{tr('作品互动', 'Story Actions')}</div>
-                    <button onClick={() => { setIsActionMenuOpen(false); handleStoryInteraction('like'); }} className={`${semanticMenuButtonClass('ghost')} ${isCurrentStoryActive('like') ? 'bg-zinc-900/60 text-pink-300' : ''}`}>
+                    <button onClick={() => { setIsActionMenuOpen(false); handleStoryInteraction('like'); }} className={`${semanticMenuButtonClass('ghost')} ${isCurrentStoryActive('like') ? 'bg-zinc-900/60 text-pink-300 app-button-liked' : ''}`}>
                       <Heart className={`h-5 w-5 ${isCurrentStoryActive('like') ? 'fill-current text-pink-300' : ''}`} /> {tr('点赞', 'Like')}
                     </button>
-                    <button onClick={() => { setIsActionMenuOpen(false); handleStoryInteraction('favorite'); }} className={`${semanticMenuButtonClass('ghost')} ${isCurrentStoryActive('favorite') ? 'bg-zinc-900/60 text-amber-300' : ''}`}>
+                    <button onClick={() => { setIsActionMenuOpen(false); handleStoryInteraction('favorite'); }} className={`${semanticMenuButtonClass('ghost')} ${isCurrentStoryActive('favorite') ? 'bg-zinc-900/60 text-amber-300 app-button-favorited' : ''}`}>
                       <Bookmark className={`h-5 w-5 ${isCurrentStoryActive('favorite') ? 'fill-current text-amber-300' : ''}`} /> {tr('收藏原作', 'Favorite original')}
                     </button>
                     <button
