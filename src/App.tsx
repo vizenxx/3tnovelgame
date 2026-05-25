@@ -13419,7 +13419,7 @@ export default function App() {
               {authoringTab === 'settings' && (
                 <section className="space-y-4">
 
-                  <div className="border-t border-app-border pt-6">
+                  <div className="pt-2">
                     <h3 className="text-xl font-black text-white">{tr('作品设置', 'Story Settings')}</h3>
                     <p className="mt-1 text-xs leading-relaxed text-app-muted">{tr('正式作品可选择私人、非公开链接或公开；收藏命运记录不会出现在这里。', 'Formal works can be private, unlisted, or public. Saved fate records do not appear here.')}</p>
                   </div>

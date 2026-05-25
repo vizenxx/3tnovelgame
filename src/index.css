@@ -244,8 +244,9 @@ html[data-theme="light"] {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.4rem;
   overflow-x: auto;
-  border-bottom: 1px solid color-mix(in srgb, var(--app-border) 48%, transparent);
-  padding-bottom: 0.55rem;
+  padding-top: 0.65rem;
+  padding-bottom: 0.65rem;
+  margin-top: -0.65rem;
   scrollbar-width: none;
 }
 
@@ -294,8 +295,8 @@ html[data-theme="light"] {
       color-mix(in srgb, var(--app-accent) 20%, transparent),
       color-mix(in srgb, var(--app-surface-soft) 45%, transparent));
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    0 12px 28px color-mix(in srgb, var(--app-accent) 13%, transparent);
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 8px 24px rgba(0, 0, 0, 0.08);
 }
 
 html[data-theme="light"] .authoring-tab-button:hover {
@@ -308,8 +309,8 @@ html[data-theme="light"] .authoring-tab-button.is-active {
       color-mix(in srgb, var(--app-accent) 16%, transparent),
       color-mix(in srgb, var(--app-surface-soft) 70%, transparent));
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.74),
-    0 12px 24px color-mix(in srgb, var(--app-accent) 10%, transparent);
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 8px 24px rgba(88, 76, 61, 0.02);
 }
 
 @media (max-width: 640px) {
@@ -351,6 +352,18 @@ html[data-theme="light"] .authoring-tab-button.is-active {
   border-color: rgba(52, 211, 153, 0.26);
   background: rgba(52, 211, 153, 0.1);
   color: #a7f3d0;
+}
+
+html[data-theme="light"] .authoring-save-pill[data-state="dirty"] {
+  border-color: rgba(180, 83, 9, 0.3) !important;
+  background: rgba(251, 191, 36, 0.08) !important;
+  color: #b45309 !important;
+}
+
+html[data-theme="light"] .authoring-save-pill[data-state="saved"] {
+  border-color: rgba(4, 120, 87, 0.25) !important;
+  background: rgba(52, 211, 153, 0.08) !important;
+  color: #047857 !important;
 }
 
 .app-modal-surface {
@@ -1013,6 +1026,10 @@ html[data-theme="light"] .reading-page::before {
   white-space: nowrap;
 }
 
+.story-card-stat[data-active="true"] .story-card-stat-value {
+  color: inherit;
+}
+
 .story-card-stat[data-active="true"][data-tone="like"] {
   border-color: rgba(244, 114, 182, 0.28);
   background: rgba(236, 72, 153, 0.1);
@@ -1086,16 +1103,21 @@ html[data-theme="light"] .reading-page::before {
 
 html[data-theme="light"] .story-card-stat[data-active="true"][data-tone="like"],
 html[data-theme="light"] .story-detail-stat[data-active="true"][data-tone="like"] {
-  border-color: rgba(171, 55, 119, 0.36);
-  background: rgba(171, 55, 119, 0.11);
-  color: #8f2c65;
+  border-color: rgba(171, 55, 119, 0.36) !important;
+  background: rgba(171, 55, 119, 0.11) !important;
+  color: #8f2c65 !important;
 }
 
 html[data-theme="light"] .story-card-stat[data-active="true"][data-tone="favorite"],
 html[data-theme="light"] .story-detail-stat[data-active="true"][data-tone="favorite"] {
-  border-color: rgba(158, 105, 17, 0.36);
-  background: rgba(180, 119, 31, 0.13);
-  color: #80540f;
+  border-color: rgba(158, 105, 17, 0.36) !important;
+  background: rgba(180, 119, 31, 0.13) !important;
+  color: #80540f !important;
+}
+
+html[data-theme="light"] .story-card-stat[data-active="true"] .story-card-stat-value,
+html[data-theme="light"] .story-detail-stat[data-active="true"] .story-detail-stat-value {
+  color: inherit !important;
 }
 
 html[data-theme="light"] .story-detail-stat[data-tone="like"]:hover {
@@ -1130,7 +1152,6 @@ html[data-theme="light"] .story-detail-stat[data-tone="favorite"]:hover {
   width: min(88vw, 21.5rem);
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.2rem;
-  overflow: hidden;
   border: 1px solid var(--app-dock-border);
   border-radius: 1.4rem;
   background:
