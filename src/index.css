@@ -96,6 +96,7 @@ html[data-theme="light"] {
 
 .authoring-studio {
   --authoring-field-bg: rgba(10, 11, 13, 0.65);
+  --authoring-field-bg-focus: rgba(10, 11, 13, 0.85);
   --authoring-field-border: rgba(255, 255, 255, 0.04);
   --authoring-field-focus: rgba(112, 132, 255, 0.45);
 }
@@ -116,7 +117,7 @@ html[data-theme="light"] {
 .authoring-studio select:focus,
 .authoring-studio textarea:focus {
   border-color: var(--authoring-field-focus) !important;
-  background-color: rgba(10, 11, 13, 0.85) !important;
+  background-color: var(--authoring-field-bg-focus) !important;
   box-shadow:
     0 0 0 3px rgba(112, 132, 255, 0.15),
     0 8px 24px rgba(0, 0, 0, 0.25),
@@ -1757,13 +1758,21 @@ html[data-theme="light"] .play-float-button {
 
 html[data-theme="light"] .app-card,
 html[data-theme="light"] .story-library-card,
-html[data-theme="light"] .story-library-toolbar,
-html[data-theme="light"] .story-library-hero {
+html[data-theme="light"] .story-library-toolbar {
   border-color: var(--app-shell-border-soft) !important;
   background:
     linear-gradient(145deg, rgba(255, 255, 255, 0.48), transparent 38%),
     var(--app-shell-card) !important;
   box-shadow: var(--app-shadow-soft) !important;
+}
+
+html[data-theme="light"] .story-library-card:hover {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(86, 100, 194, 0.1), transparent 45%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.72), transparent 40%),
+    color-mix(in srgb, var(--app-surface) 95%, transparent) !important;
+  box-shadow: 0 28px 75px rgba(88, 76, 61, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+  border-color: rgba(86, 100, 194, 0.28) !important;
 }
 
 html[data-theme="light"] .app-card-quiet {
@@ -1824,23 +1833,132 @@ html[data-theme="light"] .hover\:bg-indigo-500:hover,
 html[data-theme="light"] .hover\:bg-indigo-600:hover {
   background: linear-gradient(135deg, var(--light-primary-hover), #3f4ca0) !important;
   color: #f8f4ed !important;
+  box-shadow: 
+    0 6px 16px rgba(86, 100, 194, 0.24),
+    0 12px 28px rgba(86, 100, 194, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
 }
 
 html[data-theme="light"] .app-button-secondary,
-html[data-theme="light"] .app-button-ghost,
-html[data-theme="light"] .app-icon-secondary,
-html[data-theme="light"] .app-icon-ghost {
+html[data-theme="light"] .app-icon-secondary {
   background-color: color-mix(in srgb, var(--app-surface) 70%, transparent) !important;
+  border-color: var(--app-shell-border-soft) !important;
+  color: var(--app-readable-text) !important;
+  box-shadow: 0 3px 8px rgba(88, 76, 61, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+}
+
+html[data-theme="light"] .app-button-secondary:hover,
+html[data-theme="light"] .app-icon-secondary:hover {
+  background-color: color-mix(in srgb, var(--app-surface-soft) 72%, transparent) !important;
+  color: var(--app-readable-text) !important;
+  box-shadow: 0 6px 16px rgba(88, 76, 61, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+}
+
+html[data-theme="light"] .app-button-ghost,
+html[data-theme="light"] .app-icon-ghost {
+  background-color: transparent !important;
+  border-color: transparent !important;
+  color: var(--app-muted-text) !important;
+  box-shadow: none !important;
+}
+
+html[data-theme="light"] .app-button-ghost:hover,
+html[data-theme="light"] .app-icon-ghost:hover {
+  background-color: rgba(40, 35, 31, 0.04) !important;
+  border-color: rgba(40, 35, 31, 0.08) !important;
+  color: var(--app-readable-text) !important;
+}
+
+html[data-theme="light"] .authoring-studio {
+  --authoring-field-bg: #ffffff;
+  --authoring-field-bg-focus: #ffffff;
+  --authoring-field-border: var(--app-shell-border-soft);
+  --authoring-field-focus: var(--app-accent);
+}
+
+html[data-theme="light"] .story-library-control {
+  background-color: #ffffff !important;
   border-color: var(--app-shell-border-soft) !important;
   color: var(--app-readable-text) !important;
 }
 
-html[data-theme="light"] .app-button-secondary:hover,
-html[data-theme="light"] .app-button-ghost:hover,
-html[data-theme="light"] .app-icon-secondary:hover,
-html[data-theme="light"] .app-icon-ghost:hover {
-  background-color: color-mix(in srgb, var(--app-surface-soft) 72%, transparent) !important;
+html[data-theme="light"] .story-library-control:focus {
+  background-color: #ffffff !important;
+  border-color: var(--app-accent) !important;
+  box-shadow: 0 0 0 3px rgba(86, 100, 194, 0.15) !important;
+}
+
+html[data-theme="light"] .story-library-tabbar {
+  background: color-mix(in srgb, var(--app-border) 28%, transparent) !important;
+  border-color: var(--app-shell-border-soft) !important;
+}
+
+html[data-theme="light"] .story-library-tab {
+  color: var(--app-muted-text) !important;
+}
+
+html[data-theme="light"] .story-library-tab:hover {
   color: var(--app-readable-text) !important;
+  background: color-mix(in srgb, var(--app-surface-soft) 80%, transparent) !important;
+}
+
+html[data-theme="light"] .story-library-tab[data-active="true"] {
+  background: linear-gradient(135deg, var(--light-primary), #4c59b1) !important;
+  color: #ffffff !important;
+  border-color: var(--light-primary) !important;
+  box-shadow: 0 8px 24px rgba(86, 100, 194, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
+}
+
+html[data-theme="light"] .story-card-stat-list {
+  background: color-mix(in srgb, var(--app-surface-soft) 42%, transparent) !important;
+  border-color: var(--app-shell-border-soft) !important;
+}
+
+html[data-theme="light"] .story-card-stat {
+  background: #ffffff !important;
+  color: var(--app-muted-text) !important;
+}
+
+html[data-theme="light"] .story-card-stat-value {
+  color: var(--app-readable-text) !important;
+}
+
+html[data-theme="light"] .story-bias-bar {
+  background:
+    linear-gradient(90deg, rgba(99, 102, 241, 0.12), transparent 42%, rgba(244, 63, 94, 0.11)),
+    color-mix(in srgb, var(--app-surface-soft) 42%, transparent) !important;
+  border-color: var(--app-shell-border-soft) !important;
+}
+
+html[data-theme="light"] .story-bias-single {
+  background:
+    linear-gradient(90deg, rgba(99, 102, 241, 0.11), rgba(255, 255, 255, 0.4), rgba(99, 102, 241, 0.09)),
+    color-mix(in srgb, var(--app-surface-soft) 42%, transparent) !important;
+}
+
+html[data-theme="light"] [class*="text-pink-100"],
+html[data-theme="light"] [class*="text-pink-200"],
+html[data-theme="light"] [class*="text-pink-300"],
+html[data-theme="light"] [class*="text-pink-400"] {
+  color: #ab3777 !important;
+}
+
+html[data-theme="light"] [class*="shadow-black"] {
+  --tw-shadow-color: rgba(88, 76, 61, 0.06) !important;
+}
+
+html[data-theme="light"] .destiny-dock button.bg-zinc-900\/80 {
+  border-color: var(--app-shell-border-soft) !important;
+  background-color: color-mix(in srgb, var(--app-surface) 80%, transparent) !important;
+  color: var(--app-readable-text) !important;
+  box-shadow: 0 4px 12px rgba(88, 76, 61, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.6) !important;
+}
+
+html[data-theme="light"] .destiny-dock button.bg-zinc-900\/80:hover {
+  border-color: rgba(86, 100, 194, 0.35) !important;
+  background-color: color-mix(in srgb, var(--app-surface-soft) 85%, transparent) !important;
+  color: var(--app-accent) !important;
+  box-shadow: 0 6px 16px rgba(86, 100, 194, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
 }
 
 html[data-theme="light"] .bg-emerald-600,
