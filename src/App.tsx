@@ -856,7 +856,7 @@ const GlobalError = ({ errorMsg }: { errorMsg: string | null }) => (
         exit={{ opacity: 0, y: 10, scale: 0.98 }}
         role="alert"
         aria-live="assertive"
-        className="app-toast fixed left-1/2 top-[max(5.5rem,calc(env(safe-area-inset-top)+4.5rem))] z-[6100] w-[min(92vw,28rem)] -translate-x-1/2 rounded-[1.5rem] px-5 py-4 text-center text-sm font-bold leading-relaxed text-zinc-100 backdrop-blur-xl"
+        className="app-toast fixed left-1/2 top-[max(5.5rem,calc(env(safe-area-inset-top)+4.5rem))] z-[6100] w-[min(92vw,28rem)] -translate-x-1/2 rounded-[1.5rem] px-5 py-4 text-center text-sm font-bold leading-relaxed text-app-text backdrop-blur-xl"
       >
         <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-gradient-to-r from-indigo-400 to-sky-300" />
         <div>{errorMsg}</div>
@@ -927,19 +927,19 @@ const PwaUpdateModal = ({
           initial={{ opacity: 0, scale: 0.96, y: 16 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.96, y: 16 }}
-          className="app-modal-surface app-modal-safe-height w-full max-w-md space-y-5 overflow-y-auto rounded-3xl border border-zinc-800 p-5 shadow-2xl sm:p-6"
+          className="app-modal-surface app-modal-safe-height w-full max-w-md space-y-5 overflow-y-auto rounded-3xl border border-app-border p-5 shadow-2xl sm:p-6"
         >
           <div className="space-y-2">
-            <div className="text-xs uppercase tracking-[0.35em] text-zinc-500">版本更新</div>
+            <div className="text-xs uppercase tracking-[0.35em] text-app-muted">版本更新</div>
             <h3 className="text-2xl font-black text-white">发现新版 App</h3>
-            <p className="text-sm leading-relaxed text-zinc-400">
+            <p className="text-sm leading-relaxed text-app-muted">
               当前安装的 PWA 不是最新版。最新版本为 {updateInfo.latestVersion}，建议现在升级后再继续使用。
             </p>
           </div>
 
           {updateInfo.isIos ? (
-            <div className="space-y-3 text-sm text-zinc-300">
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 space-y-2">
+            <div className="space-y-3 text-sm text-app-text">
+              <div className="rounded-2xl border border-app-border bg-app-surface/60 p-4 space-y-2">
                 <div>1. 点击下方“打开更新页”</div>
                 <div>2. 在 Safari 中重新打开本站并等待页面加载完成</div>
                 <div>3. 回到主屏幕重新进入 App；如果仍未更新，再从 Safari 重新“添加到主屏幕”</div>
@@ -956,7 +956,7 @@ const PwaUpdateModal = ({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="py-3 rounded-2xl border border-zinc-700 bg-zinc-900 text-zinc-200 font-bold"
+                  className="py-3 rounded-2xl border border-app-border bg-app-surface text-app-text font-bold"
                 >
                   稍后再说
                 </button>
@@ -968,7 +968,7 @@ const PwaUpdateModal = ({
                 type="button"
                 onClick={onClose}
                 disabled={isApplying}
-                className="py-3 rounded-2xl border border-zinc-700 bg-zinc-900 text-zinc-200 font-bold disabled:opacity-50"
+                className="py-3 rounded-2xl border border-app-border bg-app-surface text-app-text font-bold disabled:opacity-50"
               >
                 稍后再说
               </button>
@@ -1010,7 +1010,7 @@ const LoadingOverlay = ({ progress, status, subtext, variant = 'default', langua
     variant === 'bless' ? 'bg-emerald-950/90' : 
     variant === 'curse' ? 'bg-rose-950/90' : 
     variant === 'ending' ? 'bg-amber-950/90' :
-    'bg-zinc-950/90'
+    'bg-app-bg/90'
   }`}>
     <motion.div
       animate={{ rotate: variant === 'ending' ? 180 : -360, scale: [1, 1.1, 1] }}
@@ -1036,9 +1036,9 @@ const LoadingOverlay = ({ progress, status, subtext, variant = 'default', langua
     }`}>
       {status}
     </h2>
-    {subtext && <p className="mb-8 max-w-md text-sm leading-relaxed text-zinc-400">{subtext}</p>}
+    {subtext && <p className="mb-8 max-w-md text-sm leading-relaxed text-app-muted">{subtext}</p>}
     
-    <div className="mb-4 h-2 w-full max-w-md overflow-hidden rounded-full border border-zinc-800 bg-zinc-900 shadow-inner">
+    <div className="mb-4 h-2 w-full max-w-md overflow-hidden rounded-full border border-app-border bg-app-surface shadow-inner">
       <motion.div 
         className={`h-full transition-all duration-500 ${
           variant === 'bless' ? 'bg-gradient-to-r from-emerald-600 to-teal-400' : 
@@ -1051,7 +1051,7 @@ const LoadingOverlay = ({ progress, status, subtext, variant = 'default', langua
       />
     </div>
     
-    <div className="flex justify-between w-full max-w-md text-[10px] font-mono text-zinc-500 uppercase tracking-[0.3em]">
+    <div className="flex justify-between w-full max-w-md text-[10px] font-mono text-app-muted uppercase tracking-[0.3em]">
       <span>{footerLabel}</span>
       <span>{Math.round(progress)}%</span>
     </div>
@@ -1072,7 +1072,7 @@ const BlockingSyncOverlay = ({
     initial={{ opacity: 0 }}
     animate={{ opacity: 1 }}
     exit={{ opacity: 0 }}
-    className={`${safeModalBackdropClass} ${zIndexClass} bg-zinc-950/55 backdrop-blur-md`}
+    className={`${safeModalBackdropClass} ${zIndexClass} bg-app-bg/55 backdrop-blur-md`}
   >
     <motion.div
       initial={{ y: 14, opacity: 0, scale: 0.97 }}
@@ -1081,8 +1081,8 @@ const BlockingSyncOverlay = ({
       className="app-modal-surface w-full max-w-sm rounded-[1.75rem] p-5 text-center backdrop-blur-xl"
     >
       <Loader2 className="mx-auto h-8 w-8 animate-spin text-indigo-300" />
-      <div className="mt-4 text-sm font-black text-zinc-100">{title}</div>
-      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-zinc-800">
+      <div className="mt-4 text-sm font-black text-app-text">{title}</div>
+      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-app-surface-soft">
         <motion.div
           className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-sky-300 to-indigo-500"
           initial={{ x: '-100%' }}
@@ -1091,7 +1091,7 @@ const BlockingSyncOverlay = ({
           style={{ width: '55%' }}
         />
       </div>
-      {detail && <p className="mt-3 text-xs leading-relaxed text-zinc-500">{detail}</p>}
+      {detail && <p className="mt-3 text-xs leading-relaxed text-app-muted">{detail}</p>}
     </motion.div>
   </motion.div>
 );
@@ -1117,11 +1117,11 @@ const InlineSyncState = ({
     ) : tone === 'error' ? (
       <AlertCircle className="h-8 w-8 text-amber-300" />
     ) : (
-      <BookOpen className="h-8 w-8 text-zinc-500" />
+      <BookOpen className="h-8 w-8 text-app-muted" />
     )}
-    <div className={`mt-4 text-sm font-black ${tone === 'error' ? 'text-amber-100' : 'text-zinc-200'}`}>{title}</div>
+    <div className={`mt-4 text-sm font-black ${tone === 'error' ? 'text-amber-100' : 'text-app-text'}`}>{title}</div>
     {tone === 'loading' && (
-      <div className="mt-3 h-1.5 w-48 overflow-hidden rounded-full bg-zinc-800">
+      <div className="mt-3 h-1.5 w-48 overflow-hidden rounded-full bg-app-surface-soft">
         <motion.div
           className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-sky-300 to-indigo-500"
           initial={{ x: '-100%' }}
@@ -1132,7 +1132,7 @@ const InlineSyncState = ({
       </div>
     )}
     {detail && (
-      <p className={`mx-auto mt-3 max-w-xl text-xs leading-relaxed ${tone === 'error' ? 'text-amber-100/75' : 'text-zinc-500'}`}>
+      <p className={`mx-auto mt-3 max-w-xl text-xs leading-relaxed ${tone === 'error' ? 'text-amber-100/75' : 'text-app-muted'}`}>
         {detail}
       </p>
     )}
@@ -1215,15 +1215,15 @@ const ConnectivityDrawer = ({
         initial={{ y: 120, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: 120, opacity: 0 }}
-        className="fixed inset-x-3 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5.35rem)] z-[6200] mx-auto max-w-2xl rounded-[1.5rem] border border-white/10 bg-zinc-950/92 p-4 shadow-2xl shadow-black/40 backdrop-blur-xl"
+        className="fixed inset-x-3 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5.35rem)] z-[6200] mx-auto max-w-2xl rounded-[1.5rem] border border-white/10 bg-app-bg/92 p-4 shadow-2xl shadow-black/40 backdrop-blur-xl"
       >
         <div className="flex items-start gap-3">
           <div className={`rounded-full p-2 ${state.tone === 'offline' ? 'bg-rose-500/15 text-rose-200' : state.tone === 'error' ? 'bg-amber-500/15 text-amber-200' : 'bg-indigo-500/15 text-indigo-200'}`}>
             {state.tone === 'offline' ? <WifiOff className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-black text-zinc-100">{state.title}</div>
-            {state.detail && <p className="mt-1 text-xs font-semibold leading-relaxed text-zinc-400">{state.detail}</p>}
+            <div className="text-sm font-black text-app-text">{state.title}</div>
+            {state.detail && <p className="mt-1 text-xs font-semibold leading-relaxed text-app-muted">{state.detail}</p>}
             <div className="mt-3 flex flex-wrap gap-2">
               <button type="button" onClick={onRetry} className={semanticButtonClass('primary', { compact: true })}>
                 <RefreshCcw className="h-4 w-4" />
@@ -1350,7 +1350,7 @@ const inheritedEndingDisplayLabel = (record: Partial<FateCompletionRecord>, requ
 const endingDomainToneClass = (domain: 'left' | 'right' | 'middle') => {
   if (domain === 'left') return 'text-indigo-200 bg-indigo-500/12 border-indigo-400/20';
   if (domain === 'right') return 'text-rose-200 bg-rose-500/12 border-rose-400/20';
-  return 'text-zinc-200 bg-zinc-500/12 border-zinc-400/20';
+  return 'text-app-text bg-zinc-500/12 border-zinc-400/20';
 };
 
 const endingDomainCards = (source?: any) => {
@@ -2931,35 +2931,35 @@ export default function App() {
   };
 
   const ReadingTextControls = () => (
-    <div className="inline-flex flex-wrap items-center gap-2 rounded-2xl border border-zinc-800/45 bg-zinc-950/45 p-1 text-xs font-bold text-zinc-400 backdrop-blur-sm">
+    <div className="inline-flex flex-wrap items-center gap-2 rounded-2xl border border-app-border/45 bg-app-bg/45 p-1 text-xs font-bold text-app-muted backdrop-blur-sm">
       <button
         type="button"
         onClick={() => setReadingTextScale((value) => Math.max(0.9, Number((value - 0.1).toFixed(1))))}
-        className="rounded-xl px-3 py-2 transition-colors hover:bg-zinc-800 hover:text-white active:scale-95"
+        className="rounded-xl px-3 py-2 transition-colors hover:bg-app-surface-soft hover:text-white active:scale-95"
       >
         A-
       </button>
-      <span className="min-w-12 text-center text-zinc-500">{Math.round(readingTextScale * 100)}%</span>
+      <span className="min-w-12 text-center text-app-muted">{Math.round(readingTextScale * 100)}%</span>
       <button
         type="button"
         onClick={() => setReadingTextScale((value) => Math.min(1.4, Number((value + 0.1).toFixed(1))))}
-        className="rounded-xl px-3 py-2 transition-colors hover:bg-zinc-800 hover:text-white active:scale-95"
+        className="rounded-xl px-3 py-2 transition-colors hover:bg-app-surface-soft hover:text-white active:scale-95"
       >
         A+
       </button>
-      <span className="mx-1 h-5 w-px bg-zinc-800" />
+      <span className="mx-1 h-5 w-px bg-app-surface-soft" />
       <button
         type="button"
         onClick={() => setReadingTextOpacity((value) => Math.max(0.7, Number((value - 0.05).toFixed(2))))}
-        className="rounded-xl px-3 py-2 transition-colors hover:bg-zinc-800 hover:text-white active:scale-95"
+        className="rounded-xl px-3 py-2 transition-colors hover:bg-app-surface-soft hover:text-white active:scale-95"
       >
         亮-
       </button>
-      <span className="min-w-12 text-center text-zinc-500">{Math.round(readingTextOpacity * 100)}%</span>
+      <span className="min-w-12 text-center text-app-muted">{Math.round(readingTextOpacity * 100)}%</span>
       <button
         type="button"
         onClick={() => setReadingTextOpacity((value) => Math.min(1, Number((value + 0.05).toFixed(2))))}
-        className="rounded-xl px-3 py-2 transition-colors hover:bg-zinc-800 hover:text-white active:scale-95"
+        className="rounded-xl px-3 py-2 transition-colors hover:bg-app-surface-soft hover:text-white active:scale-95"
       >
         亮+
       </button>
@@ -5157,13 +5157,13 @@ export default function App() {
     const percent = Math.max(0, Math.min(100, Math.round(generationProgress || 0)));
     return (
       <div className="mt-4 w-full max-w-xs">
-        <div className="h-1 overflow-hidden rounded-full bg-zinc-900">
+        <div className="h-1 overflow-hidden rounded-full bg-app-surface">
           <div
             className="h-full rounded-full bg-indigo-500 transition-[width] duration-300 ease-out"
             style={{ width: `${percent}%` }}
           />
         </div>
-        <div className="mt-2 text-center text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">{percent}%</div>
+        <div className="mt-2 text-center text-[10px] font-black uppercase tracking-[0.22em] text-app-muted">{percent}%</div>
       </div>
     );
   };
@@ -5283,7 +5283,7 @@ export default function App() {
         </div>
         <div className="space-y-2">
           <h2 className="text-2xl font-black text-white">{status}</h2>
-          <p className="text-sm font-bold text-zinc-500 tracking-widest uppercase">进度 {Math.round(progress)}%</p>
+          <p className="text-sm font-bold text-app-muted tracking-widest uppercase">进度 {Math.round(progress)}%</p>
         </div>
       </div>
     </motion.div>
@@ -8079,15 +8079,15 @@ export default function App() {
           <motion.div
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="app-modal-surface app-modal-safe-height w-full max-w-sm overflow-y-auto rounded-3xl border border-zinc-800 p-5 shadow-2xl sm:p-6"
+            className="app-modal-surface app-modal-safe-height w-full max-w-sm overflow-y-auto rounded-3xl border border-app-border p-5 shadow-2xl sm:p-6"
           >
             <h3 className="mb-2 text-xl font-black text-white">{confirmationModal.title}</h3>
-            <p className="mb-6 text-sm text-zinc-400 leading-relaxed">{confirmationModal.message}</p>
+            <p className="mb-6 text-sm text-app-muted leading-relaxed">{confirmationModal.message}</p>
             <div className="flex gap-3">
               <button
                 type="button"
                 onClick={() => setConfirmationModal(prev => ({ ...prev, isOpen: false }))}
-                className="flex-1 rounded-xl bg-zinc-900 py-3 text-sm font-bold text-zinc-400"
+                className="flex-1 rounded-xl bg-app-surface py-3 text-sm font-bold text-app-muted"
               >
                 取消
               </button>
@@ -8132,7 +8132,7 @@ export default function App() {
               </div>
               <div className="text-xs font-black uppercase tracking-[0.22em] text-emerald-300">作品已保存</div>
               <h3 className="mt-2 break-words text-2xl font-black text-white">{title}</h3>
-              <p className="mt-3 text-sm leading-relaxed text-zinc-400">
+              <p className="mt-3 text-sm leading-relaxed text-app-muted">
                 更改已经写入作品档案。可以马上分享作品，或回到首页继续查看作品库。
               </p>
               {isPrivate && (
@@ -8197,7 +8197,7 @@ export default function App() {
               <RefreshCcw className="h-8 w-8" />
             </div>
             <h3 className="mb-3 text-2xl font-black text-white">检测到现有进度</h3>
-            <p className="mb-8 text-zinc-400 leading-relaxed">
+            <p className="mb-8 text-app-muted leading-relaxed">
               您之前在这个故事中有尚未完成的干涉。是否要继承上次的进度继续游玩？
             </p>
             <div className="flex flex-col gap-3">
@@ -8211,14 +8211,14 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => { void startFreshFromPendingProgress(); }}
-                className="w-full rounded-2xl bg-zinc-900 py-4 text-sm font-bold text-zinc-400"
+                className="w-full rounded-2xl bg-app-surface py-4 text-sm font-bold text-app-muted"
               >
                 开始新干涉
               </button>
               <button
                 type="button"
                 onClick={() => setPendingProgressToLoad(null)}
-                className="w-full py-2 text-xs font-medium text-zinc-600 hover:text-zinc-400 transition-colors"
+                className="w-full py-2 text-xs font-medium text-zinc-600 hover:text-app-muted transition-colors"
               >
                 暂不处理
               </button>
@@ -8247,7 +8247,7 @@ export default function App() {
             <div className="mb-5">
               <div className="text-xs font-black uppercase tracking-[0.2em] text-indigo-300">续作继承</div>
               <h3 className="mt-2 text-2xl font-black text-white">选择要继承的前作命运线</h3>
-              <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+              <p className="mt-2 text-sm leading-relaxed text-app-muted">
                 找到多条符合前置条件的记录。选择其中一条后，续作第一章会根据该记录做开场调节，之后再回到本作的既定轨道。
               </p>
             </div>
@@ -8265,12 +8265,12 @@ export default function App() {
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex min-w-0 flex-wrap items-center gap-2">
-                      <div className="font-black text-zinc-100">{inheritedEndingDisplayLabel(record, pendingSequelInheritance.requirement)}</div>
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${record.sourceType === 'archived' ? 'bg-amber-500/15 text-amber-200' : 'bg-zinc-800 text-zinc-400'}`}>
+                      <div className="font-black text-app-text">{inheritedEndingDisplayLabel(record, pendingSequelInheritance.requirement)}</div>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${record.sourceType === 'archived' ? 'bg-amber-500/15 text-amber-200' : 'bg-app-surface-soft text-app-muted'}`}>
                         {record.sourceType === 'archived' ? '收藏命运' : '自动记录'}
                       </span>
                     </div>
-                    <div className="text-[10px] font-black uppercase tracking-[0.16em] text-zinc-500">
+                    <div className="text-[10px] font-black uppercase tracking-[0.16em] text-app-muted">
                       {record.completedAt ? new Date(record.completedAt).toLocaleString() : '完成记录'}
                     </div>
                   </div>
@@ -8284,7 +8284,7 @@ export default function App() {
                     </div>
                   )}
                   {record.storyConclusion && (
-                    <p className="mt-3 line-clamp-2 text-xs leading-relaxed text-zinc-400">{record.storyConclusion}</p>
+                    <p className="mt-3 line-clamp-2 text-xs leading-relaxed text-app-muted">{record.storyConclusion}</p>
                   )}
                 </button>
               ))}
@@ -8323,13 +8323,13 @@ export default function App() {
           <motion.div
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="app-modal-surface app-modal-safe-height w-full max-w-md overflow-y-auto rounded-[2.5rem] border border-zinc-800 p-6 shadow-2xl sm:p-8"
+            className="app-modal-surface app-modal-safe-height w-full max-w-md overflow-y-auto rounded-[2.5rem] border border-app-border p-6 shadow-2xl sm:p-8"
           >
             <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-rose-500/20 text-rose-400">
               <AlertCircle className="h-8 w-8" />
             </div>
             <h3 className="mb-3 text-2xl font-black text-white">确定要离开吗？</h3>
-            <p className="mb-8 text-zinc-400 leading-relaxed">
+            <p className="mb-8 text-app-muted leading-relaxed">
               当前干涉尚未保存。离开游玩页后，未保存的游玩进度将会丢失。
             </p>
             <div className="flex flex-col gap-3">
@@ -8361,14 +8361,14 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => resetGame({ discardCloudProgress: true })}
-                className="w-full rounded-2xl bg-zinc-900 py-4 text-sm font-bold text-zinc-400"
+                className="w-full rounded-2xl bg-app-surface py-4 text-sm font-bold text-app-muted"
               >
                 确认返回
               </button>
               <button
                 type="button"
                 onClick={() => setShowLeaveGameModal(false)}
-                className="mt-2 w-full py-2 text-sm font-medium text-zinc-500 hover:text-zinc-300"
+                className="mt-2 w-full py-2 text-sm font-medium text-app-muted hover:text-app-text"
               >
                 继续游玩
               </button>
@@ -8400,7 +8400,7 @@ export default function App() {
             <div className="mb-2 text-xs font-black uppercase tracking-[0.22em] text-indigo-300">支线解锁</div>
             <h3 className="text-2xl font-black text-white">{branchUnlockNotice.name || '新的命运支线'}</h3>
             {(branchUnlockNotice.desc || branchUnlockNotice.hint) && (
-              <p className="mt-4 text-sm leading-relaxed text-zinc-400">
+              <p className="mt-4 text-sm leading-relaxed text-app-muted">
                 {branchUnlockNotice.desc || branchUnlockNotice.hint}
               </p>
             )}
@@ -8432,7 +8432,7 @@ export default function App() {
             initial={{ y: 18, opacity: 0, scale: 0.96 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 18, opacity: 0, scale: 0.96 }}
-            className="app-modal-surface app-modal-safe-height w-full max-w-md overflow-y-auto rounded-3xl border border-zinc-800 p-5 shadow-2xl sm:p-6"
+            className="app-modal-surface app-modal-safe-height w-full max-w-md overflow-y-auto rounded-3xl border border-app-border p-5 shadow-2xl sm:p-6"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="text-xs font-black uppercase tracking-[0.22em] text-indigo-300">命运涟漪</div>
@@ -8441,9 +8441,9 @@ export default function App() {
                 <h3 className="mt-2 text-2xl font-black text-white">众人的命运因干涉而有了变化...</h3>
                 <div className="mt-5 grid gap-3">
                   {interventionStatusNotice.updates.map((update) => (
-                    <div key={update.id} className="rounded-2xl border border-zinc-800 bg-zinc-900/45 p-4">
+                    <div key={update.id} className="rounded-2xl border border-app-border bg-app-surface/45 p-4">
                       <div className="flex items-center justify-between gap-3">
-                        <div className="font-black text-zinc-100">{update.name}</div>
+                        <div className="font-black text-app-text">{update.name}</div>
                         <div className={`rounded-full px-2.5 py-1 text-[11px] font-black ${update.isDead ? 'bg-red-500/20 text-red-300' : 'bg-emerald-500/20 text-emerald-300'}`}>
                           {update.status}
                         </div>
@@ -8455,7 +8455,7 @@ export default function App() {
             ) : (
               <>
                 <h3 className="mt-2 text-2xl font-black text-white">干涉的涟漪似乎没能碰触到众人...</h3>
-                <p className="mt-4 text-sm leading-relaxed text-zinc-400">
+                <p className="mt-4 text-sm leading-relaxed text-app-muted">
                   这次变化更多停留在情节与命运走向之中，角色状态暂未出现可记录的改变。
                 </p>
               </>
@@ -8533,18 +8533,18 @@ export default function App() {
             </div>
             )}
             <div className="mb-4 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-900/35 p-4">
-                <div className="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-500">本次解锁</div>
+              <div className="rounded-2xl border border-app-border bg-app-surface/35 p-4">
+                <div className="text-[11px] font-black uppercase tracking-[0.18em] text-app-muted">本次解锁</div>
                 <div className="mt-1 text-2xl font-black text-white">{branchStats.runUnlocked.length}</div>
               </div>
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-900/35 p-4">
-                <div className="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-500">解锁统计</div>
+              <div className="rounded-2xl border border-app-border bg-app-surface/35 p-4">
+                <div className="text-[11px] font-black uppercase tracking-[0.18em] text-app-muted">解锁统计</div>
                 <div className="mt-1 text-2xl font-black text-white">{branchStats.historicalUnlockedCount}/{branchStats.total}</div>
               </div>
             </div>
             {branchStats.runUnlocked.length > 0 && (
-              <div className="mb-4 rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4">
-                <div className="mb-2 text-[11px] font-black uppercase tracking-[0.18em] text-zinc-500">本次触及支线</div>
+              <div className="mb-4 rounded-2xl border border-app-border bg-app-surface/30 p-4">
+                <div className="mb-2 text-[11px] font-black uppercase tracking-[0.18em] text-app-muted">本次触及支线</div>
                 <div className="flex flex-wrap gap-2">
                   {branchStats.runUnlocked.map((branch: any) => (
                     <span key={branch.id || branch.name} className="rounded-full bg-indigo-500/10 px-2.5 py-1 text-xs font-black text-indigo-200">
@@ -8554,7 +8554,7 @@ export default function App() {
                 </div>
               </div>
             )}
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 text-lg font-medium leading-relaxed text-amber-100">
+            <div className="rounded-2xl border border-app-border bg-app-surface/40 p-5 text-lg font-medium leading-relaxed text-amber-100">
               {String(storyConclusion || '').split('\n').filter(Boolean).map((paragraph, index) => (
                 <p key={index}>{paragraph}</p>
               ))}
@@ -8627,7 +8627,7 @@ export default function App() {
                     ? 'text-pink-400'
                     : stat.active && stat.tone === 'favorite'
                     ? 'text-amber-400'
-                    : 'text-zinc-400 hover:text-zinc-200'
+                    : 'text-app-muted hover:text-app-text'
                 }`}
               >
                 <Icon className={`h-3.5 w-3.5 shrink-0 ${stat.active ? 'fill-current' : ''}`} />
@@ -8765,7 +8765,7 @@ export default function App() {
               {coverUrl ? (
                 <img src={coverUrl} alt={`${formatBookTitle(getStoryTitle(story))} 封面`} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
               ) : (
-                <div className="flex h-full w-full items-center justify-center p-4 text-center text-[11px] font-black uppercase tracking-[0.18em] text-zinc-400">
+                <div className="flex h-full w-full items-center justify-center p-4 text-center text-[11px] font-black uppercase tracking-[0.18em] text-app-muted">
                   3T NOVEL
                 </div>
               )}
@@ -8782,12 +8782,12 @@ export default function App() {
             <h3 className="mb-1 whitespace-normal break-words text-[1.45rem] font-black leading-tight text-white transition-colors group-hover:text-indigo-200 sm:text-2xl">
               {formatBookTitle(getStoryTitle(story))}
             </h3>
-            <div className="mb-2 text-sm font-bold text-zinc-400/85">
+            <div className="mb-2 text-sm font-bold text-app-muted/85">
               <AuthorNameButton authorId={story.authorId || story.meta?.authorId} authorName={getStoryAuthorName(story)} />
             </div>
             {/* Middle zone: flexes to fill remaining space, shrinks when needed */}
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              <p className="story-library-desc-fade mb-2 flex-1 text-[0.98rem] leading-relaxed text-zinc-300/85 transition-colors group-hover:text-zinc-200">
+              <p className="story-library-desc-fade mb-2 flex-1 text-[0.98rem] leading-relaxed text-app-text/85 transition-colors group-hover:text-app-text">
                 {getStoryMainAxis(story)}
               </p>
               {sequelRequirement && (
@@ -8900,11 +8900,11 @@ export default function App() {
             </button>
             <div className="grid gap-5 sm:grid-cols-[180px_minmax(0,1fr)]">
               <div>
-                <div className="aspect-square overflow-hidden rounded-3xl border border-zinc-800 bg-gradient-to-br from-zinc-800 via-zinc-950 to-indigo-950 shadow-xl">
+                <div className="aspect-square overflow-hidden rounded-3xl border border-app-border bg-gradient-to-br from-zinc-800 via-zinc-950 to-indigo-950 shadow-xl">
                   {coverUrl ? (
                     <img src={coverUrl} alt={`${title} 封面`} className="h-full w-full object-cover" />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center p-5 text-center text-xs font-black uppercase tracking-[0.2em] text-zinc-500">
+                    <div className="flex h-full w-full items-center justify-center p-5 text-center text-xs font-black uppercase tracking-[0.2em] text-app-muted">
                       3T NOVEL
                     </div>
                   )}
@@ -8926,10 +8926,10 @@ export default function App() {
                   ))}
                 </div>
                 <h3 className="break-words text-3xl font-black leading-tight text-white">{title}</h3>
-                <div className="mt-2 text-sm font-bold text-zinc-500">
+                <div className="mt-2 text-sm font-bold text-app-muted">
                   <AuthorNameButton authorId={storyDetailStory.authorId || storyDetailStory.meta?.authorId} authorName={getStoryAuthorName(storyDetailStory)} />
                 </div>
-                <div className="mt-5 max-h-[40vh] overflow-y-auto rounded-3xl border border-zinc-800/60 bg-zinc-900/25 p-4 text-base leading-relaxed text-zinc-300">
+                <div className="mt-5 max-h-[40vh] overflow-y-auto rounded-3xl border border-app-border/60 bg-app-surface/25 p-4 text-base leading-relaxed text-app-text">
                   {getStoryMainAxis(storyDetailStory) || '这部作品暂时还没有填写完整介绍。'}
                 </div>
                 {detailSequelRequirement && (
@@ -8991,7 +8991,7 @@ export default function App() {
               </div>
               <div className="min-w-0 flex-1">
                 <h3 className="text-xl font-black text-white">续作尚未解锁</h3>
-                <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+                <p className="mt-2 text-sm leading-relaxed text-app-muted">
                   这部续作需要先在《{stripBookTitle(sequelGateModal.sourceTitle || '前作')}》完成指定前置情节，才可继承记录并干涉命运。
                 </p>
               </div>
@@ -8999,13 +8999,13 @@ export default function App() {
             <div className="mt-5 space-y-3 rounded-3xl border border-white/10 bg-white/[0.03] p-4">
               {sequelGateModal.missingEnding && (
                 <div>
-                  <div className="text-xs font-black uppercase tracking-[0.16em] text-zinc-500">需要结局</div>
-                  <div className="mt-1 text-sm font-bold text-zinc-200">{sequelGateModal.missingEnding.name}</div>
+                  <div className="text-xs font-black uppercase tracking-[0.16em] text-app-muted">需要结局</div>
+                  <div className="mt-1 text-sm font-bold text-app-text">{sequelGateModal.missingEnding.name}</div>
                 </div>
               )}
               {sequelGateModal.missingBranches.length > 0 && (
                 <div>
-                  <div className="text-xs font-black uppercase tracking-[0.16em] text-zinc-500">需要支线</div>
+                  <div className="text-xs font-black uppercase tracking-[0.16em] text-app-muted">需要支线</div>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {sequelGateModal.missingBranches.map((branch) => (
                       <span key={branch.id} className="rounded-full border border-indigo-400/20 bg-indigo-500/10 px-3 py-1 text-xs font-black text-indigo-100">
@@ -9091,7 +9091,7 @@ export default function App() {
             {t('library.titleA')}<br />
             <span className="story-library-title-accent">{t('library.titleB')}</span>
           </h2>
-          <p className="mt-5 max-w-2xl text-base font-medium leading-relaxed text-zinc-400 sm:text-lg">
+          <p className="mt-5 max-w-2xl text-base font-medium leading-relaxed text-app-muted sm:text-lg">
             {t('library.subtitle')}
           </p>
         </div>
@@ -9114,14 +9114,14 @@ export default function App() {
               value={authEmail}
               onChange={(event) => setAuthEmail(event.target.value)}
               placeholder="邮箱"
-              className="rounded-xl border border-amber-500/20 bg-zinc-950 px-4 py-3 text-sm text-white outline-none transition-colors focus:border-amber-400"
+              className="rounded-xl border border-amber-500/20 bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none transition-colors focus:border-amber-400"
             />
             <input
               type="password"
               value={authPassword}
               onChange={(event) => setAuthPassword(event.target.value)}
               placeholder="密码（至少 6 位）"
-              className="rounded-xl border border-amber-500/20 bg-zinc-950 px-4 py-3 text-sm text-white outline-none transition-colors focus:border-amber-400"
+              className="rounded-xl border border-amber-500/20 bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none transition-colors focus:border-amber-400"
             />
             <button
               type="button"
@@ -9235,9 +9235,9 @@ export default function App() {
         {myStories.length > 0 && (
           <section>
             <div className="mb-6 flex items-center gap-3">
-              <div className="h-px flex-1 bg-zinc-800" />
-              <h3 className="text-sm font-black uppercase tracking-[0.2em] text-zinc-500">我的创作</h3>
-              <div className="h-px flex-1 bg-zinc-800" />
+              <div className="h-px flex-1 bg-app-surface-soft" />
+              <h3 className="text-sm font-black uppercase tracking-[0.2em] text-app-muted">我的创作</h3>
+              <div className="h-px flex-1 bg-app-surface-soft" />
             </div>
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {myStories.map(s => renderStoryCard(s, false))}
@@ -9247,9 +9247,9 @@ export default function App() {
 
         <section>
           <div className="mb-6 flex items-center gap-3">
-            <div className="h-px flex-1 bg-zinc-800" />
-            <h3 className="text-sm font-black uppercase tracking-[0.2em] text-zinc-500">最新作品</h3>
-            <div className="h-px flex-1 bg-zinc-800" />
+            <div className="h-px flex-1 bg-app-surface-soft" />
+            <h3 className="text-sm font-black uppercase tracking-[0.2em] text-app-muted">最新作品</h3>
+            <div className="h-px flex-1 bg-app-surface-soft" />
           </div>
           {isLoadingStories ? (
             <div className="flex h-64 items-center justify-center">
@@ -9312,10 +9312,10 @@ export default function App() {
             <div className="line-clamp-2 text-sm font-black text-white leading-snug">{formatBookTitle(story.title)}</div>
             <div className="shrink-0 rounded-full bg-indigo-500/15 px-2 py-1 text-[10px] font-black text-indigo-300">收藏原作</div>
           </div>
-          <div className="mb-3 text-[11px] font-bold text-zinc-500">
+          <div className="mb-3 text-[11px] font-bold text-app-muted">
             <AuthorNameButton prefix="原作者：" authorId={story.originalAuthorId || story.sourceStoryId || story.authorId} authorName={getOriginalAuthorName(story)} />
           </div>
-          <div className="line-clamp-3 text-xs leading-relaxed text-zinc-500 mb-4">{story.main_axis || '暂无主轴摘要。'}</div>
+          <div className="line-clamp-3 text-xs leading-relaxed text-app-muted mb-4">{story.main_axis || '暂无主轴摘要。'}</div>
 
           {!isChoosingThis ? (
             <button
@@ -9349,18 +9349,18 @@ export default function App() {
                   setArchiveChoiceStoryId(null);
                   void openReadonlyStory(story.sourceStoryId || story.id, { allowBack: true, returnTarget: 'ARCHIVE' });
                 }}
-                className="flex w-full items-center gap-3 rounded-xl border border-zinc-700 bg-zinc-900/80 px-3 py-2.5 text-left text-sm font-bold text-zinc-200 transition-colors hover:border-zinc-500 hover:bg-zinc-800 active:scale-[0.98]"
+                className="flex w-full items-center gap-3 rounded-xl border border-app-border bg-app-surface/80 px-3 py-2.5 text-left text-sm font-bold text-app-text transition-colors hover:border-zinc-500 hover:bg-app-surface-soft active:scale-[0.98]"
               >
                 <BookOpen className="h-4 w-4 shrink-0" />
                 <div>
                   <div>观看命运</div>
-                  <div className="text-[10px] font-normal text-zinc-500">以只读方式阅读原版故事</div>
+                  <div className="text-[10px] font-normal text-app-muted">以只读方式阅读原版故事</div>
                 </div>
               </button>
               <button
                 type="button"
                 onClick={() => setArchiveChoiceStoryId(null)}
-                className="w-full rounded-xl px-3 py-1.5 text-center text-xs font-bold text-zinc-600 hover:text-zinc-400 transition-colors"
+                className="w-full rounded-xl px-3 py-1.5 text-center text-xs font-bold text-zinc-600 hover:text-app-muted transition-colors"
               >
                 取消
               </button>
@@ -9396,7 +9396,7 @@ export default function App() {
         ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20'
         : v === 'unlisted'
         ? 'bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20'
-        : 'bg-zinc-800/80 border-zinc-700 text-zinc-400 hover:bg-zinc-700';
+        : 'bg-app-surface-soft/80 border-app-border text-app-muted hover:bg-app-surface-soft';
 
     const renderSavedCard = (story: any) => (
       <div key={story.id} className="app-card flex flex-col rounded-[1.5rem] p-5">
@@ -9410,19 +9410,19 @@ export default function App() {
               title="点击切换可见范围"
               className={`block w-full appearance-none rounded-full border px-2.5 py-1 pr-6 text-[10px] font-black outline-none transition-colors cursor-pointer text-center ${visibilityClass(story.visibility)}`}
             >
-              <option value="unlisted" className="bg-zinc-900 text-zinc-100">非公开链接</option>
-              <option value="private" className="bg-zinc-900 text-zinc-100">私人</option>
+              <option value="unlisted" className="bg-app-surface text-app-text">非公开链接</option>
+              <option value="private" className="bg-app-surface text-app-text">私人</option>
             </select>
             <div className="pointer-events-none absolute inset-y-0 right-1 flex items-center px-1 text-inherit opacity-70">
               <svg className="h-3 w-3 fill-current" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" /></svg>
             </div>
           </div>
         </div>
-        <div className="mb-3 grid gap-1 text-[11px] font-bold text-zinc-500">
+        <div className="mb-3 grid gap-1 text-[11px] font-bold text-app-muted">
           <div><AuthorNameButton prefix="原作者：" authorId={story.originalAuthorId || story.sourceStoryId || story.authorId} authorName={getOriginalAuthorName(story)} /></div>
           {getIntervenerName(story) && <div>干涉者：{getIntervenerName(story)}</div>}
         </div>
-        <div className="line-clamp-3 text-xs leading-relaxed text-zinc-500 flex-1">{story.main_axis || '暂无主轴摘要。'}</div>
+        <div className="line-clamp-3 text-xs leading-relaxed text-app-muted flex-1">{story.main_axis || '暂无主轴摘要。'}</div>
         <div className="mt-4 flex gap-1.5 sm:gap-2">
           <button
             type="button"
@@ -9460,7 +9460,7 @@ export default function App() {
           <div className="min-w-0">
             <div className="text-xs font-black uppercase tracking-[0.18em] text-indigo-300">追踪作者</div>
             <div className="mt-1 truncate text-lg font-black text-white">{author.authorName || `游客+${shortUserId(author.authorId)}`}</div>
-            <div className="mt-1 text-[11px] font-bold text-zinc-500">追踪于 {new Date(author.followedAt || Date.now()).toLocaleDateString()}</div>
+            <div className="mt-1 text-[11px] font-bold text-app-muted">追踪于 {new Date(author.followedAt || Date.now()).toLocaleDateString()}</div>
           </div>
           <div className="rounded-full border border-indigo-400/20 bg-indigo-500/10 p-2 text-indigo-200">
             <Bell className="h-4 w-4" />
@@ -9501,7 +9501,7 @@ export default function App() {
         <div className="mb-10 flex items-start justify-between gap-4">
           <div>
             <h2 className="text-3xl font-black text-white sm:text-4xl">{t('archive.title')}</h2>
-            <p className="mt-2 text-sm text-zinc-500">{t('archive.subtitle')}</p>
+            <p className="mt-2 text-sm text-app-muted">{t('archive.subtitle')}</p>
           </div>
           <BackNavButton label={archiveReturnTarget === 'PLAYING' ? (isEnglish ? 'Back to play' : '返回游玩页') : (isEnglish ? 'Back to library' : '返回作品库')} onClick={leaveArchiveView} />
         </div>
@@ -9521,7 +9521,7 @@ export default function App() {
           )}
           {/* Tab 切换栏 */}
           <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="flex rounded-2xl border border-zinc-800 bg-zinc-950/70 p-1 shrink-0">
+            <div className="flex rounded-2xl border border-app-border bg-app-bg/70 p-1 shrink-0">
               {([
                 { id: 'favorite', label: t('archive.favoriteTab') },
                 { id: 'saved', label: t('archive.savedTab') },
@@ -9532,7 +9532,7 @@ export default function App() {
                   type="button"
                   onClick={() => { setArchiveTab(tab.id as 'favorite' | 'saved' | 'authors'); setArchiveChoiceStoryId(null); }}
                   className={`rounded-xl px-4 py-2 text-sm font-black transition-all duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 ${
-                    archiveTab === tab.id ? 'bg-indigo-600 text-white shadow-lg' : 'text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200'
+                    archiveTab === tab.id ? 'bg-indigo-600 text-white shadow-lg' : 'text-app-muted hover:bg-app-surface hover:text-app-text'
                   }`}
                 >
                   {tab.label} <span className="ml-1 text-[10px] opacity-70">{tab.id === 'authors' ? followedAuthors.length : archiveStories.filter((s: any) => tab.id === 'favorite' ? s.archiveKind === 'favorite' : s.archiveKind !== 'favorite').length}</span>
@@ -9547,7 +9547,7 @@ export default function App() {
                   value={archiveSearch}
                   onChange={(event) => { setArchiveSearch(event.target.value); setArchiveChoiceStoryId(null); }}
                   placeholder={isEnglish ? 'Search title or premise' : '搜索标题或主轴内容'}
-                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950/80 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+                  className="w-full rounded-xl border border-app-border bg-app-input-bg/80 px-3 py-2 text-sm text-app-text outline-none focus:border-indigo-500"
                 />
                 <button
                   type="button"
@@ -9659,7 +9659,7 @@ export default function App() {
                   初次进入
                 </div>
                 <h2 className="mt-4 text-2xl font-black text-white">欢迎来到命运故事台</h2>
-                <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+                <p className="mt-2 text-sm leading-relaxed text-app-muted">
                   这里不是普通阅读器：可阅读故事、干涉章节、收藏命运线，也可生成或改编作品。
                 </p>
               </div>
@@ -9673,9 +9673,9 @@ export default function App() {
                 { title: '干涉章节', desc: '每局最多三次，系统会重写相关命运线。' },
                 { title: '收藏与分享', desc: '满意的命运可收藏到馆藏，或分享给其他读者。' },
               ].map((item) => (
-                <div key={item.title} className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
-                  <div className="text-sm font-black text-zinc-100">{item.title}</div>
-                  <div className="mt-2 text-xs leading-relaxed text-zinc-500">{item.desc}</div>
+                <div key={item.title} className="rounded-2xl border border-app-border bg-app-surface/40 p-4">
+                  <div className="text-sm font-black text-app-text">{item.title}</div>
+                  <div className="mt-2 text-xs leading-relaxed text-app-muted">{item.desc}</div>
                 </div>
               ))}
             </div>
@@ -9708,7 +9708,7 @@ export default function App() {
             initial={{ opacity: 0, y: 18, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 18, scale: 0.98 }}
-            className="app-modal-surface app-modal-safe-height w-full max-w-lg overflow-y-auto rounded-[2rem] border border-zinc-800 p-5 shadow-2xl sm:p-6"
+            className="app-modal-surface app-modal-safe-height w-full max-w-lg overflow-y-auto rounded-[2rem] border border-app-border p-5 shadow-2xl sm:p-6"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-5 flex items-start gap-4">
@@ -9717,7 +9717,7 @@ export default function App() {
               </div>
               <div>
                 <h2 className="text-xl font-black text-white">接收作品动态提醒？</h2>
-                <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+                <p className="mt-2 text-sm leading-relaxed text-app-muted">
                   开启后，作者更新、作品被点赞收藏、追踪作者发布新作时，可以在手机收到提醒。也可以之后到个人中心的设置里开启。
                 </p>
               </div>
@@ -9822,7 +9822,7 @@ export default function App() {
             {tr('世界观设定', 'World Settings')}
           </div>
           <h1 className="mt-4 text-3xl font-black text-white sm:text-4xl">{pageTitle}</h1>
-          <p className="mt-3 max-w-3xl text-sm leading-relaxed text-zinc-400">
+          <p className="mt-3 max-w-3xl text-sm leading-relaxed text-app-muted">
             {pageDescription}
           </p>
         </div>
@@ -9831,11 +9831,11 @@ export default function App() {
         <div className="grid gap-6">
           <section className="space-y-4">
             {isSeriesWorldListPage && (
-            <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/60 p-4">
+            <div className="rounded-[1.5rem] border border-app-border bg-app-bg/60 p-4">
               <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <div className="text-sm font-black text-white">{tr('已保存设定', 'Saved settings')}</div>
-                  <p className="mt-1 text-xs leading-relaxed text-zinc-500">{tr('这是独立的收录页，只负责查找、进入编辑和删除后的管理。', 'This is a dedicated library page for finding, opening, and managing saved settings.')}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-app-muted">{tr('这是独立的收录页，只负责查找、进入编辑和删除后的管理。', 'This is a dedicated library page for finding, opening, and managing saved settings.')}</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button type="button" onClick={() => navigateTo('SERIES_WORLD_GENERATE')} className={semanticButtonClass('primary', { compact: true })}>
@@ -9849,7 +9849,7 @@ export default function App() {
                 </div>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {seriesWorlds.length === 0 && <div className="rounded-2xl bg-zinc-900/60 p-4 text-sm text-zinc-500 sm:col-span-2 lg:col-span-3">{tr('还没有世界观设定，可以先生成或手动建立一个。', 'No world setting yet. Generate one or create a manual draft first.')}</div>}
+                {seriesWorlds.length === 0 && <div className="rounded-2xl bg-app-surface/60 p-4 text-sm text-app-muted sm:col-span-2 lg:col-span-3">{tr('还没有世界观设定，可以先生成或手动建立一个。', 'No world setting yet. Generate one or create a manual draft first.')}</div>}
                 {seriesWorlds.map((series) => (
                   <button
                     key={series.id}
@@ -9863,10 +9863,10 @@ export default function App() {
                       navigateTo('SERIES_WORLD_EDIT');
                       void loadContinuityNodesForSeries(series.id);
                     }}
-                    className={`w-full rounded-2xl border p-4 text-left transition-all hover:-translate-y-0.5 active:scale-[0.98] ${selectedSeriesId === series.id ? 'border-indigo-400 bg-indigo-500/15' : 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-600'}`}
+                    className={`w-full rounded-2xl border p-4 text-left transition-all hover:-translate-y-0.5 active:scale-[0.98] ${selectedSeriesId === series.id ? 'border-indigo-400 bg-indigo-500/15' : 'border-app-border bg-app-surface/40 hover:border-zinc-600'}`}
                   >
                     <div className="text-sm font-black text-white">{series.title}</div>
-                    <div className="mt-1 line-clamp-2 text-xs leading-relaxed text-zinc-500">{(series.worldBible as any)?.worldview || series.pitch || tr('尚未填写世界观概况', 'No world overview yet')}</div>
+                    <div className="mt-1 line-clamp-2 text-xs leading-relaxed text-app-muted">{(series.worldBible as any)?.worldview || series.pitch || tr('尚未填写世界观概况', 'No world overview yet')}</div>
                   </button>
                 ))}
               </div>
@@ -9874,30 +9874,30 @@ export default function App() {
             )}
 
             {isSeriesWorldGeneratePage && (
-            <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/60 p-4">
+            <div className="rounded-[1.5rem] border border-app-border bg-app-bg/60 p-4">
               <div className="mb-4">
                 <div className="text-lg font-black text-white">{tr('世界观生成', 'World setting generation')}</div>
-                <p className="mt-1 text-xs leading-relaxed text-zinc-500">{tr('填写世界观概况即可生成新设定；如果选择来源作品，则会直接从该作品提取世界观概况、角色卡池、支线和结局素材。', 'Write an overview to generate a new setting. If a source story is selected, the app extracts the overview, character cards, branches, and ending material from that story.')}</p>
+                <p className="mt-1 text-xs leading-relaxed text-app-muted">{tr('填写世界观概况即可生成新设定；如果选择来源作品，则会直接从该作品提取世界观概况、角色卡池、支线和结局素材。', 'Write an overview to generate a new setting. If a source story is selected, the app extracts the overview, character cards, branches, and ending material from that story.')}</p>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
-                <input value={seriesForm.title || ''} onChange={(event) => setSeriesForm((prev) => ({ ...prev, title: event.target.value }))} placeholder={tr('世界观设定名称', 'World setting title')} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
-                <input value={seriesGenreText} onChange={(event) => setSeriesForm((prev) => ({ ...prev, genreTags: event.target.value.split(/[,，]/).map((tag) => tag.trim()).filter(Boolean) }))} placeholder={tr('题材标签，以逗号分隔', 'Genre tags, comma-separated')} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
+                <input value={seriesForm.title || ''} onChange={(event) => setSeriesForm((prev) => ({ ...prev, title: event.target.value }))} placeholder={tr('世界观设定名称', 'World setting title')} className="rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500" />
+                <input value={seriesGenreText} onChange={(event) => setSeriesForm((prev) => ({ ...prev, genreTags: event.target.value.split(/[,，]/).map((tag) => tag.trim()).filter(Boolean) }))} placeholder={tr('题材标签，以逗号分隔', 'Genre tags, comma-separated')} className="rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500" />
               </div>
               <textarea
                 value={worldBibleDraft.worldview || ''}
                 onChange={(event) => updateWorldBibleDraft({ worldview: event.target.value })}
                 placeholder={tr('世界观概况：简单描述这个世界的核心感觉、规则、时代、冲突或创作方向。', 'World overview: briefly describe the world’s feel, rules, era, conflict, or creative direction.')}
-                className="mt-3 min-h-32 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                className="mt-3 min-h-32 w-full resize-y rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
               />
-              <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900/35 p-4">
-                <label className="mb-2 block text-xs font-black uppercase tracking-[0.18em] text-zinc-500">{tr('来源作品（可选）', 'Source story (optional)')}</label>
-                <p className="mb-3 text-xs leading-relaxed text-zinc-500">
+              <div className="mt-4 rounded-2xl border border-app-border bg-app-surface/35 p-4">
+                <label className="mb-2 block text-xs font-black uppercase tracking-[0.18em] text-app-muted">{tr('来源作品（可选）', 'Source story (optional)')}</label>
+                <p className="mb-3 text-xs leading-relaxed text-app-muted">
                   {tr('不选择作品时，按上方概况生成世界观；选择作品后，主按钮会改为从该作品提取。', 'Without a story, the button generates from the overview. With a story selected, it extracts from that story.')}
                 </p>
                 <select
                   value={seriesSourceStoryId}
                   onChange={(event) => setSeriesSourceStoryId(event.target.value)}
-                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm text-zinc-200 outline-none"
+                  className="w-full rounded-xl border border-app-border bg-app-input-bg px-3 py-3 text-sm text-app-text outline-none"
                 >
                   <option value="">{tr('不导入作品，生成全新世界观设定', 'No story import; generate a new world setting')}</option>
                   {myStories.map((story: any) => (
@@ -9921,11 +9921,11 @@ export default function App() {
 
           <section className="space-y-6">
             {isSeriesWorldEditPage && (
-            <div className="rounded-[2rem] border border-zinc-800 bg-zinc-950/60 p-5">
+            <div className="rounded-[2rem] border border-app-border bg-app-bg/60 p-5">
               <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <div className="text-lg font-black text-white">{tr('世界观设定草稿', 'World Setting Draft')}</div>
-                  <div className="mt-1 text-xs text-zinc-500">{tr('所有内容都可以手动编辑，保存后才能用于绑定作品。', 'Everything can be edited manually. Save it before binding stories.')}</div>
+                  <div className="mt-1 text-xs text-app-muted">{tr('所有内容都可以手动编辑，保存后才能用于绑定作品。', 'Everything can be edited manually. Save it before binding stories.')}</div>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {selectedSeriesId && (
@@ -9942,21 +9942,21 @@ export default function App() {
               </div>
               {renderInlineHelp('world-editor', '世界观仓库编辑指引', '在此编辑世界观的关键要素。其中【世界基准规则】是AI创作故事时绝对遵守的铁律（例如：魔法在这个世界上已被禁止）；【角色卡池】存放该世界里登场的主要配角与背景；【故事大纲与素材】能为后续作品提供线索。修改完成后，切记点击最下方的『保存世界观』，才能让改动生效。')}
               <div className="grid gap-3 sm:grid-cols-2">
-                <input value={seriesForm.title || ''} onChange={(event) => setSeriesForm((prev) => ({ ...prev, title: event.target.value }))} placeholder={tr('世界观设定名称', 'World setting title')} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
-                <input value={seriesGenreText} onChange={(event) => setSeriesForm((prev) => ({ ...prev, genreTags: event.target.value.split(/[,，]/).map((tag) => tag.trim()).filter(Boolean) }))} placeholder={tr('题材标签，以逗号分隔', 'Genre tags, comma-separated')} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" />
+                <input value={seriesForm.title || ''} onChange={(event) => setSeriesForm((prev) => ({ ...prev, title: event.target.value }))} placeholder={tr('世界观设定名称', 'World setting title')} className="rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500" />
+                <input value={seriesGenreText} onChange={(event) => setSeriesForm((prev) => ({ ...prev, genreTags: event.target.value.split(/[,，]/).map((tag) => tag.trim()).filter(Boolean) }))} placeholder={tr('题材标签，以逗号分隔', 'Genre tags, comma-separated')} className="rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500" />
               </div>
               <textarea
                 value={worldBibleDraft.worldview || ''}
                 onChange={(event) => updateWorldBibleDraft({ worldview: event.target.value })}
                 placeholder={tr('世界观概况：简单描述这个世界的核心感觉、规则、时代、冲突或创作方向，用来让 AI 整理下方三类仓库条目。', 'World overview: briefly describe the world’s feel, rules, era, conflict, or creative direction so AI can organize the archive items below.')}
-                className="mt-3 min-h-32 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                className="mt-3 min-h-32 w-full resize-y rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
               />
               <div className="mt-5 space-y-5">
-                <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/55 p-4">
+                <div className="rounded-[1.5rem] border border-app-border bg-app-bg/55 p-4">
                   <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <div className="text-sm font-black text-white">{tr('世界基准', 'World baseline')}</div>
-                      <p className="mt-1 text-xs leading-relaxed text-zinc-500">{tr('一条一条记录这个世界允许什么、禁止什么、哪些设定必须被遵守。生成作品时可以按需勾选。', 'Record reusable rules one by one: what is allowed, forbidden, or must be obeyed. They can be selected during generation.')}</p>
+                      <p className="mt-1 text-xs leading-relaxed text-app-muted">{tr('一条一条记录这个世界允许什么、禁止什么、哪些设定必须被遵守。生成作品时可以按需勾选。', 'Record reusable rules one by one: what is allowed, forbidden, or must be obeyed. They can be selected during generation.')}</p>
                     </div>
                     <button
                       type="button"
@@ -9969,12 +9969,12 @@ export default function App() {
                   </div>
                   <div className="grid gap-3">
                     {baselineRuleDrafts.length === 0 && (
-                      <div className="rounded-2xl border border-dashed border-zinc-800 p-4 text-xs leading-relaxed text-zinc-500">
+                      <div className="rounded-2xl border border-dashed border-app-border p-4 text-xs leading-relaxed text-app-muted">
                         {tr('还没有世界基准。可以手动新增，或点击左侧从零生成世界观。', 'No baseline rules yet. Add one manually or generate a world setting from scratch.')}
                       </div>
                     )}
                     {baselineRuleDrafts.map((rule, index) => (
-                      <div key={rule.id || index} className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+                      <div key={rule.id || index} className="rounded-2xl border border-app-border bg-app-surface/40 p-4">
                         <div className="mb-3 flex items-center justify-between gap-3">
                           <div className="text-xs font-black uppercase tracking-[0.18em] text-indigo-300">{tr('世界基准', 'Rule')} {index + 1}</div>
                           <button
@@ -9991,37 +9991,37 @@ export default function App() {
                             value={rule.title || ''}
                             onChange={(event) => updateBaselineRuleDraft(index, { title: event.target.value, id: rule.id || `rule_${index + 1}` })}
                             placeholder={tr('基准标题，例如：王都在第二部前不可陷落', 'Rule title, e.g. The capital cannot fall before Part 2')}
-                            className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                            className="rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
                           />
                           <input
                             value={rule.kind || ''}
                             onChange={(event) => updateBaselineRuleDraft(index, { kind: event.target.value })}
                             placeholder={tr('类别', 'Kind')}
-                            className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                            className="rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
                           />
                         </div>
                         <textarea
                           value={rule.detail || rule.rule || ''}
                           onChange={(event) => updateBaselineRuleDraft(index, { detail: event.target.value })}
                           placeholder={tr('具体说明：这条基准如何限制或保护后续作品生成。', 'Details: how this rule limits or protects later story generation.')}
-                          className="min-h-24 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-200 outline-none focus:border-indigo-500"
+                          className="min-h-24 w-full resize-y rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
                         />
                         <input
                           value={normalizeTagList(Array.isArray(rule.tags) ? rule.tags : String(rule.tags || rule.kind || '').split(/[,，]/)).join('，')}
                           onChange={(event) => updateBaselineRuleDraft(index, { tags: normalizeTagList(event.target.value.split(/[,，]/)), kind: '' })}
                           placeholder={tr('标签，可选，例如：角色限制，时间限制，势力规则', 'Tags, optional: character limit, timeline, faction rule')}
-                          className="mt-3 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                          className="mt-3 w-full rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
                         />
                       </div>
                     ))}
                   </div>
                 </div>
 
-                <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/55 p-4">
+                <div className="rounded-[1.5rem] border border-app-border bg-app-bg/55 p-4">
                   <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <div className="text-sm font-black text-white">{tr('角色卡池', 'Character pool')}</div>
-                      <p className="mt-1 text-xs leading-relaxed text-zinc-500">{tr('保存系列内可复用角色。续作默认可以从这里沿用主要角色，不再每次重新发明。', 'Store reusable characters for the series. Sequels can inherit major characters from here by default.')}</p>
+                      <p className="mt-1 text-xs leading-relaxed text-app-muted">{tr('保存系列内可复用角色。续作默认可以从这里沿用主要角色，不再每次重新发明。', 'Store reusable characters for the series. Sequels can inherit major characters from here by default.')}</p>
                     </div>
                     <button
                       type="button"
@@ -10034,12 +10034,12 @@ export default function App() {
                   </div>
                   <div className="grid gap-3">
                     {characterCardDrafts.length === 0 && (
-                      <div className="rounded-2xl border border-dashed border-zinc-800 p-4 text-xs leading-relaxed text-zinc-500">
+                      <div className="rounded-2xl border border-dashed border-app-border p-4 text-xs leading-relaxed text-app-muted">
                         {tr('还没有角色卡。可以加入主角、重要配角、势力代表或会贯穿多部作品的角色。', 'No character cards yet. Add protagonists, key supporting characters, faction representatives, or recurring figures.')}
                       </div>
                     )}
                     {characterCardDrafts.map((card, index) => (
-                      <div key={card.id || index} className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+                      <div key={card.id || index} className="rounded-2xl border border-app-border bg-app-surface/40 p-4">
                         <div className="mb-3 flex items-center justify-between gap-3">
                           <div className="text-xs font-black uppercase tracking-[0.18em] text-amber-300">{tr('角色卡', 'Character')} {index + 1}</div>
                           <button
@@ -10056,37 +10056,37 @@ export default function App() {
                             value={card.name || ''}
                             onChange={(event) => updateCharacterCardDraft(index, { name: event.target.value, id: card.id || `char_${index + 1}` })}
                             placeholder={tr('角色名', 'Character name')}
-                            className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                            className="rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
                           />
                           <input
                             value={card.role || ''}
                             onChange={(event) => updateCharacterCardDraft(index, { role: event.target.value })}
                             placeholder={tr('系列定位，例如：主角/导师/宿敌', 'Series role, e.g. protagonist / mentor / rival')}
-                            className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                            className="rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
                           />
                         </div>
                         <textarea
                           value={card.desc || ''}
                           onChange={(event) => updateCharacterCardDraft(index, { desc: event.target.value })}
                           placeholder={tr('角色说明：身份、动机、矛盾点，以及后续作品可如何使用。', 'Profile: identity, motive, contradiction, and how later stories may use this character.')}
-                          className="mt-3 min-h-24 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-200 outline-none focus:border-indigo-500"
+                          className="mt-3 min-h-24 w-full resize-y rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
                         />
                         <input
                           value={card.status || ''}
                           onChange={(event) => updateCharacterCardDraft(index, { status: event.target.value })}
                           placeholder={tr('默认状态，例如：仍在王都、失踪、被封印', 'Default status, e.g. in the capital / missing / sealed away')}
-                          className="mt-3 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                          className="mt-3 w-full rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
                         />
                       </div>
                     ))}
                   </div>
                 </div>
 
-                <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/55 p-4">
+                <div className="rounded-[1.5rem] border border-app-border bg-app-bg/55 p-4">
                   <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <div className="text-sm font-black text-white">{tr('情节素材', 'Plot material')}</div>
-                      <p className="mt-1 text-xs leading-relaxed text-zinc-500">{tr('记录可复用的伏笔、历史事件、未解谜团或适合未来作品调用的情节素材。', 'Store reusable foreshadowing, historical events, unresolved mysteries, or plot material for future stories.')}</p>
+                      <p className="mt-1 text-xs leading-relaxed text-app-muted">{tr('记录可复用的伏笔、历史事件、未解谜团或适合未来作品调用的情节素材。', 'Store reusable foreshadowing, historical events, unresolved mysteries, or plot material for future stories.')}</p>
                     </div>
                     <button
                       type="button"
@@ -10099,24 +10099,24 @@ export default function App() {
                   </div>
                   <div className="grid gap-3">
                     {plotNoteDrafts.length === 0 && (
-                      <div className="rounded-2xl border border-dashed border-zinc-800 p-4 text-xs leading-relaxed text-zinc-500">
+                      <div className="rounded-2xl border border-dashed border-app-border p-4 text-xs leading-relaxed text-app-muted">
                         {tr('还没有情节素材。可以记录“某场旧战争”“某个未解预言”“某角色的失踪原因”等。', 'No plot material yet. You can record old wars, unsolved prophecies, missing-character causes, and similar material.')}
                       </div>
                     )}
                     {plotNoteDrafts.map((note, index) => (
-                      <div key={note.id || index} className="grid gap-2 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-3">
+                      <div key={note.id || index} className="grid gap-2 rounded-2xl border border-app-border bg-app-surface/40 p-3">
                         <div className="grid gap-2 sm:grid-cols-[1fr_9rem_auto]">
                           <input
                             value={note.title || ''}
                             onChange={(event) => updatePlotNoteDraft(index, { title: event.target.value, id: note.id || `plot_${index + 1}` })}
                             placeholder={tr('素材标题', 'Material title')}
-                            className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500"
+                            className="rounded-xl border border-app-border bg-app-input-bg px-3 py-2 text-sm text-app-text outline-none focus:border-indigo-500"
                           />
                           <input
                             value={note.tag || ''}
                             onChange={(event) => updatePlotNoteDraft(index, { tag: event.target.value })}
                             placeholder={tr('标签', 'Tag')}
-                            className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500"
+                            className="rounded-xl border border-app-border bg-app-input-bg px-3 py-2 text-sm text-app-text outline-none focus:border-indigo-500"
                           />
                           <button
                             type="button"
@@ -10131,7 +10131,7 @@ export default function App() {
                           value={note.detail || ''}
                           onChange={(event) => updatePlotNoteDraft(index, { detail: event.target.value })}
                           placeholder={tr('情节素材内容', 'Plot material details')}
-                          className="min-h-20 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-200 outline-none focus:border-indigo-500"
+                          className="min-h-20 w-full resize-y rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
                         />
                       </div>
                     ))}
@@ -10159,12 +10159,12 @@ export default function App() {
           {tr('命运引擎', 'Fate Engine')}
         </div>
         <h1 className="text-4xl font-black text-white sm:text-5xl">{tr('快速生成故事', 'Quick Story Generation')}</h1>
-        <p className="text-sm leading-relaxed text-zinc-500 sm:text-base">
+        <p className="text-sm leading-relaxed text-app-muted sm:text-base">
           {tr('选择 1 到 4 个主题，或直接输入故事大纲。系统会先生成完整蓝图，再预先写好前 3 章供玩家开始干涉。', 'Choose 1 to 4 tags or enter an outline. The system creates a full blueprint, then writes the first 3 chapters so play can begin quickly.')}
         </p>
       </div>
 
-      <div className="mx-auto mt-8 flex w-full max-w-xl rounded-full border border-zinc-800 bg-zinc-950/70 p-1 text-xs font-black">
+      <div className="mx-auto mt-8 flex w-full max-w-xl rounded-full border border-app-border bg-app-bg/70 p-1 text-xs font-black">
         {([
           { id: 'quiz' as const, label: appLanguage === 'en-US' ? 'Play by quiz' : '想玩故事' },
           { id: 'advanced' as const, label: appLanguage === 'en-US' ? 'Advanced creation' : '高级创作设置' },
@@ -10173,7 +10173,7 @@ export default function App() {
             key={mode.id}
             type="button"
             onClick={() => setQuickGenerationMode(mode.id)}
-            className={`flex-1 rounded-full px-3 py-2 transition-colors ${quickGenerationMode === mode.id ? 'bg-indigo-500 text-white' : 'text-zinc-500 hover:text-zinc-200'}`}
+            className={`flex-1 rounded-full px-3 py-2 transition-colors ${quickGenerationMode === mode.id ? 'bg-indigo-500 text-white' : 'text-app-muted hover:text-app-text'}`}
           >
             {mode.label}
           </button>
@@ -10185,7 +10185,7 @@ export default function App() {
         const selected = asSafeArray<string>(quickQuizAnswers[step.id]);
         const isLastStep = quickQuizStepIndex >= QUICK_QUIZ_STEPS.length - 1;
         return (
-          <div className="mx-auto mt-8 w-full max-w-4xl rounded-[2rem] border border-zinc-800 bg-zinc-900/30 p-5 text-left shadow-2xl shadow-black/10 sm:p-6">
+          <div className="mx-auto mt-8 w-full max-w-4xl rounded-[2rem] border border-app-border bg-app-surface/30 p-5 text-left shadow-2xl shadow-black/10 sm:p-6">
             <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="text-sm font-black text-amber-100">
@@ -10206,23 +10206,23 @@ export default function App() {
                 {appLanguage === 'en-US' ? 'Fully random' : '全随机生成'}
               </button>
             </div>
-            <div className="mb-5 rounded-2xl border border-zinc-800 bg-zinc-950/55 p-4">
+            <div className="mb-5 rounded-2xl border border-app-border bg-app-bg/55 p-4">
               <button
                 type="button"
                 onClick={() => setQuickCharacterSeed((prev) => ({ ...prev, enabled: !prev.enabled }))}
                 className="flex w-full items-center justify-between gap-3 text-left"
               >
                 <div>
-                  <div className="text-sm font-black text-zinc-100">
+                  <div className="text-sm font-black text-app-text">
                     {appLanguage === 'en-US' ? 'Use a character idea?' : '有想放进故事的人物吗？'}
                   </div>
-                  <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+                  <p className="mt-1 text-xs leading-relaxed text-app-muted">
                     {appLanguage === 'en-US'
                       ? 'Optional. Add a person, relationship, or character seed for the story to build around.'
                       : '可选。可以填一个人物、关系或人设需求，让故事围绕它自然展开。'}
                   </p>
                 </div>
-                <span className={`rounded-full px-3 py-1 text-xs font-black ${quickCharacterSeed.enabled ? 'bg-indigo-500 text-white' : 'bg-zinc-800 text-zinc-400'}`}>
+                <span className={`rounded-full px-3 py-1 text-xs font-black ${quickCharacterSeed.enabled ? 'bg-indigo-500 text-white' : 'bg-app-surface-soft text-app-muted'}`}>
                   {quickCharacterSeed.enabled ? (appLanguage === 'en-US' ? 'On' : '已开启') : (appLanguage === 'en-US' ? 'Skip' : '跳过')}
                 </span>
               </button>
@@ -10233,13 +10233,13 @@ export default function App() {
                       value={quickCharacterSeed.name}
                       onChange={(event) => setQuickCharacterSeed((prev) => ({ ...prev, name: event.target.value }))}
                       placeholder={appLanguage === 'en-US' ? 'Character name, e.g. my sister' : '人物名称，例如：妹妹'}
-                      className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-200 outline-none transition-colors focus:border-indigo-500"
+                      className="w-full rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none transition-colors focus:border-indigo-500"
                     />
                     <input
                       value={quickCharacterSeed.role}
                       onChange={(event) => setQuickCharacterSeed((prev) => ({ ...prev, role: event.target.value }))}
                       placeholder={appLanguage === 'en-US' ? 'Identity or relationship' : '身份或关系，例如：主角的妹妹'}
-                      className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-200 outline-none transition-colors focus:border-indigo-500"
+                      className="w-full rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none transition-colors focus:border-indigo-500"
                     />
                   </div>
                   <div className="grid gap-2 sm:grid-cols-3">
@@ -10255,7 +10255,7 @@ export default function App() {
                         className={`rounded-xl border px-3 py-2 text-xs font-black transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
                           quickCharacterSeed.position === option.value
                             ? 'border-indigo-400 bg-indigo-500/15 text-indigo-100'
-                            : 'border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
+                            : 'border-app-border bg-app-surface/50 text-app-muted hover:border-zinc-600 hover:text-app-text'
                         }`}
                       >
                         {option.label}
@@ -10266,7 +10266,7 @@ export default function App() {
                     value={quickCharacterSeed.note}
                     onChange={(event) => setQuickCharacterSeed((prev) => ({ ...prev, note: event.target.value }))}
                     placeholder={appLanguage === 'en-US' ? 'Optional note: personality, secret, wish, conflict...' : '可选补充：性格、秘密、愿望、矛盾点……'}
-                    className="min-h-24 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-200 outline-none transition-colors focus:border-indigo-500"
+                    className="min-h-24 w-full resize-y rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none transition-colors focus:border-indigo-500"
                   />
                 </div>
               )}
@@ -10277,9 +10277,9 @@ export default function App() {
                   {appLanguage === 'en-US' ? `Step ${quickQuizStepIndex + 1}/${QUICK_QUIZ_STEPS.length}` : `第 ${quickQuizStepIndex + 1}/${QUICK_QUIZ_STEPS.length} 步`}
                 </div>
                 <h2 className="mt-2 text-2xl font-black text-white">{quickText(step.title)}</h2>
-                <p className="mt-2 text-sm leading-relaxed text-zinc-500">{quickText(step.subtitle)}</p>
+                <p className="mt-2 text-sm leading-relaxed text-app-muted">{quickText(step.subtitle)}</p>
               </div>
-              <div className="h-2 overflow-hidden rounded-full bg-zinc-800 sm:w-40">
+              <div className="h-2 overflow-hidden rounded-full bg-app-surface-soft sm:w-40">
                 <div
                   className="h-full rounded-full bg-indigo-400 transition-all"
                   style={{ width: `${((quickQuizStepIndex + 1) / QUICK_QUIZ_STEPS.length) * 100}%` }}
@@ -10298,7 +10298,7 @@ export default function App() {
                     className={`min-h-16 rounded-2xl border px-4 py-3 text-left transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
                       active
                         ? 'border-indigo-400 bg-indigo-500/15 text-indigo-100 shadow-lg shadow-indigo-950/30'
-                        : 'border-zinc-800 bg-zinc-950/60 text-zinc-300 hover:border-zinc-600 hover:bg-zinc-900'
+                        : 'border-app-border bg-app-bg/60 text-app-text hover:border-zinc-600 hover:bg-app-surface'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-3">
@@ -10354,18 +10354,18 @@ export default function App() {
             key={template.id}
             type="button"
             onClick={() => applyQuickStoryTemplate(template)}
-            className="group rounded-[1.5rem] border border-zinc-800 bg-zinc-900/40 p-4 text-left transition-all hover:-translate-y-1 hover:border-indigo-400/50 hover:bg-indigo-500/10 active:scale-[0.98]"
+            className="group rounded-[1.5rem] border border-app-border bg-app-surface/40 p-4 text-left transition-all hover:-translate-y-1 hover:border-indigo-400/50 hover:bg-indigo-500/10 active:scale-[0.98]"
           >
             <div className="flex items-center justify-between gap-3">
-              <span className="text-base font-black text-zinc-100 group-hover:text-white">{isEnglish ? QUICK_STORY_TEMPLATE_EN[template.id]?.label || template.label : template.label}</span>
+              <span className="text-base font-black text-app-text group-hover:text-white">{isEnglish ? QUICK_STORY_TEMPLATE_EN[template.id]?.label || template.label : template.label}</span>
               <span className="rounded-full border border-indigo-400/20 bg-indigo-500/10 px-2 py-1 text-[10px] font-black text-indigo-200">
                 {isEnglish ? QUICK_STORY_TEMPLATE_EN[template.id]?.badge || template.badge : template.badge}
               </span>
             </div>
-            <p className="mt-3 text-xs leading-relaxed text-zinc-500 group-hover:text-zinc-300">{isEnglish ? QUICK_STORY_TEMPLATE_EN[template.id]?.hint || template.hint : template.hint}</p>
+            <p className="mt-3 text-xs leading-relaxed text-app-muted group-hover:text-app-text">{isEnglish ? QUICK_STORY_TEMPLATE_EN[template.id]?.hint || template.hint : template.hint}</p>
             <div className="mt-4 flex flex-wrap gap-1.5">
               {(isEnglish ? QUICK_STORY_TEMPLATE_EN[template.id]?.tags || template.tags : template.tags).map((tag) => (
-                <span key={tag} className="rounded-full bg-zinc-950 px-2 py-1 text-[10px] font-bold text-zinc-400">
+                <span key={tag} className="rounded-full bg-app-bg px-2 py-1 text-[10px] font-bold text-app-muted">
                   {tag}
                 </span>
               ))}
@@ -10375,7 +10375,7 @@ export default function App() {
       </div>
 
       <div className="mx-auto mt-6 w-full max-w-2xl px-4 text-left">
-        <label className="mb-3 block text-sm font-bold text-zinc-300">{tr('主题与标签（以逗号分隔）', 'Themes and tags, comma-separated')}</label>
+        <label className="mb-3 block text-sm font-bold text-app-text">{tr('主题与标签（以逗号分隔）', 'Themes and tags, comma-separated')}</label>
         <input
           value={themeInputText}
           onChange={(event) => {
@@ -10384,7 +10384,7 @@ export default function App() {
              setSelectedThemes(val.split(/[,，]/).map(s => s.trim()).filter(Boolean));
           }}
           placeholder={tr('在此手动输入标签或点击下方快速添加', 'Enter tags here or tap quick tags below')}
-          className="w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-sm text-zinc-200 outline-none transition-colors focus:border-indigo-500"
+          className="w-full rounded-2xl border border-app-border bg-app-input-bg px-4 py-4 text-sm text-app-text outline-none transition-colors focus:border-indigo-500"
         />
         <div className="mt-4 flex flex-wrap gap-2">
           {THEMES.map(tag => (
@@ -10400,7 +10400,7 @@ export default function App() {
                  setThemeInputText(newText);
                  setSelectedThemes(newText.split(/[,，]/).map(s => s.trim()).filter(Boolean));
               }}
-              className="rounded-lg bg-zinc-800/50 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-white"
+              className="rounded-lg bg-app-surface-soft/50 px-3 py-1.5 text-xs text-app-text transition-colors hover:bg-app-surface-soft hover:text-white"
             >
               + {isEnglish ? THEME_LABEL_EN[tag] || tag : tag}
             </button>
@@ -10414,7 +10414,7 @@ export default function App() {
           <select
             value={quickSeriesBindingId}
             onChange={(event) => setQuickSeriesBindingId(event.target.value)}
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-200 outline-none focus:border-indigo-500"
+            className="w-full rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
           >
             <option value="">{tr('不套用世界观设定', 'No world setting')}</option>
             {seriesWorlds.map((series) => (
@@ -10433,14 +10433,14 @@ export default function App() {
             const continuityEndings = asSafeArray<any>(quickContinuitySourceStory?.endings);
             return (
               <div className="mt-4 space-y-4">
-                <div className="border-t border-zinc-800 pt-4">
-                  <div className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-zinc-500">{tr('世界基准', 'World baseline')}</div>
+                <div className="border-t border-app-border pt-4">
+                  <div className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-app-muted">{tr('世界基准', 'World baseline')}</div>
                   {baselineRules.length === 0 ? (
-                    <div className="text-xs leading-relaxed text-zinc-500">{tr('该世界观设定还没有条目化基准；生成时只会参考世界观概况。', 'No itemized baseline rules yet; generation will only use the world overview as reference.')}</div>
+                    <div className="text-xs leading-relaxed text-app-muted">{tr('该世界观设定还没有条目化基准；生成时只会参考世界观概况。', 'No itemized baseline rules yet; generation will only use the world overview as reference.')}</div>
                   ) : (
                     <div className="grid gap-2">
                       {baselineRules.map((rule) => (
-                        <label key={rule.id} className="flex items-start gap-2 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 text-xs text-zinc-300">
+                        <label key={rule.id} className="flex items-start gap-2 rounded-xl border border-app-border bg-app-surface/50 p-3 text-xs text-app-text">
                           <input
                             type="checkbox"
                             checked={quickSeriesSelection.baselineRuleIds.includes(rule.id)}
@@ -10453,7 +10453,7 @@ export default function App() {
                             className="mt-1 accent-indigo-500"
                           />
                           <span>
-                            <span className="block font-black leading-relaxed text-zinc-100">{rule.detail || rule.title}</span>
+                            <span className="block font-black leading-relaxed text-app-text">{rule.detail || rule.title}</span>
                             {normalizeTagList(Array.isArray(rule.tags) ? rule.tags : String(rule.tags || rule.kind || '').split(/[,，]/)).length > 0 && (
                               <span className="mt-2 flex flex-wrap gap-1.5">
                                 {normalizeTagList(Array.isArray(rule.tags) ? rule.tags : String(rule.tags || rule.kind || '').split(/[,，]/)).map((tag) => (
@@ -10467,14 +10467,14 @@ export default function App() {
                     </div>
                   )}
                 </div>
-                <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-3">
-                  <div className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-zinc-500">{tr('角色卡池', 'Character pool')}</div>
+                <div className="rounded-2xl border border-app-border bg-app-bg/60 p-3">
+                  <div className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-app-muted">{tr('角色卡池', 'Character pool')}</div>
                   {characterCards.length === 0 ? (
-                    <div className="text-xs leading-relaxed text-zinc-500">{tr('该世界观设定还没有角色卡；生成时会根据本次情节重新设计角色。', 'No character cards yet; this story will create its own cast.')}</div>
+                    <div className="text-xs leading-relaxed text-app-muted">{tr('该世界观设定还没有角色卡；生成时会根据本次情节重新设计角色。', 'No character cards yet; this story will create its own cast.')}</div>
                   ) : (
                     <div className="grid gap-2 sm:grid-cols-2">
                       {characterCards.map((card) => (
-                        <label key={card.id} className="flex items-start gap-2 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 text-xs text-zinc-300">
+                        <label key={card.id} className="flex items-start gap-2 rounded-xl border border-app-border bg-app-surface/50 p-3 text-xs text-app-text">
                           <input
                             type="checkbox"
                             checked={quickSeriesSelection.characterIds.includes(card.id)}
@@ -10487,16 +10487,16 @@ export default function App() {
                             className="mt-1 accent-indigo-500"
                           />
                           <span>
-                            <span className="block font-black text-zinc-100">{card.name}</span>
-                            <span className="mt-1 block leading-relaxed text-zinc-500">{card.desc || card.role || tr('系列角色', 'Series character')}</span>
+                            <span className="block font-black text-app-text">{card.name}</span>
+                            <span className="mt-1 block leading-relaxed text-app-muted">{card.desc || card.role || tr('系列角色', 'Series character')}</span>
                           </span>
                         </label>
                       ))}
                     </div>
                   )}
                 </div>
-                <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-3">
-                  <label className="flex items-center gap-2 text-sm font-black text-zinc-200">
+                <div className="rounded-2xl border border-app-border bg-app-bg/60 p-3">
+                  <label className="flex items-center gap-2 text-sm font-black text-app-text">
                     <input
                       type="checkbox"
                       checked={quickSeriesSelection.useContinuity}
@@ -10510,7 +10510,7 @@ export default function App() {
                       <select
                         value={quickSeriesSelection.sourceStoryId}
                         onChange={(event) => setQuickSeriesSelection((prev) => ({ ...prev, sourceStoryId: event.target.value, requiredBranchIds: [], endingId: '', continuityNodeId: '' }))}
-                        className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm text-zinc-200 outline-none"
+                        className="rounded-xl border border-app-border bg-app-input-bg px-3 py-3 text-sm text-app-text outline-none"
                       >
                         <option value="">{tr('选择前作', 'Choose previous story')}</option>
                         {seriesStoryOptions.map((story: any) => (
@@ -10518,7 +10518,7 @@ export default function App() {
                         ))}
                       </select>
                       {seriesStoryOptions.length === 0 && (
-                        <div className="text-xs leading-relaxed text-zinc-500">{tr('该世界观下还没有可作为前作的作品。请先生成或绑定第一部。', 'No previous story is bound to this world setting yet.')}</div>
+                        <div className="text-xs leading-relaxed text-app-muted">{tr('该世界观下还没有可作为前作的作品。请先生成或绑定第一部。', 'No previous story is bound to this world setting yet.')}</div>
                       )}
                       {quickContinuityLoading && (
                         <div className="flex items-center gap-2 text-xs font-bold text-indigo-200"><Loader2 className="h-3.5 w-3.5 animate-spin" />{tr('正在读取前作支线与结局...', 'Loading branches and endings...')}</div>
@@ -10526,15 +10526,15 @@ export default function App() {
                       {quickSeriesSelection.sourceStoryId && !quickContinuityLoading && (
                         <div className="grid gap-3">
                           <div>
-                            <div className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-zinc-500">{tr('前置支线，可复选', 'Required branches')}</div>
+                            <div className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-app-muted">{tr('前置支线，可复选', 'Required branches')}</div>
                             {continuityBranches.length === 0 ? (
-                              <div className="text-xs leading-relaxed text-zinc-500">{tr('该前作没有可选支线。', 'This previous story has no branches.')}</div>
+                              <div className="text-xs leading-relaxed text-app-muted">{tr('该前作没有可选支线。', 'This previous story has no branches.')}</div>
                             ) : (
                               <div className="grid gap-2 sm:grid-cols-2">
                                 {continuityBranches.map((branch: any) => {
                                   const branchId = String(branch.id || '');
                                   return (
-                                    <label key={branchId} className="flex items-start gap-2 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 text-xs text-zinc-300">
+                                    <label key={branchId} className="flex items-start gap-2 rounded-xl border border-app-border bg-app-surface/50 p-3 text-xs text-app-text">
                                       <input
                                         type="checkbox"
                                         checked={quickSeriesSelection.requiredBranchIds.includes(branchId)}
@@ -10546,7 +10546,7 @@ export default function App() {
                                         }))}
                                         className="mt-1 accent-indigo-500"
                                       />
-                                      <span className="font-bold text-zinc-100">{branch.name || branch.title || branchId}</span>
+                                      <span className="font-bold text-app-text">{branch.name || branch.title || branchId}</span>
                                     </label>
                                   );
                                 })}
@@ -10554,12 +10554,12 @@ export default function App() {
                             )}
                           </div>
                           <div>
-                            <div className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-zinc-500">{tr('前置结局，单选', 'Required ending')}</div>
+                            <div className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-app-muted">{tr('前置结局，单选', 'Required ending')}</div>
                             <div className="grid gap-2 sm:grid-cols-3">
                               {continuityEndings.map((ending: any) => {
                                 const endingId = String(ending.id || '');
                                 return (
-                                  <label key={endingId} className="flex items-start gap-2 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 text-xs text-zinc-300">
+                                  <label key={endingId} className="flex items-start gap-2 rounded-xl border border-app-border bg-app-surface/50 p-3 text-xs text-app-text">
                                     <input
                                       type="radio"
                                       name="quick-continuity-ending"
@@ -10567,7 +10567,7 @@ export default function App() {
                                       onChange={() => setQuickSeriesSelection((prev) => ({ ...prev, endingId }))}
                                       className="mt-1 accent-indigo-500"
                                     />
-                                    <span className="font-bold text-zinc-100">{ending.title || endingId}</span>
+                                    <span className="font-bold text-app-text">{ending.title || endingId}</span>
                                   </label>
                                 );
                               })}
@@ -10577,7 +10577,7 @@ export default function App() {
                             value={quickSeriesSelection.hardSettings}
                             onChange={(event) => setQuickSeriesSelection((prev) => ({ ...prev, hardSettings: event.target.value }))}
                             placeholder={tr('继承硬设定：一行一条，例如「前作中阵亡的人物不能无解释复活」或「第二部开场必须承认王都已陷落」。', 'Continuity hard rules: one per line, e.g. “Dead characters cannot return without explanation.”')}
-                            className="min-h-24 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-200 outline-none focus:border-indigo-500"
+                            className="min-h-24 w-full resize-y rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
                           />
                         </div>
                       )}
@@ -10588,17 +10588,17 @@ export default function App() {
             );
           })()}
         </div>
-        <label className="mb-3 block text-sm font-bold text-zinc-300">{tr('专属故事大纲', 'Custom story outline')}</label>
+        <label className="mb-3 block text-sm font-bold text-app-text">{tr('专属故事大纲', 'Custom story outline')}</label>
         <textarea
           value={customOutline}
           onChange={(event) => setCustomOutline(event.target.value)}
           placeholder={tr('例如：一位在现代都市经营神秘书店的青年，某夜遇见来自未来的顾客，自此被卷入一场会改写现实的命运试炼。', 'Example: A young bookseller in a modern city meets a customer from the future and is drawn into a fate trial that can rewrite reality.')}
-          className="min-h-[140px] w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-sm text-zinc-200 outline-none transition-colors focus:border-indigo-500"
+          className="min-h-[140px] w-full rounded-2xl border border-app-border bg-app-input-bg px-4 py-4 text-sm text-app-text outline-none transition-colors focus:border-indigo-500"
         />
         <div className="mt-6 space-y-3">
-          <div className="space-y-3 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
+          <div className="space-y-3 rounded-2xl border border-app-border bg-app-bg/70 p-4">
             <div className="flex items-center justify-between gap-3">
-              <span className="text-sm font-bold text-zinc-400">{tr('叙事人称', 'Narrative voice')}</span>
+              <span className="text-sm font-bold text-app-muted">{tr('叙事人称', 'Narrative voice')}</span>
               <span className="text-xs font-black text-indigo-300">
                 {quickText(NARRATIVE_PERSON_OPTIONS.find((option) => option.value === narrativePerson)?.label)}
               </span>
@@ -10612,7 +10612,7 @@ export default function App() {
                   className={`rounded-2xl border px-3 py-3 text-left transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
                     narrativePerson === option.value
                       ? 'border-indigo-400 bg-indigo-500/15 text-indigo-100 shadow-lg shadow-indigo-950/30'
-                      : 'border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
+                      : 'border-app-border bg-app-surface/50 text-app-muted hover:border-zinc-600 hover:text-app-text'
                   }`}
                 >
                   <div className="text-sm font-black">{quickText(option.label)}</div>
@@ -10623,9 +10623,9 @@ export default function App() {
           </div>
         </div>
         <div className="mt-6 space-y-3">
-          <div className="space-y-3 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
+          <div className="space-y-3 rounded-2xl border border-app-border bg-app-bg/70 p-4">
             <div className="flex items-center justify-between gap-3">
-              <span className="text-sm font-bold text-zinc-400">{tr('结局结构', 'Ending structure')}</span>
+              <span className="text-sm font-bold text-app-muted">{tr('结局结构', 'Ending structure')}</span>
               <span className="text-xs font-black text-indigo-300">
                 {quickEndingMode === 'single' ? tr('唯一走向', 'Fixed-ending path') : tr('三域走向', 'Three-domain path')}
               </span>
@@ -10650,7 +10650,7 @@ export default function App() {
                   className={`rounded-2xl border px-3 py-3 text-left transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
                     quickEndingMode === option.value
                       ? 'border-indigo-400 bg-indigo-500/15 text-indigo-100 shadow-lg shadow-indigo-950/30'
-                      : 'border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
+                      : 'border-app-border bg-app-surface/50 text-app-muted hover:border-zinc-600 hover:text-app-text'
                   }`}
                 >
                   <div className="text-sm font-black">{option.label}</div>
@@ -10659,7 +10659,7 @@ export default function App() {
               ))}
             </div>
             {quickEndingMode === 'dual' && (
-              <div className="mt-4 rounded-2xl border border-zinc-800/80 bg-zinc-950/60 p-3 text-xs font-bold text-zinc-400">
+              <div className="mt-4 rounded-2xl border border-app-border/80 bg-app-bg/60 p-3 text-xs font-bold text-app-muted">
                 {(() => {
                   const axis = endingBiasAxisFromBias(quickEndingBias);
                   const bias = endingBiasFromAxis(axis);
@@ -10683,7 +10683,7 @@ export default function App() {
                         <span>{tr('中性', 'Neutral')}</span>
                         <span>{tr('左域强', 'Left strong')}</span>
                       </div>
-                      <div className="mt-2 text-[11px] leading-relaxed text-zinc-500">
+                      <div className="mt-2 text-[11px] leading-relaxed text-app-muted">
                         {tr(`左域 ${bias.leftBaseWeight}% / 右域 ${bias.rightBaseWeight}%；支线会瓜分各自剩余空间来撬动走向。`, `Left ${bias.leftBaseWeight}% / Right ${bias.rightBaseWeight}%. Branches use each side's remaining room to shift the path.`)}
                       </div>
                     </>
@@ -10695,7 +10695,7 @@ export default function App() {
         </div>
         <div className="mt-6 space-y-3">
           <div className="flex items-center justify-between text-sm">
-            <span className="font-bold text-zinc-400">{tr('每章目标字数', 'Target words per chapter')}</span>
+            <span className="font-bold text-app-muted">{tr('每章目标字数', 'Target words per chapter')}</span>
             <span className="font-black text-indigo-300">{targetWordCount} {tr('字', 'words')}</span>
           </div>
           <input
@@ -10773,7 +10773,7 @@ export default function App() {
         {isSystemSettingsMode && (
           <div className="mb-6 flex items-center justify-between">
             <div>
-              <div className="text-xs font-black uppercase tracking-[0.24em] text-zinc-500">
+              <div className="text-xs font-black uppercase tracking-[0.24em] text-app-muted">
                 {tr('设置', 'Settings')}
               </div>
               <h2 className="mt-1 text-2xl font-black text-white">
@@ -10793,7 +10793,7 @@ export default function App() {
         {!isSystemSettingsMode && (
           <div className="mb-6 flex items-center justify-between">
             <div>
-              <div className="text-xs font-black uppercase tracking-[0.24em] text-zinc-500">
+              <div className="text-xs font-black uppercase tracking-[0.24em] text-app-muted">
                 {tr('个人中心', 'Account Center')}
               </div>
             </div>
@@ -10809,7 +10809,7 @@ export default function App() {
         )}
 
         {!isSystemSettingsMode && (
-          <div className="mb-6 rounded-2xl border border-zinc-800/60 bg-zinc-900/10 p-5 space-y-4">
+          <div className="mb-6 rounded-2xl border border-app-border/60 bg-app-surface/10 p-5 space-y-4">
             {/* 名字与Email */}
             <div className="flex items-start justify-between">
               <div>
@@ -10819,14 +10819,14 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => setIsEditNameModalOpen(true)}
-                      className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-600 hover:text-white transition-all active:scale-95"
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-app-border bg-app-surface/50 text-app-muted hover:border-zinc-600 hover:text-white transition-all active:scale-95"
                       title={tr('修改名称', 'Edit name')}
                     >
                       <PenSquare className="h-4 w-4" />
                     </button>
                   )}
                 </div>
-                <div className="mt-1 text-sm text-zinc-500">{user?.email || tr('游客账号', 'Guest account')}</div>
+                <div className="mt-1 text-sm text-app-muted">{user?.email || tr('游客账号', 'Guest account')}</div>
               </div>
             </div>
 
@@ -10838,13 +10838,13 @@ export default function App() {
             )}
 
             {/* 个性签名 */}
-            <div className="border-t border-zinc-800/40 pt-3">
+            <div className="border-t border-app-border/40 pt-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-bold text-zinc-500 mb-1">{tr('个人签名', 'Bio')}</div>
+                  <div className="text-xs font-bold text-app-muted mb-1">{tr('个人签名', 'Bio')}</div>
                   <div 
                     onClick={() => setIsEditBioModalOpen(true)}
-                    className="text-sm text-zinc-300 hover:text-white cursor-pointer transition-colors line-clamp-3 italic leading-relaxed"
+                    className="text-sm text-app-text hover:text-white cursor-pointer transition-colors line-clamp-3 italic leading-relaxed"
                   >
                     {myBio.trim() ? `「 ${myBio} 」` : tr('点击设置您的个性签名...', 'Click to set your bio...')}
                   </div>
@@ -10852,7 +10852,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setIsEditBioModalOpen(true)}
-                  className="shrink-0 inline-flex h-7 w-7 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-600 hover:text-white transition-all active:scale-95"
+                  className="shrink-0 inline-flex h-7 w-7 items-center justify-center rounded-lg border border-app-border bg-app-surface/50 text-app-muted hover:border-zinc-600 hover:text-white transition-all active:scale-95"
                   title={tr('修改签名', 'Edit bio')}
                 >
                   <PenSquare className="h-4 w-4" />
@@ -10862,17 +10862,17 @@ export default function App() {
 
             {/* 安全设置与修改密码入口 (非游客账号) */}
             {!user?.isAnonymous && (
-              <div className="border-t border-zinc-800/40 pt-3">
+              <div className="border-t border-app-border/40 pt-3">
                 <button
                   type="button"
                   onClick={() => setIsSecurityModalOpen(true)}
-                  className="w-full flex items-center justify-between rounded-xl border border-zinc-800/60 bg-zinc-900/40 px-4 py-3 text-sm text-zinc-300 hover:border-zinc-700 hover:text-white transition-all active:scale-[0.99]"
+                  className="w-full flex items-center justify-between rounded-xl border border-app-border/60 bg-app-surface/40 px-4 py-3 text-sm text-app-text hover:border-app-border hover:text-white transition-all active:scale-[0.99]"
                 >
                   <div className="flex items-center gap-2">
-                    <Lock className="h-4 w-4 text-zinc-400" />
+                    <Lock className="h-4 w-4 text-app-muted" />
                     <span>{tr('账户安全设置', 'Account Security Settings')}</span>
                   </div>
-                  <ChevronRight className="h-4 w-4 text-zinc-500" />
+                  <ChevronRight className="h-4 w-4 text-app-muted" />
                 </button>
               </div>
             )}
@@ -10884,7 +10884,7 @@ export default function App() {
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
                 <div className="text-lg font-black text-white">{tr('我的资产', 'My Library')}</div>
-                <div className="mt-1 text-xs leading-relaxed text-zinc-500">
+                <div className="mt-1 text-xs leading-relaxed text-app-muted">
                   {tr('收藏、命运线、追踪和创作集中查看，方便快速找到相关内容。', 'Favorites, fate lines, follows, and works are gathered here for quick access.')}
                 </div>
               </div>
@@ -10896,10 +10896,10 @@ export default function App() {
                   key={item.label}
                   type="button"
                   onClick={item.onClick}
-                  className="group text-left rounded-2xl border border-zinc-800/80 bg-zinc-950/50 p-4 transition-all duration-150 hover:-translate-y-0.5 hover:border-zinc-700 hover:bg-zinc-900/60 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70"
+                  className="group text-left rounded-2xl border border-app-border/80 bg-app-bg/50 p-4 transition-all duration-150 hover:-translate-y-0.5 hover:border-app-border hover:bg-app-surface/60 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70"
                 >
                   <div className="text-2xl font-black text-white group-hover:text-indigo-200 transition-colors">{item.value}</div>
-                  <div className="mt-1 text-xs font-bold text-zinc-500 group-hover:text-zinc-400 transition-colors">{item.label}</div>
+                  <div className="mt-1 text-xs font-bold text-app-muted group-hover:text-app-muted transition-colors">{item.label}</div>
                 </button>
               ))}
             </div>
@@ -10910,13 +10910,13 @@ export default function App() {
           <section className="p-0">
             <div className="space-y-3">
               {isSystemSettingsMode && (
-                <div className="overflow-hidden rounded-2xl border border-zinc-800/60">
+                <div className="overflow-hidden rounded-2xl border border-app-border/60">
                   {/* 语言 */}
                   <div className="p-4">
                     <div className="mb-3 flex items-center justify-between gap-3">
                       <div>
-                        <div className="text-sm font-black text-zinc-100">{t('language.switch')}</div>
-                        <div className="mt-1 text-xs leading-relaxed text-zinc-500">
+                        <div className="text-sm font-black text-app-text">{t('language.switch')}</div>
+                        <div className="mt-1 text-xs leading-relaxed text-app-muted">
                           {appLanguage === 'en-US'
                             ? 'This setting is saved on this device until it is changed here again.'
                             : '语言设置会保存在当前设备，之后默认沿用，直到回到这里再次改变。'}
@@ -10932,7 +10932,7 @@ export default function App() {
                           className={`rounded-xl border px-3 py-2 text-sm font-black transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
                             appLanguage === option
                               ? 'border-indigo-400 bg-indigo-500/15 text-indigo-100'
-                              : 'border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
+                              : 'border-app-border bg-app-surface/50 text-app-muted hover:border-zinc-600 hover:text-app-text'
                           }`}
                         >
                           {option === 'zh-CN' ? t('language.zh') : t('language.en')}
@@ -10941,11 +10941,11 @@ export default function App() {
                     </div>
                   </div>
                   {/* 主题 */}
-                  <div className="border-t border-zinc-800/60 p-4">
+                  <div className="border-t border-app-border/60 p-4">
                     <div className="mb-3 flex items-center justify-between gap-3">
                       <div>
-                        <div className="text-sm font-black text-zinc-100">{tr('界面主题', 'Theme')}</div>
-                        <div className="mt-1 text-xs leading-relaxed text-zinc-500">
+                        <div className="text-sm font-black text-app-text">{tr('界面主题', 'Theme')}</div>
+                        <div className="mt-1 text-xs leading-relaxed text-app-muted">
                           {tr('浅色主题使用柔和低疲劳配色，暗色主题保留原本氛围。', 'Light theme uses softer low-fatigue colors; dark theme keeps the original atmosphere.')}
                         </div>
                       </div>
@@ -10963,7 +10963,7 @@ export default function App() {
                           className={`rounded-xl border px-3 py-2 text-sm font-black transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
                             appTheme === option.value
                               ? 'border-indigo-400 bg-indigo-500/15 text-indigo-100'
-                              : 'border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
+                              : 'border-app-border bg-app-surface/50 text-app-muted hover:border-zinc-600 hover:text-app-text'
                           }`}
                         >
                           {option.label}
@@ -10972,11 +10972,11 @@ export default function App() {
                     </div>
                   </div>
                   {/* 通知 */}
-                  <div className="border-t border-zinc-800/60 p-4">
+                  <div className="border-t border-app-border/60 p-4">
                     <div className="mb-3 flex items-center justify-between gap-3">
                       <div>
-                        <div className="text-sm font-black text-zinc-100">{tr('手机通知', 'Mobile notifications')}</div>
-                        <div className="mt-1 text-xs leading-relaxed text-zinc-500">
+                        <div className="text-sm font-black text-app-text">{tr('手机通知', 'Mobile notifications')}</div>
+                        <div className="mt-1 text-xs leading-relaxed text-app-muted">
                           {tr('接收作者更新、作品互动 and 系统提醒。若曾在系统弹窗中拒绝，需要到浏览器或手机设置里重新允许。', 'Receive author updates, story interactions, and system reminders. If blocked before, re-enable it in browser or phone settings.')}
                         </div>
                       </div>
@@ -10988,11 +10988,11 @@ export default function App() {
                     </button>
                   </div>
                   {/* 版本 */}
-                  <div className="border-t border-zinc-800/60 p-4">
+                  <div className="border-t border-app-border/60 p-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <div className="text-sm font-black text-zinc-100">{tr('版本', 'Version')}</div>
-                        <div className="mt-1 text-xs leading-relaxed text-zinc-500">
+                        <div className="text-sm font-black text-app-text">{tr('版本', 'Version')}</div>
+                        <div className="mt-1 text-xs leading-relaxed text-app-muted">
                           {tr('用于确认当前安装的 App 是否已经更新。', 'Use this to confirm whether the installed app is up to date.')}
                         </div>
                       </div>
@@ -11002,10 +11002,10 @@ export default function App() {
                       </div>
                     </div>
                   </div>
-                  <div className="border-t border-zinc-800/60 p-4">
+                  <div className="border-t border-app-border/60 p-4">
                     <div className="mb-3">
-                      <div className="text-sm font-black text-zinc-100">{tr('帮助中心', 'Help center')}</div>
-                      <div className="mt-1 text-xs leading-relaxed text-zinc-500">
+                      <div className="text-sm font-black text-app-text">{tr('帮助中心', 'Help center')}</div>
+                      <div className="mt-1 text-xs leading-relaxed text-app-muted">
                         {tr('查看作品、创作、世界观与续作功能的简明说明。', 'Read short guides for stories, creation, world settings, and sequels.')}
                       </div>
                     </div>
@@ -11046,7 +11046,7 @@ export default function App() {
             {t('archive.title')}
           </div>
           <div className="space-y-3">
-            <div className="text-sm text-zinc-400">
+            <div className="text-sm text-app-muted">
               {tr('收藏命运和分享记录现在集中在独立页面管理。', 'Saved fate lines and share records are managed on a separate page.')}
             </div>
             <button
@@ -11068,7 +11068,7 @@ export default function App() {
               {tr('入门教学', 'Tutorial')}
             </div>
             <div className="space-y-3">
-              <div className="text-sm leading-relaxed text-zinc-400">
+              <div className="text-sm leading-relaxed text-app-muted">
                 {tr('用一段短篇试玩熟悉阅读、干涉、结算与收藏命运的基本流程。', 'Try a short guided story to learn reading, intervention, endings, and saved fate lines.')}
               </div>
               <button
@@ -11096,7 +11096,7 @@ export default function App() {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <div className="text-sm font-black text-white">AI 图片生成功能</div>
-                  <div className="mt-1 text-xs leading-relaxed text-zinc-500">
+                  <div className="mt-1 text-xs leading-relaxed text-app-muted">
                     关闭时，普通用户不会看到封面 AI 生成入口；管理员自己始终保留最新功能入口。
                   </div>
                 </div>
@@ -11142,7 +11142,7 @@ export default function App() {
             initial={{ opacity: 0, y: 16, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 16, scale: 0.97 }}
-            className={`app-modal-surface app-modal-safe-height w-full max-w-4xl overflow-y-auto rounded-[2rem] border border-zinc-800 p-5 shadow-2xl sm:p-6`}
+            className={`app-modal-surface app-modal-safe-height w-full max-w-4xl overflow-y-auto rounded-[2rem] border border-app-border p-5 shadow-2xl sm:p-6`}
             onClick={(event) => event.stopPropagation()}
           >
             {renderAccountCenterContent('modal')}
@@ -11266,14 +11266,14 @@ export default function App() {
         <motion.div
           initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          className={`pointer-events-auto fixed w-[min(24rem,calc(100vw-2rem))] ${tourPlacementClass} rounded-[2rem] border border-indigo-500/25 bg-zinc-900/92 p-5 shadow-2xl backdrop-blur-md`}
+          className={`pointer-events-auto fixed w-[min(24rem,calc(100vw-2rem))] ${tourPlacementClass} rounded-[2rem] border border-indigo-500/25 bg-app-surface/92 p-5 shadow-2xl backdrop-blur-md`}
         >
           <div className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300">
             <Sparkles className="h-3 w-3" />
             创作者引导 ({tourStep + 1} / {guidedSteps.length})
           </div>
           <h3 className="text-xl font-black text-white">{currentStep.title}</h3>
-          <p className="mt-3 text-sm leading-relaxed text-zinc-300">
+          <p className="mt-3 text-sm leading-relaxed text-app-text">
             {currentStep.text}
           </p>
           <div className="mt-6 flex justify-between gap-3">
@@ -11304,7 +11304,7 @@ export default function App() {
       <button
         type="button"
         onClick={() => setIsHelpDrawerOpen(true)}
-        className="fixed bottom-[calc(max(0.85rem,env(safe-area-inset-bottom))+5rem)] right-8 z-[1500] flex h-12 w-12 items-center justify-center rounded-full border border-indigo-500/30 bg-zinc-950/80 text-indigo-300 shadow-2xl backdrop-blur-md transition-all hover:border-indigo-400 hover:text-white hover:scale-105 active:scale-95 animate-pulse"
+        className="fixed bottom-[calc(max(0.85rem,env(safe-area-inset-bottom))+5rem)] right-8 z-[1500] flex h-12 w-12 items-center justify-center rounded-full border border-indigo-500/30 bg-app-bg/80 text-indigo-300 shadow-2xl backdrop-blur-md transition-all hover:border-indigo-400 hover:text-white hover:scale-105 active:scale-95 animate-pulse"
         title={isEnglish ? "Help Center" : "帮助中心"}
         aria-label={isEnglish ? "Help Center" : "帮助中心"}
       >
@@ -11381,7 +11381,7 @@ export default function App() {
     return (
       <AnimatePresence>
         {isHelpDrawerOpen && (
-          <div className="fixed inset-0 z-[6500] flex justify-end bg-zinc-950/60 backdrop-blur-[1px]">
+          <div className="fixed inset-0 z-[6500] flex justify-end bg-app-bg/60 backdrop-blur-[1px]">
             <div className="absolute inset-0" onClick={() => setIsHelpDrawerOpen(false)} />
             
             <motion.div
@@ -11389,9 +11389,9 @@ export default function App() {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'tween', duration: 0.3, ease: 'easeOut' }}
-              className="relative z-10 flex h-full w-full flex-col border-l border-zinc-800 bg-zinc-900/95 p-6 shadow-2xl backdrop-blur-md sm:max-w-md"
+              className="relative z-10 flex h-full w-full flex-col border-l border-app-border bg-app-surface/95 p-6 shadow-2xl backdrop-blur-md sm:max-w-md"
             >
-              <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
+              <div className="flex items-center justify-between border-b border-app-border pb-4">
                 <div className="flex items-center gap-2">
                   <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-400">
                     <Sparkles className="h-4 w-4" />
@@ -11401,7 +11401,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setIsHelpDrawerOpen(false)}
-                  className="rounded-lg p-2 text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors"
+                  className="rounded-lg p-2 text-app-muted hover:bg-app-surface-soft hover:text-white transition-colors"
                   aria-label={isEnglish ? "Close Help Center" : "关闭帮助中心"}
                 >
                   <X className="h-5 w-5" />
@@ -11409,29 +11409,29 @@ export default function App() {
               </div>
 
               <div className="relative mt-4">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-app-muted" />
                 <input
                   type="search"
                   value={helpSearch}
                   onChange={(event) => setHelpSearch(event.target.value)}
                   placeholder={tr('搜索您想知道的规则或名词...', 'Search terms, rules...')}
-                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950/60 py-2.5 pl-9 pr-4 text-xs font-semibold text-zinc-100 outline-none transition-colors focus:border-indigo-400/70"
+                  className="w-full rounded-xl border border-app-border bg-app-input-bg/60 py-2.5 pl-9 pr-4 text-xs font-semibold text-app-text outline-none transition-colors focus:border-indigo-400/70"
                 />
               </div>
 
               <div className="mt-6 flex-1 overflow-y-auto pr-1 space-y-4 scrollbar-thin">
                 {filteredQas.length === 0 ? (
-                  <div className="py-12 text-center text-xs text-zinc-500">
+                  <div className="py-12 text-center text-xs text-app-muted">
                     {tr('没有找到匹配的内容，换个词试试吧？', 'No matches found. Try another search term.')}
                   </div>
                 ) : (
                   filteredQas.map((qa, index) => (
-                    <div key={index} className="rounded-2xl border border-zinc-800/80 bg-zinc-950/20 p-4 transition-colors hover:border-zinc-800">
-                      <h3 className="text-sm font-black text-zinc-100 flex gap-2">
+                    <div key={index} className="rounded-2xl border border-app-border/80 bg-app-bg/20 p-4 transition-colors hover:border-app-border">
+                      <h3 className="text-sm font-black text-app-text flex gap-2">
                         <span className="text-indigo-400">Q:</span>
                         {qa.q}
                       </h3>
-                      <p className="mt-2 text-xs leading-relaxed text-zinc-400">
+                      <p className="mt-2 text-xs leading-relaxed text-app-muted">
                         {qa.a}
                       </p>
                     </div>
@@ -11444,14 +11444,14 @@ export default function App() {
                   <button
                     type="button"
                     onClick={restoreHelpCards}
-                    className="w-full rounded-xl border border-zinc-800 bg-zinc-950/40 py-2.5 text-xs font-semibold text-zinc-400 hover:border-indigo-500/30 hover:text-indigo-300 transition-colors"
+                    className="w-full rounded-xl border border-app-border bg-app-bg/40 py-2.5 text-xs font-semibold text-app-muted hover:border-indigo-500/30 hover:text-indigo-300 transition-colors"
                   >
                     {tr('恢复所有被折叠的教学提示', 'Restore All Dismissed Tips')}
                   </button>
                 </div>
               )}
 
-              <div className="mt-4 border-t border-zinc-800 pt-4 text-center">
+              <div className="mt-4 border-t border-app-border pt-4 text-center">
                 <p className="text-[10px] text-zinc-600">
                   {tr('命运馆执行官专用工具集 · 离线引导版本', 'Fate interference toolkit · Offline version')}
                 </p>
@@ -11477,13 +11477,13 @@ export default function App() {
             initial={{ y: 16, opacity: 0, scale: 0.97 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 12, opacity: 0, scale: 0.98 }}
-            className="app-modal-surface app-modal-safe-height w-full max-w-md overflow-y-auto rounded-[2rem] border border-zinc-800 p-5 shadow-2xl sm:p-6"
+            className="app-modal-surface app-modal-safe-height w-full max-w-md overflow-y-auto rounded-[2rem] border border-app-border p-5 shadow-2xl sm:p-6"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-xl font-black text-white">{tr('修改昵称', 'Change Display Name')}</h3>
-                <p className="mt-1 text-xs text-zinc-500">{tr('修改后，您生成的作品和干涉记录都会显示新昵称（最多5字）。', 'After change, your works and records will display the new name (max 5 chars).')}</p>
+                <p className="mt-1 text-xs text-app-muted">{tr('修改后，您生成的作品和干涉记录都会显示新昵称（最多5字）。', 'After change, your works and records will display the new name (max 5 chars).')}</p>
               </div>
               <button type="button" onClick={() => setIsEditNameModalOpen(false)} className={semanticIconButtonClass('ghost')} aria-label={tr('关闭', 'Close')}>
                 <X className="h-5 w-5" />
@@ -11495,7 +11495,7 @@ export default function App() {
                 onChange={(event) => setProfileDisplayName(event.target.value)}
                 placeholder={tr('输入新昵称', 'New display name')}
                 maxLength={5}
-                className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                className="w-full rounded-xl border border-app-border bg-app-surface px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
               />
               <div className="flex gap-3">
                 <button type="button" onClick={() => setIsEditNameModalOpen(false)} className={semanticButtonClass('secondary', { fullWidth: true })}>
@@ -11533,13 +11533,13 @@ export default function App() {
             initial={{ y: 16, opacity: 0, scale: 0.97 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 12, opacity: 0, scale: 0.98 }}
-            className="app-modal-surface app-modal-safe-height w-full max-w-md overflow-y-auto rounded-[2rem] border border-zinc-800 p-5 shadow-2xl sm:p-6"
+            className="app-modal-surface app-modal-safe-height w-full max-w-md overflow-y-auto rounded-[2rem] border border-app-border p-5 shadow-2xl sm:p-6"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-xl font-black text-white">{tr('修改个性签名', 'Edit Bio')}</h3>
-                <p className="mt-1 text-xs text-zinc-500">{tr('用于展示在您的作者档案中，告诉大家关于您的一两件事（最多120字）。', 'Displayed on your author profile to tell others a bit about yourself (max 120 chars).')}</p>
+                <p className="mt-1 text-xs text-app-muted">{tr('用于展示在您的作者档案中，告诉大家关于您的一两件事（最多120字）。', 'Displayed on your author profile to tell others a bit about yourself (max 120 chars).')}</p>
               </div>
               <button type="button" onClick={() => setIsEditBioModalOpen(false)} className={semanticIconButtonClass('ghost')} aria-label={tr('关闭', 'Close')}>
                 <X className="h-5 w-5" />
@@ -11551,7 +11551,7 @@ export default function App() {
                 onChange={(e) => setEditingBio(e.target.value)}
                 placeholder={tr('写点什么向别人介绍自己吧...', 'Write something to introduce yourself...')}
                 maxLength={120}
-                className="w-full h-28 resize-none rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                className="w-full h-28 resize-none rounded-xl border border-app-border bg-app-surface px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
               />
               <div className="flex gap-3">
                 <button type="button" onClick={() => setIsEditBioModalOpen(false)} className={semanticButtonClass('secondary', { fullWidth: true })}>
@@ -11589,13 +11589,13 @@ export default function App() {
             initial={{ y: 16, opacity: 0, scale: 0.97 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 12, opacity: 0, scale: 0.98 }}
-            className="app-modal-surface app-modal-safe-height w-full max-w-md overflow-y-auto rounded-[2rem] border border-zinc-800 p-5 shadow-2xl sm:p-6"
+            className="app-modal-surface app-modal-safe-height w-full max-w-md overflow-y-auto rounded-[2rem] border border-app-border p-5 shadow-2xl sm:p-6"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-xl font-black text-white">{tr('修改账户密码', 'Security Settings')}</h3>
-                <p className="mt-1 text-xs text-zinc-500">{tr('修改账户登录密码或发送密码重设邮件。', 'Change account password or send reset email.')}</p>
+                <p className="mt-1 text-xs text-app-muted">{tr('修改账户登录密码或发送密码重设邮件。', 'Change account password or send reset email.')}</p>
               </div>
               <button type="button" onClick={() => setIsSecurityModalOpen(false)} className={semanticIconButtonClass('ghost')} aria-label={tr('关闭', 'Close')}>
                 <X className="h-5 w-5" />
@@ -11607,14 +11607,14 @@ export default function App() {
                 value={profileCurrentPassword}
                 onChange={(event) => setProfileCurrentPassword(event.target.value)}
                 placeholder={tr('当前密码', 'Current password')}
-                className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                className="w-full rounded-xl border border-app-border bg-app-surface px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
               />
               <input
                 type="password"
                 value={profileNewPassword}
                 onChange={(event) => setProfileNewPassword(event.target.value)}
                 placeholder={tr('新密码（至少 6 位）', 'New password (at least 6 characters)')}
-                className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                className="w-full rounded-xl border border-app-border bg-app-surface px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
               />
               <button
                 type="button"
@@ -11630,7 +11630,7 @@ export default function App() {
                 {tr('确认修改密码', 'Confirm change password')}
               </button>
               
-              <div className="border-t border-zinc-800/60 my-2"></div>
+              <div className="border-t border-app-border/60 my-2"></div>
               
               <button
                 type="button"
@@ -11667,12 +11667,12 @@ export default function App() {
         <div className="mb-10 flex items-start justify-between gap-4">
           <div className="flex min-w-0 gap-4">
             {story.meta?.coverUrl && (
-              <img src={story.meta.coverUrl} alt={`${formatBookTitle(story.meta?.title)} ${tr('封面', 'cover')}`} className="h-24 w-24 shrink-0 rounded-2xl border border-zinc-800 object-cover sm:h-32 sm:w-32" />
+              <img src={story.meta.coverUrl} alt={`${formatBookTitle(story.meta?.title)} ${tr('封面', 'cover')}`} className="h-24 w-24 shrink-0 rounded-2xl border border-app-border object-cover sm:h-32 sm:w-32" />
             )}
             <div className="min-w-0 space-y-3">
-              <div className="text-xs font-black uppercase tracking-[0.24em] text-zinc-500">{tr('故事记录', 'Story Record')}</div>
+              <div className="text-xs font-black uppercase tracking-[0.24em] text-app-muted">{tr('故事记录', 'Story Record')}</div>
               <h1 className="break-words text-4xl font-black text-white">{formatBookTitle(story.meta?.title)}</h1>
-              <div className="space-y-1 text-sm font-bold text-zinc-500">
+              <div className="space-y-1 text-sm font-bold text-app-muted">
                 <div><AuthorNameButton prefix={tr('原作者：', 'Original author: ')} authorId={story.meta?.originalAuthorId || story.meta?.sourceStoryId || story.meta?.authorId} authorName={getOriginalAuthorName(story.meta)} /></div>
                 {getIntervenerName(story.meta) && <div>{tr('干涉者：', 'Intervener: ')}{getIntervenerName(story.meta)}</div>}
               </div>
@@ -11680,7 +11680,7 @@ export default function App() {
           </div>
           {readonlyCanGoBack && <BackNavButton label={tr('返回上一页', 'Back')} onClick={leaveReadonlyStory} />}
         </div>
-        <div className="app-card-quiet mb-10 rounded-[2rem] p-6 text-sm leading-relaxed text-zinc-300">
+        <div className="app-card-quiet mb-10 rounded-[2rem] p-6 text-sm leading-relaxed text-app-text">
           {story.meta?.main_axis || tr('暂无故事主轴摘要。', 'No story premise summary yet.')}
         </div>
         <div className="mb-8 flex justify-end">
@@ -11690,8 +11690,8 @@ export default function App() {
           <div className="app-card-quiet mb-8 rounded-[2rem] p-5">
             <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <div className="text-xs font-black uppercase tracking-[0.22em] text-zinc-500">{tr('馆藏管理', 'Archive Management')}</div>
-                <div className="mt-1 text-sm font-bold text-zinc-300">
+                <div className="text-xs font-black uppercase tracking-[0.22em] text-app-muted">{tr('馆藏管理', 'Archive Management')}</div>
+                <div className="mt-1 text-sm font-bold text-app-text">
                   {tr('当前状态：', 'Current status: ')}{story.meta?.visibility === 'unlisted' ? tr('非公开链接，可通过链接访问', 'Unlisted link, accessible by URL') : tr('私人，仅当前账号可见', 'Private, only visible to this account')}
                 </div>
               </div>
@@ -11734,7 +11734,7 @@ export default function App() {
                 </button>
               </div>
             </div>
-            <p className="text-xs leading-relaxed text-zinc-500">
+            <p className="text-xs leading-relaxed text-app-muted">
               {tr('分享会使用当前这条馆藏记录本身，不会重复创建新的通篇馆藏作品。', 'Sharing uses this archive record itself and will not create another full duplicate.')}
             </p>
           </div>
@@ -11743,13 +11743,13 @@ export default function App() {
           {(story.chapters || []).map((chapter) => (
             <section key={chapter.chapter_num} className="reading-chapter relative">
               <div className="mb-6 flex items-center gap-4">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-800/60 bg-zinc-950/45 text-xs font-black text-zinc-500">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-app-border/60 bg-app-bg/45 text-xs font-black text-app-muted">
                   {chapter.chapter_num}
                 </div>
-                <h2 className="text-xl font-black text-zinc-100">{chapter.title || (isEnglish ? `Chapter ${chapter.chapter_num}` : `第${chapter.chapter_num}章`)}</h2>
+                <h2 className="text-xl font-black text-app-text">{chapter.title || (isEnglish ? `Chapter ${chapter.chapter_num}` : `第${chapter.chapter_num}章`)}</h2>
                 <div className="h-px flex-1 bg-gradient-to-r from-zinc-800/70 to-transparent" />
               </div>
-              <div className="space-y-5 text-zinc-300">
+              <div className="space-y-5 text-app-text">
                 {(chapter.text || '').split('\n').filter(Boolean).map((paragraph, idx) => (
                   <p key={idx} style={readingParagraphStyle} className="leading-relaxed">{renderReadingParagraph(paragraph, story.meta?.characters || [])}</p>
                 ))}
@@ -11760,7 +11760,7 @@ export default function App() {
         </div>
         <div className="app-card mt-12 rounded-[2rem] p-6 text-center">
           <h3 className="text-2xl font-black text-white">{tr('想亲手改变这条命运线吗？', 'Want to change this fate line?')}</h3>
-          <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-zinc-400">
+          <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-app-muted">
             {tr('这页是只读故事记录。注册或登录后，可从原版故事开始干涉命运；若作者开放权限，也可一键改编成个人作品。', 'This is a read-only story record. After signing in, start from the original story to interfere with fate; if adaptation is allowed, it can also become a personal work.')}
           </p>
           <div className="mt-6 grid gap-3 sm:grid-cols-3">
@@ -11817,10 +11817,10 @@ export default function App() {
           animate={{ x: 0 }}
           exit={{ x: '100%' }}
           transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-          className="fixed inset-y-0 right-0 z-[2200] w-full max-w-sm border-l border-zinc-800 bg-zinc-950/90 shadow-2xl backdrop-blur-xl"
+          className="fixed inset-y-0 right-0 z-[2200] w-full max-w-sm border-l border-app-border bg-app-bg/90 shadow-2xl backdrop-blur-xl"
         >
           <div className="flex h-full flex-col">
-            <div className="flex items-center justify-between border-b border-zinc-800 px-6 pb-6 pt-[max(1.5rem,calc(env(safe-area-inset-top)+1rem))]">
+            <div className="flex items-center justify-between border-b border-app-border px-6 pb-6 pt-[max(1.5rem,calc(env(safe-area-inset-top)+1rem))]">
               <h3 className="text-xl font-black text-white">{tr('故事信息', 'Story Info')}</h3>
               <button
                 type="button"
@@ -11834,11 +11834,11 @@ export default function App() {
               {blueprint && (
                 <>
                   <section className="space-y-3">
-                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">{tr('故事背景', 'Story Background')}</h4>
-                    <p className="text-sm leading-relaxed text-zinc-300">{blueprint.main_axis}</p>
+                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-app-muted">{tr('故事背景', 'Story Background')}</h4>
+                    <p className="text-sm leading-relaxed text-app-text">{blueprint.main_axis}</p>
                   </section>
                   <section className="space-y-3">
-                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">{tr('作者预设倾向', 'Author Tendency')}</h4>
+                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-app-muted">{tr('作者预设倾向', 'Author Tendency')}</h4>
                     <div className="grid grid-cols-2 gap-3">
                       {endingBiasStoryCardLabels(blueprint).map((bias) => (
                         <div
@@ -11851,27 +11851,27 @@ export default function App() {
                                 : 'border-indigo-400/20 bg-indigo-500/10 text-indigo-100'
                           }`}
                         >
-                          <div className="text-[11px] font-black text-zinc-400">{bias.label}</div>
+                          <div className="text-[11px] font-black text-app-muted">{bias.label}</div>
                           <div className="mt-1 text-lg font-black">{bias.value}</div>
                         </div>
                       ))}
                     </div>
                     {isSingleEndingStory(blueprint) && (
-                      <p className="text-xs leading-relaxed text-zinc-500">
+                      <p className="text-xs leading-relaxed text-app-muted">
                         {tr('本作采用唯一走向，干涉会改变过程、角色经历与支线展开，但最终会自然收束到唯一结局。', 'This work uses a fixed-ending path; interference changes the journey, character experience, and branches, but ultimately converges to one ending.')}
                       </p>
                     )}
                     {!isSingleEndingStory(blueprint) && (
-                    <p className="text-xs leading-relaxed text-zinc-500">
+                    <p className="text-xs leading-relaxed text-app-muted">
                       {tr('这是作者为左域与右域设置的基础倾向，只作为命运走向参考，不代表最终结局必然落点。', 'This is the author’s base tendency for left/right ending domains. It is a reference, not a guaranteed final outcome.')}
                     </p>
                     )}
                   </section>
                   <section className="space-y-4">
-                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">{tr('登场角色', 'Characters')}</h4>
+                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-app-muted">{tr('登场角色', 'Characters')}</h4>
                     <div className="grid gap-3">
                       {blueprint.characters.map(char => (
-                        <div key={char.id} className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+                        <div key={char.id} className="rounded-2xl border border-app-border bg-app-surface/40 p-4">
                           <div className="mb-1 flex items-start justify-between">
                             <div className="font-bold text-indigo-300">{char.name}</div>
                             {characterStatuses[char.id] && (
@@ -11880,16 +11880,16 @@ export default function App() {
                               </div>
                             )}
                           </div>
-                          <div className="text-xs text-zinc-500 leading-relaxed">{char.desc}</div>
+                          <div className="text-xs text-app-muted leading-relaxed">{char.desc}</div>
                         </div>
                       ))}
                     </div>
                   </section>
                   <section className="space-y-4">
-                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">{tr('命运支线', 'Fate Branches')}</h4>
+                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-app-muted">{tr('命运支线', 'Fate Branches')}</h4>
                     <div className="grid gap-3">
                       {(blueprint.branches || []).length === 0 ? (
-                        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 text-sm text-zinc-500">
+                        <div className="rounded-2xl border border-app-border bg-app-surface/30 p-4 text-sm text-app-muted">
                           {tr('暂无支线记录。', 'No branch records yet.')}
                         </div>
                       ) : (
@@ -11914,29 +11914,29 @@ export default function App() {
                                 isUnlocked
                                   ? 'border-indigo-500/40 bg-indigo-950/30'
                                   : wasUnlocked
-                                    ? 'border-zinc-700 bg-zinc-900/60'
-                                    : 'border-zinc-800 bg-zinc-900/30'
+                                    ? 'border-app-border bg-app-surface/60'
+                                    : 'border-app-border bg-app-surface/30'
                               }`}
                             >
                               <div className="mb-2 flex items-center justify-between gap-3">
-                                <div className="font-bold text-zinc-100">{visibleName}</div>
+                                <div className="font-bold text-app-text">{visibleName}</div>
                                 <div className={`rounded-full px-2 py-1 text-[10px] font-black ${
                                   isUnlocked
                                     ? 'bg-indigo-500/20 text-indigo-200'
                                     : wasUnlocked
-                                      ? 'bg-zinc-700/60 text-zinc-300'
-                                      : 'bg-zinc-800 text-zinc-500'
+                                      ? 'bg-app-surface-soft/60 text-app-text'
+                                      : 'bg-app-surface-soft text-app-muted'
                                 }`}>
                                   {isUnlocked ? tr('已解锁', 'Unlocked') : wasUnlocked ? tr('曾解锁', 'Previously unlocked') : tr('待解锁', 'Locked')}
                                 </div>
                               </div>
-                              <div className="text-xs leading-relaxed text-zinc-500">{visibleDesc}</div>
+                              <div className="text-xs leading-relaxed text-app-muted">{visibleDesc}</div>
                               {canRevealBranchContent && (
-                                <div className="mt-2.5 rounded-xl border border-zinc-800 bg-zinc-950/40 p-2.5 space-y-1">
+                                <div className="mt-2.5 rounded-xl border border-app-border bg-app-bg/40 p-2.5 space-y-1">
                                   <div className="text-[10px] font-black text-indigo-400 uppercase tracking-wider">
                                     {tr('解锁方法：', 'Unlock Method: ')}
                                   </div>
-                                  <div className="text-[11px] text-zinc-400 space-y-0.5">
+                                  <div className="text-[11px] text-app-muted space-y-0.5">
                                     {(() => {
                                       const triggers = branch.triggerGroups || (branch.trigger ? [branch.trigger] : []);
                                       if (triggers.length === 0) return <div className="italic text-zinc-650">{tr('无判定条件', 'No trigger conditions')}</div>;
@@ -11952,7 +11952,7 @@ export default function App() {
                               )}
                               {canRevealBranchContent && (
                                 <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-black">
-                                  <span className="rounded-full bg-zinc-800 px-2 py-1 text-zinc-300">
+                                  <span className="rounded-full bg-app-surface-soft px-2 py-1 text-app-text">
                                     {branch.side === 'left' ? tr('左域支线', 'Left branch') : tr('右域支线', 'Right branch')}
                                   </span>
                                   <span className="rounded-full bg-indigo-500/10 px-2 py-1 text-indigo-200">
@@ -11988,11 +11988,11 @@ export default function App() {
       type="button"
       onClick={() => void openNotificationCenter()}
       aria-label={tr('打开通知', 'Open notifications')}
-      className={`relative inline-flex ${size === 'md' ? 'h-12 w-12' : 'h-11 w-11'} items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950/85 text-zinc-200 transition-colors hover:border-indigo-400/60 hover:text-white backdrop-blur-md`}
+      className={`relative inline-flex ${size === 'md' ? 'h-12 w-12' : 'h-11 w-11'} items-center justify-center rounded-2xl border border-app-border bg-app-bg/85 text-app-text transition-colors hover:border-indigo-400/60 hover:text-white backdrop-blur-md`}
     >
       <Bell className="h-5 w-5" />
       {notificationUnreadCount > 0 && (
-        <span className="absolute -right-1 -top-1 min-w-5 rounded-full border border-zinc-950 bg-rose-500 px-1.5 py-0.5 text-[10px] font-black leading-none text-white shadow-lg">
+        <span className="absolute -right-1 -top-1 min-w-5 rounded-full border border-app-border bg-rose-500 px-1.5 py-0.5 text-[10px] font-black leading-none text-white shadow-lg">
           {notificationUnreadCount > 9 ? '9+' : notificationUnreadCount}
         </span>
       )}
@@ -12006,7 +12006,7 @@ export default function App() {
           type="button"
           onClick={() => setShowLeaveGameModal(true)}
           aria-label={tr('返回作品库', 'Back to library')}
-          className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950/80 text-zinc-200 transition-colors hover:border-zinc-600 hover:text-white backdrop-blur-md"
+          className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-app-border bg-app-bg/80 text-app-text transition-colors hover:border-zinc-600 hover:text-white backdrop-blur-md"
         >
           <ChevronLeft className="h-6 w-6" />
         </button>
@@ -12016,7 +12016,7 @@ export default function App() {
           <button
             type="button"
             onClick={() => setIsStoryInfoOpen(true)}
-            className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-zinc-800 bg-zinc-950/80 px-4 text-sm font-bold text-zinc-200 transition-colors hover:border-zinc-600 hover:text-white backdrop-blur-md"
+            className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-app-border bg-app-bg/80 px-4 text-sm font-bold text-app-text transition-colors hover:border-zinc-600 hover:text-white backdrop-blur-md"
           >
             <BookOpen className="h-4 w-4" />
             {tr('故事信息', 'Story Info')}
@@ -12026,7 +12026,7 @@ export default function App() {
           type="button"
           onClick={openSystemSettings}
           aria-label={tr('打开系统设置', 'Open system settings')}
-          className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950/80 text-zinc-200 transition-colors hover:border-zinc-600 hover:text-white backdrop-blur-md"
+          className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-app-border bg-app-bg/80 text-app-text transition-colors hover:border-zinc-600 hover:text-white backdrop-blur-md"
         >
           <Settings className="h-5 w-5" />
         </button>
@@ -12034,7 +12034,7 @@ export default function App() {
         <button
           type="button"
           onClick={() => setIsActionMenuOpen(true)}
-          className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950/80 text-zinc-200 transition-colors hover:border-zinc-600 hover:text-white backdrop-blur-md"
+          className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-app-border bg-app-bg/80 text-app-text transition-colors hover:border-zinc-600 hover:text-white backdrop-blur-md"
         >
           <Menu className="h-6 w-6" />
         </button>
@@ -12049,7 +12049,7 @@ export default function App() {
         type="button"
         onClick={openSystemSettings}
         aria-label={tr('打开系统设置', 'Open system settings')}
-        className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950/85 text-zinc-200 transition-colors hover:border-zinc-600 hover:text-white backdrop-blur-md"
+        className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-app-border bg-app-bg/85 text-app-text transition-colors hover:border-zinc-600 hover:text-white backdrop-blur-md"
       >
         <Settings className="h-5 w-5" />
       </button>
@@ -12144,7 +12144,7 @@ export default function App() {
     ? createPortal(
       <div className="destiny-dock play-destiny-dock rounded-full px-3 py-1.5 backdrop-blur-xl">
         <div className="flex min-h-9 items-center justify-between gap-2 px-1">
-          <div className="shrink-0 text-xs font-black text-zinc-300 sm:text-sm">
+          <div className="shrink-0 text-xs font-black text-app-text sm:text-sm">
             {interventionsLeft}/3 {tr('干涉数', 'interventions')}
           </div>
           <div className="min-w-0 flex-1 text-center text-xs font-black sm:text-sm">
@@ -12154,11 +12154,11 @@ export default function App() {
               }
               if (storyConclusion || interventionsLeft <= 0) {
                 const domain = endingDomainFromValue(endingValue);
-                return <span className={domain === 'left' ? 'text-indigo-300/90' : domain === 'right' ? 'text-rose-300/90' : 'text-zinc-300'}>{endingDomainUserLabel(domain)}</span>;
+                return <span className={domain === 'left' ? 'text-indigo-300/90' : domain === 'right' ? 'text-rose-300/90' : 'text-app-text'}>{endingDomainUserLabel(domain)}</span>;
               }
               const left = Math.round(uiFeedback.leftProgress || 0);
               const right = Math.round(uiFeedback.rightProgress || 0);
-              if (left <= 0 && right <= 0) return <span className="text-zinc-400">{tr('中域', 'Middle domain')}</span>;
+              if (left <= 0 && right <= 0) return <span className="text-app-muted">{tr('中域', 'Middle domain')}</span>;
               if (left >= right) return <span className="text-indigo-300/85">{isEnglish ? `Left ${left}%` : `左${left}%`}</span>;
               return <span className="text-rose-300/85">{isEnglish ? `Right ${right}%` : `右${right}%`}</span>;
             })()}
@@ -12169,7 +12169,7 @@ export default function App() {
             disabled={isRewriting || isGeneratingConclusion || !activeStoryId}
             className={`inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-black transition-all duration-150 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 sm:h-9 ${
               storyConclusion || interventionsLeft <= 0
-                ? 'border border-zinc-700 bg-zinc-900/80 text-zinc-100 hover:border-zinc-500'
+                ? 'border border-app-border bg-app-surface/80 text-app-text hover:border-zinc-500'
                 : 'bg-zinc-100 text-zinc-950 hover:bg-white'
             }`}
           >
@@ -12194,7 +12194,7 @@ export default function App() {
             {tr('正在干涉世界线', 'Interfering with the timeline')}
           </motion.div>
           <h1 className="text-4xl font-black text-white sm:text-6xl">{formatBookTitle(blueprint.title)}</h1>
-          <div className="text-sm font-bold text-zinc-500">
+          <div className="text-sm font-bold text-app-muted">
             <AuthorNameButton
               authorId={(activeStoryMeta || { authorId: user?.uid }).authorId}
               authorName={getStoryAuthorName(activeStoryMeta || { authorId: user?.uid, authorName: getUserAuthorName(user) })}
@@ -12202,7 +12202,7 @@ export default function App() {
           </div>
           <div className="flex flex-wrap justify-center gap-2">
             {selectedThemes.map(tag => (
-              <span key={tag} className="rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-1 text-xs font-medium text-zinc-400">
+              <span key={tag} className="rounded-lg border border-app-border bg-app-surface/50 px-3 py-1 text-xs font-medium text-app-muted">
                 {tag}
               </span>
             ))}
@@ -12225,14 +12225,14 @@ export default function App() {
             className="reading-chapter group relative"
           >
             <div className="mb-6 flex items-center gap-4">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-800/60 bg-zinc-950/45 text-xs font-black text-zinc-500 transition-colors group-hover:border-indigo-500/40 group-hover:text-indigo-300">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-app-border/60 bg-app-bg/45 text-xs font-black text-app-muted transition-colors group-hover:border-indigo-500/40 group-hover:text-indigo-300">
                 {chapter.chapter_num}
               </div>
-              <h2 className="text-xl font-bold text-zinc-100">{chapter.title || (isEnglish ? `Chapter ${chapter.chapter_num}` : `第${chapter.chapter_num}章`)}</h2>
+              <h2 className="text-xl font-bold text-app-text">{chapter.title || (isEnglish ? `Chapter ${chapter.chapter_num}` : `第${chapter.chapter_num}章`)}</h2>
               <div className="h-px flex-1 bg-gradient-to-r from-zinc-800/70 to-transparent" />
             </div>
             
-            <div className="relative leading-relaxed text-zinc-300">
+            <div className="relative leading-relaxed text-app-text">
               <div className="prose prose-invert max-w-none space-y-6">
                 {isChapterTextReady(chapter) ? (
                   String(chapter.text || '').split('\n').filter(Boolean).map((p, pIdx) => (
@@ -12291,10 +12291,10 @@ export default function App() {
                           transition={{ duration: 0.2, ease: 'easeOut' }}
                           className="overflow-hidden"
                         >
-                          <div className="mt-6 flex w-full flex-col items-center gap-6 rounded-[1.75rem] border border-zinc-800/70 bg-zinc-950/40 p-5 sm:p-6">
+                          <div className="mt-6 flex w-full flex-col items-center gap-6 rounded-[1.75rem] border border-app-border/70 bg-app-bg/40 p-5 sm:p-6">
                             <div className="max-w-xl text-center">
-                              <div className="mb-1 text-sm font-black text-zinc-100">{tr('因果节点已就绪', 'Causal node ready')}</div>
-                              <div className="text-xs leading-relaxed text-zinc-500">
+                              <div className="mb-1 text-sm font-black text-app-text">{tr('因果节点已就绪', 'Causal node ready')}</div>
+                              <div className="text-xs leading-relaxed text-app-muted">
                                 {tr('请选择本章登场角色，再决定施加庇佑或磨难。支线提示只作为命运走向的参考，不会直接写进故事表面。', 'Choose a character in this chapter, then apply blessing or hardship. Branch hints guide fate direction but are not written directly into the story surface.')}
                               </div>
                             </div>
@@ -12333,10 +12333,10 @@ export default function App() {
                                   )).filter(Boolean).slice(0, 2);
 
                                 return (
-                                  <div key={char.id} className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+                                  <div key={char.id} className="rounded-2xl border border-app-border bg-app-bg/60 p-4">
                                     <div className="mb-3">
                                       <div className="flex items-start justify-between">
-                                        <div className="text-sm font-black text-zinc-100">{char.name}</div>
+                                        <div className="text-sm font-black text-app-text">{char.name}</div>
                                         {characterStatuses[char.id] && (
                                           <div className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${characterStatuses[char.id].isDead ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
                                             {characterStatuses[char.id].status || tr('在场', 'Present')}
@@ -12344,7 +12344,7 @@ export default function App() {
                                         )}
                                       </div>
                                       {branchHints.length > 0 && (
-                                        <div className="mt-2 space-y-1 text-xs leading-relaxed text-zinc-500">
+                                        <div className="mt-2 space-y-1 text-xs leading-relaxed text-app-muted">
                                           {branchHints.map((hint, hintIdx) => (
                                             <div key={`${char.id}-hint-${hintIdx}`}>{hint}</div>
                                           ))}
@@ -12404,7 +12404,7 @@ export default function App() {
           <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="text-sm font-black text-white">{formatBookTitle(blueprint.title)}</div>
-              <div className="text-xs font-bold text-zinc-500">
+              <div className="text-xs font-bold text-app-muted">
                 <AuthorNameButton
                   authorId={(activeStoryMeta || { authorId: user?.uid }).authorId}
                   authorName={getStoryAuthorName(activeStoryMeta || { authorId: user?.uid, authorName: getUserAuthorName(user) })}
@@ -12453,19 +12453,19 @@ export default function App() {
         <h1 className="text-4xl font-black text-white sm:text-6xl">{tr('最终命运总结', 'Final Fate Summary')}</h1>
       </div>
 
-      <div className="relative rounded-[3rem] border border-zinc-800 bg-zinc-900/30 p-10 shadow-2xl backdrop-blur-xl sm:p-12">
+      <div className="relative rounded-[3rem] border border-app-border bg-app-surface/30 p-10 shadow-2xl backdrop-blur-xl sm:p-12">
         {isGeneratingConclusion ? (
           <div className="flex h-64 flex-col items-center justify-center gap-6">
             <Loader2 className="h-10 w-10 animate-spin text-zinc-700" />
-            <p className="text-sm font-bold text-zinc-500">{generationStatus}</p>
+            <p className="text-sm font-bold text-app-muted">{generationStatus}</p>
           </div>
         ) : (
           <div className="space-y-8">
             <section className="space-y-4">
               <div className="flex items-center gap-4">
-                <div className="h-px flex-1 bg-zinc-800" />
-                <h2 className="text-xs font-black uppercase tracking-[0.3em] text-zinc-500">时空回响</h2>
-                <div className="h-px flex-1 bg-zinc-800" />
+                <div className="h-px flex-1 bg-app-surface-soft" />
+                <h2 className="text-xs font-black uppercase tracking-[0.3em] text-app-muted">时空回响</h2>
+                <div className="h-px flex-1 bg-app-surface-soft" />
               </div>
               <div className="prose prose-invert max-w-none text-xl font-medium leading-relaxed italic text-amber-200/90">
                 {String(storyConclusion || '').split('\n').map((p, i) => (
@@ -12485,7 +12485,7 @@ export default function App() {
               </button>
               <button
                 onClick={resetGame}
-                className="flex items-center justify-center gap-3 rounded-2xl bg-zinc-800 py-5 text-lg font-black text-zinc-200 transition-all hover:bg-zinc-700 hover:scale-[1.02]"
+                className="flex items-center justify-center gap-3 rounded-2xl bg-app-surface-soft py-5 text-lg font-black text-app-text transition-all hover:bg-app-surface-soft hover:scale-[1.02]"
               >
                 <RefreshCcw className="h-6 w-6" />
                 开启新轮回
@@ -12498,7 +12498,7 @@ export default function App() {
   );
 
   const renderBranchForm = (isNew: boolean) => (
-    <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/40 p-5 space-y-4">
+    <div className="rounded-[1.5rem] border border-app-border bg-app-bg/40 p-5 space-y-4">
       <div className="flex items-center justify-between">
         <div className="text-sm font-black text-white">{isNew ? tr('新建支线', 'New branch') : tr('编辑支线', 'Edit branch')}</div>
         <button type="button" onClick={() => setExpandedBranchId(null)} className={semanticButtonClass('ghost', { compact: true })}>
@@ -12507,20 +12507,20 @@ export default function App() {
         </button>
       </div>
       <div>
-        <input value={branchForm.name} onChange={(event) => setBranchForm((prev) => ({ ...prev, name: event.target.value }))} className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500" placeholder={tr('支线名', 'Branch name')} />
+        <input value={branchForm.name} onChange={(event) => setBranchForm((prev) => ({ ...prev, name: event.target.value }))} className="w-full rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500" placeholder={tr('支线名', 'Branch name')} />
       </div>
       <div className="grid gap-3 md:grid-cols-2">
-        <select value={branchForm.side} onChange={(event) => setBranchForm((prev) => ({ ...prev, side: event.target.value as 'left' | 'right' }))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500">
+        <select value={branchForm.side} onChange={(event) => setBranchForm((prev) => ({ ...prev, side: event.target.value as 'left' | 'right' }))} className="rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500">
           <option value="left">{tr('左域支线', 'Left-domain branch')}</option>
           <option value="right">{tr('右域支线', 'Right-domain branch')}</option>
         </select>
-        <select value={branchForm.tier} onChange={(event) => setBranchForm((prev) => ({ ...prev, tier: event.target.value as 'small' | 'medium' | 'large' }))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500">
+        <select value={branchForm.tier} onChange={(event) => setBranchForm((prev) => ({ ...prev, tier: event.target.value as 'small' | 'medium' | 'large' }))} className="rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500">
           <option value="small">{tr('影响：小', 'Impact: small')}</option>
           <option value="medium">{tr('影响：中', 'Impact: medium')}</option>
           <option value="large">{tr('影响：大', 'Impact: large')}</option>
         </select>
       </div>
-      <label className="flex items-start gap-3 rounded-2xl border border-amber-500/15 bg-amber-500/5 p-4 text-sm text-zinc-300">
+      <label className="flex items-start gap-3 rounded-2xl border border-amber-500/15 bg-amber-500/5 p-4 text-sm text-app-text">
         <input
           type="checkbox"
           checked={branchForm.isHidden}
@@ -12529,16 +12529,16 @@ export default function App() {
         />
         <span>
           <span className="block font-black text-amber-200">{tr('隐藏支线', 'Hidden branch')}</span>
-          <span className="mt-1 block text-xs leading-relaxed text-zinc-500">{tr('隐藏支线不会提前暴露完整内容；玩家需要在游玩中触发后，才会看到这条支线的具体情节。', 'Hidden branches do not reveal full content early. Players see the details only after triggering them during play.')}</span>
+          <span className="mt-1 block text-xs leading-relaxed text-app-muted">{tr('隐藏支线不会提前暴露完整内容；玩家需要在游玩中触发后，才会看到这条支线的具体情节。', 'Hidden branches do not reveal full content early. Players see the details only after triggering them during play.')}</span>
         </span>
       </label>
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4">
-        <label className="block space-y-2 text-sm font-bold text-zinc-300">
+      <div className="rounded-2xl border border-app-border bg-app-surface/30 p-4">
+        <label className="block space-y-2 text-sm font-bold text-app-text">
           <span>{tr('导向结局绑定', 'Ending binding')}</span>
           <select
             value={branchForm.endingId}
             onChange={(event) => setBranchForm((prev) => ({ ...prev, endingId: event.target.value }))}
-            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+            className="w-full rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
           >
             <option value="">{tr('自动进入该域的默认结局', 'Auto-use the default ending in this domain')}</option>
             {(authoringCartridge?.endings || []).map((ending: any) => (
@@ -12548,15 +12548,15 @@ export default function App() {
             ))}
           </select>
         </label>
-        <p className="mt-2 text-xs leading-relaxed text-zinc-500">{tr('支线可以只影响左域/右域走向，也可以进一步绑定到某个具体结局。没有绑定时，会自动进入该域的默认结局。', 'A branch can affect only left/right direction, or bind to a specific ending. Without a binding, it uses that domain’s default ending.')}</p>
+        <p className="mt-2 text-xs leading-relaxed text-app-muted">{tr('支线可以只影响左域/右域走向，也可以进一步绑定到某个具体结局。没有绑定时，会自动进入该域的默认结局。', 'A branch can affect only left/right direction, or bind to a specific ending. Without a binding, it uses that domain’s default ending.')}</p>
       </div>
-      <textarea value={branchForm.sceneText} onChange={(event) => setBranchForm((prev) => ({ ...prev, sceneText: event.target.value }))} className="authoring-resizable-textarea min-h-[180px] w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-sm text-white outline-none focus:border-indigo-500" placeholder={tr('支线情节（300 字以内）', 'Branch scene (within 300 words)')} />
+      <textarea value={branchForm.sceneText} onChange={(event) => setBranchForm((prev) => ({ ...prev, sceneText: event.target.value }))} className="authoring-resizable-textarea min-h-[180px] w-full resize-y rounded-2xl border border-app-border bg-app-input-bg px-4 py-4 text-sm text-app-text outline-none focus:border-indigo-500" placeholder={tr('支线情节（300 字以内）', 'Branch scene (within 300 words)')} />
       <div className="space-y-3">
         <div className="text-sm font-black text-white">{tr('触发条件', 'Trigger Conditions')}</div>
         {branchConditions.map((condition, idx) => (
-          <div key={idx} className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4 space-y-3">
+          <div key={idx} className="rounded-2xl border border-app-border bg-app-surface/30 p-4 space-y-3">
             <div className="flex items-center justify-between gap-3">
-              <div className="text-xs font-black text-zinc-500">{tr('条件组', 'Condition group')} {idx + 1}</div>
+              <div className="text-xs font-black text-app-muted">{tr('条件组', 'Condition group')} {idx + 1}</div>
               {branchConditions.length > 1 && (
                 <button type="button" onClick={() => setBranchConditions((prev) => prev.filter((_, itemIdx) => itemIdx !== idx))} className={semanticButtonClass('danger', { compact: true })}>
                   <Trash2 className="h-4 w-4" />
@@ -12565,29 +12565,29 @@ export default function App() {
               )}
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              <select value={condition.kind} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, kind: event.target.value as 'single' | 'count' } : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500 min-w-[120px]">
+              <select value={condition.kind} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, kind: event.target.value as 'single' | 'count' } : item))} className="rounded-xl border border-app-border bg-app-input-bg px-3 py-2 text-sm text-app-text outline-none focus:border-indigo-500 min-w-[120px]">
                 <option value="single">{tr('单次判定', 'Single check')}</option>
                 <option value="count">{tr('累计判定', 'Cumulative check')}</option>
               </select>
-              <select value={condition.kind === 'single' ? condition.singleChapterNum : condition.upToChapterNum} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? (condition.kind === 'single' ? { ...item, singleChapterNum: Number(event.target.value) } : { ...item, upToChapterNum: Number(event.target.value) }) : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500 min-w-[100px]">
+              <select value={condition.kind === 'single' ? condition.singleChapterNum : condition.upToChapterNum} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? (condition.kind === 'single' ? { ...item, singleChapterNum: Number(event.target.value) } : { ...item, upToChapterNum: Number(event.target.value) }) : item))} className="rounded-xl border border-app-border bg-app-input-bg px-3 py-2 text-sm text-app-text outline-none focus:border-indigo-500 min-w-[100px]">
                 {chapterOptions.map((chapterNum) => <option key={chapterNum} value={chapterNum}>{isEnglish ? `Chapter ${chapterNum}` : `第${chapterNum}章`}</option>)}
               </select>
-              <select value={condition.kind === 'single' ? condition.singleCharId : condition.countCharId} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? (condition.kind === 'single' ? { ...item, singleCharId: event.target.value } : { ...item, countCharId: event.target.value }) : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500 min-w-[140px]">
+              <select value={condition.kind === 'single' ? condition.singleCharId : condition.countCharId} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? (condition.kind === 'single' ? { ...item, singleCharId: event.target.value } : { ...item, countCharId: event.target.value }) : item))} className="rounded-xl border border-app-border bg-app-input-bg px-3 py-2 text-sm text-app-text outline-none focus:border-indigo-500 min-w-[140px]">
                 <option value="">{tr('选择角色', 'Choose character')}</option>
                 {normalizeCharacters(authoringCartridge?.meta?.characters || []).map((character: any) => <option key={character.id} value={character.id}>{character.name}</option>)}
               </select>
               {condition.kind === 'single' ? (
-                <select value={condition.singleAction} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, singleAction: event.target.value as 'bless' | 'curse' } : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500 min-w-[100px]">
+                <select value={condition.singleAction} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, singleAction: event.target.value as 'bless' | 'curse' } : item))} className="rounded-xl border border-app-border bg-app-input-bg px-3 py-2 text-sm text-app-text outline-none focus:border-indigo-500 min-w-[100px]">
                   <option value="bless">{tr('庇佑', 'Bless')}</option>
                   <option value="curse">{tr('磨难', 'Hardship')}</option>
                 </select>
               ) : (
                 <>
-                  <select value={condition.countAction} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, countAction: event.target.value as 'bless' | 'curse' } : item))} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500 min-w-[100px]">
+                  <select value={condition.countAction} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, countAction: event.target.value as 'bless' | 'curse' } : item))} className="rounded-xl border border-app-border bg-app-input-bg px-3 py-2 text-sm text-app-text outline-none focus:border-indigo-500 min-w-[100px]">
                     <option value="bless">{tr('庇佑', 'Bless')}</option>
                     <option value="curse">{tr('磨难', 'Hardship')}</option>
                   </select>
-                  <input type="number" min={1} value={condition.minCount} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, minCount: Math.max(1, Number(event.target.value) || 1) } : item))} className="w-24 rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-indigo-500" placeholder={tr('累计次数', 'Count')} />
+                  <input type="number" min={1} value={condition.minCount} onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, minCount: Math.max(1, Number(event.target.value) || 1) } : item))} className="w-24 rounded-xl border border-app-border bg-app-input-bg px-3 py-2 text-sm text-app-text outline-none focus:border-indigo-500" placeholder={tr('累计次数', 'Count')} />
                 </>
               )}
             </div>
@@ -12596,7 +12596,7 @@ export default function App() {
                 type="text"
                 value={condition.hint || ''}
                 onChange={(event) => setBranchConditions((prev) => prev.map((item, itemIdx) => itemIdx === idx ? { ...item, hint: event.target.value } : item))}
-                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-2 text-sm text-white outline-none focus:border-indigo-500"
+                className="w-full rounded-xl border border-app-border bg-app-input-bg px-4 py-2 text-sm text-app-text outline-none focus:border-indigo-500"
                 placeholder={tr('提示（可选，在触发条件中设置，多条件时可针对不同条件设置提示）', 'Hint (optional, set in trigger conditions. Multi-conditions can have different hints)')}
               />
             </div>
@@ -12705,11 +12705,11 @@ export default function App() {
     return seriesWorlds.find((series) => series.id === seriesId)?.title || tr('世界观作品', 'World setting work');
   };
 
-  const renderAuthoringStatChip = (label: string, value: string | number, Icon: any, tone = 'text-zinc-300') => (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-800/80 bg-zinc-950/55 px-2.5 py-1 text-[11px] font-black text-zinc-300">
+  const renderAuthoringStatChip = (label: string, value: string | number, Icon: any, tone = 'text-app-text') => (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-app-border/80 bg-app-bg/55 px-2.5 py-1 text-[11px] font-black text-app-text">
       <Icon className={`h-3.5 w-3.5 ${tone}`} />
-      <span className="text-zinc-500">{label}</span>
-      <span className="text-zinc-100">{value}</span>
+      <span className="text-app-muted">{label}</span>
+      <span className="text-app-text">{value}</span>
     </span>
   );
 
@@ -12734,17 +12734,17 @@ export default function App() {
           >
             <div className="flex min-w-0 items-start gap-3">
               <div className="mt-0.5 rounded-full border border-white/10 bg-white/10 p-2">
-                <Bell className="h-4 w-4 text-zinc-100" />
+                <Bell className="h-4 w-4 text-app-text" />
               </div>
               <div className="min-w-0">
                 <div className="text-sm font-black text-white">{notification.title}</div>
-                <div className="mt-1 text-xs font-semibold leading-relaxed text-zinc-300">{notification.detail}</div>
+                <div className="mt-1 text-xs font-semibold leading-relaxed text-app-text">{notification.detail}</div>
               </div>
             </div>
             <button
               type="button"
               onClick={() => dismissAuthorPulseNotification(notification.id)}
-              className="rounded-full p-1 text-zinc-500 transition-colors hover:bg-white/10 hover:text-zinc-100 active:scale-95"
+              className="rounded-full p-1 text-app-muted transition-colors hover:bg-white/10 hover:text-app-text active:scale-95"
               aria-label="关闭通知"
             >
               <X className="h-4 w-4" />
@@ -12764,7 +12764,7 @@ export default function App() {
           e.stopPropagation();
           openAuthorProfile(authorId, authorName);
         }}
-        className="font-black text-zinc-300 underline decoration-zinc-700 underline-offset-4 transition-colors hover:text-indigo-200 hover:decoration-indigo-300"
+        className="font-black text-app-text underline decoration-zinc-700 underline-offset-4 transition-colors hover:text-indigo-200 hover:decoration-indigo-300"
       >
         {authorName || (authorId ? `游客+${shortUserId(authorId)}` : '未知作者')}
       </button>
@@ -12785,7 +12785,7 @@ export default function App() {
             initial={{ y: 20, opacity: 0, scale: 0.96 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 14, opacity: 0, scale: 0.98 }}
-            className="app-modal-surface app-modal-safe-height w-full max-w-xl overflow-y-auto rounded-[2rem] border border-zinc-800 p-5 shadow-2xl sm:p-6"
+            className="app-modal-surface app-modal-safe-height w-full max-w-xl overflow-y-auto rounded-[2rem] border border-app-border p-5 shadow-2xl sm:p-6"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-5 flex items-start justify-between gap-4">
@@ -12797,7 +12797,7 @@ export default function App() {
                     「 {authorProfileBio} 」
                   </p>
                 )}
-                <p className="mt-2 text-xs font-semibold text-zinc-500">{tr('查看这个作者公开或非公开链接作品，并决定是否追踪后续更新。', 'View this author’s public or unlisted works, and decide whether to follow future updates.')}</p>
+                <p className="mt-2 text-xs font-semibold text-app-muted">{tr('查看这个作者公开或非公开链接作品，并决定是否追踪后续更新。', 'View this author’s public or unlisted works, and decide whether to follow future updates.')}</p>
               </div>
               <button type="button" onClick={() => setAuthorProfileTarget(null)} className={semanticIconButtonClass('secondary')} aria-label={tr('关闭作者档案', 'Close author profile')}>
                 <X className="h-5 w-5" />
@@ -12812,12 +12812,12 @@ export default function App() {
               )}
             </div>
             {authorProfileLoading ? (
-              <div className="flex items-center justify-center gap-2 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-8 text-sm font-black text-zinc-400">
+              <div className="flex items-center justify-center gap-2 rounded-2xl border border-app-border bg-app-surface/40 p-8 text-sm font-black text-app-muted">
                 <Loader2 className="h-5 w-5 animate-spin" />
                 {isEnglish ? 'Loading author works...' : '正在读取作者作品...'}
               </div>
             ) : authorProfileStories.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/30 p-8 text-center text-sm font-semibold text-zinc-500">
+              <div className="rounded-2xl border border-dashed border-app-border bg-app-surface/30 p-8 text-center text-sm font-semibold text-app-muted">
                 {tr('暂时没有可查看的作者作品。', 'No viewable works from this author yet.')}
               </div>
             ) : (
@@ -12830,10 +12830,10 @@ export default function App() {
                       setAuthorProfileTarget(null);
                       void startStoryPlay(story.id);
                     }}
-                    className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4 text-left transition-colors hover:border-indigo-400/50 hover:bg-indigo-500/10"
+                    className="rounded-2xl border border-app-border bg-app-surface/40 p-4 text-left transition-colors hover:border-indigo-400/50 hover:bg-indigo-500/10"
                   >
-                    <div className="font-black text-zinc-100">{formatBookTitle(getStoryTitle(story))}</div>
-                    <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-black text-zinc-500">
+                    <div className="font-black text-app-text">{formatBookTitle(getStoryTitle(story))}</div>
+                    <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-black text-app-muted">
                       <span>{tr('点赞', 'Likes')} {getStoryLikeCount(story)}</span>
                       <span>{tr('收藏', 'Favorites')} {getStoryFavoriteCount(story)}</span>
                       <span>{tr('分享', 'Shares')} {getStoryShareCount(story)}</span>
@@ -12863,14 +12863,14 @@ export default function App() {
             initial={{ y: 20, opacity: 0, scale: 0.96 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 14, opacity: 0, scale: 0.98 }}
-            className="app-modal-surface app-modal-safe-height w-full max-w-lg overflow-y-auto rounded-[2rem] border border-zinc-800 p-5 shadow-2xl sm:p-6"
+            className="app-modal-surface app-modal-safe-height w-full max-w-lg overflow-y-auto rounded-[2rem] border border-app-border p-5 shadow-2xl sm:p-6"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <div className="text-xs font-black uppercase tracking-[0.2em] text-indigo-300">{tr('通知', 'Notifications')}</div>
                 <h3 className="mt-2 text-2xl font-black text-white">{tr('命运动态', 'Fate Updates')}</h3>
-                <p className="mt-1 text-xs font-semibold text-zinc-500">{tr('点赞、收藏、分享、追踪作者更新和创作提醒都会集中在这里。', 'Likes, favorites, shares, followed author updates, and creation nudges gather here.')}</p>
+                <p className="mt-1 text-xs font-semibold text-app-muted">{tr('点赞、收藏、分享、追踪作者更新和创作提醒都会集中在这里。', 'Likes, favorites, shares, followed author updates, and creation nudges gather here.')}</p>
               </div>
               <button type="button" onClick={() => setNotificationCenterOpen(false)} className={semanticIconButtonClass('ghost')} aria-label={tr('关闭通知', 'Close notifications')}>
                 <X className="h-5 w-5" />
@@ -12894,7 +12894,7 @@ export default function App() {
               {notificationLoading && notificationItems.length === 0 ? (
                 <ListSkeleton count={4} compact />
               ) : notificationItems.length === 0 ? (
-                <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/30 p-8 text-center text-sm font-semibold text-zinc-500">
+                <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-app-border bg-app-surface/30 p-8 text-center text-sm font-semibold text-app-muted">
                   {tr('暂时没有新的通知。', 'No new notifications yet.')}
                 </div>
               ) : (
@@ -12903,7 +12903,7 @@ export default function App() {
                     <div
                       key={item.id}
                       className={`flex items-start gap-2 rounded-2xl border p-3 transition-colors hover:border-indigo-400/50 hover:bg-indigo-500/10 ${
-                        item.readAt ? 'border-zinc-800 bg-zinc-900/30' : 'border-indigo-400/30 bg-indigo-500/10'
+                        item.readAt ? 'border-app-border bg-app-surface/30' : 'border-indigo-400/30 bg-indigo-500/10'
                       }`}
                     >
                       <button
@@ -12918,8 +12918,8 @@ export default function App() {
                           <Bell className="h-4 w-4 text-indigo-200" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="font-black text-zinc-100">{item.title || tr('新的通知', 'New notification')}</div>
-                          <div className="mt-1 text-xs font-semibold leading-relaxed text-zinc-400">{item.body || tr('有新的命运动态。', 'There is a new fate update.')}</div>
+                          <div className="font-black text-app-text">{item.title || tr('新的通知', 'New notification')}</div>
+                          <div className="mt-1 text-xs font-semibold leading-relaxed text-app-muted">{item.body || tr('有新的命运动态。', 'There is a new fate update.')}</div>
                           <div className="mt-2 text-[10px] font-black uppercase tracking-[0.16em] text-zinc-600">
                             {new Date(item.createdAt || Date.now()).toLocaleString()}
                           </div>
@@ -12928,7 +12928,7 @@ export default function App() {
                       <button
                         type="button"
                         onClick={() => void deleteNotificationItem(item.id)}
-                        className="shrink-0 rounded-full p-2 text-zinc-500 transition-colors hover:bg-rose-500/10 hover:text-rose-200 active:scale-95"
+                        className="shrink-0 rounded-full p-2 text-app-muted transition-colors hover:bg-rose-500/10 hover:text-rose-200 active:scale-95"
                         aria-label={tr('删除通知', 'Delete notification')}
                       >
                         <Trash2 className="h-4 w-4" />
@@ -12958,26 +12958,26 @@ export default function App() {
             initial={{ y: 20, opacity: 0, scale: 0.96 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 14, opacity: 0, scale: 0.98 }}
-            className="app-modal-surface app-modal-safe-height w-full max-w-lg overflow-y-auto rounded-[2rem] border border-zinc-800 p-5 shadow-2xl sm:p-6"
+            className="app-modal-surface app-modal-safe-height w-full max-w-lg overflow-y-auto rounded-[2rem] border border-app-border p-5 shadow-2xl sm:p-6"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <div className="text-xs font-black uppercase tracking-[0.2em] text-indigo-300">{tr('分享前确认', 'Share Preview')}</div>
                 <h3 className="mt-2 text-2xl font-black text-white">{String(shareComposer.title || t('play.share'))}</h3>
-                <p className="mt-1 text-xs font-semibold text-zinc-500">{tr('可以先调整要发出去的文字；确认分享后才会调用设备分享功能，并在成功后计入分享数。', 'Edit the share text first. The device share sheet opens only after confirmation, and successful shares count toward stats.')}</p>
+                <p className="mt-1 text-xs font-semibold text-app-muted">{tr('可以先调整要发出去的文字；确认分享后才会调用设备分享功能，并在成功后计入分享数。', 'Edit the share text first. The device share sheet opens only after confirmation, and successful shares count toward stats.')}</p>
               </div>
               <button type="button" onClick={() => closeShareComposer(false)} className={semanticIconButtonClass('ghost')} aria-label={tr('关闭分享编辑', 'Close share editor')}>
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <label className="mb-3 block text-xs font-black uppercase tracking-[0.16em] text-zinc-500">{tr('分享文字', 'Share text')}</label>
+            <label className="mb-3 block text-xs font-black uppercase tracking-[0.16em] text-app-muted">{tr('分享文字', 'Share text')}</label>
             <textarea
               value={shareComposerText}
               onChange={(event) => setShareComposerText(event.target.value)}
-              className="min-h-44 w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 text-sm font-semibold leading-relaxed text-zinc-100 outline-none transition-colors focus:border-indigo-400/70"
+              className="min-h-44 w-full resize-y rounded-2xl border border-app-border bg-app-surface/60 p-4 text-sm font-semibold leading-relaxed text-app-text outline-none transition-colors focus:border-indigo-400/70"
             />
-            <div className="mt-3 rounded-2xl border border-zinc-800 bg-zinc-900/35 p-3 text-xs font-semibold leading-relaxed text-zinc-400 break-all">
+            <div className="mt-3 rounded-2xl border border-app-border bg-app-surface/35 p-3 text-xs font-semibold leading-relaxed text-app-muted break-all">
               {String(shareComposer.url || '')}
             </div>
             <div className="mt-5 grid grid-cols-2 gap-3">
@@ -13025,18 +13025,18 @@ export default function App() {
                   <BarChart3 className="h-5 w-5 text-indigo-300" />
                   {tr('我的作品', 'My Works')}
                 </div>
-                <div className="mt-1 text-xs font-semibold text-zinc-500">{tr('用数据判断哪些命运线值得继续扩写、改版或推广。', 'Use stats to decide which fate lines deserve expansion, revision, or promotion.')}</div>
+                <div className="mt-1 text-xs font-semibold text-app-muted">{tr('用数据判断哪些命运线值得继续扩写、改版或推广。', 'Use stats to decide which fate lines deserve expansion, revision, or promotion.')}</div>
               </div>
-              <div className="text-xs font-black text-zinc-500">{myStories.length} {tr('部作品', 'works')}</div>
+              <div className="text-xs font-black text-app-muted">{myStories.length} {tr('部作品', 'works')}</div>
             </div>
             <div className="mb-5 grid gap-3 lg:grid-cols-2 xl:grid-cols-[1.2fr_auto_auto_auto_auto_auto]">
               <label className="relative block">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-app-muted" />
                 <input
                   value={authoringListSearch}
                   onChange={(event) => setAuthoringListSearch(event.target.value)}
                   placeholder={tr('搜索作品、标签或主轴', 'Search works, tags, or premise')}
-                  className="w-full rounded-2xl border border-zinc-800 bg-zinc-950/60 py-3 pl-10 pr-4 text-sm font-semibold text-zinc-100 outline-none transition-colors placeholder:text-zinc-600 focus:border-indigo-400/70"
+                  className="w-full rounded-2xl border border-app-border bg-app-input-bg/60 py-3 pl-10 pr-4 text-sm font-semibold text-app-text outline-none transition-colors placeholder:text-zinc-600 focus:border-indigo-400/70"
                 />
               </label>
               <select
@@ -13046,7 +13046,7 @@ export default function App() {
                   setAuthoringSeriesKindFilter(value);
                   if (value !== 'series') setAuthoringSeriesWorldFilter('all');
                 }}
-                className="rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-sm font-black text-zinc-200 outline-none focus:border-indigo-400/70"
+                className="rounded-2xl border border-app-border bg-app-input-bg/60 px-4 py-3 text-sm font-black text-app-text outline-none focus:border-indigo-400/70"
               >
                 <option value="all">{tr('全部作品', 'All works')}</option>
                 <option value="standalone">{tr('单独作品', 'Standalone')}</option>
@@ -13058,7 +13058,7 @@ export default function App() {
                   setAuthoringSeriesWorldFilter(event.target.value);
                   if (event.target.value !== 'all') setAuthoringSeriesKindFilter('series');
                 }}
-                className="rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-sm font-black text-zinc-200 outline-none focus:border-indigo-400/70"
+                className="rounded-2xl border border-app-border bg-app-input-bg/60 px-4 py-3 text-sm font-black text-app-text outline-none focus:border-indigo-400/70"
               >
                 <option value="all">{tr('全部世界观', 'All settings')}</option>
                 {seriesWorlds.map((series) => (
@@ -13068,7 +13068,7 @@ export default function App() {
               <select
                 value={authoringListVisibilityFilter}
                 onChange={(event) => setAuthoringListVisibilityFilter(event.target.value as typeof authoringListVisibilityFilter)}
-                className="rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-sm font-black text-zinc-200 outline-none focus:border-indigo-400/70"
+                className="rounded-2xl border border-app-border bg-app-input-bg/60 px-4 py-3 text-sm font-black text-app-text outline-none focus:border-indigo-400/70"
               >
                 <option value="all">{tr('全部可见性', 'All visibility')}</option>
                 <option value="public">{tr('公开', 'Public')}</option>
@@ -13078,7 +13078,7 @@ export default function App() {
               <select
                 value={authoringCreatedFilter}
                 onChange={(event) => setAuthoringCreatedFilter(event.target.value as typeof authoringCreatedFilter)}
-                className="rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-sm font-black text-zinc-200 outline-none focus:border-indigo-400/70"
+                className="rounded-2xl border border-app-border bg-app-input-bg/60 px-4 py-3 text-sm font-black text-app-text outline-none focus:border-indigo-400/70"
               >
                 <option value="all">{tr('全部创作日期', 'All creation dates')}</option>
                 <option value="7d">{tr('近 7 天', 'Last 7 days')}</option>
@@ -13088,7 +13088,7 @@ export default function App() {
               <select
                 value={authoringListSort}
                 onChange={(event) => setAuthoringListSort(event.target.value as AuthoringListSort)}
-                className="rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-sm font-black text-zinc-200 outline-none focus:border-indigo-400/70"
+                className="rounded-2xl border border-app-border bg-app-input-bg/60 px-4 py-3 text-sm font-black text-app-text outline-none focus:border-indigo-400/70"
               >
                 <option value="updated">{tr('最近更新', 'Recently updated')}</option>
                 <option value="created">{tr('创作日期', 'Creation date')}</option>
@@ -13099,11 +13099,11 @@ export default function App() {
               </select>
             </div>
             {myStories.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/40 p-10 text-center text-zinc-500">
+              <div className="rounded-2xl border border-dashed border-app-border bg-app-bg/40 p-10 text-center text-app-muted">
                 {tr('还没有作品，点击“新建作品”开始创作。', 'No works yet. Click “New work” to start creating.')}
               </div>
             ) : getFilteredAuthoringStories().length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/40 p-8 text-center text-sm font-semibold text-zinc-500">
+              <div className="rounded-2xl border border-dashed border-app-border bg-app-bg/40 p-8 text-center text-sm font-semibold text-app-muted">
                 {tr('没有符合当前筛选的作品。', 'No works match the current filters.')}
               </div>
             ) : (
@@ -13121,7 +13121,7 @@ export default function App() {
                     className={`app-card relative flex min-h-44 flex-col justify-between overflow-hidden rounded-2xl p-5 text-left transition-all hover:-translate-y-1 hover:border-indigo-500/50 hover:bg-indigo-500/10 hover:shadow-xl active:scale-[0.98] ${authoringLoadingStoryId === story.id ? 'opacity-70 pointer-events-none' : ''}`}
                   >
                     {authoringLoadingStoryId === story.id && (
-                      <div className="absolute inset-0 z-10 flex items-center justify-center bg-zinc-950/60 backdrop-blur-sm">
+                      <div className="absolute inset-0 z-10 flex items-center justify-center bg-app-bg/60 backdrop-blur-sm">
                         <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
                       </div>
                     )}
@@ -13130,17 +13130,17 @@ export default function App() {
                         ? 'border-emerald-400/25 bg-emerald-500/15 text-emerald-200'
                         : story.visibility === 'unlisted'
                         ? 'border-sky-400/25 bg-sky-500/15 text-sky-200'
-                        : 'border-zinc-700 bg-zinc-900/80 text-zinc-300'
+                        : 'border-app-border bg-app-surface/80 text-app-text'
                     }`}>
                       {getVisibilityLabel(story.visibility)}
                     </span>
                     <div className="pr-24">
                       <div className="line-clamp-3 text-lg font-black text-white leading-tight">{formatBookTitle(getStoryTitle(story))}</div>
-                      <div className="mt-2 text-xs font-semibold text-zinc-500">{tr('创作', 'Created')} {formatShortDate(getStoryCreatedMs(story))} · {tr('更新', 'Updated')} {formatShortDate(getStoryUpdatedMs(story))}</div>
+                      <div className="mt-2 text-xs font-semibold text-app-muted">{tr('创作', 'Created')} {formatShortDate(getStoryCreatedMs(story))} · {tr('更新', 'Updated')} {formatShortDate(getStoryUpdatedMs(story))}</div>
                       <div className={`mt-2 inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-black ${
                         getAuthoringStorySeriesId(story)
                           ? 'border-indigo-400/25 bg-indigo-500/10 text-indigo-200'
-                          : 'border-zinc-700 bg-zinc-900/70 text-zinc-400'
+                          : 'border-app-border bg-app-surface/70 text-app-muted'
                       }`}>
                         <GitBranch className="h-3 w-3 shrink-0" />
                         <span className="truncate">{getAuthoringStorySeriesName(story)}</span>
@@ -13231,13 +13231,13 @@ export default function App() {
               className={`flex h-12 w-12 items-center justify-center rounded-full border shadow-2xl backdrop-blur-md transition-all hover:-translate-y-0.5 active:scale-95 ${
                 authoringFindReplaceOpen || authoringFindCompact
                   ? 'border-indigo-400 bg-indigo-500 text-white'
-                  : 'border-zinc-800 bg-zinc-950/90 text-zinc-200 hover:border-indigo-500 hover:text-white'
+                  : 'border-app-border bg-app-bg/90 text-app-text hover:border-indigo-500 hover:text-white'
               }`}
             >
               {authoringFindCompact ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
             </button>
             {authoringFindCompact && (
-              <div className="absolute bottom-16 left-0 grid w-44 gap-1.5 rounded-[1.25rem] border border-indigo-500/30 bg-zinc-950/95 p-2 shadow-2xl shadow-black/40 backdrop-blur-xl">
+              <div className="absolute bottom-16 left-0 grid w-44 gap-1.5 rounded-[1.25rem] border border-indigo-500/30 bg-app-bg/95 p-2 shadow-2xl shadow-black/40 backdrop-blur-xl">
                 <button type="button" onClick={() => moveAuthoringFindMatch(-1)} className={semanticButtonClass('ghost', { compact: true, fullWidth: true })}>
                   {tr('上一个', 'Previous')}
                 </button>
@@ -13252,38 +13252,38 @@ export default function App() {
                 >
                   {tr('替换', 'Replace')}
                 </button>
-                <div className="px-1 text-center text-[10px] font-bold text-zinc-500">
+                <div className="px-1 text-center text-[10px] font-bold text-app-muted">
                   {tr('点击左下角 X 返回设置', 'Tap the X to return to settings')}
                 </div>
               </div>
             )}
             {authoringFindReplaceOpen && (
-              <div className="absolute bottom-16 left-0 grid max-h-[min(76dvh,680px)] w-[min(92vw,44rem)] gap-3 overflow-y-auto rounded-[1.75rem] border border-indigo-500/30 bg-zinc-950/95 p-4 shadow-2xl shadow-black/40 backdrop-blur-xl sm:p-5">
+              <div className="absolute bottom-16 left-0 grid max-h-[min(76dvh,680px)] w-[min(92vw,44rem)] gap-3 overflow-y-auto rounded-[1.75rem] border border-indigo-500/30 bg-app-bg/95 p-4 shadow-2xl shadow-black/40 backdrop-blur-xl sm:p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="text-lg font-black text-white">{tr('查找 / 替换', 'Find / Replace')}</div>
-                    <p className="mt-1 text-xs leading-relaxed text-zinc-500">{tr('可指定章节、结局或角色范围，避免误改其他段落。', 'Choose chapter, ending, or character scope to avoid changing unrelated text.')}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-app-muted">{tr('可指定章节、结局或角色范围，避免误改其他段落。', 'Choose chapter, ending, or character scope to avoid changing unrelated text.')}</p>
                   </div>
                   <button type="button" onClick={() => setAuthoringFindReplaceOpen(false)} className={semanticIconButtonClass('ghost')}>
                     <X className="h-4 w-4" />
                   </button>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="space-y-1 text-xs font-bold text-zinc-400">
+                  <label className="space-y-1 text-xs font-bold text-app-muted">
                     <span>{tr('查找文字', 'Find text')}</span>
                     <input
                       value={authoringFindQuery}
                       onChange={(event) => setAuthoringFindQuery(event.target.value)}
-                      className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                      className="w-full rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
                       placeholder={tr('输入要查找的文字', 'Enter text to find')}
                     />
                   </label>
-                  <label className="space-y-1 text-xs font-bold text-zinc-400">
+                  <label className="space-y-1 text-xs font-bold text-app-muted">
                     <span>{tr('替换成', 'Replace with')}</span>
                     <input
                       value={authoringReplaceQuery}
                       onChange={(event) => setAuthoringReplaceQuery(event.target.value)}
-                      className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                      className="w-full rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
                       placeholder={tr('留空则删除查找文字', 'Leave blank to delete matched text')}
                     />
                   </label>
@@ -13295,7 +13295,7 @@ export default function App() {
                       ['endings', tr('结局', 'Endings')],
                       ['characters', tr('角色', 'Characters')],
                     ] as const).map(([key, label]) => (
-                      <label key={key} className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/50 px-3 py-2 text-xs font-bold text-zinc-300">
+                      <label key={key} className="flex items-center gap-2 rounded-xl border border-app-border bg-app-surface/50 px-3 py-2 text-xs font-bold text-app-text">
                         <input
                           type="checkbox"
                           checked={authoringFindScope[key]}
@@ -13307,9 +13307,9 @@ export default function App() {
                     ))}
                   </div>
                   {authoringFindScope.chapters && (
-                    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/35 p-3">
+                    <div className="rounded-2xl border border-app-border bg-app-surface/35 p-3">
                       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                        <div className="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-500">{tr('章节范围', 'Chapter scope')}</div>
+                        <div className="text-[11px] font-black uppercase tracking-[0.18em] text-app-muted">{tr('章节范围', 'Chapter scope')}</div>
                         <button
                           type="button"
                           onClick={() => setAuthoringFindChapterNums((authoringCartridge.chapters || []).map((chapter: any) => Number(chapter.chapter_num)).filter((chapterNum: number) => Number.isFinite(chapterNum)))}
@@ -13323,7 +13323,7 @@ export default function App() {
                           const chapterNum = Number(chapter.chapter_num);
                           const selected = authoringFindChapterNums.includes(chapterNum);
                           return (
-                            <label key={chapterNum} className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold transition-colors ${selected ? 'border-indigo-500/50 bg-indigo-500/15 text-indigo-100' : 'border-zinc-800 bg-zinc-950/60 text-zinc-400'}`}>
+                            <label key={chapterNum} className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold transition-colors ${selected ? 'border-indigo-500/50 bg-indigo-500/15 text-indigo-100' : 'border-app-border bg-app-bg/60 text-app-muted'}`}>
                               <input
                                 type="checkbox"
                                 checked={selected}
@@ -13338,9 +13338,9 @@ export default function App() {
                     </div>
                   )}
                   {authoringFindScope.endings && (
-                    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/35 p-3">
+                    <div className="rounded-2xl border border-app-border bg-app-surface/35 p-3">
                       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                        <div className="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-500">{tr('结局范围', 'Ending scope')}</div>
+                        <div className="text-[11px] font-black uppercase tracking-[0.18em] text-app-muted">{tr('结局范围', 'Ending scope')}</div>
                         <button
                           type="button"
                           onClick={() => setAuthoringFindEndingIds((authoringCartridge.endings || []).map((ending: any) => String(ending.id || '')).filter(Boolean))}
@@ -13354,7 +13354,7 @@ export default function App() {
                           const endingId = String(ending.id || '');
                           const selected = authoringFindEndingIds.includes(endingId);
                           return (
-                            <label key={endingId} className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold transition-colors ${selected ? 'border-indigo-500/50 bg-indigo-500/15 text-indigo-100' : 'border-zinc-800 bg-zinc-950/60 text-zinc-400'}`}>
+                            <label key={endingId} className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold transition-colors ${selected ? 'border-indigo-500/50 bg-indigo-500/15 text-indigo-100' : 'border-app-border bg-app-bg/60 text-app-muted'}`}>
                               <input
                                 type="checkbox"
                                 checked={selected}
@@ -13419,26 +13419,26 @@ export default function App() {
               {authoringTab === 'settings' && (
                 <section className="space-y-4">
 
-                  <div className="border-t border-zinc-800 pt-6">
+                  <div className="border-t border-app-border pt-6">
                     <h3 className="text-xl font-black text-white">{tr('作品设置', 'Story Settings')}</h3>
-                    <p className="mt-1 text-xs leading-relaxed text-zinc-500">{tr('正式作品可选择私人、非公开链接或公开；收藏命运记录不会出现在这里。', 'Formal works can be private, unlisted, or public. Saved fate records do not appear here.')}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-app-muted">{tr('正式作品可选择私人、非公开链接或公开；收藏命运记录不会出现在这里。', 'Formal works can be private, unlisted, or public. Saved fate records do not appear here.')}</p>
                   </div>
                   <div className="grid gap-4 md:grid-cols-2">
-                    <label className="space-y-2 text-sm text-zinc-400">
+                    <label className="space-y-2 text-sm text-app-muted">
                       <div>{tr('作品标题', 'Story title')}</div>
                       <input
                         value={stripBookTitle(authoringCartridge.meta?.title || '')}
                         onChange={(event) => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, title: event.target.value } }))}
-                        className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-white outline-none focus:border-indigo-500"
+                        className="w-full rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-app-text outline-none focus:border-indigo-500"
                       />
                     </label>
-                    <label className="space-y-2 text-sm text-zinc-400">
+                    <label className="space-y-2 text-sm text-app-muted">
                       <div>{tr('标签（以中文逗号分隔）', 'Tags (comma-separated)')}</div>
                       <input
                         value={authoringCustomTagsInput}
                         onChange={(event) => setAuthoringCustomTagsInput(event.target.value)}
                         placeholder={tr('在此手动输入标签或点击下方快速添加', 'Type tags here, or use quick tags below')}
-                        className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-white outline-none focus:border-indigo-500"
+                        className="w-full rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-app-text outline-none focus:border-indigo-500"
                       />
                       <div className="mt-2 flex flex-wrap gap-2">
                         {['生存', '末日', '异界', '恋爱', '悬疑', '推理', '赛博朋克', '奇幻', '惊悚', '治愈'].map(tag => (
@@ -13450,7 +13450,7 @@ export default function App() {
                                if (!current) setAuthoringCustomTagsInput(tag);
                                else if (!current.includes(tag)) setAuthoringCustomTagsInput(current + (current.endsWith('，') || current.endsWith(',') ? '' : '，') + tag);
                             }}
-                            className="rounded-lg bg-zinc-800/50 px-3 py-1.5 text-[11px] text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-white"
+                            className="rounded-lg bg-app-surface-soft/50 px-3 py-1.5 text-[11px] text-app-text transition-colors hover:bg-app-surface-soft hover:text-white"
                           >
                             + {tag}
                           </button>
@@ -13460,11 +13460,11 @@ export default function App() {
                   </div>
                   <section className="app-card-quiet rounded-2xl p-4" tabIndex={0} onPaste={handleAuthoringCoverPaste}>
                     <div className="mb-4 flex flex-col gap-4 sm:flex-row">
-                      <div className="h-32 w-32 shrink-0 overflow-hidden rounded-2xl border border-zinc-800 bg-gradient-to-br from-zinc-800 via-zinc-950 to-indigo-950">
+                      <div className="h-32 w-32 shrink-0 overflow-hidden rounded-2xl border border-app-border bg-gradient-to-br from-zinc-800 via-zinc-950 to-indigo-950">
                         {authoringCartridge.meta?.coverUrl ? (
                           <img src={authoringCartridge.meta.coverUrl} alt={tr('作品封面预览', 'Story cover preview')} className="h-full w-full object-cover" />
                         ) : (
-                          <div className="flex h-full w-full items-center justify-center p-4 text-center text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">
+                          <div className="flex h-full w-full items-center justify-center p-4 text-center text-[10px] font-black uppercase tracking-[0.18em] text-app-muted">
                             NO COVER
                           </div>
                         )}
@@ -13472,7 +13472,7 @@ export default function App() {
                       <div className="min-w-0 flex-1 space-y-3">
                         <div>
                           <h4 className="text-lg font-black text-white">{tr('作品封面', 'Story Cover')}</h4>
-                          <p className="mt-1 text-xs leading-relaxed text-zinc-500">{tr('用于作品卡和分享预览，建议 1:1。可上传图片，或直接粘贴剪贴板图片。', 'Used for story cards and share previews. 1:1 is recommended. Upload an image or paste from clipboard.')}</p>
+                          <p className="mt-1 text-xs leading-relaxed text-app-muted">{tr('用于作品卡和分享预览，建议 1:1。可上传图片，或直接粘贴剪贴板图片。', 'Used for story cards and share previews. 1:1 is recommended. Upload an image or paste from clipboard.')}</p>
                         </div>
                         <div className="flex flex-wrap gap-2">
                           <label className={`${semanticButtonClass('secondary', { compact: true })} cursor-pointer`}>
@@ -13503,7 +13503,7 @@ export default function App() {
                           value={authoringCoverPrompt}
                           onChange={(event) => setAuthoringCoverPrompt(event.target.value)}
                           placeholder={tr('描述封面画面...', 'Describe the cover image...')}
-                          className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                          className="w-full rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
                         />
                         <button type="button" onClick={handleGenerateAuthoringCover} disabled={isGeneratingCover} className={semanticButtonClass('primary', { compact: true })}>
                           {isGeneratingCover ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
@@ -13512,16 +13512,16 @@ export default function App() {
                       </div>
                     )}
                   </section>
-                  <label className="block space-y-2 text-sm text-zinc-400">
+                  <label className="block space-y-2 text-sm text-app-muted">
                     <div>{tr('故事主轴', 'Story premise')}</div>
                     <textarea
                       value={authoringCartridge.meta?.main_axis || ''}
                       onChange={(event) => setAuthoringCartridge((prev: any) => ({ ...prev, meta: { ...prev.meta, main_axis: event.target.value } }))}
-                      className="authoring-resizable-textarea min-h-[180px] w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-white outline-none focus:border-indigo-500"
+                      className="authoring-resizable-textarea min-h-[180px] w-full resize-y rounded-2xl border border-app-border bg-app-input-bg px-4 py-4 text-app-text outline-none focus:border-indigo-500"
                     />
                   </label>
                   <section className="app-card-quiet rounded-2xl p-4">
-                    <div className="mb-3 text-sm font-black text-zinc-100">{tr('结局结构', 'Ending Structure')}</div>
+                    <div className="mb-3 text-sm font-black text-app-text">{tr('结局结构', 'Ending Structure')}</div>
                     <div className="grid gap-2 sm:grid-cols-2">
                       {([
                         {
@@ -13544,7 +13544,7 @@ export default function App() {
                             className={`rounded-2xl border px-3 py-3 text-left transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
                               selected
                                 ? 'border-indigo-400 bg-indigo-500/15 text-indigo-100'
-                                : 'border-zinc-800 bg-zinc-900/40 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
+                                : 'border-app-border bg-app-surface/40 text-app-muted hover:border-zinc-600 hover:text-app-text'
                             }`}
                           >
                             <div className="text-sm font-black">{option.label}</div>
@@ -13555,9 +13555,9 @@ export default function App() {
                     </div>
                     {(authoringCartridge.meta?.endingMode || 'dual') !== 'single' && (
                     <div className="app-card-quiet mt-4 rounded-2xl p-4">
-                      <div className="text-sm font-black text-zinc-100">{tr('故事倾向', 'Story Tendency')}</div>
-                      <p className="mt-1 text-xs leading-relaxed text-zinc-500">{tr('设置作品本身比较容易走向哪一种收束。读者只会感受到故事倾向，不会看到具体数值。', 'Set which ending direction the work naturally leans toward. Readers feel the tendency but do not see exact values.')}</p>
-                      <div className="mt-3 rounded-2xl border border-zinc-800/60 bg-zinc-950/45 p-3 text-xs font-bold text-zinc-400">
+                      <div className="text-sm font-black text-app-text">{tr('故事倾向', 'Story Tendency')}</div>
+                      <p className="mt-1 text-xs leading-relaxed text-app-muted">{tr('设置作品本身比较容易走向哪一种收束。读者只会感受到故事倾向，不会看到具体数值。', 'Set which ending direction the work naturally leans toward. Readers feel the tendency but do not see exact values.')}</p>
+                      <div className="mt-3 rounded-2xl border border-app-border/60 bg-app-bg/45 p-3 text-xs font-bold text-app-muted">
                         {(() => {
                           const axis = endingBiasAxisFromBias(authoringCartridge.meta?.endingBias || authoringCartridge.meta?.endingRates);
                           const bias = endingBiasFromAxis(axis);
@@ -13565,7 +13565,7 @@ export default function App() {
                             <>
                               <div className="flex items-center justify-between gap-3">
                                 <span>{tr('主线倾向', 'Mainline tendency')}</span>
-                                <span className="text-sm font-black text-zinc-100">{endingBiasAxisLabel(axis)}</span>
+                                <span className="text-sm font-black text-app-text">{endingBiasAxisLabel(axis)}</span>
                               </div>
                               <input
                                 type="range"
@@ -13587,19 +13587,19 @@ export default function App() {
                                 <span>{tr('中性', 'Neutral')}</span>
                                 <span>{tr('左域强', 'Left strong')}</span>
                               </div>
-                              <div className="mt-2 text-[11px] leading-relaxed text-zinc-500">
+                              <div className="mt-2 text-[11px] leading-relaxed text-app-muted">
                                 {tr(`左域 ${bias.leftBaseWeight}% / 右域 ${bias.rightBaseWeight}%；主线越偏一侧，另一侧越需要靠支线撬动。`, `Left ${bias.leftBaseWeight}% / Right ${bias.rightBaseWeight}%. The stronger one side's mainline is, the more the other side relies on branches to push back.`)}
                               </div>
                             </>
                           );
                         })()}
                       </div>
-                      <p className="mt-3 text-[11px] leading-relaxed text-zinc-500">{tr('如果不确定，保持中性即可；支线与玩家干涉会继续影响故事最终走向。', 'If unsure, keep it neutral. Branches and player interventions still affect the final direction.')}</p>
+                      <p className="mt-3 text-[11px] leading-relaxed text-app-muted">{tr('如果不确定，保持中性即可；支线与玩家干涉会继续影响故事最终走向。', 'If unsure, keep it neutral. Branches and player interventions still affect the final direction.')}</p>
                     </div>
                     )}
                   </section>
                   <section className="app-card-quiet rounded-2xl p-4">
-                    <div className="mb-3 text-sm font-black text-zinc-100">{tr('作品可见性', 'Visibility')}</div>
+                    <div className="mb-3 text-sm font-black text-app-text">{tr('作品可见性', 'Visibility')}</div>
                     <div className="grid gap-2 sm:grid-cols-3">
                       {[
                         { value: 'private', label: tr('私人', 'Private'), hint: tr('只有作者自己可见。', 'Only the author can view it.') },
@@ -13615,7 +13615,7 @@ export default function App() {
                             className={`rounded-2xl border px-3 py-3 text-left transition-all hover:-translate-y-0.5 active:scale-[0.98] ${
                               selected
                                 ? 'border-emerald-400 bg-emerald-500/10 text-emerald-100'
-                                : 'border-zinc-800 bg-zinc-900/40 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200'
+                                : 'border-app-border bg-app-surface/40 text-app-muted hover:border-zinc-600 hover:text-app-text'
                             }`}
                           >
                             <div className="text-sm font-black">{option.label}</div>
@@ -13625,7 +13625,7 @@ export default function App() {
                       })}
                     </div>
                   </section>
-                  <label className="flex items-start gap-3 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-4 text-sm text-zinc-400">
+                  <label className="flex items-start gap-3 rounded-2xl border border-app-border bg-app-bg/50 p-4 text-sm text-app-muted">
                     <input
                       type="checkbox"
                       checked={Boolean(authoringCartridge.meta?.allowAdaptation)}
@@ -13633,22 +13633,22 @@ export default function App() {
                       className="mt-1 h-4 w-4 accent-indigo-500"
                     />
                     <span>
-                      <span className="block font-black text-zinc-100">{tr('开放一键改编权限', 'Allow one-click adaptation')}</span>
-                      <span className="mt-1 block text-xs leading-relaxed text-zinc-500">{tr('开启后，其他已登录用户可以把这篇作品改编成个人草稿继续创作。', 'When enabled, other logged-in users can adapt this work into their own draft.')}</span>
+                      <span className="block font-black text-app-text">{tr('开放一键改编权限', 'Allow one-click adaptation')}</span>
+                      <span className="mt-1 block text-xs leading-relaxed text-app-muted">{tr('开启后，其他已登录用户可以把这篇作品改编成个人草稿继续创作。', 'When enabled, other logged-in users can adapt this work into their own draft.')}</span>
                     </span>
                   </label>
                   
-                  <div className="border-t border-zinc-800 pt-6">
+                  <div className="border-t border-app-border pt-6">
                     <h3 className="text-xl font-black text-white">{tr('一键导入', 'One-click Import')}</h3>
-                    <p className="mt-1 text-xs leading-relaxed text-zinc-500">{tr('支持按“主线设置 / 支线设置”范本格式自动解析并写入当前作品。', 'Parse and import text using the “Mainline / Branch Settings” template format.')}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-app-muted">{tr('支持按“主线设置 / 支线设置”范本格式自动解析并写入当前作品。', 'Parse and import text using the “Mainline / Branch Settings” template format.')}</p>
                   </div>
                   <textarea
                     value={authoringImportText}
                     onChange={(event) => setAuthoringImportText(event.target.value)}
                     placeholder={tr('把其他 AI 生成的完整文本粘贴到这里...', 'Paste a complete generated story here...')}
-                    className="authoring-resizable-textarea min-h-[320px] w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-950 p-5 text-sm text-zinc-300 outline-none transition-colors focus:border-indigo-500"
+                    className="authoring-resizable-textarea min-h-[320px] w-full resize-y rounded-2xl border border-app-border bg-app-input-bg p-5 text-sm text-app-text outline-none transition-colors focus:border-indigo-500"
                   />
-                  <label className="flex items-center gap-2 text-xs text-zinc-400">
+                  <label className="flex items-center gap-2 text-xs text-app-muted">
                     <input
                       type="checkbox"
                       checked={authoringImportReplaceBranches}
@@ -13677,7 +13677,7 @@ export default function App() {
                 <section className="space-y-6">
                   <div>
                     <h3 className="text-xl font-black text-white">{tr('系列设置', 'Series Settings')}</h3>
-                    <p className="mt-1 text-xs leading-relaxed text-zinc-500">{tr('管理本作套用的世界观设定、角色卡和继承节点。这里记录的是系列层级的限制，不是本作情节主轴。', 'Manage the world setting, character cards, and continuity node used by this work. These are series-level constraints, not this story premise.')}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-app-muted">{tr('管理本作套用的世界观设定、角色卡和继承节点。这里记录的是系列层级的限制，不是本作情节主轴。', 'Manage the world setting, character cards, and continuity node used by this work. These are series-level constraints, not this story premise.')}</p>
                   </div>
                   <div className="rounded-[1.5rem] border border-indigo-300/15 bg-indigo-500/10 p-4">
                     <label className="mb-2 block text-sm font-black text-indigo-100">{tr('套用世界观设定', 'Apply world setting')}</label>
@@ -13705,7 +13705,7 @@ export default function App() {
                           },
                         }));
                       }}
-                      className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-200 outline-none focus:border-indigo-500"
+                      className="w-full rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
                     >
                       <option value="">{tr('不套用世界观设定', 'No world setting')}</option>
                       {seriesWorlds.map((series) => (
@@ -13770,14 +13770,14 @@ export default function App() {
                     };
                     return (
                       <>
-                        <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/40 p-4">
+                        <div className="rounded-[1.5rem] border border-app-border bg-app-bg/40 p-4">
                           <div className="mb-3 text-sm font-black text-white">{tr('本作套用的世界基准', 'World baseline used by this work')}</div>
                           {baselineRules.length === 0 ? (
-                            <p className="text-xs leading-relaxed text-zinc-500">{tr('该世界观设定还没有条目化基准。', 'This world setting has no itemized baseline rules yet.')}</p>
+                            <p className="text-xs leading-relaxed text-app-muted">{tr('该世界观设定还没有条目化基准。', 'This world setting has no itemized baseline rules yet.')}</p>
                           ) : (
                             <div className="grid gap-2">
                               {baselineRules.map((rule) => (
-                                <label key={rule.id} className="flex items-start gap-2 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 text-xs text-zinc-300">
+                                <label key={rule.id} className="flex items-start gap-2 rounded-xl border border-app-border bg-app-surface/50 p-3 text-xs text-app-text">
                                   <input
                                     type="checkbox"
                                     checked={selectedRuleIds.includes(rule.id)}
@@ -13793,7 +13793,7 @@ export default function App() {
                                     className="mt-1 accent-indigo-500"
                                   />
                                   <span>
-                                    <span className="block font-black leading-relaxed text-zinc-100">{rule.detail || rule.title}</span>
+                                    <span className="block font-black leading-relaxed text-app-text">{rule.detail || rule.title}</span>
                                     {normalizeTagList(Array.isArray(rule.tags) ? rule.tags : String(rule.tags || rule.kind || '').split(/[,，]/)).length > 0 && (
                                       <span className="mt-2 flex flex-wrap gap-1.5">
                                         {normalizeTagList(Array.isArray(rule.tags) ? rule.tags : String(rule.tags || rule.kind || '').split(/[,，]/)).map((tag) => (
@@ -13807,11 +13807,11 @@ export default function App() {
                             </div>
                           )}
                         </div>
-                        <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/40 p-4">
+                        <div className="rounded-[1.5rem] border border-app-border bg-app-bg/40 p-4">
                           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                             <div>
                               <div className="text-sm font-black text-white">{tr('角色卡池', 'Character pool')}</div>
-                              <p className="mt-1 text-xs text-zinc-500">{tr('勾选后可导入到本作角色列表；续作默认沿用主要角色。', 'Selected cards can be imported into this work; sequels inherit major characters by default.')}</p>
+                              <p className="mt-1 text-xs text-app-muted">{tr('勾选后可导入到本作角色列表；续作默认沿用主要角色。', 'Selected cards can be imported into this work; sequels inherit major characters by default.')}</p>
                             </div>
                             <button
                               type="button"
@@ -13842,11 +13842,11 @@ export default function App() {
                             </button>
                           </div>
                           {characterCards.length === 0 ? (
-                            <p className="text-xs leading-relaxed text-zinc-500">{tr('该世界观设定还没有角色卡。', 'This world setting has no character cards yet.')}</p>
+                            <p className="text-xs leading-relaxed text-app-muted">{tr('该世界观设定还没有角色卡。', 'This world setting has no character cards yet.')}</p>
                           ) : (
                             <div className="grid gap-2 sm:grid-cols-2">
                               {characterCards.map((card) => (
-                                <label key={card.id} className="flex items-start gap-2 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 text-xs text-zinc-300">
+                                <label key={card.id} className="flex items-start gap-2 rounded-xl border border-app-border bg-app-surface/50 p-3 text-xs text-app-text">
                                   <input
                                     type="checkbox"
                                     checked={selectedCharacterIds.includes(card.id)}
@@ -13862,18 +13862,18 @@ export default function App() {
                                     className="mt-1 accent-indigo-500"
                                   />
                                   <span>
-                                    <span className="block font-black text-zinc-100">{card.name}</span>
-                                    <span className="mt-1 block leading-relaxed text-zinc-500">{card.desc || card.role || tr('系列角色', 'Series character')}</span>
+                                    <span className="block font-black text-app-text">{card.name}</span>
+                                    <span className="mt-1 block leading-relaxed text-app-muted">{card.desc || card.role || tr('系列角色', 'Series character')}</span>
                                   </span>
                                 </label>
                               ))}
                             </div>
                           )}
                         </div>
-                        <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/40 p-4">
+                        <div className="rounded-[1.5rem] border border-app-border bg-app-bg/40 p-4">
                           <div className="mb-3">
                             <div className="text-sm font-black text-white">{tr('续作开启条件', 'Sequel unlock conditions')}</div>
-                            <p className="mt-1 text-xs leading-relaxed text-zinc-500">{tr('如果本作是续作，可指定需要先完成哪一部前作、哪一个结局，以及哪些支线，玩家才可以干涉本作。', 'If this work is a sequel, choose the previous story, ending, and branches required before players can interfere with it.')}</p>
+                            <p className="mt-1 text-xs leading-relaxed text-app-muted">{tr('如果本作是续作，可指定需要先完成哪一部前作、哪一个结局，以及哪些支线，玩家才可以干涉本作。', 'If this work is a sequel, choose the previous story, ending, and branches required before players can interfere with it.')}</p>
                           </div>
                           <select
                             value={authoringCartridge.meta?.seriesRole || 'main'}
@@ -13885,7 +13885,7 @@ export default function App() {
                                 ...(event.target.value !== 'sequel' ? { continuityNodeId: null } : {}),
                               },
                             }))}
-                            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm text-zinc-200 outline-none"
+                            className="w-full rounded-xl border border-app-border bg-app-input-bg px-3 py-3 text-sm text-app-text outline-none"
                           >
                             <option value="main">{tr('第一部 / 正篇', 'First installment')}</option>
                             <option value="sequel">{tr('续作', 'Sequel')}</option>
@@ -13896,7 +13896,7 @@ export default function App() {
                               <select
                                 value={constraints.sourceStoryId || ''}
                                 onChange={(event) => updateAuthoringSourceStory(event.target.value)}
-                                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm text-zinc-200 outline-none"
+                                className="w-full rounded-xl border border-app-border bg-app-input-bg px-3 py-3 text-sm text-app-text outline-none"
                               >
                                 <option value="">{tr('选择前作', 'Choose previous story')}</option>
                                 {authoringSeriesStoryOptions.map((story: any) => (
@@ -13904,7 +13904,7 @@ export default function App() {
                                 ))}
                               </select>
                               {authoringSeriesStoryOptions.length === 0 && (
-                                <p className="text-xs leading-relaxed text-zinc-500">{tr('该世界观下还没有其他作品可作为前作。', 'No other work in this world setting can be used as the previous story yet.')}</p>
+                                <p className="text-xs leading-relaxed text-app-muted">{tr('该世界观下还没有其他作品可作为前作。', 'No other work in this world setting can be used as the previous story yet.')}</p>
                               )}
                               {authoringContinuityLoading && (
                                 <div className="flex items-center gap-2 text-xs font-bold text-indigo-200"><Loader2 className="h-3.5 w-3.5 animate-spin" />{tr('正在读取前作支线与结局...', 'Loading previous branches and endings...')}</div>
@@ -13912,16 +13912,16 @@ export default function App() {
                               {constraints.sourceStoryId && !authoringContinuityLoading && (
                                 <div className="grid gap-4">
                                   <div>
-                                    <div className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-zinc-500">{tr('可开启续作的前作支线', 'Required previous-story branches')}</div>
+                                    <div className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-app-muted">{tr('可开启续作的前作支线', 'Required previous-story branches')}</div>
                                     {authoringContinuityBranches.length === 0 ? (
-                                      <p className="text-xs leading-relaxed text-zinc-500">{tr('该前作没有可选择的支线。', 'This previous story has no selectable branches.')}</p>
+                                      <p className="text-xs leading-relaxed text-app-muted">{tr('该前作没有可选择的支线。', 'This previous story has no selectable branches.')}</p>
                                     ) : (
                                       <div className="grid gap-2 sm:grid-cols-2">
                                         {authoringContinuityBranches.map((branch: any) => {
                                           const branchId = String(branch.id || '');
                                           const checked = asSafeArray<string>(constraints.requiredBranchIds).includes(branchId);
                                           return (
-                                            <label key={branchId} className="flex items-start gap-2 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 text-xs text-zinc-300">
+                                            <label key={branchId} className="flex items-start gap-2 rounded-xl border border-app-border bg-app-surface/50 p-3 text-xs text-app-text">
                                               <input
                                                 type="checkbox"
                                                 checked={checked}
@@ -13942,8 +13942,8 @@ export default function App() {
                                                 className="mt-1 accent-indigo-500"
                                               />
                                               <span>
-                                                <span className="block font-bold text-zinc-100">{branch.name || branch.title || branchId}</span>
-                                                {(branch.desc || branch.description) && <span className="mt-1 block leading-relaxed text-zinc-500">{branch.desc || branch.description}</span>}
+                                                <span className="block font-bold text-app-text">{branch.name || branch.title || branchId}</span>
+                                                {(branch.desc || branch.description) && <span className="mt-1 block leading-relaxed text-app-muted">{branch.desc || branch.description}</span>}
                                               </span>
                                             </label>
                                           );
@@ -13952,12 +13952,12 @@ export default function App() {
                                     )}
                                   </div>
                                   <div>
-                                    <div className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-zinc-500">{tr('可开启续作的前作结局', 'Required previous-story ending')}</div>
+                                    <div className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-app-muted">{tr('可开启续作的前作结局', 'Required previous-story ending')}</div>
                                     <div className="grid gap-2 sm:grid-cols-3">
                                       {authoringContinuityEndings.map((ending: any) => {
                                         const endingId = String(ending.id || '');
                                         return (
-                                          <label key={endingId} className="flex items-start gap-2 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 text-xs text-zinc-300">
+                                          <label key={endingId} className="flex items-start gap-2 rounded-xl border border-app-border bg-app-surface/50 p-3 text-xs text-app-text">
                                             <input
                                               type="radio"
                                               name="authoring-continuity-ending"
@@ -13969,7 +13969,7 @@ export default function App() {
                                               })}
                                               className="mt-1 accent-indigo-500"
                                             />
-                                            <span className="font-bold text-zinc-100">{ending.title || endingId}</span>
+                                            <span className="font-bold text-app-text">{ending.title || endingId}</span>
                                           </label>
                                         );
                                       })}
@@ -13985,7 +13985,7 @@ export default function App() {
                                       });
                                     }}
                                     placeholder={tr('继承硬设定：一行一条，例如「前作中阵亡的人物不能无解释复活」。', 'Continuity hard rules: one per line, e.g. dead characters cannot return without explanation.')}
-                                    className="authoring-resizable-textarea min-h-[120px] w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-200 outline-none focus:border-indigo-500"
+                                    className="authoring-resizable-textarea min-h-[120px] w-full resize-y rounded-xl border border-app-border bg-app-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
                                   />
                                 </div>
                               )}
@@ -13995,7 +13995,7 @@ export default function App() {
                       </>
                     );
                   })() : (
-                    <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/40 p-6 text-sm leading-relaxed text-zinc-500">
+                    <div className="rounded-2xl border border-dashed border-app-border bg-app-bg/40 p-6 text-sm leading-relaxed text-app-muted">
                       {tr('本作尚未套用世界观设定。普通单篇作品可以保持为空；若是系列作品，请先选择一个世界观设定。', 'This work is not using a world setting. Standalone stories can leave this empty; choose one for series works.')}
                     </div>
                   )}
@@ -14007,15 +14007,15 @@ export default function App() {
                   {authoringTocOpen && (
                     <div className="fixed inset-0 z-[99]" onClick={() => setAuthoringTocOpen(false)} />
                   )}
-                  <div className={`fixed bottom-[calc(max(0.85rem,env(safe-area-inset-bottom))+13.5rem)] left-8 z-[1600] max-h-[min(52dvh,26rem)] flex-col gap-2 overflow-y-auto rounded-2xl border border-zinc-800 bg-zinc-950/90 p-2 shadow-2xl backdrop-blur-md transition-all ${authoringTocOpen ? 'flex' : 'hidden'}`}>
-                     <div className="mb-1 text-center text-[10px] font-black text-zinc-500">目录导航</div>
+                  <div className={`fixed bottom-[calc(max(0.85rem,env(safe-area-inset-bottom))+13.5rem)] left-8 z-[1600] max-h-[min(52dvh,26rem)] flex-col gap-2 overflow-y-auto rounded-2xl border border-app-border bg-app-bg/90 p-2 shadow-2xl backdrop-blur-md transition-all ${authoringTocOpen ? 'flex' : 'hidden'}`}>
+                     <div className="mb-1 text-center text-[10px] font-black text-app-muted">目录导航</div>
                      {(authoringCartridge.chapters || []).map((c: any) => (
-                        <button type="button" key={c.chapter_num} onClick={() => { setAuthoringTocOpen(false); document.getElementById(`authoring-chapter-${c.chapter_num}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} className="rounded-xl px-3 py-2 text-xs font-bold text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white">
+                        <button type="button" key={c.chapter_num} onClick={() => { setAuthoringTocOpen(false); document.getElementById(`authoring-chapter-${c.chapter_num}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} className="rounded-xl px-3 py-2 text-xs font-bold text-app-muted transition-colors hover:bg-app-surface-soft hover:text-white">
                            第 {c.chapter_num} 章
                         </button>
                      ))}
-                     <div className="mx-2 my-1 h-px bg-zinc-800" />
-                        <button type="button" onClick={() => { setAuthoringTocOpen(false); document.getElementById('authoring-endings')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} className="rounded-xl px-3 py-2 text-xs font-bold text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white">
+                     <div className="mx-2 my-1 h-px bg-app-surface-soft" />
+                        <button type="button" onClick={() => { setAuthoringTocOpen(false); document.getElementById('authoring-endings')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} className="rounded-xl px-3 py-2 text-xs font-bold text-app-muted transition-colors hover:bg-app-surface-soft hover:text-white">
                        结局设置
                      </button>
                   </div>
@@ -14031,13 +14031,13 @@ export default function App() {
                 <section className="space-y-6">
                   <div>
                     <h3 className="text-xl font-black text-white">主线与结局</h3>
-                    <p className="mt-1 text-xs leading-relaxed text-zinc-500">这里负责章节正文与结局的编写。其他基本设定请前往「作品设置」修改。</p>
+                    <p className="mt-1 text-xs leading-relaxed text-app-muted">这里负责章节正文与结局的编写。其他基本设定请前往「作品设置」修改。</p>
                   </div>
 
                   <div className="space-y-4">
                     <div className="text-lg font-black text-white">章节正文</div>
                     {(authoringCartridge.chapters || []).map((chapter: any) => (
-                      <div id={`authoring-chapter-${chapter.chapter_num}`} key={chapter.chapter_num} className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/40 p-4 space-y-3">
+                      <div id={`authoring-chapter-${chapter.chapter_num}`} key={chapter.chapter_num} className="rounded-[1.5rem] border border-app-border bg-app-bg/40 p-4 space-y-3">
                         <div className="text-sm font-black text-white">{formatStoryHeading(chapter)}</div>
                         <input
                           id={`authoring-chapter-${chapter.chapter_num}-title`}
@@ -14046,7 +14046,7 @@ export default function App() {
                             ...prev,
                             chapters: prev.chapters.map((item: any) => item.chapter_num === chapter.chapter_num ? { ...item, title: event.target.value } : item),
                           }))}
-                          className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                          className="w-full rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
                           placeholder="章节标题"
                         />
                         <textarea
@@ -14056,7 +14056,7 @@ export default function App() {
                             ...prev,
                             chapters: prev.chapters.map((item: any) => item.chapter_num === chapter.chapter_num ? { ...item, text: event.target.value } : item),
                           }))}
-                          className="authoring-resizable-textarea min-h-[240px] w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-sm text-white outline-none focus:border-indigo-500"
+                          className="authoring-resizable-textarea min-h-[240px] w-full resize-y rounded-2xl border border-app-border bg-app-input-bg px-4 py-4 text-sm text-app-text outline-none focus:border-indigo-500"
                           placeholder={`第${chapter.chapter_num}章正文`}
                         />
                       </div>
@@ -14067,10 +14067,10 @@ export default function App() {
                     <div id="authoring-endings" className="text-lg font-black text-white">结局设置</div>
                     <div className="grid gap-3 lg:grid-cols-3">
                       {endingDomainCards(authoringCartridge.meta).map((domain) => (
-                        <div key={domain.id} className="rounded-2xl border border-zinc-800 bg-zinc-950/45 p-4">
-                          <div className="text-xs font-black uppercase tracking-[0.18em] text-zinc-500">{domain.title}</div>
-                          <div className="mt-2 text-sm font-black text-zinc-100">{domain.label}</div>
-                          <p className="mt-3 text-xs leading-relaxed text-zinc-500">{domain.hint}</p>
+                        <div key={domain.id} className="rounded-2xl border border-app-border bg-app-bg/45 p-4">
+                          <div className="text-xs font-black uppercase tracking-[0.18em] text-app-muted">{domain.title}</div>
+                          <div className="mt-2 text-sm font-black text-app-text">{domain.label}</div>
+                          <p className="mt-3 text-xs leading-relaxed text-app-muted">{domain.hint}</p>
                         </div>
                       ))}
                     </div>
@@ -14099,11 +14099,11 @@ export default function App() {
                           ? endingsInDomain
                           : [{ id: defaultEndingId, title: '', text: '' }];
                         return (
-                          <div key={domain} className="space-y-3 rounded-[1.5rem] border border-zinc-800 bg-zinc-950/25 p-4">
+                          <div key={domain} className="space-y-3 rounded-[1.5rem] border border-app-border bg-app-bg/25 p-4">
                             <div className="flex flex-wrap items-center justify-between gap-3">
                               <div>
                                 <div className="text-base font-black text-white">{endingDomainTitle(domain)}</div>
-                                <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+                                <p className="mt-1 text-xs leading-relaxed text-app-muted">
                                   {domain === 'middle' ? '故事没有明显偏向左右时，会进入中结局域；可设置多个余韵型具体结局。' : `故事偏向${endingDomainTitle(domain)}后，会根据已触发支线绑定选择具体结局。`}
                                 </p>
                               </div>
@@ -14129,7 +14129,7 @@ export default function App() {
                             </div>
 
                             {visibleEndings.map((ending: any) => (
-                              <div id={`authoring-ending-${ending.id}`} key={ending.id} className="rounded-[1.25rem] border border-zinc-800 bg-zinc-950/50 p-4 space-y-3">
+                              <div id={`authoring-ending-${ending.id}`} key={ending.id} className="rounded-[1.25rem] border border-app-border bg-app-bg/50 p-4 space-y-3">
                                 <div className="text-sm font-black text-white">{authoringEndingIdToLabel(ending.id)}</div>
                                 <input
                                   id={`authoring-ending-${ending.id}-title`}
@@ -14138,7 +14138,7 @@ export default function App() {
                                     ...prev,
                                     endings: prev.endings.map((item: any) => item.id === ending.id ? { ...item, title: event.target.value } : item),
                                   }))}
-                                  className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                                  className="w-full rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
                                   placeholder="结局标题"
                                 />
                                 <textarea
@@ -14148,7 +14148,7 @@ export default function App() {
                                     ...prev,
                                     endings: prev.endings.map((item: any) => item.id === ending.id ? { ...item, text: event.target.value } : item),
                                   }))}
-                                  className="authoring-resizable-textarea min-h-[240px] w-full resize-y rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-4 text-sm text-white outline-none focus:border-indigo-500"
+                                  className="authoring-resizable-textarea min-h-[240px] w-full resize-y rounded-2xl border border-app-border bg-app-input-bg px-4 py-4 text-sm text-app-text outline-none focus:border-indigo-500"
                                   placeholder="结局正文"
                                 />
                               </div>
@@ -14165,10 +14165,10 @@ export default function App() {
                 <section className="space-y-6">
                   <div>
                     <h3 className="text-xl font-black text-white">角色和支线</h3>
-                    <p className="mt-1 text-xs leading-relaxed text-zinc-500">角色会作为干涉对象和支线条件基础；支线会根据触发条件在游玩时被判定解锁。</p>
+                    <p className="mt-1 text-xs leading-relaxed text-app-muted">角色会作为干涉对象和支线条件基础；支线会根据触发条件在游玩时被判定解锁。</p>
                   </div>
 
-                  <div className="space-y-3 rounded-[1.5rem] border border-zinc-800 bg-zinc-950/40 p-5">
+                  <div className="space-y-3 rounded-[1.5rem] border border-app-border bg-app-bg/40 p-5">
                     <div className="flex items-center justify-between">
                       <div className="text-lg font-black text-white">角色设定</div>
                       <button
@@ -14197,7 +14197,7 @@ export default function App() {
                               characters: prev.meta.characters.map((item: any, itemIndex: number) => itemIndex === index ? { ...item, name: event.target.value } : item),
                             },
                           }))}
-                          className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                          className="rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
                           placeholder="角色名"
                         />
                         <textarea
@@ -14210,7 +14210,7 @@ export default function App() {
                               characters: prev.meta.characters.map((item: any, itemIndex: number) => itemIndex === index ? { ...item, desc: event.target.value } : item),
                             },
                           }))}
-                          className="authoring-resizable-textarea min-h-[96px] w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                          className="authoring-resizable-textarea min-h-[96px] w-full resize-y rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none focus:border-indigo-500"
                           placeholder="角色简介"
                         />
                         <button
@@ -14281,10 +14281,10 @@ export default function App() {
                         {expandedBranchId === branch.id ? (
                           renderBranchForm(false)
                         ) : (
-                          <div className="rounded-[1.5rem] border border-zinc-800 bg-zinc-950/40 p-4 flex flex-wrap items-center justify-between gap-3">
+                          <div className="rounded-[1.5rem] border border-app-border bg-app-bg/40 p-4 flex flex-wrap items-center justify-between gap-3">
                             <div>
                               <div className="text-sm font-black text-white">{branch.name}</div>
-                              <div className="mt-1 flex flex-wrap gap-1.5 text-xs text-zinc-500">
+                              <div className="mt-1 flex flex-wrap gap-1.5 text-xs text-app-muted">
                                 <span>{branch.side === 'left' ? '左域' : '右域'} / 影响：{branchTierLabel(branch.tier)}</span>
                                 {(branch.is_hidden || branch.hidden || branch.tier === 'hidden' || branch.inject?.hidden) && (
                                   <span className="rounded-full bg-amber-500/10 px-2 py-0.5 font-black text-amber-200">隐藏支线</span>
@@ -14293,7 +14293,7 @@ export default function App() {
                               <div className="mt-1 text-xs text-indigo-300">
                                 导向：{authoringEndingIdToLabel(branch.endingId || branch.inject?.endingId || branch.inject?.targetEndingId || branch.side)}
                               </div>
-                              <div className="mt-2 text-xs leading-relaxed text-zinc-400 max-w-xl line-clamp-2">{branch.sceneText || branch.hint || '暂无内容'}</div>
+                              <div className="mt-2 text-xs leading-relaxed text-app-muted max-w-xl line-clamp-2">{branch.sceneText || branch.hint || '暂无内容'}</div>
                             </div>
                             <div className="flex gap-2 shrink-0">
                               <button
@@ -14403,7 +14403,7 @@ export default function App() {
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.9, opacity: 0 }}
-            className="app-modal-surface app-modal-safe-height grid w-full max-w-md gap-4 overflow-y-auto rounded-3xl border border-zinc-800 p-5 shadow-2xl sm:p-8"
+            className="app-modal-surface app-modal-safe-height grid w-full max-w-md gap-4 overflow-y-auto rounded-3xl border border-app-border p-5 shadow-2xl sm:p-8"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
@@ -14417,7 +14417,7 @@ export default function App() {
             </div>
             <div className="grid max-h-[min(72vh,34rem)] gap-5 overflow-y-auto pr-1">
               <section className="grid gap-2">
-                <div className="px-1 text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">{tr('阅读与资料', 'Reading & Info')}</div>
+                <div className="px-1 text-[10px] font-black uppercase tracking-[0.22em] text-app-muted">{tr('阅读与资料', 'Reading & Info')}</div>
                 <button
                   onClick={() => {
                     setIsActionMenuOpen(false);
@@ -14439,11 +14439,11 @@ export default function App() {
               {gameState === 'PLAYING' && (
                 <>
                   <section className="grid gap-2">
-                    <div className="px-1 text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">{tr('作品互动', 'Story Actions')}</div>
-                    <button onClick={() => { setIsActionMenuOpen(false); handleStoryInteraction('like'); }} className={`${semanticMenuButtonClass('ghost')} ${isCurrentStoryActive('like') ? 'bg-zinc-900/60 text-pink-300 app-button-liked' : ''}`}>
+                    <div className="px-1 text-[10px] font-black uppercase tracking-[0.22em] text-app-muted">{tr('作品互动', 'Story Actions')}</div>
+                    <button onClick={() => { setIsActionMenuOpen(false); handleStoryInteraction('like'); }} className={`${semanticMenuButtonClass('ghost')} ${isCurrentStoryActive('like') ? 'bg-app-surface/60 text-pink-300 app-button-liked' : ''}`}>
                       <Heart className={`h-5 w-5 ${isCurrentStoryActive('like') ? 'fill-current text-pink-300' : ''}`} /> {tr('点赞', 'Like')}
                     </button>
-                    <button onClick={() => { setIsActionMenuOpen(false); handleStoryInteraction('favorite'); }} className={`${semanticMenuButtonClass('ghost')} ${isCurrentStoryActive('favorite') ? 'bg-zinc-900/60 text-amber-300 app-button-favorited' : ''}`}>
+                    <button onClick={() => { setIsActionMenuOpen(false); handleStoryInteraction('favorite'); }} className={`${semanticMenuButtonClass('ghost')} ${isCurrentStoryActive('favorite') ? 'bg-app-surface/60 text-amber-300 app-button-favorited' : ''}`}>
                       <Bookmark className={`h-5 w-5 ${isCurrentStoryActive('favorite') ? 'fill-current text-amber-300' : ''}`} /> {tr('收藏原作', 'Favorite original')}
                     </button>
                     <button
@@ -14462,7 +14462,7 @@ export default function App() {
                     </button>
                   </section>
                   <section className="grid gap-2">
-                    <div className="px-1 text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">{tr('创作与重开', 'Create & Restart')}</div>
+                    <div className="px-1 text-[10px] font-black uppercase tracking-[0.22em] text-app-muted">{tr('创作与重开', 'Create & Restart')}</div>
                     {!activeStoryId && (
                       <button onClick={() => { setIsActionMenuOpen(false); handleRegenerateQuickStory(); }} className={semanticMenuButtonClass('ghost')}>
                         <RefreshCcw className="h-5 w-5" /> {tr('重新生成', 'Regenerate')}
@@ -14478,7 +14478,7 @@ export default function App() {
                 </>
               )}
               <section className="grid gap-2">
-                <div className="px-1 text-[10px] font-black uppercase tracking-[0.22em] text-zinc-500">{tr('离开', 'Leave')}</div>
+                <div className="px-1 text-[10px] font-black uppercase tracking-[0.22em] text-app-muted">{tr('离开', 'Leave')}</div>
                 <button
                   onClick={() => {
                     setIsActionMenuOpen(false);
@@ -14549,7 +14549,7 @@ export default function App() {
               exit={{ opacity: 0, y: 8, scale: 0.97 }}
               className="play-quick-panel p-2"
             >
-              <div className="px-2 pb-1 pt-1 text-center text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">{tr('快速浏览', 'Quick Nav')}</div>
+              <div className="px-2 pb-1 pt-1 text-center text-[10px] font-black uppercase tracking-[0.2em] text-app-muted">{tr('快速浏览', 'Quick Nav')}</div>
               {chapters.map((chapter) => {
                 const ready = isChapterTextReady(chapter);
                 return (
@@ -14560,9 +14560,9 @@ export default function App() {
                       setPlayingTocOpen(false);
                       scrollToChapter(chapter.chapter_num);
                     }}
-                    className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+                    className="flex items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold text-app-muted transition-colors hover:bg-app-surface-soft hover:text-white"
                   >
-                    <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-black ${ready ? 'bg-indigo-500/15 text-indigo-300' : 'bg-zinc-800 text-zinc-500'}`}>
+                    <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-black ${ready ? 'bg-indigo-500/15 text-indigo-300' : 'bg-app-surface-soft text-app-muted'}`}>
                       {chapter.chapter_num}
                     </span>
                     <span className="min-w-0 flex-1 truncate">{isEnglish ? `Chapter ${chapter.chapter_num}` : `第${chapter.chapter_num}章`}</span>
@@ -14603,19 +14603,19 @@ export default function App() {
             initial={{ y: 16, opacity: 0, scale: 0.97 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 16, opacity: 0, scale: 0.97 }}
-            className="app-modal-surface app-modal-safe-height w-full max-w-sm overflow-y-auto rounded-3xl border border-zinc-800 p-5 shadow-2xl sm:p-6"
+            className="app-modal-surface app-modal-safe-height w-full max-w-sm overflow-y-auto rounded-3xl border border-app-border p-5 shadow-2xl sm:p-6"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-5 flex items-center justify-between gap-3">
               <div>
-                <div className="text-xs font-black uppercase tracking-[0.22em] text-zinc-500">{tr('下载 App', 'Install App')}</div>
+                <div className="text-xs font-black uppercase tracking-[0.22em] text-app-muted">{tr('下载 App', 'Install App')}</div>
                 <h2 className="mt-1 text-xl font-black text-white">{tr('添加到手机桌面', 'Add to home screen')}</h2>
               </div>
               <button type="button" onClick={() => setShowIosInstallModal(false)} className={semanticIconButtonClass('ghost')}>
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="space-y-3 text-sm leading-relaxed text-zinc-400">
+            <div className="space-y-3 text-sm leading-relaxed text-app-muted">
               <p>{tr('在 iPhone/iPad：点击浏览器底部的分享按钮，然后选择“添加到主屏幕”。', 'On iPhone/iPad: tap the browser share button, then choose “Add to Home Screen”.')}</p>
               <p>{tr('在 Android/桌面浏览器：如果没有自动弹出安装窗口，请打开浏览器菜单，选择“安装应用”或“添加到主屏幕”。', 'On Android/desktop: if no install prompt appears, open the browser menu and choose “Install app” or “Add to Home Screen”.')}</p>
             </div>
@@ -14651,7 +14651,7 @@ export default function App() {
     : null;
 
   return (
-    <div data-theme={appTheme} className="min-h-screen bg-zinc-950 text-zinc-100 selection:bg-indigo-500/30 selection:text-indigo-200">
+    <div data-theme={appTheme} className="min-h-screen bg-app-bg text-app-text selection:bg-indigo-500/30 selection:text-indigo-200">
       <GlobalError errorMsg={errorMsg} />
       {installGuideModal}
       <ConnectivityDrawer
@@ -14693,7 +14693,7 @@ export default function App() {
           {(gameState === 'SERIES_WORLD_LIST' || gameState === 'SERIES_WORLD_GENERATE' || gameState === 'SERIES_WORLD_EDIT') && renderSeriesWorldView()}
           {gameState === 'THEME_SELECTION' && renderThemeSelectionView()}
           {gameState === 'GENERATING_BLUEPRINT' && (
-            <div className="fixed inset-0 z-[5000] flex flex-col items-center justify-center bg-zinc-950 px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))] text-center">
+            <div className="fixed inset-0 z-[5000] flex flex-col items-center justify-center bg-app-bg px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))] text-center">
               <motion.div
                 animate={{ rotate: 360 }}
                 transition={{ repeat: Infinity, duration: 4, ease: "linear" }}
