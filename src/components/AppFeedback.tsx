@@ -27,10 +27,10 @@ export const LoadingOverlay = ({
 }) => {
   const isEnglishOverlay = language === 'en-US';
   const footerLabel = variant === 'default'
-    ? (isEnglishOverlay ? 'Weaving causality' : 'æ­£åœ¨ç¼–ç»‡å› æžœ')
+    ? (isEnglishOverlay ? 'Weaving causality' : '正在编织因果')
     : variant === 'ending'
-      ? (isEnglishOverlay ? 'Ending in motion' : 'ç»ˆå±€æ¼”ç»Žä¸­')
-      : (isEnglishOverlay ? 'Reshaping the chain' : 'å› æžœé“¾æ¡é‡å¡‘ä¸­');
+      ? (isEnglishOverlay ? 'Ending in motion' : '终局演绎中')
+      : (isEnglishOverlay ? 'Reshaping the chain' : '因果链条重塑中');
 
   return (
     <div className={`fixed inset-0 z-[6000] backdrop-blur-xl flex flex-col items-center justify-center px-8 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(2rem,env(safe-area-inset-top))] text-center transition-colors duration-700 ${
@@ -254,13 +254,13 @@ export const ConnectivityDrawer = ({
             <div className="mt-3 flex flex-wrap gap-2">
               <button type="button" onClick={onRetry} className={semanticButtonClass('primary', { compact: true })}>
                 <RefreshCcw className="h-4 w-4" />
-                é‡è¯•åŒæ­¥
+                重试同步
               </button>
               <button type="button" onClick={onHome} className={semanticButtonClass('secondary', { compact: true })}>
-                å›žåˆ°é¦–é¡µ
+                回到首页
               </button>
               <button type="button" onClick={onDismiss} className={semanticButtonClass('ghost', { compact: true })}>
-                ç»§ç»­æµè§ˆ
+                继续浏览
               </button>
             </div>
           </div>

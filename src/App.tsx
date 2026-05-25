@@ -7268,7 +7268,7 @@ export default function App() {
       createdShareId = shareId;
       const sharedRecord = {
         id: shareId,
-        title: blueprint?.title || "æœªå‘½åæ•…äº‹",
+        title: blueprint?.title || "未命名故事",
         main_axis: blueprint?.main_axis || "",
         tags: selectedThemes,
         characters: blueprint?.characters || [],

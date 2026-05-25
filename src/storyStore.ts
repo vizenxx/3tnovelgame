@@ -487,7 +487,7 @@ export async function reserveCoverGenerationUsage(db: Firestore, userId: string,
     const snap = await transaction.get(usageRef);
     const current = Number(snap.data()?.count || 0);
     if (current >= dailyLimit) {
-      throw new Error('ä»Šå¤©çš„ AI å°é¢ç”Ÿæˆæ¬¡æ•°å·²ç»ç”¨å®Œã€‚');
+      throw new Error('今天的 AI 封面生成次数已经用完。');
     }
     const nextCount = current + 1;
     transaction.set(usageRef, {

@@ -47,9 +47,9 @@ export const InstallAppBanner = ({
     <div className="w-full rounded-2xl border border-indigo-500/30 bg-indigo-500/10 p-4 backdrop-blur-sm">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
-          <div className="text-sm font-bold text-indigo-100">å®‰è£…åˆ°æ‰‹æœºæ¡Œé¢</div>
+          <div className="text-sm font-bold text-indigo-100">安装到手机桌面</div>
           <div className="text-xs leading-relaxed text-indigo-200/80">
-            å®‰è£…åŽå¯åƒåŽŸç”Ÿåº”ç”¨ä¸€æ ·ä»Žæ¡Œé¢ç›´æŽ¥æ‰“å¼€ï¼ŒåŠ è½½ä¹Ÿä¼šæ›´ç¨³å®šã€‚
+            安装后可像原生应用一样从桌面直接打开，加载也会更稳定。
           </div>
         </div>
         <button
@@ -57,7 +57,7 @@ export const InstallAppBanner = ({
           onClick={onInstall}
           className="shrink-0 rounded-xl bg-white px-4 py-2 text-sm font-bold text-black transition-colors hover:bg-zinc-200"
         >
-          ç«‹å³å®‰è£…
+          立即安装
         </button>
       </div>
     </div>
@@ -92,35 +92,35 @@ export const PwaUpdateModal = ({
           className="app-modal-surface app-modal-safe-height w-full max-w-md space-y-5 overflow-y-auto rounded-3xl border border-app-border p-5 shadow-2xl sm:p-6"
         >
           <div className="space-y-2">
-            <div className="text-xs uppercase tracking-[0.35em] text-app-muted">ç‰ˆæœ¬æ›´æ–°</div>
-            <h3 className="text-2xl font-black text-white">å‘çŽ°æ–°ç‰ˆ App</h3>
+            <div className="text-xs uppercase tracking-[0.35em] text-app-muted">版本更新</div>
+            <h3 className="text-2xl font-black text-white">发现新版 App</h3>
             <p className="text-sm leading-relaxed text-app-muted">
-              å½“å‰å®‰è£…çš„ PWA ä¸æ˜¯æœ€æ–°ç‰ˆã€‚æœ€æ–°ç‰ˆæœ¬ä¸º {updateInfo.latestVersion}ï¼Œå»ºè®®çŽ°åœ¨å‡çº§åŽå†ç»§ç»­ä½¿ç”¨ã€‚
+              当前安装的 PWA 不是最新版。最新版本为 {updateInfo.latestVersion}，建议现在升级后再继续使用。
             </p>
           </div>
 
           {updateInfo.isIos ? (
             <div className="space-y-3 text-sm text-app-text">
-              <div className="rounded-2xl border border-app-border bg-app-surface/60 p-4 space-y-2">
-                <div>1. ç‚¹å‡»ä¸‹æ–¹â€œæ‰“å¼€æ›´æ–°é¡µâ€</div>
-                <div>2. åœ¨ Safari ä¸­é‡æ–°æ‰“å¼€æœ¬ç«™å¹¶ç­‰å¾…é¡µé¢åŠ è½½å®Œæˆ</div>
-                <div>3. å›žåˆ°ä¸»å±å¹•é‡æ–°è¿›å…¥ Appï¼›å¦‚æžœä»æœªæ›´æ–°ï¼Œå†ä»Ž Safari é‡æ–°â€œæ·»åŠ åˆ°ä¸»å±å¹•â€</div>
+              <div className="space-y-2 rounded-2xl border border-app-border bg-app-surface/60 p-4">
+                <div>1. 点击下方“打开更新页”</div>
+                <div>2. 在 Safari 中重新打开本站并等待页面加载完成</div>
+                <div>3. 回到主屏幕重新进入 App；如果仍未更新，再从 Safari 重新“添加到主屏幕”</div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <a
                   href="/"
                   target="_blank"
                   rel="noreferrer"
-                  className="py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-center"
+                  className="rounded-2xl bg-indigo-600 py-3 text-center font-bold text-white hover:bg-indigo-500"
                 >
-                  æ‰“å¼€æ›´æ–°é¡µ
+                  打开更新页
                 </a>
                 <button
                   type="button"
                   onClick={onClose}
-                  className="py-3 rounded-2xl border border-app-border bg-app-surface text-app-text font-bold"
+                  className="rounded-2xl border border-app-border bg-app-surface py-3 font-bold text-app-text"
                 >
-                  ç¨åŽå†è¯´
+                  稍后再说
                 </button>
               </div>
             </div>
@@ -130,17 +130,17 @@ export const PwaUpdateModal = ({
                 type="button"
                 onClick={onClose}
                 disabled={isApplying}
-                className="py-3 rounded-2xl border border-app-border bg-app-surface text-app-text font-bold disabled:opacity-50"
+                className="rounded-2xl border border-app-border bg-app-surface py-3 font-bold text-app-text disabled:opacity-50"
               >
-                ç¨åŽå†è¯´
+                稍后再说
               </button>
               <button
                 type="button"
                 onClick={onUpdate}
                 disabled={isApplying}
-                className="py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold disabled:opacity-50"
+                className="rounded-2xl bg-indigo-600 py-3 font-bold text-white hover:bg-indigo-500 disabled:opacity-50"
               >
-                {isApplying ? 'å‡çº§ä¸­...' : 'ç«‹å³å‡çº§'}
+                {isApplying ? '升级中...' : '立即升级'}
               </button>
             </div>
           )}
