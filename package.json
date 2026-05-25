@@ -13,6 +13,7 @@
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "lint": "tsc --noEmit",
     "test:engine": "tsx scripts/test-story-run-engine.ts",
+    "check:theme-contrast": "node scripts/check-theme-contrast.mjs",
     "check:frontend-safety": "node scripts/check-frontend-safety.mjs",
     "check:supabase-health": "node scripts/check-supabase-health.mjs",
     "check:industrial": "node scripts/industrial-check.mjs",

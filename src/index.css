@@ -10,7 +10,7 @@
   --app-border: #1a1b2a;
   --app-text: #c5c6cb;
   --app-muted: #8d909b;
-  --app-faint: #6e7282;
+  --app-faint: #787d8f;
   --app-accent: #6376f0;
   --app-brand-aura: rgba(99, 118, 240, 0.06);
   --app-brand-warm: rgba(235, 94, 118, 0.05);
@@ -19,7 +19,7 @@
   --app-reading-scale: 1;
   --app-readable-text: color-mix(in srgb, #c5c6cb calc(var(--app-reading-brightness) * 100%), #8c8c8c);
   --app-muted-text: color-mix(in srgb, #8d909b calc(var(--app-reading-brightness) * 100%), #737373);
-  --app-faint-text: color-mix(in srgb, #6e7282 calc(var(--app-reading-brightness) * 100%), #626262);
+  --app-faint-text: color-mix(in srgb, #787d8f calc(var(--app-reading-brightness) * 100%), #686868);
   --app-soft-white: #c5c6cb;
   --app-soft-black: #040507;
   --app-shell-card: color-mix(in srgb, var(--app-surface) 64%, transparent);
@@ -52,18 +52,18 @@ html[data-theme="light"] {
   color-scheme: light;
   --app-bg: #f3eee6;
   --app-surface: #fbf7f0;
-  --app-surface-soft: #ece4d8;
-  --app-border: #d6cabb;
+  --app-surface-soft: #eee5d8;
+  --app-border: #cfc2b1;
   --app-text: #28231f;
-  --app-muted: #62584e;
-  --app-faint: #766b5f;
+  --app-muted: #51483f;
+  --app-faint: #675d52;
   --app-accent: #5664c2;
   --app-brand-aura: rgba(86, 100, 194, 0.12);
   --app-brand-warm: rgba(176, 104, 78, 0.09);
   --app-brand-line: rgba(40, 35, 31, 0.055);
   --app-readable-text: color-mix(in srgb, #28231f calc(var(--app-reading-brightness) * 100%), #707070);
-  --app-muted-text: color-mix(in srgb, #62584e calc(var(--app-reading-brightness) * 100%), #7a7a7a);
-  --app-faint-text: color-mix(in srgb, #766b5f calc(var(--app-reading-brightness) * 100%), #8a8a8a);
+  --app-muted-text: color-mix(in srgb, #51483f calc(var(--app-reading-brightness) * 100%), #74706a);
+  --app-faint-text: color-mix(in srgb, #675d52 calc(var(--app-reading-brightness) * 100%), #80786f);
   --app-soft-white: #fbf7f0;
   --app-soft-black: #28231f;
   --app-shell-card: color-mix(in srgb, var(--app-surface) 76%, transparent);
@@ -677,6 +677,74 @@ button.app-icon-danger:active,
 
 .app-semantic-button svg {
   flex: 0 0 auto;
+}
+
+.app-menu-button {
+  color: var(--app-readable-text);
+}
+
+.app-menu-button-ghost {
+  color: var(--app-readable-text);
+}
+
+.app-menu-button-ghost:hover {
+  background: color-mix(in srgb, var(--app-surface-soft) 62%, transparent);
+}
+
+.app-menu-button-primary {
+  color: color-mix(in srgb, var(--app-accent) 76%, var(--app-readable-text));
+}
+
+.app-menu-button-primary:hover {
+  background: color-mix(in srgb, var(--app-accent) 14%, transparent);
+}
+
+.app-menu-button-secondary {
+  color: #9fe3bd;
+}
+
+.app-menu-button-secondary:hover {
+  background: rgba(52, 211, 153, 0.09);
+}
+
+.app-menu-button-danger {
+  color: #f5a3b1;
+}
+
+.app-menu-button-danger:hover {
+  background: rgba(244, 63, 94, 0.09);
+}
+
+html[data-theme="light"] .app-menu-button-ghost {
+  color: var(--app-readable-text);
+}
+
+html[data-theme="light"] .app-menu-button-ghost:hover {
+  background: color-mix(in srgb, var(--app-surface-soft) 72%, transparent);
+}
+
+html[data-theme="light"] .app-menu-button-primary {
+  color: #4656ad;
+}
+
+html[data-theme="light"] .app-menu-button-primary:hover {
+  background: rgba(79, 95, 187, 0.11);
+}
+
+html[data-theme="light"] .app-menu-button-secondary {
+  color: #3d6d4d;
+}
+
+html[data-theme="light"] .app-menu-button-secondary:hover {
+  background: rgba(79, 116, 88, 0.12);
+}
+
+html[data-theme="light"] .app-menu-button-danger {
+  color: #96384a;
+}
+
+html[data-theme="light"] .app-menu-button-danger:hover {
+  background: rgba(150, 56, 74, 0.11);
 }
 
 html:lang(zh) .app-semantic-button {
@@ -2254,4 +2322,99 @@ a:focus:not(:focus-visible),
 [role="button"]:focus:not(:focus-visible) {
   outline: none !important;
   box-shadow: none !important;
+}
+
+/* Final light-theme contrast governor.
+   Many older screens still use dark Tailwind utility names. In light mode,
+   those names should map to warm paper surfaces and deep ink, not literal
+   black/grey blocks or low-contrast pale text. */
+html[data-theme="light"] [class*="bg-zinc-950"],
+html[data-theme="light"] [class*="bg-zinc-900"] {
+  background-color: color-mix(in srgb, var(--app-surface) 90%, transparent) !important;
+}
+
+html[data-theme="light"] [class*="bg-zinc-800"],
+html[data-theme="light"] [class*="bg-zinc-700"] {
+  background-color: color-mix(in srgb, var(--app-surface-soft) 82%, transparent) !important;
+}
+
+html[data-theme="light"] [class*="bg-black"] {
+  background-color: rgba(40, 35, 31, 0.32) !important;
+}
+
+html[data-theme="light"] [class*="bg-white"] {
+  background-color: color-mix(in srgb, var(--app-surface) 92%, transparent) !important;
+}
+
+html[data-theme="light"] [class*="text-white"],
+html[data-theme="light"] [class*="text-zinc-50"],
+html[data-theme="light"] [class*="text-zinc-100"],
+html[data-theme="light"] [class*="text-zinc-200"],
+html[data-theme="light"] [class*="text-zinc-300"],
+html[data-theme="light"] [class*="text-black"],
+html[data-theme="light"] [class*="text-zinc-900"],
+html[data-theme="light"] [class*="text-zinc-950"] {
+  color: var(--app-readable-text) !important;
+}
+
+html[data-theme="light"] [class*="text-zinc-400"],
+html[data-theme="light"] [class*="text-zinc-500"],
+html[data-theme="light"] [class*="text-zinc-600"],
+html[data-theme="light"] [class*="text-zinc-700"] {
+  color: var(--app-muted-text) !important;
+}
+
+html[data-theme="light"] [class*="border-zinc-950"],
+html[data-theme="light"] [class*="border-zinc-900"],
+html[data-theme="light"] [class*="border-zinc-800"],
+html[data-theme="light"] [class*="border-zinc-700"],
+html[data-theme="light"] [class*="border-white"] {
+  border-color: var(--app-shell-border-soft) !important;
+}
+
+html[data-theme="light"] [class*="divide-zinc-"],
+html[data-theme="light"] [class*="divide-white"] {
+  border-color: var(--app-shell-border-soft) !important;
+}
+
+html[data-theme="light"] .app-modal-surface,
+html[data-theme="light"] .app-card,
+html[data-theme="light"] .app-card-quiet,
+html[data-theme="light"] .story-library-card,
+html[data-theme="light"] .story-library-toolbar,
+html[data-theme="light"] .story-library-hero,
+html[data-theme="light"] .authoring-studio,
+html[data-theme="light"] .primary-bottom-dock-shell,
+html[data-theme="light"] .primary-bottom-dock-menu,
+html[data-theme="light"] .destiny-dock,
+html[data-theme="light"] .play-quick-panel,
+html[data-theme="light"] .play-float-button {
+  color: var(--app-readable-text) !important;
+}
+
+html[data-theme="light"] input,
+html[data-theme="light"] textarea,
+html[data-theme="light"] select {
+  background-color: color-mix(in srgb, var(--app-surface) 97%, white) !important;
+  color: var(--app-readable-text) !important;
+  border-color: var(--app-shell-border-soft) !important;
+}
+
+html[data-theme="light"] input::placeholder,
+html[data-theme="light"] textarea::placeholder {
+  color: color-mix(in srgb, var(--app-muted) 78%, transparent) !important;
+}
+
+html[data-theme="light"] .bg-indigo-600,
+html[data-theme="light"] .bg-indigo-500,
+html[data-theme="light"] .app-button-primary {
+  color: #f8f4ed !important;
+}
+
+html[data-theme="light"] .bg-indigo-600 *,
+html[data-theme="light"] .bg-indigo-500 *,
+html[data-theme="light"] .app-button-primary *,
+html[data-theme="light"] .bg-emerald-600 *,
+html[data-theme="light"] .bg-emerald-500 * {
+  color: #f8f4ed !important;
 }

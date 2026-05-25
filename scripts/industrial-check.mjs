@@ -79,6 +79,12 @@ try {
 }
 
 try {
+  execFileSync(process.execPath, ['scripts/check-theme-contrast.mjs'], { cwd: root, stdio: 'inherit' });
+} catch (error) {
+  process.exitCode = 1;
+}
+
+try {
   execFileSync(process.execPath, ['scripts/check-supabase-health.mjs', '--static'], { cwd: root, stdio: 'inherit' });
 } catch (error) {
   process.exitCode = 1;

@@ -25,10 +25,10 @@ export const semanticIconButtonClass = (variant: 'secondary' | 'danger' | 'ghost
 
 export const semanticMenuButtonClass = (variant: 'primary' | 'secondary' | 'danger' | 'ghost' = 'ghost') => {
   const variants = {
-    primary: 'text-indigo-100 hover:bg-indigo-950/60',
-    secondary: 'text-emerald-100 hover:bg-emerald-950/60',
-    danger: 'text-rose-100 hover:bg-rose-950/60',
-    ghost: 'text-zinc-100 hover:bg-zinc-900/70',
+    primary: 'app-menu-button-primary',
+    secondary: 'app-menu-button-secondary',
+    danger: 'app-menu-button-danger',
+    ghost: 'app-menu-button-ghost',
   };
-  return `flex w-full items-center gap-2 rounded-xl px-3 py-3 text-left text-sm transition-all duration-150 hover:translate-x-1 active:translate-x-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 disabled:pointer-events-none disabled:opacity-50 ${variants[variant]}`;
+  return `app-menu-button flex w-full items-center gap-2 rounded-xl px-3 py-3 text-left text-sm transition-all duration-150 hover:translate-x-1 active:translate-x-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 disabled:pointer-events-none disabled:opacity-50 ${variants[variant]}`;
 };
