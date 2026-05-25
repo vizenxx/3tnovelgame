@@ -49,6 +49,7 @@ import { AccountProfileModals } from './components/AccountModals';
 import { StoryLibraryCard } from './components/StoryLibraryCard';
 import { StorySelectView } from './components/StorySelectView';
 import { StoryDetailModal } from './components/StoryDetailModal';
+import { ArchiveView } from './components/ArchiveView';
 import { AuthoringSaveSuccessModal, ConfirmationModal, SequelGateModal, type SequelGateModalState } from './components/GeneralModals';
 import { AuthorProfileModal, NotificationCenterModal, ShareComposerModal } from './components/SocialModals';
 import {
@@ -8478,375 +8479,54 @@ export default function App() {
       />
     );
   };
-  const renderArchiveView = () => {
-    const keyword = archiveSearch.trim().toLowerCase();
-    const archiveStories = Array.isArray(mySharedStories) ? mySharedStories.filter(Boolean) : [];
-    const archiveSegment = storyListSyncState?.archive || { status: 'idle' as SyncStatus };
-    const matchesKeyword = (story: any) => {
-      if (!keyword) return true;
-      const haystack = `${story.title || ''}\n${story.main_axis || ''}`.toLowerCase();
-      return haystack.includes(keyword);
-    };
-
-    const favoriteStories = archiveStories.filter(
-      (story: any) => story.archiveKind === 'favorite' && matchesKeyword(story)
-    );
-    const savedStories = archiveStories.filter((story: any) => {
-      if (story.archiveKind === 'favorite') return false;
-      if (archiveFilter !== 'all' && story.visibility !== archiveFilter) return false;
-      return matchesKeyword(story);
-    });
-    const visibleFollowedAuthors = followedAuthors.filter((author) => {
-      if (!keyword) return true;
-      return `${author.authorName}\n${author.authorId}`.toLowerCase().includes(keyword);
-    });
-    const isArchiveSyncing = archiveSegment.status === 'loading' || archiveSegment.status === 'syncing';
-
-    const handleUnfollowFromArchive = async (authorId: string) => {
-      if (!db || !user) return;
-      try {
-        setFollowedAuthors((prev) => prev.filter((author) => author.authorId !== authorId));
-        await unfollowAuthor(db as any, authorId);
-        if (authorProfileTarget?.authorId === authorId) setAuthorProfileFollowing(false);
-        showError('已取消追踪作者。');
-      } catch (error: any) {
-        console.error(error);
-        showError(error?.message || '取消追踪失败。');
-        void refreshFollowedAuthors();
-      }
-    };
-
-    const renderFavoriteCard = (story: any) => {
-      const isChoosingThis = archiveChoiceStoryId === story.id;
-      return (
-        <div key={story.id} className="app-card rounded-[1.5rem] p-5 transition-all duration-150">
-          <div className="mb-2 flex items-start justify-between gap-2">
-            <div className="line-clamp-2 text-sm font-black text-white leading-snug">{formatBookTitle(story.title)}</div>
-            <div className="shrink-0 rounded-full bg-indigo-500/15 px-2 py-1 text-[10px] font-black text-indigo-300">收藏原作</div>
-          </div>
-          <div className="mb-3 text-[11px] font-bold text-app-muted">
-            <AuthorNameButton prefix="原作者：" authorId={story.originalAuthorId || story.sourceStoryId || story.authorId} authorName={getOriginalAuthorName(story)} />
-          </div>
-          <div className="line-clamp-3 text-xs leading-relaxed text-app-muted mb-4">{story.main_axis || '暂无主轴摘要。'}</div>
-
-          {!isChoosingThis ? (
-            <button
-              type="button"
-              onClick={() => setArchiveChoiceStoryId(story.id)}
-              className={semanticButtonClass('secondary', { compact: true })}
-            >
-              <BookOpen className="h-4 w-4" />
-              前往原作
-            </button>
-          ) : (
-            <div className="rounded-2xl border border-indigo-500/30 bg-indigo-950/40 p-3 space-y-2">
-              <div className="text-[11px] font-black uppercase tracking-[0.18em] text-indigo-400 mb-2">选择进入方式</div>
-              <button
-                type="button"
-                onClick={() => {
-                  setArchiveChoiceStoryId(null);
-                  void startStoryPlay(story.sourceStoryId || story.id);
-                }}
-                className="flex w-full items-center gap-3 rounded-xl bg-indigo-600/90 px-3 py-2.5 text-left text-sm font-bold text-white transition-colors hover:bg-indigo-500 active:scale-[0.98]"
-              >
-                <Zap className="h-4 w-4 shrink-0" />
-                <div>
-                  <div>干涉命运</div>
-                  <div className="text-[10px] font-normal text-indigo-200/80">进入游玩页，亲手改写这段故事</div>
-                </div>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setArchiveChoiceStoryId(null);
-                  void openReadonlyStory(story.sourceStoryId || story.id, { allowBack: true, returnTarget: 'ARCHIVE' });
-                }}
-                className="flex w-full items-center gap-3 rounded-xl border border-app-border bg-app-surface/80 px-3 py-2.5 text-left text-sm font-bold text-app-text transition-colors hover:border-zinc-500 hover:bg-app-surface-soft active:scale-[0.98]"
-              >
-                <BookOpen className="h-4 w-4 shrink-0" />
-                <div>
-                  <div>观看命运</div>
-                  <div className="text-[10px] font-normal text-app-muted">以只读方式阅读原版故事</div>
-                </div>
-              </button>
-              <button
-                type="button"
-                onClick={() => setArchiveChoiceStoryId(null)}
-                className="w-full rounded-xl px-3 py-1.5 text-center text-xs font-bold text-zinc-600 hover:text-app-muted transition-colors"
-              >
-                取消
-              </button>
-            </div>
-          )}
-
-          <div className="mt-3 flex gap-2">
-            <button
-              type="button"
-              disabled={archiveUpdatingIds[story.id]}
-              onClick={() => handleDeleteArchiveStory(story)}
-              className={semanticButtonClass('danger', { compact: true })}
-            >
-              <Trash2 className="h-4 w-4" />
-              取消收藏
-            </button>
-            <button
-              type="button"
-              disabled={isSharing || archiveUpdatingIds[story.id]}
-              onClick={() => shareArchiveListStory(story)}
-              className={semanticButtonClass('ghost', { compact: true })}
-            >
-              {isSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
-              分享原作
-            </button>
-          </div>
-        </div>
-      );
-    };
-
-    const visibilityClass = (v: string) =>
-      v === 'public'
-        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20'
-        : v === 'unlisted'
-        ? 'bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20'
-        : 'bg-app-surface-soft/80 border-app-border text-app-muted hover:bg-app-surface-soft';
-
-    const renderSavedCard = (story: any) => (
-      <div key={story.id} className="app-card flex flex-col rounded-[1.5rem] p-5">
-        <div className="mb-2 flex items-start justify-between gap-2">
-          <div className="line-clamp-2 text-sm font-black text-white leading-snug">{formatBookTitle(story.title)}</div>
-          <div className="relative shrink-0">
-            <select
-              value={story.visibility || 'unlisted'}
-              disabled={archiveUpdatingIds[story.id]}
-              onChange={(e) => handleArchiveVisibilityChange(story, e.target.value as any)}
-              title="点击切换可见范围"
-              className={`block w-full appearance-none rounded-full border px-2.5 py-1 pr-6 text-[10px] font-black outline-none transition-colors cursor-pointer text-center ${visibilityClass(story.visibility)}`}
-            >
-              <option value="unlisted" className="bg-app-surface text-app-text">非公开链接</option>
-              <option value="private" className="bg-app-surface text-app-text">私人</option>
-            </select>
-            <div className="pointer-events-none absolute inset-y-0 right-1 flex items-center px-1 text-inherit opacity-70">
-              <svg className="h-3 w-3 fill-current" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" /></svg>
-            </div>
-          </div>
-        </div>
-        <div className="mb-3 grid gap-1 text-[11px] font-bold text-app-muted">
-          <div><AuthorNameButton prefix="原作者：" authorId={story.originalAuthorId || story.sourceStoryId || story.authorId} authorName={getOriginalAuthorName(story)} /></div>
-          {getIntervenerName(story) && <div>干涉者：{getIntervenerName(story)}</div>}
-        </div>
-        <div className="line-clamp-3 text-xs leading-relaxed text-app-muted flex-1">{story.main_axis || '暂无主轴摘要。'}</div>
-        <div className="mt-4 flex gap-1.5 sm:gap-2">
-          <button
-            type="button"
-            onClick={() => openReadonlyStory(story.id, { allowBack: true, returnTarget: 'ARCHIVE' })}
-            className={`${semanticButtonClass('secondary', { compact: true })} flex-1 justify-center whitespace-nowrap px-0.5 text-[10px] tracking-tighter sm:px-2 sm:text-xs`}
-          >
-            <BookOpen className="mr-1 h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
-            观看命运
-          </button>
-          <button
-            type="button"
-            disabled={isSharing || archiveUpdatingIds[story.id]}
-            onClick={() => shareArchiveListStory(story)}
-            className={`${semanticButtonClass('secondary', { compact: true })} flex-1 justify-center whitespace-nowrap px-0.5 text-[10px] tracking-tighter sm:px-2 sm:text-xs`}
-          >
-            {isSharing ? <Loader2 className="mr-1 h-3.5 w-3.5 shrink-0 animate-spin sm:h-4 sm:w-4" /> : <ExternalLink className="mr-1 h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />}
-            分享
-          </button>
-          <button
-            type="button"
-            disabled={archiveUpdatingIds[story.id]}
-            onClick={() => handleDeleteArchiveStory(story)}
-            className={`${semanticButtonClass('danger', { compact: true })} flex-1 justify-center whitespace-nowrap px-0.5 text-[10px] tracking-tighter sm:px-2 sm:text-xs`}
-          >
-            <Trash2 className="mr-1 h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
-            删除
-          </button>
-        </div>
-      </div>
-    );
-
-    const renderFollowedAuthorCard = (author: { authorId: string; authorName: string; followedAt: string }) => (
-      <div key={author.authorId} className="app-card flex flex-col rounded-[1.5rem] p-5">
-        <div className="mb-3 flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-xs font-black uppercase tracking-[0.18em] text-indigo-300">追踪作者</div>
-            <div className="mt-1 truncate text-lg font-black text-white">{author.authorName || `游客+${shortUserId(author.authorId)}`}</div>
-            <div className="mt-1 text-[11px] font-bold text-app-muted">追踪于 {new Date(author.followedAt || Date.now()).toLocaleDateString()}</div>
-          </div>
-          <div className="rounded-full border border-indigo-400/20 bg-indigo-500/10 p-2 text-indigo-200">
-            <Bell className="h-4 w-4" />
-          </div>
-        </div>
-        <div className="mt-auto grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => openAuthorProfile(author.authorId, author.authorName)}
-            className={`${semanticButtonClass('secondary', { compact: true })} min-w-0 justify-center px-2 text-xs`}
-          >
-            <BookOpen className="h-4 w-4" />
-            查看作者作品
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleUnfollowFromArchive(author.authorId)}
-            className={`${semanticButtonClass('ghost', { compact: true })} min-w-0 justify-center px-2 text-xs`}
-          >
-            <X className="h-4 w-4" />
-            取消追踪
-          </button>
-        </div>
-      </div>
-    );
-
-    return (
-      <div className="relative mx-auto max-w-6xl px-6 pb-[calc(7.5rem+env(safe-area-inset-bottom))] pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] lg:px-8">
-        <AnimatePresence>
-          {isArchiveSyncing && archiveStories.length === 0 && (
-            <BlockingSyncOverlay
-              title={isEnglish ? 'Syncing fate archive' : '正在同步命运收藏馆'}
-              detail={isEnglish ? 'If the network is slow, local cache stays available and the list updates when sync finishes.' : '如果网络较慢，会先保留本机缓存，完成后自动更新列表。'}
-              zIndexClass="z-[3200]"
-            />
-          )}
-        </AnimatePresence>
-        <div className="mb-10 flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-3xl font-black text-white sm:text-4xl">{t('archive.title')}</h2>
-            <p className="mt-2 text-sm text-app-muted">{t('archive.subtitle')}</p>
-          </div>
-          <BackNavButton label={archiveReturnTarget === 'PLAYING' ? (isEnglish ? 'Back to play' : '返回游玩页') : (isEnglish ? 'Back to library' : '返回作品库')} onClick={leaveArchiveView} />
-        </div>
-
-        <section className="app-card-quiet relative overflow-hidden rounded-[2rem] p-4 sm:p-5">
-          {isArchiveSyncing && archiveStories.length > 0 && (
-            <div className="mb-5 flex items-center gap-3 rounded-2xl border border-indigo-500/20 bg-indigo-500/10 px-4 py-3 text-xs font-bold text-indigo-100/85">
-              <Loader2 className="h-4 w-4 shrink-0 animate-spin text-indigo-300" />
-              <span>{isEnglish ? 'Syncing archive. The current list stays usable.' : '正在同步收藏馆，当前列表会保持可用。'}</span>
-            </div>
-          )}
-          {archiveSegment.status === 'error' && archiveStories.length > 0 && (
-            <div className="mb-5 rounded-3xl border border-amber-500/25 bg-amber-500/10 p-4 text-sm leading-relaxed text-amber-100/85">
-              <div className="font-black text-amber-100">{isEnglish ? 'Archive sync is not smooth right now' : '收藏馆同步暂时不顺利'}</div>
-              <p className="mt-1 text-xs text-amber-100/70">{archiveSegment.error || (isEnglish ? 'Current content is kept. Try refreshing later.' : '已保留当前可用内容，可以稍后刷新重试。')}</p>
-            </div>
-          )}
-          {/* Tab 切换栏 */}
-          <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="flex rounded-2xl border border-app-border bg-app-bg/70 p-1 shrink-0">
-              {([
-                { id: 'favorite', label: t('archive.favoriteTab') },
-                { id: 'saved', label: t('archive.savedTab') },
-                { id: 'authors', label: isEnglish ? 'Following' : '追踪作者' },
-              ] as const).map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => { setArchiveTab(tab.id as 'favorite' | 'saved' | 'authors'); setArchiveChoiceStoryId(null); }}
-                  className={`rounded-xl px-4 py-2 text-sm font-black transition-all duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 ${
-                    archiveTab === tab.id ? 'bg-indigo-600 text-white shadow-lg' : 'text-app-muted hover:bg-app-surface hover:text-app-text'
-                  }`}
-                >
-                  {tab.label} <span className="ml-1 text-[10px] opacity-70">{tab.id === 'authors' ? followedAuthors.length : archiveStories.filter((s: any) => tab.id === 'favorite' ? s.archiveKind === 'favorite' : s.archiveKind !== 'favorite').length}</span>
-                </button>
-              ))}
-            </div>
-
-            <div className="flex min-w-0 flex-1 flex-col gap-3">
-              <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-                <input
-                  type="search"
-                  value={archiveSearch}
-                  onChange={(event) => { setArchiveSearch(event.target.value); setArchiveChoiceStoryId(null); }}
-                  placeholder={isEnglish ? 'Search title or premise' : '搜索标题或主轴内容'}
-                  className="w-full rounded-xl border border-app-border bg-app-input-bg/80 px-3 py-2 text-sm text-app-text outline-none focus:border-indigo-500"
-                />
-                <button
-                  type="button"
-                  onClick={() => archiveTab === 'authors' ? refreshFollowedAuthors() : refreshArchiveStories({ force: true })}
-                  disabled={archiveTab === 'authors' ? followedAuthorsLoading : isArchiveSyncing}
-                  className={semanticButtonClass('ghost', { compact: true })}
-                >
-                  <RefreshCcw className={`h-4 w-4 ${(archiveTab === 'authors' ? followedAuthorsLoading : isArchiveSyncing) ? 'animate-spin' : ''}`} />
-                  {isEnglish ? 'Refresh archive' : '刷新馆藏'}
-                </button>
-              </div>
-              {archiveTab === 'saved' && (
-                <div className="flex flex-wrap gap-1.5">
-                  {([
-                    { id: 'all', label: isEnglish ? 'All' : '全部' },
-                    { id: 'unlisted', label: isEnglish ? 'Unlisted link' : '非公开链接' },
-                    { id: 'private', label: isEnglish ? 'Private' : '私人' },
-                  ] as const).map((option) => (
-                    <button
-                      key={option.id}
-                      type="button"
-                      onClick={() => setArchiveFilter(option.id as any)}
-                      className={archiveFilter === option.id ? semanticButtonClass('primary', { compact: true }) : semanticButtonClass('ghost', { compact: true })}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Tab 内容 */}
-          {archiveSegment.status === 'error' && archiveStories.length === 0 ? (
-            <InlineSyncState
-              tone="error"
-              title={isEnglish ? 'Archive could not sync' : '收藏馆暂时无法同步'}
-              detail={archiveSegment.error || (isEnglish ? 'No local cache is available. Reload, or return to the library for now.' : '没有可用的本机缓存。可以重新读取，或先返回作品库继续浏览。')}
-              actionLabel={isEnglish ? 'Reload archive' : '重新读取收藏馆'}
-              onAction={() => refreshArchiveStories({ force: true })}
-            />
-          ) : isArchiveSyncing && archiveStories.length === 0 ? (
-            <ListSkeleton count={6} />
-          ) : archiveTab === 'authors' ? (
-            followedAuthorsLoading && visibleFollowedAuthors.length === 0 ? (
-              <ListSkeleton count={3} />
-            ) : visibleFollowedAuthors.length === 0 ? (
-              <InlineSyncState
-                tone="empty"
-                title={keyword ? (isEnglish ? 'No followed authors match the search' : '没有符合搜索词的追踪作者') : (isEnglish ? 'No followed authors yet' : '还没有追踪任何作者')}
-                detail={keyword ? (isEnglish ? 'Try another keyword, or clear the search.' : '换个关键词再试，或清空搜索条件。') : (isEnglish ? 'Open an author profile from an author name, then follow the author to view them here.' : '点击作者名字打开作者档案后，可以追踪作者并在这里集中查看。')}
-              />
-            ) : (
-              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                {visibleFollowedAuthors.map(renderFollowedAuthorCard)}
-              </div>
-            )
-          ) : archiveTab === 'favorite' ? (
-            favoriteStories.length === 0 ? (
-              <InlineSyncState
-                tone="empty"
-                title={keyword ? (isEnglish ? 'No favorited originals match the search' : '没有符合搜索词的收藏原作') : (isEnglish ? 'No favorited originals yet' : '还没有收藏任何原作')}
-                detail={keyword ? (isEnglish ? 'Try another keyword, or clear the search.' : '换个关键词再试，或清空搜索条件。') : (isEnglish ? 'Tap Favorite while reading to keep the original work here.' : '在游玩页点击「收藏」后，原作会出现在这里。')}
-              />
-            ) : (
-              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                {favoriteStories.map(renderFavoriteCard)}
-              </div>
-            )
-          ) : (
-            savedStories.length === 0 ? (
-              <InlineSyncState
-                tone="empty"
-                title={keyword || archiveFilter !== 'all' ? (isEnglish ? 'No saved fate lines match the filters' : '没有符合条件的收藏命运') : (isEnglish ? 'No saved fate lines yet' : '还没有收藏任何命运线')}
-                detail={keyword || archiveFilter !== 'all' ? (isEnglish ? 'Try changing the search or visibility filter.' : '可以调整搜索或可见性筛选条件。') : (isEnglish ? 'Tap Save Fate while reading to keep the current fate line here.' : '在游玩页点击「收藏命运」后，当前命运线会出现在这里。')}
-              />
-            ) : (
-              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                {savedStories.map(renderSavedCard)}
-              </div>
-            )
-          )}
-        </section>
-      </div>
-    );
-  };
-
+  const renderArchiveView = () => (
+    <ArchiveView
+      archiveSearch={archiveSearch}
+      setArchiveSearch={setArchiveSearch}
+      archiveFilter={archiveFilter}
+      setArchiveFilter={setArchiveFilter}
+      archiveTab={archiveTab}
+      setArchiveTab={setArchiveTab}
+      archiveChoiceStoryId={archiveChoiceStoryId}
+      setArchiveChoiceStoryId={setArchiveChoiceStoryId}
+      archiveUpdatingIds={archiveUpdatingIds}
+      archiveReturnTarget={archiveReturnTarget}
+      mySharedStories={mySharedStories}
+      followedAuthors={followedAuthors}
+      followedAuthorsLoading={followedAuthorsLoading}
+      storyListSyncState={storyListSyncState}
+      isEnglish={isEnglish}
+      isSharing={isSharing}
+      t={t}
+      formatBookTitle={formatBookTitle}
+      getOriginalAuthorName={getOriginalAuthorName}
+      getIntervenerName={getIntervenerName}
+      shortUserId={shortUserId}
+      AuthorNameButton={AuthorNameButton}
+      onLeave={leaveArchiveView}
+      onRefreshArchive={refreshArchiveStories}
+      onRefreshFollowedAuthors={refreshFollowedAuthors}
+      onStartStory={startStoryPlay}
+      onOpenReadonlyStory={openReadonlyStory}
+      onDeleteArchiveStory={handleDeleteArchiveStory}
+      onShareArchiveStory={shareArchiveListStory}
+      onArchiveVisibilityChange={handleArchiveVisibilityChange}
+      onOpenAuthorProfile={openAuthorProfile}
+      onUnfollowAuthor={async (authorId) => {
+        if (!db || !user) return;
+        try {
+          setFollowedAuthors((prev) => prev.filter((author) => author.authorId !== authorId));
+          await unfollowAuthor(db as any, authorId);
+          if (authorProfileTarget?.authorId === authorId) setAuthorProfileFollowing(false);
+          showError('已取消追踪作者。');
+        } catch (error: any) {
+          console.error(error);
+          showError(error?.message || '取消追踪失败。');
+          void refreshFollowedAuthors();
+        }
+      }}
+    />
+  );
   const renderOnboardingGuide = () => (
     <OnboardingGuide
       open={showOnboardingGuide}
