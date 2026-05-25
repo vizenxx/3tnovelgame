@@ -2,7 +2,9 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import dotenv from 'dotenv';
 import { GoogleAuth } from 'google-auth-library';
+import { loadLocalSecrets } from './load-local-secrets.mjs';
 
+loadLocalSecrets(process.cwd());
 dotenv.config({ path: '.env.local' });
 dotenv.config({ path: '.env' });
 

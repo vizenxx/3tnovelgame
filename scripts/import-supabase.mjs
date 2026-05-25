@@ -1,6 +1,8 @@
 import fs from 'node:fs/promises';
 import dotenv from 'dotenv';
+import { loadLocalSecrets } from './load-local-secrets.mjs';
 
+loadLocalSecrets(process.cwd());
 dotenv.config({ path: '.env.local' });
 dotenv.config({ path: '.env' });
 

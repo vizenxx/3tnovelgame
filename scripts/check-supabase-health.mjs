@@ -1,11 +1,13 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import dotenv from 'dotenv';
+import { loadLocalSecrets } from './load-local-secrets.mjs';
 
 const root = process.cwd();
 const args = new Set(process.argv.slice(2));
 const staticOnly = args.has('--static');
 
+loadLocalSecrets(root);
 dotenv.config({ path: resolve(root, '.env.local'), quiet: true });
 dotenv.config({ path: resolve(root, '.env'), quiet: true });
 

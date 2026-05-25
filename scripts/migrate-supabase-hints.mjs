@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { loadLocalSecrets } from './load-local-secrets.mjs';
 
 async function loadEnv() {
   const env = {};
@@ -23,6 +24,7 @@ async function loadEnv() {
 const writeMode = process.argv.includes('--write');
 
 async function run() {
+  loadLocalSecrets(process.cwd());
   const env = await loadEnv();
   const supabaseUrl = env.SUPABASE_URL || process.env.SUPABASE_URL;
   const supabaseKey = env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SECRET_KEY;

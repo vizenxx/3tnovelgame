@@ -8,7 +8,7 @@ let tracked = new Set();
 try {
   tracked = new Set(runGit(['ls-files']).split(/\r?\n/).filter(Boolean));
 } catch (error) {
-  console.warn(`Git file tracking check skipped: ${error instanceof Error ? error.message : String(error)}`);
+  tracked = new Set();
 }
 
 const forbiddenTracked = [

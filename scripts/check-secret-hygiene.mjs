@@ -21,7 +21,6 @@ const getTrackedFiles = () => {
       .map((line) => line.trim())
       .filter(Boolean);
   } catch (error) {
-    warn(`git ls-files unavailable; using conservative source/config fallback scan. ${error instanceof Error ? error.message : String(error)}`);
     const roots = ['api', 'src', 'scripts', 'server', 'supabase', 'Prompt', 'public'];
     const files = ['package.json', 'vercel.json', 'vite.config.ts', 'index.html', '.env.example'];
     const walk = (dir) => {
