@@ -1429,17 +1429,7 @@ body,
 
 /* warm radial glow behind icon */
 .app-boot-mark::before {
-  content: "";
-  position: absolute;
-  inset: -34px;
-  border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    rgba(129, 140, 248, 0.22) 0%,
-    rgba(176, 132, 72, 0.06) 42%,
-    transparent 72%
-  );
-  animation: app-boot-glow-pulse 3.2s ease-in-out infinite;
+  display: none;
 }
 
 .app-boot-mark img,
@@ -1449,10 +1439,7 @@ body,
   width: 120px;
   height: 120px;
   object-fit: contain;
-  filter:
-    drop-shadow(0 0 18px rgba(129, 140, 248, 0.42))
-    drop-shadow(0 0 48px rgba(99, 118, 240, 0.16))
-    drop-shadow(0 10px 30px rgba(0, 0, 0, 0.48));
+  filter: none;
 }
 
 /* sweeping light band — clipped to circle so no hard rectangular edges */
@@ -1582,22 +1569,6 @@ html[data-theme="light"] .app-boot-title {
   text-shadow: none;
 }
 
-html[data-theme="light"] .app-boot-mark img,
-html[data-theme="light"] .app-boot-logo-svg {
-  filter:
-    drop-shadow(0 0 18px rgba(79, 95, 187, 0.28))
-    drop-shadow(0 0 48px rgba(79, 95, 187, 0.08))
-    drop-shadow(0 8px 24px rgba(88, 76, 61, 0.16)) !important;
-}
-
-html[data-theme="light"] .app-boot-mark::before {
-  background: radial-gradient(
-    circle,
-    rgba(79, 95, 187, 0.35) 0%,
-    rgba(180, 113, 76, 0.1) 42%,
-    transparent 72%
-  ) !important;
-}
 
 /* ── Keyframes ── */
 @keyframes app-boot-text-in {
