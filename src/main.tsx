@@ -6,9 +6,20 @@ import './index.css';
 
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register(`/sw.js?v=${encodeURIComponent(__APP_BUILD_ID__)}`).catch((error) => {
-      console.error('Service worker registration failed:', error);
+    let reloadingForNewWorker = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (reloadingForNewWorker) return;
+      reloadingForNewWorker = true;
+      window.location.reload();
     });
+
+    navigator.serviceWorker.register(`/sw.js?v=${encodeURIComponent(__APP_BUILD_ID__)}`)
+      .then((registration) => {
+        registration.update().catch(() => {});
+      })
+      .catch((error) => {
+        console.error('Service worker registration failed:', error);
+      });
   });
 } else if ('serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations().then((registrations) => {

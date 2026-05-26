@@ -10,12 +10,28 @@ type CacheEnvelope<T> = {
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
+const withLocalCacheTimeout = async <T>(promise: Promise<T>, ms = 1200): Promise<T> => {
+  let timeoutId: number | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = window.setTimeout(() => reject(new Error('Local cache timeout')), ms);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timeoutId) window.clearTimeout(timeoutId);
+  }
+};
+
 const openCacheDb = () => {
   if (typeof indexedDB === 'undefined') {
     return Promise.reject(new Error('IndexedDB is not available'));
   }
   if (dbPromise) return dbPromise;
   dbPromise = new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      dbPromise = null;
+      reject(new Error('IndexedDB open timeout'));
+    }, 1200);
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = () => {
       const db = request.result;
@@ -23,21 +39,33 @@ const openCacheDb = () => {
         db.createObjectStore(STORE_NAME, { keyPath: 'key' });
       }
     };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error || new Error('Unable to open local cache'));
+    request.onsuccess = () => {
+      window.clearTimeout(timeout);
+      resolve(request.result);
+    };
+    request.onerror = () => {
+      window.clearTimeout(timeout);
+      dbPromise = null;
+      reject(request.error || new Error('Unable to open local cache'));
+    };
+    request.onblocked = () => {
+      window.clearTimeout(timeout);
+      dbPromise = null;
+      reject(new Error('IndexedDB open blocked'));
+    };
   });
   return dbPromise;
 };
 
 export async function getLocalCache<T>(key: string): Promise<CacheEnvelope<T> | null> {
   try {
-    const db = await openCacheDb();
-    return await new Promise((resolve, reject) => {
+    const db = await withLocalCacheTimeout(openCacheDb());
+    return await withLocalCacheTimeout(new Promise((resolve, reject) => {
       const transaction = db.transaction(STORE_NAME, 'readonly');
       const request = transaction.objectStore(STORE_NAME).get(key);
       request.onsuccess = () => resolve((request.result as CacheEnvelope<T> | undefined) || null);
       request.onerror = () => reject(request.error);
-    });
+    }));
   } catch {
     return null;
   }
@@ -45,13 +73,13 @@ export async function getLocalCache<T>(key: string): Promise<CacheEnvelope<T> | 
 
 export async function setLocalCache<T>(key: string, value: T): Promise<void> {
   try {
-    const db = await openCacheDb();
-    await new Promise<void>((resolve, reject) => {
+    const db = await withLocalCacheTimeout(openCacheDb());
+    await withLocalCacheTimeout(new Promise<void>((resolve, reject) => {
       const transaction = db.transaction(STORE_NAME, 'readwrite');
       transaction.objectStore(STORE_NAME).put({ key, value, updatedAt: Date.now() } satisfies CacheEnvelope<T>);
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error);
-    });
+    }));
   } catch {
     // Local cache is an optimization; never block app behavior.
   }
@@ -59,13 +87,13 @@ export async function setLocalCache<T>(key: string, value: T): Promise<void> {
 
 export async function deleteLocalCache(key: string): Promise<void> {
   try {
-    const db = await openCacheDb();
-    await new Promise<void>((resolve, reject) => {
+    const db = await withLocalCacheTimeout(openCacheDb());
+    await withLocalCacheTimeout(new Promise<void>((resolve, reject) => {
       const transaction = db.transaction(STORE_NAME, 'readwrite');
       transaction.objectStore(STORE_NAME).delete(key);
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error);
-    });
+    }));
   } catch {
     // Ignore cache cleanup failures.
   }
@@ -73,16 +101,16 @@ export async function deleteLocalCache(key: string): Promise<void> {
 
 export async function pruneLocalCache(options?: { maxEntries?: number; maxAgeMs?: number }): Promise<void> {
   try {
-    const db = await openCacheDb();
+    const db = await withLocalCacheTimeout(openCacheDb());
     const maxEntries = Math.max(20, options?.maxEntries ?? 160);
     const maxAgeMs = Math.max(24 * 60 * 60 * 1000, options?.maxAgeMs ?? 45 * 24 * 60 * 60 * 1000);
     const now = Date.now();
-    const entries = await new Promise<Array<CacheEnvelope<unknown>>>((resolve, reject) => {
+    const entries = await withLocalCacheTimeout(new Promise<Array<CacheEnvelope<unknown>>>((resolve, reject) => {
       const transaction = db.transaction(STORE_NAME, 'readonly');
       const request = transaction.objectStore(STORE_NAME).getAll();
       request.onsuccess = () => resolve(Array.isArray(request.result) ? request.result : []);
       request.onerror = () => reject(request.error);
-    });
+    }));
     const sorted = entries
       .filter((entry) => entry?.key)
       .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
@@ -94,13 +122,13 @@ export async function pruneLocalCache(options?: { maxEntries?: number; maxAgeMs?
       }
     });
     if (staleKeys.size === 0) return;
-    await new Promise<void>((resolve, reject) => {
+    await withLocalCacheTimeout(new Promise<void>((resolve, reject) => {
       const transaction = db.transaction(STORE_NAME, 'readwrite');
       const store = transaction.objectStore(STORE_NAME);
       staleKeys.forEach((key) => store.delete(key));
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error);
-    });
+    }));
   } catch {
     // Cache pruning should never block the app.
   }
