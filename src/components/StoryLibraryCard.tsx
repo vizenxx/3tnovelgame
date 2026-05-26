@@ -111,7 +111,7 @@ export const StoryLibraryCard = ({
               <BookOpen className="h-4 w-4" />
               {t('library.details')}
             </button>
-            <button type="button" onClick={(event) => { event.stopPropagation(); onStartStory(story.id); }} className={`${semanticButtonClass('primary', { fullWidth: true, compact: true })} text-sm`}>
+            <button type="button" onClick={(event) => { event.stopPropagation(); if (storyId) onStartStory(storyId); }} className={`${semanticButtonClass('primary', { fullWidth: true, compact: true })} text-sm`}>
               <Sparkles className="h-4 w-4" />
               {t('library.intervene')}
             </button>

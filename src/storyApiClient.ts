@@ -35,10 +35,40 @@ export class StoryApiError extends Error {
 const STORY_API_TIMEOUT_MS = 12000;
 const OPTIONAL_AUTH_TOKEN_TIMEOUT_MS = 2500;
 const REQUIRED_AUTH_TOKEN_TIMEOUT_MS = 7000;
+const inFlightReadRequests = new Map<string, Promise<any>>();
+const DEDUPE_READ_ACTIONS = new Set([
+  'getAppSettings',
+  'getAuthorFollowState',
+  'getPushConfig',
+  'getSeriesWorld',
+  'getSharedStoryRecord',
+  'getStoryCartridge',
+  'getStoryMeta',
+  'getUserProgress',
+  'listAuthorStories',
+  'listContinuityNodes',
+  'listFollowedAuthors',
+  'listMySeriesWorlds',
+  'listMySharedStories',
+  'listMyStories',
+  'listNotifications',
+  'listPublicStories',
+]);
 
 const createRequestId = () => (
   `story-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 );
+
+const stablePayloadKey = (value: unknown): string => {
+  if (Array.isArray(value)) return `[${value.map(stablePayloadKey).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, item]) => `${JSON.stringify(key)}:${stablePayloadKey(item)}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value);
+};
 
 const friendlyStoryApiError = (stage: string, code: string, rawMessage: string) => {
   const message = String(rawMessage || '');
@@ -67,6 +97,15 @@ export async function storyApi<T = any>(
   payload: Record<string, any> = {},
   options: StoryApiOptions = {}
 ) {
+  const canDedupe = DEDUPE_READ_ACTIONS.has(action);
+  const dedupeKey = canDedupe
+    ? `${action}|${options.auth ? 'auth' : 'optional'}|${stablePayloadKey(payload)}`
+    : '';
+  if (dedupeKey && inFlightReadRequests.has(dedupeKey)) {
+    return inFlightReadRequests.get(dedupeKey) as Promise<T>;
+  }
+
+  const executeRequest = async () => {
   const stage = options.stage || action;
   const requestId = createRequestId();
   const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
@@ -168,5 +207,16 @@ export async function storyApi<T = any>(
     throw wrapped;
   } finally {
     window.clearTimeout(timeout);
+  }
+  };
+
+  if (!dedupeKey) return executeRequest();
+
+  const request = executeRequest();
+  inFlightReadRequests.set(dedupeKey, request);
+  try {
+    return await request;
+  } finally {
+    inFlightReadRequests.delete(dedupeKey);
   }
 }

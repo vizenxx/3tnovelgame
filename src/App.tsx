@@ -3884,23 +3884,12 @@ export default function App() {
   useEffect(() => {
     if (!user?.uid || !db) {
       setNotificationItems([]);
-      return;
     }
-    void refreshNotificationCenter();
-    const timer = window.setInterval(() => {
-      void refreshNotificationCenter();
-    }, 60000);
-    return () => window.clearInterval(timer);
   }, [user?.uid, db]);
 
   useEffect(() => {
     if (gameState !== 'AUTHORING' || authoringCartridge || !user || !db) return;
     void loadSeriesWorlds();
-    const timer = window.setInterval(() => {
-      void refreshStories({ force: true });
-      void loadSeriesWorlds();
-    }, 60000);
-    return () => window.clearInterval(timer);
   }, [gameState, authoringCartridge, user?.uid, db, storyLibrarySort]);
 
   useEffect(() => {
@@ -4996,7 +4985,7 @@ export default function App() {
     }
     try {
       setNotificationLoading(true);
-      const rows = await listNotifications(db as any, 60);
+      const rows = await listNotifications(db as any, 30);
       setNotificationItems((prev) => {
         const localRows = prev.filter((item) => item.local);
         const merged = new Map<string, typeof notificationItems[number]>();
