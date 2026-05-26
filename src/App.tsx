@@ -4648,7 +4648,14 @@ export default function App() {
       const cachedRun = await getLocalCache<any>(activeRunCacheKey());
       if (cancelled) return;
       void refreshFollowedAuthors();
-      const userDoc = await getDoc(doc(db as any, 'users', user.uid)).catch(() => null);
+      const userDoc = await withTimeout(
+        getDoc(doc(db as any, 'users', user.uid)),
+        3500,
+        '用户资料读取超时。'
+      ).catch((error) => {
+        console.warn('User profile load skipped:', error);
+        return null;
+      });
       if (userDoc?.exists() && !cancelled) {
         setMyBio(userDoc.data()?.bio || '');
       }
@@ -4658,8 +4665,19 @@ export default function App() {
         setSessionId(user.uid);
         resetToHome();
         setStartupMessage(isEnglish ? 'Reading story archive...' : '正在读取作品档案...');
-        const loadedStories = await refreshStories().catch((error) => {
+        const loadedStories = await withTimeout(
+          refreshStories(),
+          8000,
+          '首页作品同步超时，已先进入首页。'
+        ).catch((error) => {
           console.warn('Initial story library load skipped:', error);
+          setManualConnectivityNotice({
+            tone: 'weak',
+            title: isEnglish ? 'Story library is still syncing' : '作品库仍在同步',
+            detail: isEnglish
+              ? 'The home page is available first. Use refresh if the list does not appear.'
+              : '已先进入首页；如果作品列表没有出现，可以稍后点击刷新。',
+          });
           return false;
         });
         hasLoadedInitialStoryListRef.current = Boolean(loadedStories);
