@@ -279,25 +279,6 @@
         </div>
       </div>
     </div>
-    <script>
-      // Animate the percentage counter to match progress bar
-      (function() {
-        var el = document.getElementById('boot-pct');
-        if (!el) return;
-        var start = Date.now();
-        var dur = 6500;
-        var from = 12, to = 88;
-        function tick() {
-          var t = Math.min((Date.now() - start) / dur, 1);
-          // ease-out cubic to match CSS animation
-          var ease = 1 - Math.pow(1 - t, 3);
-          var v = Math.round(from + (to - from) * ease);
-          el.textContent = v + '%';
-          if (t < 1) requestAnimationFrame(tick);
-        }
-        requestAnimationFrame(tick);
-      })();
-    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

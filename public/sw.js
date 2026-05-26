@@ -1,6 +1,6 @@
 const cacheVersion = new URL(self.location.href).searchParams.get('v') || 'v1';
 const CACHE_NAME = `fate-engine-${cacheVersion}`;
-const APP_SHELL = ['/', '/manifest.webmanifest', '/pwa-icon-192.png', '/pwa-icon-512.png', '/pwa-maskable-512.png'];
+const APP_SHELL = ['/manifest.webmanifest', '/pwa-icon-192.png', '/pwa-icon-512.png', '/pwa-maskable-512.png'];
 const STATIC_CACHE_PATTERNS = [/\.(?:js|css|png|svg|ico|webmanifest)$/];
 
 const notificationFallback = (language) => {
@@ -84,11 +84,7 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(event.request)
         .then((networkResponse) => networkResponse)
-        .catch(() => {
-          return caches.match('/').then((cachedResponse) => (
-            cachedResponse || new Response('', { status: 504, statusText: 'Offline' })
-          ));
-        })
+        .catch(() => new Response('', { status: 504, statusText: 'Offline' }))
     );
     return;
   }
