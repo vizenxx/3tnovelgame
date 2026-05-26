@@ -114,10 +114,12 @@ const storyInfoPanel = (
                         const wasUnlocked = historicallyUnlockedBranches.some((item: any) => item.id === branch.id);
                         const isHidden = branch.is_hidden || branch.hidden || branch.tier === 'hidden' || branch.inject?.hidden;
                         const canRevealBranchContent = isUnlocked || wasUnlocked;
-                        const visibleName = isHidden && !canRevealBranchContent ? tr('隐藏支线', 'Hidden branch') : branch.name;
+                        const triggers = branch.triggerGroups || (branch.trigger ? [branch.trigger] : []);
+                        const publicHint = String(branch.hint || triggers.map((tg: any) => tg?.hint).find(Boolean) || '').trim();
+                        const visibleName = branch.name || (isHidden ? tr('隐藏支线', 'Hidden branch') : tr('未命名支线', 'Untitled branch'));
                         const visibleDesc = canRevealBranchContent
                           ? (branch.desc || branch.sceneText || branch.hint || tr('尚无支线描述。', 'No branch description yet.'))
-                          : (branch.hint || tr('继续干涉命运，寻找这条支线的触发契机。', 'Keep interfering with fate to find the trigger for this branch.'));
+                          : (publicHint || tr('继续干涉命运，寻找这条支线的触发契机。', 'Keep interfering with fate to find the trigger for this branch.'));
                         return (
                           <div
                             key={branch.id || branch.name}
@@ -149,7 +151,6 @@ const storyInfoPanel = (
                                 </div>
                                 <div className="text-[11px] text-app-muted space-y-0.5">
                                   {(() => {
-                                    const triggers = branch.triggerGroups || (branch.trigger ? [branch.trigger] : []);
                                     if (triggers.length === 0) return <div className="italic text-zinc-650">{tr('无判定条件', 'No trigger conditions')}</div>;
                                     return triggers.map((tg: any, tIdx: number) => (
                                       <div key={tIdx} className="flex items-start gap-1">

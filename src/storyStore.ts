@@ -100,13 +100,19 @@ const normalizeEnding = (ending: any): StoryEndingDoc => ({
   keyNodes: asArray<string>(ending?.keyNodes),
 });
 
+const getBranchHint = (branch: any) => String(
+  branch?.hint
+  || asArray<any>(branch?.triggerGroups).map((group) => group?.hint).find(Boolean)
+  || '',
+);
+
 const normalizeBranch = (branch: any): StoryBranchDoc => ({
   ...(branch || {}),
   id: String(branch?.id || ''),
   side: branch?.side === 'right' ? 'right' : 'left',
   tier: branch?.tier || 'small',
-  name: String(branch?.name || ''),
-  hint: String(branch?.hint || ''),
+  name: String(branch?.name || branch?.theme || ''),
+  hint: getBranchHint(branch),
   desc: String(branch?.desc || ''),
   triggerGroups: asArray(branch?.triggerGroups),
   inject: {
@@ -1181,8 +1187,8 @@ export async function adaptBlueprintToStory(db: Firestore, args: {
     const branchDoc: Partial<StoryBranchDoc> = {
       side: b.side === 'left' ? 'left' : 'right',
       tier: b.score >= 5 ? 'large' : b.score >= 3 ? 'large' : b.score >= 2 ? 'medium' : 'small',
-      name: b.name || '未命名支线',
-      hint: '',
+      name: b.name || b.theme || '未命名支线',
+      hint: getBranchHint({ ...b, triggerGroups: b.triggerGroups || (b.trigger ? [b.trigger] : []) }),
       desc: b.desc || b.sceneText || '',
       common: false,
       trigger: b.trigger || { type: 'single', single: { chapterNum: 2, charId: normalizedChars[0].id, action: 'bless' } },

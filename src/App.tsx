@@ -6196,6 +6196,7 @@ export default function App() {
       data.branches = (data.branches || []).map((branch: any) => ({
         ...branch,
         id: branch.id || `b_${Math.random().toString(36).slice(2, 11)}`,
+        name: branch.name || branch.theme || '未命名支线',
         sceneText: branch.sceneText || branch.desc || '',
         trigger: branch.trigger || {
           type: 'single',
@@ -6205,7 +6206,21 @@ export default function App() {
             action: branch.condition_action === 'curse' ? 'curse' : 'bless',
           },
         },
-      }));
+      })).map((branch: any) => {
+        const triggerGroups = Array.isArray(branch.triggerGroups) && branch.triggerGroups.length > 0
+          ? branch.triggerGroups
+          : (branch.trigger ? [branch.trigger] : []);
+        const publicHint = String(
+          branch.hint
+          || triggerGroups.map((group: any) => group?.hint).find(Boolean)
+          || '',
+        ).trim();
+        return {
+          ...branch,
+          hint: publicHint,
+          triggerGroups,
+        };
+      });
 
       const initialStatuses: Record<string, { status: string; isDead: boolean }> = {};
       (data.characters || []).forEach((character: any) => {

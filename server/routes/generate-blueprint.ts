@@ -68,14 +68,14 @@ const blueprintSchema = {
           condition_chapter: { type: Type.INTEGER },
           desc: { type: Type.STRING },
           is_hidden: { type: Type.BOOLEAN },
-          hint: { type: Type.STRING },
+          hint: { type: Type.STRING, description: 'Public teaser for the locked branch. Poetic foreshadowing only; never a trigger instruction.' },
           triggerGroups: {
             type: Type.ARRAY,
             items: {
               type: Type.OBJECT,
               properties: {
                 type: { type: Type.STRING, description: 'single or count' },
-                hint: { type: Type.STRING, description: 'Hint for this exact trigger condition.' },
+                hint: { type: Type.STRING, description: 'Public teaser for this trigger condition. Foreshadowing only; no chapter/person/action instruction.' },
                 single: {
                   type: Type.OBJECT,
                   properties: {
@@ -183,6 +183,14 @@ function normalizeBlueprint(raw: any, requestedEndingMode: 'single' | 'dual' = '
 
   const characterIds = characters.map((character: any) => character.id);
   const characterNames = new Set(characters.map((character: any) => String(character.name || '').trim()).filter(Boolean));
+  const sanitizeBranchHint = (value: any) => {
+    const hint = String(value || '').replace(/\s+/g, ' ').trim();
+    if (!hint) return '命运有细微回声';
+    if (/(第\s*\d+\s*章|chapter\s*\d+|c\d+\b|bless|curse|庇佑|磨难|点击|选择|执行|解锁|unlock|intervene on|to get)/i.test(hint)) {
+      return '暗处仍有未响起的回声';
+    }
+    return hint.slice(0, 80);
+  };
   const normalizeGeneratedTriggerGroups = (branch: any, index: number) => {
     const fallbackCharId = characterIds[index % Math.max(1, characterIds.length)] || 'c1';
     const rawGroups = Array.isArray(branch?.triggerGroups)
@@ -192,7 +200,7 @@ function normalizeBlueprint(raw: any, requestedEndingMode: 'single' | 'dual' = '
         : [];
     const groups = rawGroups.slice(0, 3).map((group: any) => {
       const type = group?.type === 'count' ? 'count' : 'single';
-      const hint = String(group?.hint || branch?.hint || '').trim();
+      const hint = sanitizeBranchHint(group?.hint || branch?.hint);
       if (type === 'count') {
         const count = group?.count || {};
         return {
@@ -228,7 +236,7 @@ function normalizeBlueprint(raw: any, requestedEndingMode: 'single' | 'dual' = '
         charId: String(branch?.condition_char || fallbackCharId),
         action: String(branch?.condition_action) === 'curse' ? 'curse' : 'bless',
       },
-      hint: String(branch?.hint || '命运有细微回声').trim(),
+      hint: sanitizeBranchHint(branch?.hint),
     }];
   };
   const normalizeGeneratedBranchName = (branch: any, index: number) => {
@@ -251,14 +259,14 @@ function normalizeBlueprint(raw: any, requestedEndingMode: 'single' | 'dual' = '
         condition_chapter: Math.min(6, Math.max(2, Number(branch?.condition_chapter) || 2)),
         desc: String(branch?.desc || '一次干涉会令潜藏的命运分歧浮现。').trim(),
         is_hidden: Boolean(branch?.is_hidden),
-        hint: String(branch?.hint || '命运有细微回声').trim(),
+        hint: sanitizeBranchHint(branch?.hint),
       }))
     : [];
   if (branches.length === 0) {
     branches = characters.slice(0, 3).flatMap((character: any, index: number) => ([
       {
         id: `b_${index + 1}_left`,
-        name: character.name,
+        name: `温柔的岔光`,
         score: 1,
         side: 'left',
         condition_char: character.id,
@@ -266,11 +274,11 @@ function normalizeBlueprint(raw: any, requestedEndingMode: 'single' | 'dual' = '
         condition_chapter: Math.min(6, Math.max(2, index + 2)),
         desc: `${character.name}因一次庇佑而看见新的可能，后续选择出现温和偏转。`,
         is_hidden: false,
-        hint: '温和的回响',
+        hint: '有人在沉默里看见另一条路',
       },
       {
         id: `b_${index + 1}_right`,
-        name: character.name,
+        name: `暗处的裂痕`,
         score: 1,
         side: 'right',
         condition_char: character.id,
@@ -278,7 +286,7 @@ function normalizeBlueprint(raw: any, requestedEndingMode: 'single' | 'dual' = '
         condition_chapter: Math.min(6, Math.max(2, index + 2)),
         desc: `${character.name}因一次磨难而被迫面对代价，命运暗处浮现裂痕。`,
         is_hidden: index === 0,
-        hint: '暗处的裂痕',
+        hint: '旧伤在无人处悄悄开口',
       },
     ])).slice(0, 6);
   }
@@ -291,7 +299,7 @@ function normalizeBlueprint(raw: any, requestedEndingMode: 'single' | 'dual' = '
       condition_char: triggerGroups[0]?.single?.charId || triggerGroups[0]?.count?.charId || branch.condition_char,
       condition_action: triggerGroups[0]?.single?.action || triggerGroups[0]?.count?.action || branch.condition_action,
       condition_chapter: triggerGroups[0]?.single?.chapterNum || triggerGroups[0]?.count?.upToChapterNum || branch.condition_chapter,
-      hint: '',
+      hint: sanitizeBranchHint(rawBranch?.hint || triggerGroups.map((group: any) => group?.hint).find(Boolean) || branch.hint),
       trigger: triggerGroups[0],
       triggerGroups,
       sceneText: String(rawBranch?.sceneText || rawBranch?.desc || branch.desc || '').trim(),

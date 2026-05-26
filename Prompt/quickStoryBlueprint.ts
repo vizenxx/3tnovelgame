@@ -15,12 +15,14 @@ export function buildQuickStoryBlueprintPrompt(args: {
   const branchRulesInstruction = isEnglish
     ? `Branch design hard rules:
 1. Single-ending stories still need branches, but those branches must not guide left/right ending domains or create mutually exclusive finales. They change route, cost, clues, relationships, revealed meaning, and how naturally the same finale is reached.
-2. Branch name must be a short branch title, never just a character name. Branch desc must be a concrete plot change, hidden implication, and branch meaning; it must not repeat the hint.
-3. Hints belong to triggerGroups, not to the branch itself. If a branch has multiple trigger groups, each condition group must have its own hint.`
+2. Branch name is the branch theme shown before unlock. It must be a short atmospheric title, never just a character name and never a mechanical condition.
+3. Branch desc is private story design: concrete plot change, hidden implication, and why this branch matters. It must not simply repeat the hint.
+4. Each triggerGroups item must include a public-facing hint. The hint must feel like foreshadowing: 5-14 natural English words, no chapter number, no character ID, no "bless/curse", no instruction like "do X to get Y".`
     : `支线设计硬规则：
 1. 单一结局也必须有支线，但支线不需要导向左/右结局域，也不参与左右结局域引导；它们只改变抵达同一终局的路径、代价、线索、人物关系、理解和收束自然度。
-2. 支线 name 必须是简短支线标题，不能只是角色名；desc 必须写具体情节变化、隐藏内幕和支线意义，不要与提示词重复。
-3. 提示词必须放在 triggerGroups 的每个条件组里，而不是放在支线本身上；多条件支线必须每个条件各有自己的 hint。`;
+2. 支线 name 是未解锁时也会展示的“支线主题”，必须是简短、有气氛的标题，不能只是角色名，也不能写成触发条件。
+3. desc 是作者/后台用的支线情节设计：必须写具体情节变化、隐藏内幕和支线意义，不要与提示词重复。
+4. 每个 triggerGroups 条件组都必须有 hint。hint 是给玩家看的未解锁提示，必须像伏笔或隐约预兆：8-18字，不写第几章、不写角色ID、不写庇佑/磨难、不写“执行某操作得到某结果”。`;
   args.customOutline = args.customOutline
     ? `${args.customOutline}\n\n${branchRulesInstruction}`
     : branchRulesInstruction;
@@ -120,11 +122,12 @@ Output requirements:
 7. Set endingMode to ${isSingleEnding ? '"single"' : '"dual"'}; also keep left_mainline_default and right_mainline_default (0-100) for compatibility.
 8. The endings array must still output 3 items for compatibility: normal=default, good=left, bad=right. ${isSingleEnding ? 'All three must converge on the same core finale, with only route, cost, and understanding differing.' : 'All three should be coherent chapter-seven ending directions.'}
 9. Plan 6-10 branch fate points. ${isSingleEnding ? 'Single-ending stories still need branches. They must not guide toward left/right ending domains or mutually exclusive finales; they should change route, cost, clues, relationships, revealed meaning, and how naturally the same finale is reached.' : 'Split them roughly between left and right. Branch events must work with the left/right mainline math.'}
-10. A branch is an individual story event setup. name must be a short branch title such as "The Glass Debt" or "The Locked Letter"; it must never be only a character name.
+10. A branch is an individual story event setup. name must be a short branch theme such as "The Glass Debt" or "The Locked Letter"; it must never be only a character name or a trigger instruction.
 11. desc must clearly state the concrete story change, hidden implication, and why this branch matters. It must not simply repeat the hint.
-12. Put hint on each trigger condition, not on the branch itself. If a branch has multiple triggerGroups, each trigger group should have its own 4-12 English word hint.
-13. condition_char must use an existing character ID; condition_chapter must be an integer from 2 to 6; condition_action must be bless or curse. Also output triggerGroups mirroring these fields, with hint on each group.
-14. chapter titles/summaries must fit the requested narrative person and avoid forcing viewpoint shifts.
+12. Every triggerGroups item must include hint. The hint is the locked-branch teaser shown to players: 5-14 natural English words, metaphorical or layered, related to the branch consequence, but never revealing the exact trigger.
+13. Hints must not contain chapter numbers, character IDs, UI operations, "bless", "curse", or wording like "intervene on X to unlock Y".
+14. condition_char must use an existing character ID; condition_chapter must be an integer from 2 to 6; condition_action must be bless or curse. Also output triggerGroups mirroring these fields, with hint on each group.
+15. chapter titles/summaries must fit the requested narrative person and avoid forcing viewpoint shifts.
 
 Return strict JSON only. Do not include metadata. Reference chapter length: ${args.targetWordCount} words.`;
   }
@@ -151,11 +154,12 @@ ${seriesInstruction}${continuityInstruction}${continuityHardInstruction}
 7. 设定 endingMode 字段，值必须是 ${isSingleEnding ? '"single"' : '"dual"'}；同时保留 left_mainline_default 和 right_mainline_default (0-100) 以兼容旧数学机制。
 8. endings 数组仍输出 3 条以兼容旧结构：normal=结局1/default，good=结局2/left，bad=结局3/right。${isSingleEnding ? '但三条必须明显收束到同一个核心终局，只允许过程、代价、人物理解有差异。' : '三条应是逻辑严密的三种第 7 章结局走向。'}
 9. 规划 6-10 个支线命运点（branches）。${isSingleEnding ? '支线可以有倾向权重，但不得导向互斥终局；它们应改变抵达单一终局的路径、代价与伏笔解释。' : '左右各半。支线情节必须根据左/右主线做数学设定，相互影响。'}角色性格和核心主线必须在后续章节的大纲里严格体现。
-10. 每条支线必须提供 hint（8-18字），用于 UI 中的隐约提示，但不要直接暴露完整触发条件。
-11. condition_char 只能使用已创建的角色ID；condition_chapter 必须是 2 到 6 的整数；condition_action 只能是 bless 或 curse。
-12. desc 必须写清该支线发生时的具体剧情变化和隐藏内幕。
-13. name 字段只能是角色姓名，所有背景描述全部放进 desc。
-14. chapters 的 title/summary 必须与上述叙事人称相容，避免设计会迫使正文切换人称的章节视角。
+10. 每条支线的 name 必须是“支线主题”，用于未解锁时展示，例如“锁住的信”“雨夜的债”“镜后的誓言”；不能只是角色姓名，也不能写成触发条件。
+11. 每个 triggerGroups 条件组必须提供 hint（8-18字），用于 UI 中的隐约提示。hint 要像伏笔或未揭开的预兆，必须与支线后果有关，但不能直接暴露完整触发条件。
+12. hint 不得出现第几章、角色ID、庇佑、磨难、点击、选择、执行、得到、解锁等机械操作语气。
+13. condition_char 只能使用已创建的角色ID；condition_chapter 必须是 2 到 6 的整数；condition_action 只能是 bless 或 curse。
+14. desc 必须写清该支线发生时的具体剧情变化、隐藏内幕和支线意义，不能与 hint 重复。
+15. chapters 的 title/summary 必须与上述叙事人称相容，避免设计会迫使正文切换人称的章节视角。
 
 请严格按 JSON 输出，不要包含元数据。字数参考值：${args.targetWordCount}。`;
 }

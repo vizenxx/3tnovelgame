@@ -75,6 +75,19 @@ const SHARED_CARD_LEGACY_SELECT = SHARED_CARD_SELECT
   .join(',');
 const asArray = (value: any) => Array.isArray(value) ? value : [];
 const asInt = (value: any, fallback = 0) => Number.isFinite(Number(value)) ? Math.round(Number(value)) : fallback;
+const getBranchTriggerGroups = (branch: any) => {
+  const groups = asArray(branch?.triggerGroups || branch?.trigger_groups);
+  if (groups.length > 0) return groups;
+  return branch?.trigger ? [branch.trigger] : [];
+};
+const getBranchPublicHint = (branch: any) => {
+  const direct = String(branch?.hint || branch?.publicHint || branch?.teaser || '').trim();
+  if (direct) return direct;
+  const groupHint = getBranchTriggerGroups(branch)
+    .map((group: any) => String(group?.hint || group?.publicHint || group?.teaser || '').trim())
+    .find(Boolean);
+  return groupHint || '';
+};
 const isMissingFateRecordColumn = (error: unknown) => /fate_record|schema cache|column/i.test(String((error as any)?.message || error || ''));
 const guestName = (uid: string) => `游客+${String(uid || '').slice(0, 6).toUpperCase()}`;
 
@@ -1410,19 +1423,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         { story_id: storyId, id: 'right', chapter_num: 7, title: '右域默认结局', text: asArray(bp.endings).find((ending) => ending.type === 'bad' || ending.type === 'right')?.text || '' },
       ];
       await runAdaptStage('create-endings', () => supabaseUpsert('story_endings', endingRows, 'story_id,id'));
-      const branches = asArray(bp.branches).map((branch) => ({
-        story_id: storyId,
-        side: branch.side === 'right' ? 'right' : 'left',
-        tier: branch.score >= 5 ? 'large' : branch.score >= 3 ? 'large' : branch.score >= 2 ? 'medium' : 'small',
-        name: branch.name || '未命名支线',
-        hint: '',
-        description: branch.desc || branch.sceneText || '',
-        trigger: branch.trigger || { type: 'single', single: { chapterNum: 2, charId: characters[0]?.id || 'c1', action: 'bless' } },
-        trigger_groups: branch.triggerGroups || (branch.trigger ? [branch.trigger] : []),
-        common: false,
-        inject: { ...(branch.inject || { mustHappen: [], mustReveal: [], mustChange: [] }), hidden: Boolean(branch.is_hidden || branch.hidden || branch.score >= 5) },
-        scene_text: branch.sceneText || branch.desc || '',
-      }));
+      const branches = asArray(bp.branches).map((branch) => {
+        const trigger = branch.trigger || { type: 'single', single: { chapterNum: 2, charId: characters[0]?.id || 'c1', action: 'bless' } };
+        const triggerGroups = getBranchTriggerGroups({ ...branch, trigger });
+        return {
+          story_id: storyId,
+          side: branch.side === 'right' ? 'right' : 'left',
+          tier: branch.score >= 5 ? 'large' : branch.score >= 3 ? 'large' : branch.score >= 2 ? 'medium' : 'small',
+          name: branch.name || branch.theme || '未命名支线',
+          hint: getBranchPublicHint({ ...branch, triggerGroups }),
+          description: branch.desc || branch.description || branch.sceneText || '',
+          trigger,
+          trigger_groups: triggerGroups,
+          common: false,
+          inject: { ...(branch.inject || { mustHappen: [], mustReveal: [], mustChange: [] }), hidden: Boolean(branch.is_hidden || branch.hidden || branch.score >= 5) },
+          scene_text: branch.sceneText || branch.desc || branch.description || '',
+        };
+      });
       if (branches.length) await runAdaptStage('create-branches', () => supabaseInsert('story_branches', branches));
       return res.status(200).json(storyId);
     }
@@ -1520,11 +1537,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         story_id: body.storyId,
         side: branch.side || 'left',
         tier,
-        name: branch.name || '',
-        hint: '',
+        name: branch.name || branch.theme || '',
+        hint: getBranchPublicHint(branch),
         description: branch.desc || '',
         trigger: branch.trigger || {},
-        trigger_groups: asArray(branch.triggerGroups),
+        trigger_groups: getBranchTriggerGroups(branch),
         common: Boolean(branch.common),
         inject: { ...(branch.inject || { mustHappen: [], mustReveal: [], mustChange: [] }), hidden: isHidden },
         scene_text: branch.sceneText || '',
@@ -1543,11 +1560,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         story_id: body.storyId,
         side: branch.side || 'left',
         tier,
-        name: branch.name || '',
-        hint: '',
+        name: branch.name || branch.theme || '',
+        hint: getBranchPublicHint(branch),
         description: branch.desc || '',
         trigger: branch.trigger || {},
-        trigger_groups: asArray(branch.triggerGroups),
+        trigger_groups: getBranchTriggerGroups(branch),
         common: Boolean(branch.common),
         inject: { ...(branch.inject || { mustHappen: [], mustReveal: [], mustChange: [] }), hidden: isHidden },
         scene_text: branch.sceneText || '',
