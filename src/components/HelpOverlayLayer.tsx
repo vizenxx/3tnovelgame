@@ -20,6 +20,7 @@ export function HelpOverlayLayer({ ctx }: { ctx: any }) {
 const renderTourOverlay = () => (
   <AuthoringTourOverlay
     tourStep={authoringCartridge ? tourStep : null}
+    tr={tr}
     setTourStep={setTourStep}
     setAuthoringTab={setAuthoringTab}
     showMessage={showError}

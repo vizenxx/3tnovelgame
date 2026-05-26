@@ -116,21 +116,21 @@ export const ArchiveView = ({
       <div key={story.id} className="app-card rounded-[1.5rem] p-5 transition-all duration-150">
         <div className="mb-2 flex items-start justify-between gap-2">
           <div className="line-clamp-2 text-sm font-black text-app-text leading-snug">{formatBookTitle(story.title)}</div>
-          <div className="shrink-0 rounded-full bg-indigo-500/15 px-2 py-1 text-[10px] font-black text-indigo-300">收藏原作</div>
+          <div className="shrink-0 rounded-full bg-indigo-500/15 px-2 py-1 text-[10px] font-black text-indigo-300">{isEnglish ? 'Original' : '收藏原作'}</div>
         </div>
         <div className="mb-3 text-[11px] font-bold text-app-muted">
-          <AuthorNameButton prefix="原作者：" authorId={story.originalAuthorId || story.sourceStoryId || story.authorId} authorName={getOriginalAuthorName(story)} />
+          <AuthorNameButton prefix={isEnglish ? 'Original: ' : '原作者：'} authorId={story.originalAuthorId || story.sourceStoryId || story.authorId} authorName={getOriginalAuthorName(story)} />
         </div>
-        <div className="mb-4 line-clamp-3 text-xs leading-relaxed text-app-muted">{story.main_axis || '暂无主轴摘要。'}</div>
+        <div className="mb-4 line-clamp-3 text-xs leading-relaxed text-app-muted">{story.main_axis || (isEnglish ? 'No premise summary yet.' : '暂无主轴摘要。')}</div>
 
         {!isChoosingThis ? (
           <button type="button" onClick={() => setArchiveChoiceStoryId(story.id)} className={semanticButtonClass('secondary', { compact: true })}>
             <BookOpen className="h-4 w-4" />
-            前往原作
+            {isEnglish ? 'Open original' : '前往原作'}
           </button>
         ) : (
           <div className="space-y-2 rounded-2xl border border-indigo-500/30 bg-indigo-950/40 p-3">
-            <div className="mb-2 text-[11px] font-black uppercase tracking-[0.18em] text-indigo-400">选择进入方式</div>
+            <div className="mb-2 text-[11px] font-black uppercase tracking-[0.18em] text-indigo-400">{isEnglish ? 'Choose entry' : '选择进入方式'}</div>
             <button
               type="button"
               onClick={() => {
@@ -141,8 +141,8 @@ export const ArchiveView = ({
             >
               <Zap className="h-4 w-4 shrink-0" />
               <div>
-                <div>干涉命运</div>
-                <div className="text-[10px] font-normal text-indigo-200/80">进入游玩页，亲手改写这段故事</div>
+                <div>{isEnglish ? 'Interfere' : '干涉命运'}</div>
+                <div className="text-[10px] font-normal text-indigo-200/80">{isEnglish ? 'Enter play mode and reshape the story' : '进入游玩页，亲手改写这段故事'}</div>
               </div>
             </button>
             <button
@@ -155,12 +155,12 @@ export const ArchiveView = ({
             >
               <BookOpen className="h-4 w-4 shrink-0" />
               <div>
-                <div>观看命运</div>
-                <div className="text-[10px] font-normal text-app-muted">以只读方式阅读原版故事</div>
+                <div>{isEnglish ? 'Read only' : '观看命运'}</div>
+                <div className="text-[10px] font-normal text-app-muted">{isEnglish ? 'Read the original story without playing' : '以只读方式阅读原版故事'}</div>
               </div>
             </button>
             <button type="button" onClick={() => setArchiveChoiceStoryId(null)} className="w-full rounded-xl px-3 py-1.5 text-center text-xs font-bold text-app-muted transition-colors hover:text-app-text">
-              取消
+              {isEnglish ? 'Cancel' : '取消'}
             </button>
           </div>
         )}
@@ -168,11 +168,11 @@ export const ArchiveView = ({
         <div className="mt-3 flex gap-2">
           <button type="button" disabled={archiveUpdatingIds[story.id]} onClick={() => void onDeleteArchiveStory(story)} className={semanticButtonClass('danger', { compact: true })}>
             <Trash2 className="h-4 w-4" />
-            取消收藏
+            {isEnglish ? 'Unsave' : '取消收藏'}
           </button>
           <button type="button" disabled={isSharing || archiveUpdatingIds[story.id]} onClick={() => void onShareArchiveStory(story)} className={semanticButtonClass('ghost', { compact: true })}>
             {isSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
-            分享原作
+            {isEnglish ? 'Share original' : '分享原作'}
           </button>
         </div>
       </div>
@@ -188,11 +188,11 @@ export const ArchiveView = ({
             value={story.visibility || 'unlisted'}
             disabled={archiveUpdatingIds[story.id]}
             onChange={(event) => void onArchiveVisibilityChange(story, event.target.value as 'private' | 'unlisted')}
-            title="点击切换可见范围"
+            title={isEnglish ? 'Change visibility' : '点击切换可见范围'}
             className={`block w-full appearance-none rounded-full border px-2.5 py-1 pr-6 text-center text-[10px] font-black outline-none transition-colors ${visibilityClass(story.visibility)}`}
           >
-            <option value="unlisted" className="bg-app-surface text-app-text">非公开链接</option>
-            <option value="private" className="bg-app-surface text-app-text">私人</option>
+            <option value="unlisted" className="bg-app-surface text-app-text">{isEnglish ? 'Unlisted' : '非公开链接'}</option>
+            <option value="private" className="bg-app-surface text-app-text">{isEnglish ? 'Private' : '私人'}</option>
           </select>
           <div className="pointer-events-none absolute inset-y-0 right-1 flex items-center px-1 text-inherit opacity-70">
             <svg className="h-3 w-3 fill-current" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" /></svg>
@@ -200,22 +200,22 @@ export const ArchiveView = ({
         </div>
       </div>
       <div className="mb-3 grid gap-1 text-[11px] font-bold text-app-muted">
-        <div><AuthorNameButton prefix="原作者：" authorId={story.originalAuthorId || story.sourceStoryId || story.authorId} authorName={getOriginalAuthorName(story)} /></div>
-        {getIntervenerName(story) && <div>干涉者：{getIntervenerName(story)}</div>}
+        <div><AuthorNameButton prefix={isEnglish ? 'Original: ' : '原作者：'} authorId={story.originalAuthorId || story.sourceStoryId || story.authorId} authorName={getOriginalAuthorName(story)} /></div>
+        {getIntervenerName(story) && <div>{isEnglish ? 'Intervener: ' : '干涉者：'}{getIntervenerName(story)}</div>}
       </div>
-      <div className="line-clamp-3 flex-1 text-xs leading-relaxed text-app-muted">{story.main_axis || '暂无主轴摘要。'}</div>
+      <div className="line-clamp-3 flex-1 text-xs leading-relaxed text-app-muted">{story.main_axis || (isEnglish ? 'No premise summary yet.' : '暂无主轴摘要。')}</div>
       <div className="mt-4 flex gap-1.5 sm:gap-2">
         <button type="button" onClick={() => void onOpenReadonlyStory(story.id, { allowBack: true, returnTarget: 'ARCHIVE' })} className={`${semanticButtonClass('secondary', { compact: true })} flex-1 justify-center whitespace-nowrap px-0.5 text-[10px] tracking-tighter sm:px-2 sm:text-xs`}>
           <BookOpen className="mr-1 h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
-          观看命运
+          {isEnglish ? 'Read' : '观看命运'}
         </button>
         <button type="button" disabled={isSharing || archiveUpdatingIds[story.id]} onClick={() => void onShareArchiveStory(story)} className={`${semanticButtonClass('secondary', { compact: true })} flex-1 justify-center whitespace-nowrap px-0.5 text-[10px] tracking-tighter sm:px-2 sm:text-xs`}>
           {isSharing ? <Loader2 className="mr-1 h-3.5 w-3.5 shrink-0 animate-spin sm:h-4 sm:w-4" /> : <ExternalLink className="mr-1 h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />}
-          分享
+          {isEnglish ? 'Share' : '分享'}
         </button>
         <button type="button" disabled={archiveUpdatingIds[story.id]} onClick={() => void onDeleteArchiveStory(story)} className={`${semanticButtonClass('danger', { compact: true })} flex-1 justify-center whitespace-nowrap px-0.5 text-[10px] tracking-tighter sm:px-2 sm:text-xs`}>
           <Trash2 className="mr-1 h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
-          删除
+          {isEnglish ? 'Delete' : '删除'}
         </button>
       </div>
     </div>
@@ -225,9 +225,9 @@ export const ArchiveView = ({
     <div key={author.authorId} className="app-card flex flex-col rounded-[1.5rem] p-5">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-xs font-black uppercase tracking-[0.18em] text-indigo-300">追踪作者</div>
-          <div className="mt-1 truncate text-lg font-black text-app-text">{author.authorName || `游客+${shortUserId(author.authorId)}`}</div>
-          <div className="mt-1 text-[11px] font-bold text-app-muted">追踪于 {new Date(author.followedAt || Date.now()).toLocaleDateString()}</div>
+          <div className="text-xs font-black uppercase tracking-[0.18em] text-indigo-300">{isEnglish ? 'Following' : '追踪作者'}</div>
+          <div className="mt-1 truncate text-lg font-black text-app-text">{author.authorName || `${isEnglish ? 'Guest' : '游客'}+${shortUserId(author.authorId)}`}</div>
+          <div className="mt-1 text-[11px] font-bold text-app-muted">{isEnglish ? 'Followed on ' : '追踪于 '}{new Date(author.followedAt || Date.now()).toLocaleDateString()}</div>
         </div>
         <div className="rounded-full border border-indigo-400/20 bg-indigo-500/10 p-2 text-indigo-200">
           <Bell className="h-4 w-4" />
@@ -236,11 +236,11 @@ export const ArchiveView = ({
       <div className="mt-auto grid grid-cols-2 gap-2">
         <button type="button" onClick={() => onOpenAuthorProfile(author.authorId, author.authorName)} className={`${semanticButtonClass('secondary', { compact: true })} min-w-0 justify-center px-2 text-xs`}>
           <BookOpen className="h-4 w-4" />
-          查看作者作品
+          {isEnglish ? 'Works' : '查看作者作品'}
         </button>
         <button type="button" onClick={() => void onUnfollowAuthor(author.authorId)} className={`${semanticButtonClass('ghost', { compact: true })} min-w-0 justify-center px-2 text-xs`}>
           <X className="h-4 w-4" />
-          取消追踪
+          {isEnglish ? 'Unfollow' : '取消追踪'}
         </button>
       </div>
     </div>

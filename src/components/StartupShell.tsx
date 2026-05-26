@@ -46,10 +46,12 @@ export const StartupShell = ({
   message,
   title = 'Fate Interference',
   subtitle = 'Linking the fate archive. Please wait.',
+  tagline = 'Shareable · Rewritable interactive story engine',
 }: {
   message: string;
   title?: string;
   subtitle?: string;
+  tagline?: string;
 }) => (
   <div className="app-boot-screen">
     <div className="app-boot-cover-main">
@@ -83,7 +85,7 @@ export const StartupShell = ({
       <div className="app-boot-text">
         <div className="app-boot-label">3T Novelgame</div>
         <div className="app-boot-title">{title}</div>
-        <div className="app-boot-tagline">可分享 · 可改写的互动故事引擎</div>
+        <div className="app-boot-tagline">{tagline}</div>
       </div>
     </div>
     <div className="app-boot-progress-wrap">

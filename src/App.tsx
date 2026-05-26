@@ -1921,13 +1921,13 @@ export default function App() {
     setAuthoringFindReplaceOpen(false);
     setAuthoringFindMatchIndex(0);
     window.setTimeout(() => scrollToAuthoringFindMatch(matches[0]), 0);
-    if (matches.length === 0) showError('没有找到匹配内容。');
+    if (matches.length === 0) showError(tr('没有找到匹配内容。', 'No matches found.'));
   };
 
   const moveAuthoringFindMatch = (direction: 1 | -1) => {
     const matches = getAuthoringFindMatches();
     if (matches.length === 0) {
-      showError('没有找到匹配内容。');
+      showError(tr('没有找到匹配内容。', 'No matches found.'));
       return;
     }
     const nextIndex = (authoringFindMatchIndex + direction + matches.length) % matches.length;
@@ -2024,7 +2024,7 @@ export default function App() {
       return next;
     });
     setAuthoringDirty(true);
-    showError('替换完成！');
+    showError(tr('替换完成！', 'Replace complete.'));
     setAuthoringFindReplaceOpen(false);
   };
   const [appTheme, setAppTheme] = useState<AppTheme>(() => (
@@ -2425,10 +2425,10 @@ export default function App() {
     } catch (error: any) {
       console.error(error);
       if (error?.name === 'AbortError') {
-        showError('已取消分享。');
+        showError(tr('已取消分享。', 'Share canceled.'));
         return;
       }
-      showError(error?.message || '分享失败。');
+      showError(error?.message || tr('分享失败。', 'Share failed.'));
     } finally {
       setIsSharing(false);
       setGlobalLoadingMessage(null);
@@ -2463,10 +2463,10 @@ export default function App() {
     } catch (error: any) {
       console.error(error);
       if (error?.name === 'AbortError') {
-        showError('已取消分享。');
+        showError(tr('已取消分享。', 'Share canceled.'));
         return;
       }
-      showError(error?.message || '分享作品失败。');
+      showError(error?.message || tr('分享作品失败。', 'Failed to share story.'));
     } finally {
       setIsSharing(false);
       setGlobalLoadingMessage(null);
@@ -2810,7 +2810,7 @@ export default function App() {
       setShowLeaveGameModal(false);
     } catch (e) {
       console.error(e);
-      showError("保存进度失败");
+      showError(tr('保存进度失败', 'Failed to save progress.'));
     } finally {
       setGlobalLoadingMessage(null);
       setAuthoringSaving(false);
@@ -2850,7 +2850,7 @@ export default function App() {
       setShowLeaveGameModal(false);
     } catch (e) {
       console.error(e);
-      showError("收藏命运失败");
+      showError(tr('收藏命运失败', 'Failed to collect fate.'));
     } finally {
       setGlobalLoadingMessage(null);
       setAuthoringSaving(false);
@@ -2895,7 +2895,7 @@ export default function App() {
     };
     console.error('Firestore Error: ', JSON.stringify(errInfo));
     setFirestoreError(errInfo);
-    showError("数据库操作失败，请检查权限或网络。");
+    showError(tr('数据库操作失败，请检查权限或网络。', 'Database operation failed. Check permissions or network.'));
   };
 
   const syncCurrentAuthorName = async (targetUser: FirebaseUser) => {
@@ -3814,7 +3814,7 @@ export default function App() {
       setFollowedAuthors(rows || []);
     } catch (error) {
       console.warn('followed authors sync failed:', error);
-      showError('追踪作者列表同步失败，请稍后再试。');
+      showError(tr('追踪作者列表同步失败，请稍后再试。', 'Failed to sync followed authors. Please try again later.'));
     } finally {
       setFollowedAuthorsLoading(false);
     }
@@ -4092,7 +4092,7 @@ export default function App() {
       }
       const record = await getSharedStoryRecord(db as any, storyId, user?.uid);
       if (!record) {
-        showError('未找到这份故事记录，或当前账号没有访问权限。');
+        showError(tr('未找到这份故事记录，或当前账号没有访问权限。', 'This story record was not found, or the current account cannot access it.'));
         return;
       }
       await cacheSharedStory(storyId, { meta: record.meta, chapters: record.chapters as any });
@@ -4104,7 +4104,7 @@ export default function App() {
       window.history.replaceState({ internalReadonly: true }, '', nextUrl);
     } catch (error) {
       console.error(error);
-      showError('载入故事记录失败。');
+      showError(tr('载入故事记录失败。', 'Failed to load story record.'));
     } finally {
       setIsLoadingStories(false);
       setGlobalLoadingMessage(null);
@@ -4127,7 +4127,7 @@ export default function App() {
     if (!readonlyStoryData?.meta || !user || !db) return;
     const originalStoryId = readonlyStoryData.meta?.sourceStoryId;
     if (!originalStoryId) {
-      showError('该分享记录未关联原始故事，无法直接干涉。');
+      showError(tr('该分享记录未关联原始故事，无法直接干涉。', 'This shared record is not linked to an original story, so it cannot be interfered with directly.'));
       return;
     }
     setReadonlyStoryData(null);
@@ -4139,7 +4139,7 @@ export default function App() {
   const handleAdaptFromReadonly = async () => {
     if (!readonlyStoryData?.meta || !readonlyStoryData?.chapters || !user || !db) return;
     if (!canAdaptReadonlyStory(readonlyStoryData.meta)) {
-      showError('原作者尚未开放这篇作品的一键改编权限。');
+      showError(tr('原作者尚未开放这篇作品的一键改编权限。', 'The original creator has not enabled one-click adaptation for this story.'));
       return;
     }
     try {
@@ -4180,13 +4180,13 @@ export default function App() {
       await refreshStories({ force: true });
       await selectAuthoringStory(storyId);
       navigateTo('AUTHORING');
-      showError('已完成一键改编，正在进入作者编辑界面。');
+      showError(tr('已完成一键改编，正在进入作者编辑界面。', 'Adaptation created. Opening the creator editor.'));
       setReadonlyStoryData(null);
       setReadonlyCanGoBack(false);
       window.history.replaceState({}, '', window.location.pathname);
     } catch (error) {
       console.error(error);
-      showError(`一键改编失败：${error instanceof Error ? error.message : '请稍后再试。'}`);
+      showError(`${tr('一键改编失败', 'Adaptation failed')}: ${error instanceof Error ? error.message : tr('请稍后再试。', 'Please try again later.')}`);
     } finally {
       setIsLoadingStories(false);
     }
@@ -4195,7 +4195,7 @@ export default function App() {
   const handleArchiveVisibilityChange = async (story: any, visibility: 'private' | 'unlisted') => {
     if (!db || !user || !story?.id) return;
     if (story.archiveKind === 'favorite') {
-      showError('收藏原作的公开状态由原作者决定。');
+      showError(tr('收藏原作的公开状态由原作者决定。', 'The original creator controls visibility for saved original works.'));
       return;
     }
     try {
@@ -4212,7 +4212,7 @@ export default function App() {
       }
     } catch (error) {
       console.error(error);
-      showError('更新公开设置失败，请稍后再试。');
+      showError(tr('更新公开设置失败，请稍后再试。', 'Failed to update visibility. Please try again later.'));
     } finally {
       setArchiveUpdatingIds((prev) => ({ ...prev, [story.id]: false }));
     }
@@ -4222,8 +4222,11 @@ export default function App() {
     if (!db || !user || !story?.id) return;
     setConfirmationModal({
       isOpen: true,
-      title: '删除馆藏记录？',
-      message: `这只会删除当前账号馆藏里的《${stripBookTitle(story.title || '未命名故事')}》记录，不会删除原作者的作品，也不会影响其他人已拥有的分享链接记录。此操作无法撤销。`,
+      title: tr('删除馆藏记录？', 'Delete archive record?'),
+      message: tr(
+        `这只会删除当前账号馆藏里的《${stripBookTitle(story.title || '未命名故事')}》记录，不会删除原作者的作品，也不会影响其他人已拥有的分享链接记录。此操作无法撤销。`,
+        `This only removes “${stripBookTitle(story.title || 'Untitled story')}” from the current archive. It will not delete the original creator's work or affect share links already owned by others. This cannot be undone.`
+      ),
       onConfirm: async () => {
         try {
           setArchiveUpdatingIds((prev) => ({ ...prev, [story.id]: true }));
@@ -4233,10 +4236,10 @@ export default function App() {
             await deleteSharedStoryRecord(db as any, story.id, user.uid);
           }
           setMySharedStories((prev) => prev.filter((item: any) => item.id !== story.id));
-          showError('馆藏记录已删除。');
+          showError(tr('馆藏记录已删除。', 'Archive record deleted.'));
         } catch (error: any) {
           console.error(error);
-          showError(error?.message || '删除馆藏记录失败。');
+          showError(error?.message || tr('删除馆藏记录失败。', 'Failed to delete archive record.'));
         } finally {
           setArchiveUpdatingIds((prev) => ({ ...prev, [story.id]: false }));
         }
@@ -4265,10 +4268,10 @@ export default function App() {
     } catch (error: any) {
       console.error(error);
       if (error?.name === 'AbortError') {
-        showError('已取消分享。');
+        showError(tr('已取消分享。', 'Share canceled.'));
         return;
       }
-      showError(error?.message || '分享失败。');
+      showError(error?.message || tr('分享失败。', 'Share failed.'));
     } finally {
       setIsSharing(false);
       setGlobalLoadingMessage(null);
@@ -4282,8 +4285,11 @@ export default function App() {
     if (!db || !user || !story || !archiveId || story.meta?.authorId !== user.uid) return;
     setConfirmationModal({
       isOpen: true,
-      title: '删除馆藏记录？',
-      message: `这会删除当前账号馆藏里的《${stripBookTitle(story.meta?.title || '未命名故事')}》记录。原作者作品不会被删除，但这条记录的分享链接将无法继续访问。此操作无法撤销。`,
+      title: tr('删除馆藏记录？', 'Delete archive record?'),
+      message: tr(
+        `这会删除当前账号馆藏里的《${stripBookTitle(story.meta?.title || '未命名故事')}》记录。原作者作品不会被删除，但这条记录的分享链接将无法继续访问。此操作无法撤销。`,
+        `This removes “${stripBookTitle(story.meta?.title || 'Untitled story')}” from the current archive. The original story will not be deleted, but this record's share link will stop working. This cannot be undone.`
+      ),
       onConfirm: async () => {
         try {
           setArchiveUpdatingIds((prev) => ({ ...prev, [archiveId]: true }));
@@ -4293,10 +4299,10 @@ export default function App() {
           setReadonlyCanGoBack(false);
           window.history.replaceState({}, '', window.location.pathname);
           goBack(readonlyReturnTarget === 'ARCHIVE' ? 'ARCHIVE' : 'STORY_SELECT');
-          showError('馆藏记录已删除。');
+          showError(tr('馆藏记录已删除。', 'Archive record deleted.'));
         } catch (error: any) {
           console.error(error);
-          showError(error?.message || '删除馆藏记录失败。');
+          showError(error?.message || tr('删除馆藏记录失败。', 'Failed to delete archive record.'));
         } finally {
           setArchiveUpdatingIds((prev) => ({ ...prev, [archiveId]: false }));
         }
@@ -4359,7 +4365,7 @@ export default function App() {
     } catch (error: any) {
       const code = error?.code || '';
       if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
-        showError('Google 登录窗口已关闭，请重新操作。');
+        showError(tr('Google 登录窗口已关闭，请重新操作。', 'Google sign-in was closed. Please try again.'));
         return;
       }
       if (code.includes('popup') || code.includes('blocked')) {
@@ -4375,7 +4381,7 @@ export default function App() {
         return;
       }
       console.error(error);
-      showError(error?.message || 'Google 登录失败，请重试。');
+      showError(error?.message || tr('Google 登录失败，请重试。', 'Google sign-in failed. Please try again.'));
     } finally {
       setIsLoggingIn(false);
     }
@@ -4383,7 +4389,7 @@ export default function App() {
 
   const handleEmailPasswordLogin = async () => {
     if (!auth || !authEmail.trim() || authPassword.length < 6) {
-      showError('请输入有效邮箱和至少 6 位密码。');
+      showError(tr('请输入有效邮箱和至少 6 位密码。', 'Enter a valid email and a password with at least 6 characters.'));
       return;
     }
     setIsLoggingIn(true);
@@ -4394,7 +4400,7 @@ export default function App() {
         const credential = EmailAuthProvider.credential(email, authPassword);
         const result = await linkWithCredential(currentUser, credential);
         await syncCurrentAuthorName(result.user);
-        showError('游客账号已注册为正式用户，当前记录已保留。');
+        showError(tr('游客账号已注册为正式用户，当前记录已保留。', 'Guest account upgraded. Current records were kept.'));
         return;
       }
       await signInWithEmailAndPassword(auth, email, authPassword);
@@ -4408,7 +4414,7 @@ export default function App() {
         return;
       }
       console.error(error);
-      showError(error?.message || '登录失败，请重试。');
+      showError(error?.message || tr('登录失败，请重试。', 'Sign-in failed. Please try again.'));
     } finally {
       setIsLoggingIn(false);
     }
@@ -4416,15 +4422,15 @@ export default function App() {
 
   const handlePasswordReset = async () => {
     if (!auth || !authEmail.trim()) {
-      showError('请先输入邮箱。');
+      showError(tr('请先输入邮箱。', 'Enter an email first.'));
       return;
     }
     try {
       await sendPasswordResetEmail(auth, authEmail.trim());
-      showError('密码重设邮件已发送。');
+      showError(tr('密码重设邮件已发送。', 'Password reset email sent.'));
     } catch (error: any) {
       console.error(error);
-      showError(error?.message || '无法发送重设邮件。');
+      showError(error?.message || tr('无法发送重设邮件。', 'Unable to send reset email.'));
     }
   };
 
@@ -4435,7 +4441,7 @@ export default function App() {
       await signInAnonymously(auth);
     } catch (error: any) {
       console.error(error);
-      showError(error?.message || '游客登录失败，请重试。');
+      showError(error?.message || tr('游客登录失败，请重试。', 'Guest sign-in failed. Please try again.'));
     } finally {
       setIsLoggingIn(false);
     }
@@ -4453,7 +4459,7 @@ export default function App() {
       }
     }).catch((error) => {
       console.warn('Google redirect callback failed:', error);
-      showError('Google 登录回调失败，请重试。');
+      showError(tr('Google 登录回调失败，请重试。', 'Google sign-in callback failed. Please try again.'));
     });
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
@@ -4488,7 +4494,7 @@ export default function App() {
 
   const handleInstallApp = async () => {
     if (isStandaloneMode) {
-      showError('当前已经在 App 模式中使用。');
+      showError(tr('当前已经在 App 模式中使用。', 'Already running in app mode.'));
       return;
     }
     if (isIosDevice()) {
@@ -4496,7 +4502,7 @@ export default function App() {
       return;
     }
     if (!installPromptEvent) {
-      showError('如果浏览器没有弹出安装提示，请从浏览器菜单选择“安装应用”或“添加到主屏幕”。');
+      showError(tr('如果浏览器没有弹出安装提示，请从浏览器菜单选择“安装应用”或“添加到主屏幕”。', 'If no install prompt appears, choose “Install app” or “Add to Home Screen” from the browser menu.'));
       return;
     }
     await installPromptEvent.prompt();
@@ -4504,13 +4510,13 @@ export default function App() {
     if (choice?.outcome === 'accepted') {
       setInstallPromptEvent(null);
       setIsStandaloneMode(true);
-      showError('已开始安装 App。');
+      showError(tr('已开始安装 App。', 'App installation started.'));
     }
   };
 
   const copySharePayload = async (payload: ShareData) => {
     const copied = await writeClipboardText(buildShareClipboardText(String(payload.text || ''), String(payload.url || '')));
-    showError(copied ? '已复制分享内容到剪贴板。' : '分享内容已准备好，请手动复制浏览器地址。');
+    showError(copied ? tr('已复制分享内容到剪贴板。', 'Share content copied to clipboard.') : tr('分享内容已准备好，请手动复制浏览器地址。', 'Share content is ready. Please copy the browser address manually.'));
     return copied;
   };
 
@@ -4519,14 +4525,14 @@ export default function App() {
       return copySharePayload(payload);
     }
     await navigator.share(payload);
-    showError('已打开系统分享。');
+    showError(tr('已打开系统分享。', 'System share sheet opened.'));
     return true;
   };
 
   const deliverPreparedShare = async (payload: ShareData): Promise<boolean> => {
     if (!navigator.share) {
       const copied = await writeClipboardText(buildShareClipboardText(String(payload.text || ''), String(payload.url || '')));
-      showError(copied ? '已复制分享内容到剪贴板。' : '分享链接已准备好，请手动复制浏览器地址。');
+      showError(copied ? tr('已复制分享内容到剪贴板。', 'Share content copied to clipboard.') : tr('分享链接已准备好，请手动复制浏览器地址。', 'Share link is ready. Please copy the browser address manually.'));
       return Boolean(copied);
     }
     try {
@@ -4537,12 +4543,12 @@ export default function App() {
       return shared;
     } catch (error: any) {
       if (error?.name === 'AbortError') {
-        showError('已取消分享。');
+        showError(tr('已取消分享。', 'Share canceled.'));
         return false;
       }
       const copied = await writeClipboardText(buildShareClipboardText(String(payload.text || ''), String(payload.url || '')));
       if (copied) {
-        showError('系统分享未能打开，但分享内容已复制，可直接粘贴发送。');
+        showError(tr('系统分享未能打开，但分享内容已复制，可直接粘贴发送。', 'System sharing did not open, but the share content was copied.'));
         return true;
       }
       throw error;
@@ -4568,10 +4574,10 @@ export default function App() {
     } catch (error: any) {
       console.error(error);
       if (error?.name === 'AbortError') {
-        showError('已取消分享。');
+        showError(tr('已取消分享。', 'Share canceled.'));
         return;
       }
-      showError(error?.message || '分享失败。');
+      showError(error?.message || tr('分享失败。', 'Share failed.'));
     } finally {
       setIsSharing(false);
       setGlobalLoadingMessage(null);
@@ -4704,7 +4710,7 @@ export default function App() {
       console.error(error);
       setIsSessionHydrated(true);
       resetToHome();
-      showError('同步会话失败，请检查登录状态或服务器权限配置后重试。');
+      showError(tr('同步会话失败，请检查登录状态或服务器权限配置后重试。', 'Session sync failed. Check sign-in status or server permissions, then try again.'));
     });
 
     return () => {
@@ -4767,7 +4773,7 @@ export default function App() {
         navigateTo('READONLY_STORY', { replace: true, reset: !(Boolean(document.referrer) && new URL(document.referrer).origin === window.location.origin) });
       })
       .catch(() => {
-        showError('加载分享故事失败。');
+        showError(tr('加载分享故事失败。', 'Failed to load shared story.'));
       });
   }, [db, user, isSessionHydrated]);
 
@@ -4800,7 +4806,7 @@ export default function App() {
       await resetGame();
     } catch (e) {
       console.error(e);
-      showError("保存进度失败");
+      showError(tr('保存进度失败', 'Failed to save progress.'));
       setShowLeaveGameModal(false);
     } finally {
       setGlobalLoadingMessage(null);
@@ -4815,17 +4821,17 @@ export default function App() {
       setGlobalLoadingDetail(isEnglish ? 'Checking whether the current story differs from the original. Only changed fate lines are saved as records.' : '正在确认当前故事是否与原作相同；只有变化后的命运线才会作为收藏命运记录。');
       if (activeStoryId && currentRunMatchesOriginal()) {
         await favoriteStory(db as any, activeStoryId, user.uid);
-        showError('原作已加入馆藏，不会重复收藏一份相同文本。');
+        showError(tr('原作已加入馆藏，不会重复收藏一份相同文本。', 'The original story is already in the archive, so the same text will not be saved again.'));
       } else {
         const { shareId, sharedRecord, cleanChapters } = await createCurrentStorySnapshot('unlisted', 'saved_run');
         cacheSharedSnapshotAfterCreate(shareId, sharedRecord, cleanChapters);
-        showError('这段命运已加入收藏命运（非公开链接）。');
+        showError(tr('这段命运已加入收藏命运（非公开链接）。', 'This fate line has been added to Fate Archive as an unlisted link.'));
       }
       await resetGame();
       return;
     } catch (e) {
       console.error(e);
-      showError("收藏命运失败");
+      showError(tr('收藏命运失败', 'Failed to collect fate.'));
       setShowLeaveGameModal(false);
     } finally {
       setGlobalLoadingMessage(null);
@@ -4868,15 +4874,15 @@ export default function App() {
 
   const handleAdaptCurrentStory = async () => {
     if (!user) {
-      showError('请先登录，再进行一键改编。');
+      showError(tr('请先登录，再进行一键改编。', 'Please sign in before using one-click adaptation.'));
       return;
     }
     if (!db || !blueprint) {
-      showError('当前没有可改编的故事。');
+      showError(tr('当前没有可改编的故事。', 'No adaptable story is available.'));
       return;
     }
     if (!canAdaptCurrentStory()) {
-      showError('原作者尚未开放这篇作品的一键改编权限。');
+      showError(tr('原作者尚未开放这篇作品的一键改编权限。', 'The original creator has not enabled one-click adaptation for this story.'));
       return;
     }
     try {
@@ -4913,10 +4919,10 @@ export default function App() {
       await refreshStories({ force: true });
       await selectAuthoringStory(storyId);
       navigateTo('AUTHORING');
-      showError('已完成一键改编，正在进入作者编辑界面。');
+      showError(tr('已完成一键改编，正在进入作者编辑界面。', 'Adaptation created. Opening the creator editor.'));
     } catch (error) {
       console.error(error);
-      showError(`一键改编失败：${error instanceof Error ? error.message : '请稍后再试。'}`);
+      showError(`${tr('一键改编失败', 'Adaptation failed')}: ${error instanceof Error ? error.message : tr('请稍后再试。', 'Please try again later.')}`);
     } finally {
       setIsLoadingStories(false);
     }
@@ -5007,7 +5013,7 @@ export default function App() {
     setNarrativePerson(template.person);
     setQuickEndingMode(template.endingMode);
     setQuickEndingBias(normalizeEndingBias(template.endingBias));
-    showError(`已套用「${template.label}」模板，可继续微调。`);
+    showError(tr(`已套用「${template.label}」模板，可继续微调。`, `“${template.label}” template applied. Fine-tune as needed.`));
   };
 
   const refreshNotificationCenter = async () => {
@@ -5050,7 +5056,7 @@ export default function App() {
       setNotificationItems((prev) => prev.map((item) => ({ ...item, readAt: item.readAt || readAt })));
     } catch (error) {
       console.warn('mark notifications read failed:', error);
-      showError('通知已读同步失败，请稍后再试。');
+      showError(tr('通知已读同步失败，请稍后再试。', 'Failed to mark notifications as read. Please try again later.'));
     }
   };
 
@@ -5061,12 +5067,12 @@ export default function App() {
     setAuthorPulseNotifications([]);
     try {
       if (db) await deleteAllNotifications(db as any);
-      showError('通知已清空。');
+      showError(tr('通知已清空。', 'Notifications cleared.'));
     } catch (error) {
       console.warn('clear notifications failed:', error);
       setNotificationItems(previousItems);
       setAuthorPulseNotifications(previousPulse);
-      showError('通知清空失败，请稍后再试。');
+      showError(tr('通知清空失败，请稍后再试。', 'Failed to clear notifications. Please try again later.'));
     }
   };
 
@@ -5079,7 +5085,7 @@ export default function App() {
     } catch (error) {
       console.warn('delete notification failed:', error);
       void refreshNotificationCenter();
-      showError('通知删除失败，已重新同步。');
+      showError(tr('通知删除失败，已重新同步。', 'Failed to delete notification. Synced again.'));
     }
   };
 
@@ -5099,7 +5105,7 @@ export default function App() {
       closeShareComposer(shared);
     } catch (error: any) {
       console.error(error);
-      showError(error?.message || '分享失败。');
+      showError(error?.message || tr('分享失败。', 'Share failed.'));
       closeShareComposer(false);
     }
   };
@@ -5149,7 +5155,7 @@ export default function App() {
       }
     } catch (error: any) {
       console.error(error);
-      showError(error?.message || '作者资料载入失败。');
+      showError(error?.message || tr('作者资料载入失败。', 'Failed to load author profile.'));
     } finally {
       setAuthorProfileLoading(false);
     }
@@ -5167,10 +5173,10 @@ export default function App() {
         ? await unfollowAuthor(db as any, authorProfileTarget.authorId)
         : await followAuthor(db as any, authorProfileTarget.authorId, authorProfileTarget.authorName);
       setAuthorProfileFollowing(Boolean(result?.following));
-      showError(result?.following ? '已追踪作者。' : '已取消追踪。');
+      showError(result?.following ? tr('已追踪作者。', 'Author followed.') : tr('已取消追踪。', 'Author unfollowed.'));
     } catch (error: any) {
       console.error(error);
-      showError(error?.message || '追踪操作失败。');
+      showError(error?.message || tr('追踪操作失败。', 'Follow action failed.'));
     } finally {
       setAuthorProfileBusy(false);
     }
@@ -5189,19 +5195,19 @@ export default function App() {
       return;
     }
     if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
-      showError('这个设备暂时不支持 PWA 推送通知。');
+      showError(tr('这个设备暂时不支持 PWA 推送通知。', 'This device does not support PWA push notifications.'));
       return;
     }
     try {
       setPushSubscribeBusy(true);
       const config = await getPushConfig();
       if (!config.publicKey || !config.enabled) {
-        showError('服务器还没有配置推送密钥，暂时只能使用 App 内通知。');
+        showError(tr('服务器还没有配置推送密钥，暂时只能使用 App 内通知。', 'Push keys are not configured yet. In-app notifications are still available.'));
         return;
       }
       const permission = await Notification.requestPermission();
       if (permission !== 'granted') {
-        showError('通知权限尚未允许。');
+        showError(tr('通知权限尚未允许。', 'Notification permission was not granted.'));
         return;
       }
       const registration = await navigator.serviceWorker.ready;
@@ -5210,10 +5216,10 @@ export default function App() {
         applicationServerKey: urlBase64ToUint8Array(config.publicKey),
       });
       await savePushSubscription(subscription.toJSON());
-      showError('手机通知已开启。');
+      showError(tr('手机通知已开启。', 'Mobile notifications enabled.'));
     } catch (error: any) {
       console.error(error);
-      showError(error?.message || '开启手机通知失败。');
+      showError(error?.message || tr('开启手机通知失败。', 'Failed to enable mobile notifications.'));
     } finally {
       setPushSubscribeBusy(false);
     }
@@ -5243,7 +5249,7 @@ export default function App() {
         : ((event.error as any)?.message || event.message || '');
       const detail = String(rawMessage || '').trim().slice(0, 140);
       returnToStoryLibraryFallback();
-      showError(detail ? `发生错误：${detail}。已回到作品库。` : '发生错误，已回到作品库。');
+      showError(detail ? tr(`发生错误：${detail}。已回到作品库。`, `An error occurred: ${detail}. Returned to the library.`) : tr('发生错误，已回到作品库。', 'An error occurred. Returned to the library.'));
     };
     window.addEventListener('error', handleFatalError as EventListener);
     window.addEventListener('unhandledrejection', handleFatalError as EventListener);
@@ -5257,7 +5263,7 @@ export default function App() {
     if (!isRecoveringInvalidGameState) return;
     const timer = window.setTimeout(() => {
       returnToStoryLibraryFallback();
-      showError('页面资料没有完整载入，已回到作品库。');
+      showError(tr('页面资料没有完整载入，已回到作品库。', 'Page data did not fully load. Returned to the library.'));
     }, 2500);
     return () => window.clearTimeout(timer);
   }, [isRecoveringInvalidGameState]);
@@ -5326,7 +5332,7 @@ export default function App() {
       }, 0);
     } catch (e) {
       console.error(e);
-      showError("重置命运失败");
+      showError(tr('重置命运失败', 'Failed to reset fate.'));
       setShowLeaveGameModal(false);
     } finally {
       setGlobalLoadingMessage(null);
@@ -5473,8 +5479,11 @@ export default function App() {
       window.setTimeout(() => {
         setConfirmationModal({
           isOpen: true,
-          title: '入门试玩已开启',
-          message: '这是一段完整离线教学故事，不会消耗 AI 额度。先阅读到第 2 章末尾，点击“干涉命运”，选择林晓和一次庇佑或磨难。第 4 章、第 6 章也会出现干涉点；完成三次后即可查看最终命运。',
+          title: tr('入门试玩已开启', 'Tutorial story started'),
+          message: tr(
+            '这是一段完整离线教学故事，不会消耗 AI 额度。先阅读到第 2 章末尾，点击“干涉命运”，选择林晓和一次庇佑或磨难。第 4 章、第 6 章也会出现干涉点；完成三次后即可查看最终命运。',
+            'This is a complete offline tutorial story and does not use AI quota. Read to the end of Chapter 2, choose “Interfere with Fate”, then pick Lin Xiao and one blessing or hardship. Chapters 4 and 6 also contain intervention points; after three interventions, the final fate can be viewed.'
+          ),
           onConfirm: () => {},
         });
       }, 250);
@@ -5523,7 +5532,7 @@ export default function App() {
           const staleCartridge = await getCachedStoryCartridge(storyId);
           if (!staleCartridge) throw error;
           cartridge = staleCartridge;
-          showError('无法连接云端，已使用本机缓存打开故事。');
+          showError(tr('无法连接云端，已使用本机缓存打开故事。', 'Cloud connection failed. Opened the story from local cache.'));
         }
       }
       if (!cartridge) {
@@ -5536,7 +5545,7 @@ export default function App() {
         progressData = await getUserProgress(db as any, user.uid, storyId);
       } catch (progressError: any) {
         console.warn('[story-progress:load]', progressError);
-        showError(getFriendlyServerError(progressError, '云端进度暂时无法读取，已先开启原始故事。'));
+        showError(getFriendlyServerError(progressError, tr('云端进度暂时无法读取，已先开启原始故事。', 'Cloud progress cannot be read right now. Opened the original story first.')));
       }
       
       setStoryLaunchOverlay({ progress: 82, status: isEnglish ? 'Checking sequel requirements...' : '正在检查续作前置条件...' });
@@ -5574,7 +5583,7 @@ export default function App() {
       await startNewStoryPlay(storyId, cartridge, progressData);
     } catch (e) {
       console.error(e);
-      showError("无法开启故事");
+      showError(tr('无法开启故事', 'Unable to open story.'));
     } finally {
       if (launchProgress !== null) window.clearInterval(launchProgress);
       setStoryLaunchOverlay((prev) => prev ? { progress: 100, status: isEnglish ? 'Story ready' : '故事已就绪' } : prev);
@@ -5596,7 +5605,7 @@ export default function App() {
       } : undefined);
     } catch (e) {
       console.error(e);
-      showError("初始化故事失败");
+      showError(tr('初始化故事失败', 'Failed to initialize story.'));
     }
   };
 
@@ -5679,7 +5688,7 @@ export default function App() {
         };
       } catch (error) {
         console.warn('[inherited-opening:rewrite-fallback]', error);
-        showError('继承开场生成暂时失败，已使用本机接续文本进入续作。');
+        showError(tr('继承开场生成暂时失败，已使用本机接续文本进入续作。', 'Inherited opening generation failed for now. Entered the sequel with local continuity text.'));
       }
       const inheritedChapters = asSafeArray<any>(baseBlueprint.chapters).map((chapter) =>
         Number(chapter.chapter_num) === 1 ? inheritedChapterOne : chapter
@@ -5702,10 +5711,10 @@ export default function App() {
         console.warn('[progress:save-inherited-sequel]', error);
       });
       applyStoryCartridgeForPlay(storyId, cartridge, inheritedProgress);
-      showError('已继承前作命运线，续作开场已按该记录调整。');
+      showError(tr('已继承前作命运线，续作开场已按该记录调整。', 'Previous fate line inherited. The sequel opening has been adjusted.'));
     } catch (error) {
       console.error('[inherited-sequel:start]', error);
-      showError('续作继承失败，请稍后重试。');
+      showError(tr('续作继承失败，请稍后重试。', 'Sequel inheritance failed. Please try again later.'));
     } finally {
       window.setTimeout(() => setStoryLaunchOverlay(null), 180);
     }
@@ -5724,7 +5733,7 @@ export default function App() {
       applyStoryCartridgeForPlay(storyId, cartridge, progressData);
     } catch (e) {
       console.error(e);
-      showError("恢复故事进度失败");
+      showError(tr('恢复故事进度失败', 'Failed to restore story progress.'));
     } finally {
       window.setTimeout(() => setStoryLaunchOverlay(null), 180);
     }
@@ -6383,7 +6392,7 @@ export default function App() {
     if (!db) return;
     const cartridge = await getStoryCartridge(db as any, storyId);
     if (!cartridge) {
-      showError('无法载入该作品。');
+      showError(tr('无法载入该作品。', 'Unable to load this story.'));
       return;
     }
     const cartridgeSeriesId = String(cartridge.meta?.seriesId || '');
@@ -6415,8 +6424,8 @@ export default function App() {
     if (authoringDirty && !confirmed) {
       setConfirmationModal({
         isOpen: true,
-        title: 'Discard unsaved changes',
-        message: 'Create a new story and discard current unsaved changes?',
+        title: tr('放弃未保存更改？', 'Discard unsaved changes?'),
+        message: tr('创建新作品会放弃当前未保存的更改。确定继续吗？', 'Creating a new story will discard current unsaved changes. Continue?'),
         onConfirm: () => {
           void handleCreateAuthoringStory(true);
         },
@@ -6428,15 +6437,15 @@ export default function App() {
       const storyId = await createEmptyStory(db as any, {
         authorId: user.uid,
         authorName: getUserAuthorName(user),
-        title: '未命名作品',
+        title: tr('未命名作品', 'Untitled story'),
         tags: [],
       });
       await refreshStories({ force: true });
       await selectAuthoringStory(storyId);
-      showError('新作品已创建。');
+      showError(tr('新作品已创建。', 'New story created.'));
     } catch (error: any) {
       console.error(error);
-      showError(error?.message || '新建作品失败。');
+      showError(error?.message || tr('新建作品失败。', 'Failed to create story.'));
     } finally {
       setAuthoringSaving(false);
     }
@@ -6447,8 +6456,8 @@ export default function App() {
     if (!confirmed) {
       setConfirmationModal({
         isOpen: true,
-        title: 'Delete story',
-        message: 'This story will be permanently deleted. This action cannot be undone.',
+        title: tr('删除作品？', 'Delete story?'),
+        message: tr('这部作品会被永久删除，此操作无法撤销。', 'This story will be permanently deleted. This cannot be undone.'),
         onConfirm: () => { void handleDeleteAuthoringStory(true); },
       });
       return;
@@ -6463,10 +6472,10 @@ export default function App() {
       setAuthoringSavedSnapshot('');
       setAuthoringDirty(false);
       await refreshStories({ force: true });
-      showError('作品已删除。');
+      showError(tr('作品已删除。', 'Story deleted.'));
     } catch (error: any) {
       console.error(error);
-      showError(error?.message || '删除作品失败。');
+      showError(error?.message || tr('删除作品失败。', 'Failed to delete story.'));
     } finally {
       setAuthoringSaving(false);
     }
@@ -6474,7 +6483,7 @@ export default function App() {
 
   const handleSaveSelectedBranch = async () => {
     if (!authoringStoryId || !selectedBranchId) {
-      showError('请先选择需要保存的支线。');
+      showError(tr('请先选择需要保存的支线。', 'Choose a branch to save first.'));
       return;
     }
     try {
@@ -6508,7 +6517,7 @@ export default function App() {
       setAuthoringSaveSuccessStory(latest);
     } catch (error: any) {
       console.error(error);
-      showError(error?.message || '保存支线失败。');
+      showError(error?.message || tr('保存支线失败。', 'Failed to save branch.'));
     } finally {
       setAuthoringSaving(false);
       setGlobalLoadingMessage(null);
@@ -6560,7 +6569,7 @@ export default function App() {
       setAuthoringSaveSuccessStory(latest);
     } catch (error: any) {
       console.error(error);
-      showError(error?.message || '保存作品失败。');
+      showError(error?.message || tr('保存作品失败。', 'Failed to save story.'));
     } finally {
       setAuthoringSaving(false);
       setGlobalLoadingMessage(null);
@@ -6589,16 +6598,16 @@ export default function App() {
   const handleAuthoringCoverUpload = async (file?: File | null) => {
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      showError('请上传图片文件。');
+      showError(tr('请上传图片文件。', 'Please upload an image file.'));
       return;
     }
     try {
       const coverUrl = await compressImageToSquareDataUrl(file);
       applyAuthoringCover(coverUrl);
-      showError('封面已载入，记得点击“保存更改”。');
+      showError(tr('封面已载入，记得点击“保存更改”。', 'Cover loaded. Remember to click “Save Changes”.'));
     } catch (error: any) {
       console.error(error);
-      showError(error?.message || '封面处理失败。');
+      showError(error?.message || tr('封面处理失败。', 'Failed to process cover.'));
     }
   };
 
@@ -6640,11 +6649,11 @@ export default function App() {
   const handleGenerateAuthoringCover = async () => {
     if (!authoringCartridge) return;
     if (!canUseCoverGeneration) {
-      showError('AI 图片生成暂未开放。');
+      showError(tr('AI 图片生成暂未开放。', 'AI image generation is not open yet.'));
       return;
     }
     if (!authoringCoverPrompt.trim()) {
-      showError('请先输入封面生成提示。');
+      showError(tr('请先输入封面生成提示。', 'Enter a cover prompt first.'));
       return;
     }
     let quotaReserved = false;
@@ -6669,13 +6678,13 @@ export default function App() {
       applyAuthoringCover(coverUrl);
       setCoverGenerationRemaining(remaining);
       quotaReserved = false;
-      showError(`AI 封面已生成，记得点击“保存更改”。今日还可生成 ${remaining} 张。`);
+      showError(tr(`AI 封面已生成，记得点击“保存更改”。今日还可生成 ${remaining} 张。`, `AI cover generated. Remember to click “Save Changes”. ${remaining} generation(s) left today.`));
     } catch (error: any) {
       console.error(error);
       if (quotaReserved) {
         await refundCoverGenerationQuota().catch((refundError) => console.error(refundError));
       }
-      showError(error?.message || 'AI 封面生成失败。');
+      showError(error?.message || tr('AI 封面生成失败。', 'AI cover generation failed.'));
     } finally {
       setIsGeneratingCover(false);
     }
@@ -6691,10 +6700,10 @@ export default function App() {
       await saveAppSettings(db as any, user.uid, nextSettings, isAdminUser);
       setFeatureSettings(nextSettings);
       setAdminFeatureDraft(nextSettings);
-      showError('管理设置已保存。');
+      showError(tr('管理设置已保存。', 'Admin settings saved.'));
     } catch (error: any) {
       console.error(error);
-      showError(error?.message || '保存管理设置失败。');
+      showError(error?.message || tr('保存管理设置失败。', 'Failed to save admin settings.'));
     } finally {
       setIsSavingAdminSettings(false);
     }
@@ -6706,10 +6715,10 @@ export default function App() {
       setBioSaving(true);
       await setDoc(doc(db as any, 'users', user.uid), { bio: editingBio.trim() }, { merge: true });
       setMyBio(editingBio.trim());
-      showError('个人签名更新成功！');
+      showError(tr('个人签名更新成功！', 'Bio updated.'));
     } catch (error: any) {
       console.error(error);
-      showError(error?.message || '个人签名保存失败。');
+      showError(error?.message || tr('个人签名保存失败。', 'Failed to save bio.'));
     } finally {
       setBioSaving(false);
     }
@@ -6721,12 +6730,12 @@ export default function App() {
 
   const handleUpdateProfileDisplayName = async () => {
     if (!auth?.currentUser || auth.currentUser.isAnonymous) {
-      showError('游客请先注册为正式用户后再修改名称。');
+      showError(tr('游客请先注册为正式用户后再修改名称。', 'Guest accounts must register before changing display name.'));
       return;
     }
     const nextName = limitFiveChars(profileDisplayName);
     if (!nextName) {
-      showError('请输入新的显示名称。');
+      showError(tr('请输入新的显示名称。', 'Enter a new display name.'));
       return;
     }
     try {
@@ -6734,20 +6743,20 @@ export default function App() {
       setUser({ ...auth.currentUser } as FirebaseUser);
       await syncCurrentAuthorName(auth.currentUser);
       await refreshStories({ force: true });
-      showError('显示名称已更新。');
+      showError(tr('显示名称已更新。', 'Display name updated.'));
     } catch (error: any) {
       console.error(error);
-      showError(error?.message || '更新名称失败。');
+      showError(error?.message || tr('更新名称失败。', 'Failed to update name.'));
     }
   };
 
   const handleUpdateAccountPassword = async () => {
     if (!auth?.currentUser || !auth.currentUser.email) {
-      showError('当前账号无法直接修改密码。');
+      showError(tr('当前账号无法直接修改密码。', 'This account cannot change password directly.'));
       return;
     }
     if (!profileCurrentPassword || profileNewPassword.length < 6) {
-      showError('请输入当前密码，以及至少 6 位的新密码。');
+      showError(tr('请输入当前密码，以及至少 6 位的新密码。', 'Enter the current password and a new password with at least 6 characters.'));
       return;
     }
     try {
@@ -6756,24 +6765,24 @@ export default function App() {
       await updatePassword(auth.currentUser, profileNewPassword);
       setProfileCurrentPassword('');
       setProfileNewPassword('');
-      showError('账户密码已更新。');
+      showError(tr('账户密码已更新。', 'Password updated.'));
     } catch (error: any) {
       console.error(error);
-      showError(error?.message || '修改密码失败。');
+      showError(error?.message || tr('修改密码失败。', 'Failed to change password.'));
     }
   };
 
   const handlePasswordResetForEmail = async (email: string) => {
     if (!auth || !String(email || '').trim()) {
-      showError('请输入邮箱。');
+      showError(tr('请输入邮箱。', 'Enter an email.'));
       return;
     }
     try {
       await sendPasswordResetEmail(auth, String(email || '').trim());
-      showError('密码重设邮件已发送。');
+      showError(tr('密码重设邮件已发送。', 'Password reset email sent.'));
     } catch (error: any) {
       console.error(error);
-      showError(error?.message || '无法发送重设邮件。');
+      showError(error?.message || tr('无法发送重设邮件。', 'Unable to send reset email.'));
     }
   };
 
@@ -6788,7 +6797,7 @@ export default function App() {
       resetToHome();
     } catch (error: any) {
       console.error(error);
-      showError(error?.message || '登出失败，请重试。');
+      showError(error?.message || tr('登出失败，请重试。', 'Sign-out failed. Please try again.'));
     }
   };
 
@@ -7022,7 +7031,7 @@ export default function App() {
 
     } catch (e) {
       console.error(e);
-      showError(e.message || "干涉失败，请重试");
+      showError(e.message || tr('干涉失败，请重试', 'Intervention failed. Please try again.'));
       setIsRewriting(false);
       setActiveInterventionOverlay(null);
     } finally {
@@ -7264,7 +7273,7 @@ export default function App() {
       }
     } catch (e: any) {
       console.error(e);
-      showError(e.message || "生成总结失败");
+      showError(e.message || tr('生成总结失败', 'Failed to generate summary.'));
       navigateTo('PLAYING', { replace: true });
     } finally {
       if (simulation) {
@@ -7290,24 +7299,24 @@ export default function App() {
       setIsSharing(true);
       setGlobalLoadingMessage(isEnglish ? 'Preparing share...' : '正在准备分享...');
       setGlobalLoadingDetail(isEnglish ? 'Choosing whether to share the original or current fate line, then opening the system share sheet.' : '正在判断分享原作还是当前命运线，并尽快调用系统分享。');
-      const shareTitle = formatBookTitle(blueprint?.title || "未命名故事");
+      const shareTitle = formatBookTitle(blueprint?.title || tr('未命名故事', 'Untitled story'));
       const cleanChapters = getCleanCurrentRunChapters();
       const shareText = buildStoryShareText(shareTitle, cleanChapters);
       if (activeStoryId && currentRunMatchesOriginal()) {
         shareStage = 'deliverOriginalShare';
-        setGlobalLoadingDetail('正在调用设备的分享功能。');
+        setGlobalLoadingDetail(tr('正在调用设备的分享功能。', 'Opening the device share sheet.'));
         if (await sharePayload({ title: shareTitle, text: shareText, url: buildOriginalStoryUrl(activeStoryId) })) {
           await recordStoryShare(activeStoryId);
         }
         return;
       }
       shareStage = 'createStorySnapshot';
-      setGlobalLoadingDetail('当前故事已发生变化，正在加入收藏命运并准备非公开链接。');
+      setGlobalLoadingDetail(tr('当前故事已发生变化，正在加入收藏命运并准备非公开链接。', 'The current story has changed. Adding it to Fate Archive and preparing an unlisted link.'));
       const { shareId, sharedRecord, cleanChapters: snapshotChapters } = await createCurrentStorySnapshot('unlisted', 'intervened');
       createdShareId = shareId;
       setSharedStoryId(shareId);
       shareStage = 'deliverPreparedShare';
-      setGlobalLoadingDetail('分享记录已准备好，正在调用设备的分享功能。');
+      setGlobalLoadingDetail(tr('分享记录已准备好，正在调用设备的分享功能。', 'Share record ready. Opening the device share sheet.'));
       const didShare = await sharePayload({ title: shareTitle, text: shareText, url: buildSharedStoryUrl(shareId) });
       if (didShare) {
         await recordStoryShare(activeStoryId || sharedRecord?.sourceStoryId);
@@ -7392,15 +7401,15 @@ export default function App() {
       }
       const hasShareId = Boolean(createdShareId);
       const stageLabel = ({
-        resolveProvenance: '确认原作者',
-        createStorySnapshot: '创建故事快照',
-        createSharedStoryRecord: '创建分享记录',
-        cacheSharedStory: '缓存分享故事',
-        cacheStoryLists: '更新本机列表缓存',
-        deliverOriginalShare: '打开原作分享',
-        deliverPreparedShare: '打开系统分享',
-      } as Record<string, string>)[shareStage] || '准备分享';
-      showError(`${hasShareId ? '分享记录已创建，但' : ''}${stageLabel}失败：${error?.name || error?.message || '未知错误'}`);
+        resolveProvenance: tr('确认原作者', 'checking original creator'),
+        createStorySnapshot: tr('创建故事快照', 'creating story snapshot'),
+        createSharedStoryRecord: tr('创建分享记录', 'creating share record'),
+        cacheSharedStory: tr('缓存分享故事', 'caching shared story'),
+        cacheStoryLists: tr('更新本机列表缓存', 'updating local list cache'),
+        deliverOriginalShare: tr('打开原作分享', 'opening original share'),
+        deliverPreparedShare: tr('打开系统分享', 'opening system share'),
+      } as Record<string, string>)[shareStage] || tr('准备分享', 'preparing share');
+      showError(`${hasShareId ? tr('分享记录已创建，但', 'Share record was created, but ') : ''}${stageLabel}${tr('失败', ' failed')}: ${error?.name || error?.message || tr('未知错误', 'Unknown error')}`);
     } finally {
       setIsSharing(false);
       setGlobalLoadingMessage(null);
@@ -7422,15 +7431,15 @@ export default function App() {
         setStoryActionState('like', idToUse, !isActive);
         applyStoryActionFlag('like', idToUse, !isActive);
         applyStoryCountDelta(idToUse, 'likeCount', isActive ? -1 : 1);
-        showError(isActive ? '已取消点赞。' : '已点赞。');
+        showError(isActive ? tr('已取消点赞。', 'Like removed.') : tr('已点赞。', 'Liked.'));
       } else if (kind === 'favorite') {
         const isActive = wasActionActive;
         setStoryActionState('favorite', idToUse, !isActive);
         applyStoryActionFlag('favorite', idToUse, !isActive);
         applyStoryCountDelta(idToUse, 'favoriteCount', isActive ? -1 : 1);
-        showError(isActive ? '已取消收藏。' : '已收藏。');
+        showError(isActive ? tr('已取消收藏。', 'Save removed.') : tr('已收藏。', 'Saved.'));
       } else if (kind === 'report') {
-        showError('不能举报系统教学卡带！');
+        showError(tr('不能举报系统教学卡带！', 'The tutorial cartridge cannot be reported.'));
       }
       return;
     }
@@ -7452,7 +7461,7 @@ export default function App() {
             applyStoryCountDelta(idToUse, 'likeCount', 1);
             void patchCachedStoryAction('like', idToUse, false, 'likeCount', 1);
           }
-          showError('已取消点赞。');
+          showError(tr('已取消点赞。', 'Like removed.'));
           return;
         }
         setStoryActionState('like', idToUse, true);
@@ -7465,7 +7474,7 @@ export default function App() {
           void patchCachedStoryAction('like', idToUse, true, 'likeCount', -1);
           return;
         }
-        showError('已点赞。');
+        showError(tr('已点赞。', 'Liked.'));
         return;
       }
       if (kind === 'favorite') {
@@ -7484,7 +7493,7 @@ export default function App() {
             applyStoryCountDelta(idToUse, 'favoriteCount', 1);
             void patchCachedStoryAction('favorite', idToUse, false, 'favoriteCount', 1);
           }
-          showError('已取消收藏。');
+          showError(tr('已取消收藏。', 'Save removed.'));
           return;
         }
         setStoryActionState('favorite', idToUse, true);
@@ -7515,7 +7524,7 @@ export default function App() {
             }, ...prev];
           });
         }
-        showError(alreadyFavorited ? '已在馆藏中。' : '已收藏并加入馆藏。');
+        showError(alreadyFavorited ? tr('已在馆藏中。', 'Already in archive.') : tr('已收藏并加入馆藏。', 'Saved and added to archive.'));
         if ((globalThis as any).__legacyFavoriteArchive__) {
 
         const cartridge = await getStoryCartridge(db as any, idToUse);
@@ -7571,17 +7580,17 @@ export default function App() {
             updatedAt: new Date().toISOString(),
           }, ...prev]);
         }
-        showError(alreadyFavorited || alreadyInArchive ? '已在馆藏中。' : '已收藏并加入馆藏。');
+        showError(alreadyFavorited || alreadyInArchive ? tr('已在馆藏中。', 'Already in archive.') : tr('已收藏并加入馆藏。', 'Saved and added to archive.'));
         return;
         }
         return;
       }
       await reportStory(db as any, idToUse, user.uid);
-      showError('已收到举报。');
+      showError(tr('已收到举报。', 'Report received.'));
       return;
     } catch (error) {
       if ((error as any)?.message === 'already-liked') {
-        showError('该作品已经点过赞。');
+        showError(tr('该作品已经点过赞。', 'This story has already been liked.'));
         return;
       }
       console.error(error);
@@ -7597,7 +7606,7 @@ export default function App() {
         applyStoryCountDelta(idToUse, 'favoriteCount', wasActionActive ? 1 : -1);
         void patchCachedStoryAction('favorite', idToUse, wasActionActive, 'favoriteCount', wasActionActive ? 1 : -1);
       }
-      showError('操作失败，请稍后再试。');
+      showError(tr('操作失败，请稍后再试。', 'Action failed. Please try again later.'));
     }
   };
 
@@ -7624,7 +7633,7 @@ export default function App() {
       });
     } catch (e) {
       console.error(e);
-      showError("保存失败");
+      showError(tr('保存失败', 'Save failed.'));
     } finally {
       setAuthoringSaving(false);
     }
@@ -7661,7 +7670,7 @@ export default function App() {
 
       if (authoringImportReplaceBranches && parsed.branches.length > 0) {
         // Handle branch import logic...
-        showError("已导入主线内容；支线内容请在「角色和支线」中继续确认。");
+        showError(tr('已导入主线内容；支线内容请在「角色和支线」中继续确认。', 'Mainline imported. Please review branch content in “Characters and Branches”.'));
       }
 
       setAuthoringCartridge(nextCartridge);
@@ -7669,7 +7678,7 @@ export default function App() {
       setAuthoringTab('settings');
     } catch (e) {
       console.error(e);
-      showError("解析导入文本失败");
+      showError(tr('解析导入文本失败', 'Failed to parse imported text.'));
     }
   };
 
@@ -7757,13 +7766,13 @@ export default function App() {
     if (gameState === 'READONLY_STORY' && !readonlyStoryData) {
       console.warn('Recovered invalid READONLY_STORY state without readonly story data.');
       resetToHome();
-      showError('页面状态已恢复，请重新打开故事记录。');
+      showError(tr('页面状态已恢复，请重新打开故事记录。', 'Page state recovered. Please open the story record again.'));
       return;
     }
     if ((gameState === 'PLAYING' || gameState === 'SUMMARY') && !blueprint) {
       console.warn('Recovered invalid story runtime state without blueprint.');
       resetToHome();
-      showError('游玩状态已恢复，请重新进入故事。');
+      showError(tr('游玩状态已恢复，请重新进入故事。', 'Play state recovered. Please enter the story again.'));
     }
   }, [isSessionHydrated, user, gameState, readonlyStoryData, blueprint]);
 
@@ -7879,10 +7888,10 @@ export default function App() {
           setFollowedAuthors((prev) => prev.filter((author) => author.authorId !== authorId));
           await unfollowAuthor(db as any, authorId);
           if (authorProfileTarget?.authorId === authorId) setAuthorProfileFollowing(false);
-          showError('已取消追踪作者。');
+          showError(tr('已取消追踪作者。', 'Author unfollowed.'));
         } catch (error: any) {
           console.error(error);
-          showError(error?.message || '取消追踪失败。');
+          showError(error?.message || tr('取消追踪失败。', 'Failed to unfollow author.'));
           void refreshFollowedAuthors();
         }
       }}
@@ -8956,7 +8965,7 @@ export default function App() {
   const renderStorySelectView = () => <StoryLibraryView ctx={storyLibraryCtx} />;
 
   const renderAuthView = () => (
-    <Suspense fallback={<StartupShell message={appLanguage === 'en-US' ? 'Loading account entry...' : '正在准备账号入口...'} title={t('app.name')} subtitle={t('startup.default')} />}>
+    <Suspense fallback={<StartupShell message={tr('正在准备账号入口...', 'Loading account entry...')} title={t('app.name')} subtitle={t('startup.default')} tagline={tr('可分享 · 可改写的互动故事引擎', 'Shareable · Rewritable interactive story engine')} />}>
       <AuthView
         isIos={isIosDevice()}
         isStandaloneMode={isStandaloneMode}
@@ -9104,6 +9113,7 @@ export default function App() {
       {installGuideModal}
       <ConnectivityDrawer
         state={connectivityDrawerState}
+        isEnglish={isEnglish}
         onRetry={() => {
           setConnectivityDismissedAt(0);
           setManualConnectivityNotice(null);
@@ -9118,7 +9128,7 @@ export default function App() {
       />
       
       {!isSessionHydrated ? (
-        <StartupShell message={startupMessage} title={t('app.name')} subtitle={t('startup.default')} />
+        <StartupShell message={startupMessage} title={t('app.name')} subtitle={t('startup.default')} tagline={tr('可分享 · 可改写的互动故事引擎', 'Shareable · Rewritable interactive story engine')} />
       ) : gameState === 'READONLY_STORY' && readonlyStoryData ? (
         <>
           {renderReadonlyStoryView()}
@@ -9130,7 +9140,7 @@ export default function App() {
       ) : !user ? (
         renderAuthView()
       ) : isRecoveringInvalidGameState ? (
-        <StartupShell message={appLanguage === 'en-US' ? 'Restoring page state...' : '正在恢复页面状态...'} title={t('app.name')} subtitle={t('startup.default')} />
+        <StartupShell message={tr('正在恢复页面状态...', 'Restoring page state...')} title={t('app.name')} subtitle={t('startup.default')} tagline={tr('可分享 · 可改写的互动故事引擎', 'Shareable · Rewritable interactive story engine')} />
       ) : (
         <>
           {gameState === 'STORY_SELECT' && renderStorySelectView()}

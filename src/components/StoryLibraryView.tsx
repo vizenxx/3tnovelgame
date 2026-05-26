@@ -369,6 +369,7 @@ const renderStoryDetailModal = () => {
 const renderSequelGateModal = () => (
   <SequelGateModal
     modal={sequelGateModal}
+    tr={tr}
     stripBookTitle={stripBookTitle}
     onGoSource={(sourceStoryId) => {
       setSequelGateModal(null);

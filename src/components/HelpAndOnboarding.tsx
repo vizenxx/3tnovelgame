@@ -78,7 +78,7 @@ export const OnboardingGuide = ({
                 <Sparkles className="h-3.5 w-3.5" />
                 {tr('初次进入', 'First visit')}
               </div>
-              <h2 className="mt-4 text-2xl font-black text-white">{tr('欢迎来到命运故事台', 'Welcome to the Fate Story Stage')}</h2>
+              <h2 className="mt-4 text-2xl font-black text-app-text">{tr('欢迎来到命运故事台', 'Welcome to the Fate Story Stage')}</h2>
               <p className="mt-2 text-sm leading-relaxed text-app-muted">
                 {tr('这里可以阅读故事、干涉章节、收藏命运线，也可以生成或改编作品。', 'Read stories, interfere with chapters, collect fate lines, or generate and adapt works.')}
               </p>
@@ -117,11 +117,13 @@ export const OnboardingGuide = ({
 export const PushPermissionPrompt = ({
   open,
   busy,
+  tr,
   onDismiss,
   onEnable,
 }: {
   open: boolean;
   busy: boolean;
+  tr: Translator;
   onDismiss: () => void;
   onEnable: () => void;
 }) => (
@@ -146,19 +148,22 @@ export const PushPermissionPrompt = ({
               <Bell className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="text-xl font-black text-white">接收作品动态提醒？</h2>
+              <h2 className="text-xl font-black text-app-text">{tr('接收作品动态提醒？', 'Enable story updates?')}</h2>
               <p className="mt-2 text-sm leading-relaxed text-app-muted">
-                开启后，作者更新、作品被点赞收藏、追踪作者发布新作时，可以在手机收到提醒。也可以之后到系统设置里开启。
+                {tr(
+                  '开启后，作者更新、作品被点赞收藏、追踪作者发布新作时，可以在手机收到提醒。也可以之后到系统设置里开启。',
+                  'Receive mobile alerts for author updates, likes, saves, and new works from followed authors. This can also be enabled later in Settings.'
+                )}
               </p>
             </div>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
             <button type="button" onClick={onDismiss} className={semanticButtonClass('ghost', { fullWidth: true })}>
-              稍后再说
+              {tr('稍后再说', 'Not now')}
             </button>
             <button type="button" onClick={onEnable} disabled={busy} className={semanticButtonClass('primary', { fullWidth: true })}>
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
-              开启手机通知
+              {tr('开启手机通知', 'Enable notifications')}
             </button>
           </div>
         </motion.div>
@@ -169,22 +174,24 @@ export const PushPermissionPrompt = ({
 
 export const AuthoringTourOverlay = ({
   tourStep,
+  tr,
   setTourStep,
   setAuthoringTab,
   showMessage,
 }: {
   tourStep: number | null;
+  tr: Translator;
   setTourStep: (step: number | null) => void;
   setAuthoringTab: (tab: any) => void;
   showMessage: (message: string) => void;
 }) => {
   if (tourStep === null) return null;
   const guidedSteps = [
-    { tab: 'settings', title: '第一步：整理作品门面', text: '先确认作品名、简介、封面、标签、可见性与改编权限。', placement: 'right' },
-    { tab: 'series', title: '第二步：套用世界观设定', text: '如作品属于长篇系列，可以在这里选择世界观设定、角色卡和继承条件。', placement: 'right' },
-    { tab: 'mainline', title: '第三步：编排主线与结局', text: '在这里编辑七章基础正文和结局域，让作品具备完整可读的主线。', placement: 'left' },
-    { tab: 'branches', title: '第四步：设计角色与支线', text: '支线条件决定玩家在某章对某个角色行动时，可能开启怎样的隐藏情节或伏笔。', placement: 'left' },
-    { tab: 'settings', title: '第五步：保存与发布', text: '确认内容后保存更改；需要被首页发现时，再把可见性设为公开。', placement: 'right' },
+    { tab: 'settings', title: tr('第一步：整理作品门面', 'Step 1: Story presentation'), text: tr('先确认作品名、简介、封面、标签、可见性与改编权限。', 'Review the title, synopsis, cover, tags, visibility, and adaptation permission.'), placement: 'right' },
+    { tab: 'series', title: tr('第二步：套用世界观设定', 'Step 2: World setting'), text: tr('如作品属于长篇系列，可以在这里选择世界观设定、角色卡和继承条件。', 'For a series work, choose world rules, character cards, and continuity requirements here.'), placement: 'right' },
+    { tab: 'mainline', title: tr('第三步：编排主线与结局', 'Step 3: Mainline and endings'), text: tr('在这里编辑七章基础正文和结局域，让作品具备完整可读的主线。', 'Edit the seven base chapters and ending domains so the story has a complete mainline.'), placement: 'left' },
+    { tab: 'branches', title: tr('第四步：设计角色与支线', 'Step 4: Characters and branches'), text: tr('支线条件决定玩家在某章对某个角色行动时，可能开启怎样的隐藏情节或伏笔。', 'Branch conditions decide which hidden scenes or foreshadowing can open when a player acts on a character.'), placement: 'left' },
+    { tab: 'settings', title: tr('第五步：保存与发布', 'Step 5: Save and publish'), text: tr('确认内容后保存更改；需要被首页发现时，再把可见性设为公开。', 'Save changes when ready. Set visibility to public only when the story should appear in the library.'), placement: 'right' },
   ];
   const currentStep = guidedSteps[tourStep];
   if (!currentStep) return null;
@@ -204,13 +211,13 @@ export const AuthoringTourOverlay = ({
       >
         <div className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300">
           <Sparkles className="h-3 w-3" />
-          创作者引导 ({tourStep + 1} / {guidedSteps.length})
+          {tr('创作者引导', 'Creator guide')} ({tourStep + 1} / {guidedSteps.length})
         </div>
-        <h3 className="text-xl font-black text-white">{currentStep.title}</h3>
+        <h3 className="text-xl font-black text-app-text">{currentStep.title}</h3>
         <p className="mt-3 text-sm leading-relaxed text-app-text">{currentStep.text}</p>
         <div className="mt-6 flex justify-between gap-3">
           <button type="button" onClick={finish} className={semanticButtonClass('ghost', { compact: true })}>
-            跳过引导
+            {tr('跳过引导', 'Skip guide')}
           </button>
           <button
             type="button"
@@ -221,12 +228,12 @@ export const AuthoringTourOverlay = ({
                 setAuthoringTab(guidedSteps[nextStep].tab);
               } else {
                 finish();
-                showMessage('向导完成！祝创作愉快！');
+                showMessage(tr('向导完成！祝创作愉快！', 'Guide complete. Happy creating!'));
               }
             }}
             className={semanticButtonClass('primary', { compact: true })}
           >
-            {tourStep === guidedSteps.length - 1 ? '完成' : '下一步'}
+            {tourStep === guidedSteps.length - 1 ? tr('完成', 'Done') : tr('下一步', 'Next')}
           </button>
         </div>
       </motion.div>
@@ -254,10 +261,26 @@ export const HelpCenterDrawer = ({
   onRestore: () => void;
 }) => {
   const qas = [
-    { q: '玩家应该怎样开始一部作品？', a: '从作品库选择感兴趣的作品，点击“干涉命运”进入阅读。读到可干涉章节时，选择角色和行动。', tags: '玩家 作品库 干涉命运 阅读 收藏 分享' },
-    { q: '作者如何设计一部可玩的故事？', a: '先整理标题、简介、封面和可见性；再写好主线章节与结局域；最后设置角色和支线条件。', tags: '作者 作品设置 主线 结局 支线 角色' },
-    { q: '世界观设定怎样连接多部作品？', a: '世界观设定像系列仓库，可以保存世界基准、角色卡池和情节素材。创作新作或续作时，作者可以勾选要套用的条目。', tags: '世界观 系列 角色卡 世界基准 续作' },
-    { q: '续作的前置条件应该怎么设？', a: '在系列设置里选择前作，再指定需要完成的结局和支线。玩家进入续作前，会先确认是否经历过对应前情。', tags: '续作 前作 继承 结局 支线' },
+    {
+      q: tr('玩家应该怎样开始一部作品？', 'How does a player start a story?'),
+      a: tr('从作品库选择感兴趣的作品，点击“干涉命运”进入阅读。读到可干涉章节时，选择角色和行动。', 'Pick a story from the library, then choose “Interfere with Fate”. At an interactable chapter, choose a character and action.'),
+      tags: tr('玩家 作品库 干涉命运 阅读 收藏 分享', 'player library interfere reading collect share'),
+    },
+    {
+      q: tr('作者如何设计一部可玩的故事？', 'How does a creator design a playable story?'),
+      a: tr('先整理标题、简介、封面和可见性；再写好主线章节与结局域；最后设置角色和支线条件。', 'Start with title, synopsis, cover, and visibility. Then prepare chapters and ending domains, followed by characters and branch conditions.'),
+      tags: tr('作者 作品设置 主线 结局 支线 角色', 'creator settings mainline endings branches characters'),
+    },
+    {
+      q: tr('世界观设定怎样连接多部作品？', 'How do world settings connect multiple works?'),
+      a: tr('世界观设定像系列仓库，可以保存世界基准、角色卡池和情节素材。创作新作或续作时，作者可以勾选要套用的条目。', 'A world setting works like a series vault: rules, character cards, and plot materials can be reused when creating new works or sequels.'),
+      tags: tr('世界观 系列 角色卡 世界基准 续作', 'world setting series character cards rules sequel'),
+    },
+    {
+      q: tr('续作的前置条件应该怎么设？', 'How should sequel requirements be set?'),
+      a: tr('在系列设置里选择前作，再指定需要完成的结局和支线。玩家进入续作前，会先确认是否经历过对应前情。', 'In Series Settings, choose the prequel, then specify required endings and branches. Players must meet those conditions before interfering with the sequel.'),
+      tags: tr('续作 前作 继承 结局 支线', 'sequel prequel inheritance ending branch'),
+    },
   ];
   const keyword = search.trim().toLowerCase();
   const filteredQas = qas.filter((item) => !keyword || `${item.q}\n${item.a}\n${item.tags}`.toLowerCase().includes(keyword));
@@ -278,9 +301,9 @@ export const HelpCenterDrawer = ({
                 <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-400">
                   <Sparkles className="h-4 w-4" />
                 </div>
-                <h2 className="text-lg font-black text-white">{tr('命运馆帮助中心', 'Help Center')}</h2>
+                <h2 className="text-lg font-black text-app-text">{tr('命运馆帮助中心', 'Help Center')}</h2>
               </div>
-              <button type="button" onClick={onClose} className="rounded-lg p-2 text-app-muted transition-colors hover:bg-app-surface-soft hover:text-white" aria-label={tr('关闭帮助中心', 'Close Help Center')}>
+              <button type="button" onClick={onClose} className="rounded-lg p-2 text-app-muted transition-colors hover:bg-app-surface-soft hover:text-app-text" aria-label={tr('关闭帮助中心', 'Close Help Center')}>
                 <X className="h-5 w-5" />
               </button>
             </div>

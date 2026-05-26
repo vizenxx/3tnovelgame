@@ -1806,7 +1806,7 @@ const renderAuthoringView = () => (
                                 if (!authoringStoryId) return;
                                 await deleteStoryBranch(db as any, authoringStoryId, branch.id);
                                 await selectAuthoringStory(authoringStoryId);
-                                showError('支线已删除。');
+                                showError(tr('支线已删除。', 'Branch deleted.'));
                               }}
                               className={semanticButtonClass('danger', { compact: true })}
                             >

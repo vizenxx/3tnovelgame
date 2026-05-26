@@ -387,24 +387,24 @@ export const AccountCenterContent = ({
           <section className="rounded-[1.5rem] border border-amber-500/25 bg-amber-500/10 p-5 lg:col-span-2">
             <div className="mb-4 flex items-center gap-2 text-lg font-black text-app-text">
               <Settings className="h-5 w-5 text-amber-300" />
-              管理目录
+              {tr('管理目录', 'Admin')}
             </div>
             <div className="space-y-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <div className="text-sm font-black text-app-text">AI 图片生成功能</div>
+                  <div className="text-sm font-black text-app-text">{tr('AI 图片生成功能', 'AI image generation')}</div>
                   <div className="mt-1 text-xs leading-relaxed text-app-muted">
-                    关闭时，普通用户不会看到封面 AI 生成入口；管理员自己始终保留最新功能入口。
+                    {tr('关闭时，普通用户不会看到封面 AI 生成入口；管理员自己始终保留最新功能入口。', 'When disabled, regular users will not see the AI cover entry. Admins always keep access to the newest tools.')}
                   </div>
                 </div>
                 <button type="button" onClick={onToggleCoverGeneration} className={adminFeatureDraft.coverGenerationEnabled ? semanticButtonClass('primary', { compact: true }) : semanticButtonClass('ghost', { compact: true })}>
                   {adminFeatureDraft.coverGenerationEnabled ? <Check className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-                  {adminFeatureDraft.coverGenerationEnabled ? '已开放给所有用户' : '仅管理员可见'}
+                  {adminFeatureDraft.coverGenerationEnabled ? tr('已开放给所有用户', 'Open to all users') : tr('仅管理员可见', 'Admin only')}
                 </button>
               </div>
               <button type="button" onClick={onSaveAdminSettings} disabled={isSavingAdminSettings} className={semanticButtonClass('secondary', { fullWidth: true })}>
                 {isSavingAdminSettings ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                保存管理设置
+                {tr('保存管理设置', 'Save admin settings')}
               </button>
             </div>
           </section>

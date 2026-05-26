@@ -4,6 +4,7 @@ import { BookOpen, CheckCircle2, Copy, Loader2, Lock } from 'lucide-react';
 import { semanticButtonClass } from './semanticClasses';
 
 const safeModalBackdropClass = "fixed inset-0 flex items-center justify-center overflow-y-auto overscroll-contain px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]";
+type Translator = (zh: string, en: string) => string;
 
 export type ConfirmationModalState = {
   isOpen: boolean;
@@ -22,9 +23,11 @@ export type SequelGateModalState = {
 
 export const ConfirmationModal = ({
   modal,
+  tr,
   onClose,
 }: {
   modal: ConfirmationModalState;
+  tr: Translator;
   onClose: () => void;
 }) => (
   <AnimatePresence>
@@ -40,15 +43,15 @@ export const ConfirmationModal = ({
           animate={{ scale: 1, opacity: 1 }}
           className="app-modal-surface app-modal-safe-height w-full max-w-sm overflow-y-auto rounded-3xl border border-app-border p-5 shadow-2xl sm:p-6"
         >
-          <h3 className="mb-2 text-xl font-black text-white">{modal.title}</h3>
-          <p className="mb-6 text-sm text-app-muted leading-relaxed">{modal.message}</p>
+          <h3 className="mb-2 text-xl font-black text-app-text">{modal.title}</h3>
+          <p className="mb-6 text-sm leading-relaxed text-app-muted">{modal.message}</p>
           <div className="flex gap-3">
             <button
               type="button"
               onClick={onClose}
               className="flex-1 rounded-xl bg-app-surface py-3 text-sm font-bold text-app-muted"
             >
-              取消
+              {tr('取消', 'Cancel')}
             </button>
             <button
               type="button"
@@ -56,9 +59,9 @@ export const ConfirmationModal = ({
                 modal.onConfirm();
                 onClose();
               }}
-              className="flex-1 rounded-xl bg-white py-3 text-sm font-bold text-black"
+              className="flex-1 rounded-xl bg-app-text py-3 text-sm font-bold text-app-bg"
             >
-              确认
+              {tr('确认', 'Confirm')}
             </button>
           </div>
         </motion.div>
@@ -69,12 +72,14 @@ export const ConfirmationModal = ({
 
 export const SequelGateModal = ({
   modal,
+  tr,
   stripBookTitle,
   onGoSource,
   onShowSourceDetail,
   onClose,
 }: {
   modal: SequelGateModalState | null;
+  tr: Translator;
   stripBookTitle: (title: string) => string;
   onGoSource: (sourceStoryId: string) => void;
   onShowSourceDetail: (sourceStoryId: string) => void;
@@ -99,22 +104,25 @@ export const SequelGateModal = ({
               <Lock className="h-5 w-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <h3 className="text-xl font-black text-white">续作尚未解锁</h3>
+              <h3 className="text-xl font-black text-app-text">{tr('续作尚未解锁', 'Sequel Locked')}</h3>
               <p className="mt-2 text-sm leading-relaxed text-app-muted">
-                这部续作需要先在《{stripBookTitle(modal.sourceTitle || '前作')}》完成指定前置情节，才可继承记录并干涉命运。
+                {tr(
+                  `这部续作需要先在《${stripBookTitle(modal.sourceTitle || '前作')}》完成指定前置情节，才可继承记录并干涉命运。`,
+                  `This sequel requires specific events in ${stripBookTitle(modal.sourceTitle || 'the previous work')} before a fate record can be inherited.`
+                )}
               </p>
             </div>
           </div>
-          <div className="mt-5 space-y-3 rounded-3xl border border-white/10 bg-white/[0.03] p-4">
+          <div className="mt-5 space-y-3 rounded-3xl border border-app-border bg-app-surface-soft/50 p-4">
             {modal.missingEnding && (
               <div>
-                <div className="text-xs font-black uppercase tracking-[0.16em] text-app-muted">需要结局</div>
+                <div className="text-xs font-black uppercase tracking-[0.16em] text-app-muted">{tr('需要结局', 'Required ending')}</div>
                 <div className="mt-1 text-sm font-bold text-app-text">{modal.missingEnding.name}</div>
               </div>
             )}
             {modal.missingBranches.length > 0 && (
               <div>
-                <div className="text-xs font-black uppercase tracking-[0.16em] text-app-muted">需要支线</div>
+                <div className="text-xs font-black uppercase tracking-[0.16em] text-app-muted">{tr('需要支线', 'Required branches')}</div>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {modal.missingBranches.map((branch) => (
                     <span key={branch.id} className="rounded-full border border-indigo-400/20 bg-indigo-500/10 px-3 py-1 text-xs font-black text-indigo-100">
@@ -132,17 +140,17 @@ export const SequelGateModal = ({
               disabled={!modal.sourceStoryId}
               className={semanticButtonClass('primary', { fullWidth: true })}
             >
-              前往前作
+              {tr('前往前作', 'Open prequel')}
             </button>
             <button
               type="button"
               onClick={() => onShowSourceDetail(modal.sourceStoryId)}
               className={semanticButtonClass('secondary', { fullWidth: true })}
             >
-              查看详情
+              {tr('查看详情', 'Details')}
             </button>
             <button type="button" onClick={onClose} className={semanticButtonClass('ghost', { fullWidth: true })}>
-              关闭
+              {tr('关闭', 'Close')}
             </button>
           </div>
         </motion.div>
@@ -153,6 +161,7 @@ export const SequelGateModal = ({
 
 export const AuthoringSaveSuccessModal = ({
   story,
+  tr,
   isSharing,
   formatBookTitle,
   onShare,
@@ -160,6 +169,7 @@ export const AuthoringSaveSuccessModal = ({
   onClose,
 }: {
   story: any | null;
+  tr: Translator;
   isSharing: boolean;
   formatBookTitle: (title: string) => string;
   onShare: () => void;
@@ -167,7 +177,7 @@ export const AuthoringSaveSuccessModal = ({
   onClose: () => void;
 }) => {
   const isPrivate = (story?.meta?.visibility || 'private') === 'private';
-  const title = story ? formatBookTitle(story.meta?.title || '未命名作品') : '';
+  const title = story ? formatBookTitle(story.meta?.title || tr('未命名作品', 'Untitled story')) : '';
 
   return (
     <AnimatePresence>
@@ -187,14 +197,20 @@ export const AuthoringSaveSuccessModal = ({
             <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-300">
               <CheckCircle2 className="h-6 w-6" />
             </div>
-            <div className="text-xs font-black uppercase tracking-[0.22em] text-emerald-300">作品已保存</div>
-            <h3 className="mt-2 break-words text-2xl font-black text-white">{title}</h3>
+            <div className="text-xs font-black uppercase tracking-[0.22em] text-emerald-300">{tr('作品已保存', 'Story Saved')}</div>
+            <h3 className="mt-2 break-words text-2xl font-black text-app-text">{title}</h3>
             <p className="mt-3 text-sm leading-relaxed text-app-muted">
-              更改已经写入作品档案。可以马上分享作品，或回到首页继续查看作品库。
+              {tr(
+                '更改已经写入作品档案。可以马上分享作品，或回到首页继续查看作品库。',
+                'Changes have been saved. Share the story now, or return home to browse the library.'
+              )}
             </p>
             {isPrivate && (
               <p className="mt-3 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs font-bold leading-relaxed text-amber-100/80">
-                当前作品仍是私人状态；点击分享时会先改为“非公开链接”，这样收到链接的人才能阅读，但作品不会出现在公开列表。
+                {tr(
+                  '当前作品仍是私人状态；点击分享时会先改为“非公开链接”，这样收到链接的人才能阅读，但作品不会出现在公开列表。',
+                  'This story is still private. Sharing will switch it to an unlisted link so readers can open it, without placing it in the public list.'
+                )}
               </p>
             )}
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
@@ -205,7 +221,7 @@ export const AuthoringSaveSuccessModal = ({
                 className={semanticButtonClass('primary', { fullWidth: true })}
               >
                 {isSharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
-                分享作品
+                {tr('分享作品', 'Share story')}
               </button>
               <button
                 type="button"
@@ -213,7 +229,7 @@ export const AuthoringSaveSuccessModal = ({
                 className={semanticButtonClass('secondary', { fullWidth: true })}
               >
                 <BookOpen className="h-4 w-4" />
-                回到首页
+                {tr('回到首页', 'Home')}
               </button>
             </div>
             <button
@@ -221,7 +237,7 @@ export const AuthoringSaveSuccessModal = ({
               onClick={onClose}
               className={`${semanticButtonClass('ghost', { fullWidth: true })} mt-3`}
             >
-              继续编辑
+              {tr('继续编辑', 'Keep editing')}
             </button>
           </motion.div>
         </motion.div>

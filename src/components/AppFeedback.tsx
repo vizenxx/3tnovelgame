@@ -227,11 +227,13 @@ export const ListSkeleton = ({ count = 6, compact = false }: { count?: number; c
 
 export const ConnectivityDrawer = ({
   state,
+  isEnglish = false,
   onRetry,
   onHome,
   onDismiss,
 }: {
   state: ConnectivityDrawerState | null;
+  isEnglish?: boolean;
   onRetry: () => void;
   onHome: () => void;
   onDismiss: () => void;
@@ -254,13 +256,13 @@ export const ConnectivityDrawer = ({
             <div className="mt-3 flex flex-wrap gap-2">
               <button type="button" onClick={onRetry} className={semanticButtonClass('primary', { compact: true })}>
                 <RefreshCcw className="h-4 w-4" />
-                重试同步
+                {isEnglish ? 'Retry sync' : '重试同步'}
               </button>
               <button type="button" onClick={onHome} className={semanticButtonClass('secondary', { compact: true })}>
-                回到首页
+                {isEnglish ? 'Home' : '回到首页'}
               </button>
               <button type="button" onClick={onDismiss} className={semanticButtonClass('ghost', { compact: true })}>
-                继续浏览
+                {isEnglish ? 'Keep browsing' : '继续浏览'}
               </button>
             </div>
           </div>

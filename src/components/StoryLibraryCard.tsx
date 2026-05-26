@@ -67,7 +67,7 @@ export const StoryLibraryCard = ({
           </div>
           <button type="button" onClick={(event) => { event.stopPropagation(); onOpenDetail(story); }} className="story-library-cover h-28 w-28 cursor-pointer transition-all hover:ring-2 hover:ring-indigo-400/70 hover:ring-offset-2 hover:ring-offset-zinc-950 sm:h-32 sm:w-32">
             {coverUrl ? (
-              <img src={coverUrl} alt={`${formatBookTitle(getStoryTitle(story))} 封面`} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+              <img src={coverUrl} alt={tr(`${formatBookTitle(getStoryTitle(story))} 封面`, `${formatBookTitle(getStoryTitle(story))} cover`)} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
             ) : (
               <div className="flex h-full w-full items-center justify-center p-4 text-center text-[11px] font-black uppercase tracking-[0.18em] text-app-muted">
                 3T NOVEL
@@ -95,12 +95,12 @@ export const StoryLibraryCard = ({
             </p>
             {sequelRequirement && (
               <div className="mb-2 shrink-0 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs font-black text-amber-100">
-                续作：需完成前作条件
+                {tr('续作：需完成前作条件', 'Sequel: prequel requirements')}
               </div>
             )}
           </div>
           <div className="mb-2 flex min-w-0 shrink-0 flex-wrap gap-1.5">
-            {(tags.length > 0 ? tags.slice(0, 3) : ['未标签']).map((tag: string) => (
+            {(tags.length > 0 ? tags.slice(0, 3) : [tr('未标签', 'Untagged')]).map((tag: string) => (
               <span key={tag} className="rounded-lg border border-indigo-400/15 bg-indigo-500/10 px-2.5 py-1 text-[11px] font-black text-indigo-200">
                 {tag}
               </span>

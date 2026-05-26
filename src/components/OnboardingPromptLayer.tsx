@@ -25,6 +25,7 @@ const renderPushPermissionPrompt = () => (
   <PushPermissionPrompt
     open={showPushPermissionPrompt}
     busy={pushSubscribeBusy}
+    tr={tr}
     onDismiss={dismissPushPermissionPrompt}
     onEnable={() => void enablePushNotificationsFromPrompt()}
   />

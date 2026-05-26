@@ -32,7 +32,7 @@ const renderSummaryView = () => (
           <section className="space-y-4">
             <div className="flex items-center gap-4">
               <div className="h-px flex-1 bg-app-surface-soft" />
-              <h2 className="text-xs font-black uppercase tracking-[0.3em] text-app-muted">时空回响</h2>
+              <h2 className="text-xs font-black uppercase tracking-[0.3em] text-app-muted">{tr('时空回响', 'Echoes')}</h2>
               <div className="h-px flex-1 bg-app-surface-soft" />
             </div>
             <div className="prose prose-invert max-w-none text-xl font-medium leading-relaxed italic text-amber-200/90">
@@ -49,14 +49,14 @@ const renderSummaryView = () => (
               className="flex items-center justify-center gap-3 rounded-2xl bg-indigo-600 py-5 text-lg font-black text-white shadow-xl shadow-indigo-600/20 transition-all hover:bg-indigo-500 hover:scale-[1.02]"
             >
               {isSharing ? <Loader2 className="h-6 w-6 animate-spin" /> : <Copy className="h-6 w-6" />}
-              分享这段命运
+              {tr('分享这段命运', 'Share this fate')}
             </button>
             <button
               onClick={resetGame}
               className="flex items-center justify-center gap-3 rounded-2xl bg-app-surface-soft py-5 text-lg font-black text-app-text transition-all hover:bg-app-surface-soft hover:scale-[1.02]"
             >
               <RefreshCcw className="h-6 w-6" />
-              开启新轮回
+              {tr('开启新轮回', 'Start new cycle')}
             </button>
           </div>
         </div>
