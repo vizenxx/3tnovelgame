@@ -8,6 +8,7 @@ import {
   BookOpen,
   Bookmark,
   Check,
+  Clipboard,
   Copy,
   ExternalLink,
   GitBranch,
@@ -101,6 +102,7 @@ export function AuthoringView({ ctx }: { ctx: any }) {
     authoringCoverPrompt,
     setAuthoringCoverPrompt,
     handleAuthoringCoverPaste,
+    handleAuthoringCoverClipboardRead,
     handleAuthoringCoverUpload,
     applyAuthoringCover,
     isGeneratingCover,
@@ -919,6 +921,10 @@ const renderAuthoringView = () => (
                             }}
                           />
                         </label>
+                        <button type="button" onClick={handleAuthoringCoverClipboardRead} className={semanticButtonClass('secondary', { compact: true })}>
+                          <Clipboard className="h-4 w-4" />
+                          {tr('粘贴图片', 'Paste image')}
+                        </button>
                         {authoringCartridge.meta?.coverUrl && (
                           <button type="button" onClick={() => applyAuthoringCover('')} className={semanticButtonClass('ghost', { compact: true })}>
                             <X className="h-4 w-4" />

@@ -129,7 +129,7 @@ type AppTheme = 'dark' | 'light';
 type StoryLibrarySort = 'updated' | 'likes' | 'interventions' | 'favorites' | 'shares' | 'words';
 type AuthoringListSort = 'updated' | 'created' | 'likes' | 'favorites' | 'shares' | 'interventions';
 type QuickGenerationMode = 'quiz' | 'advanced';
-type QuickQuizStepId = 'worlds' | 'moods' | 'conflict' | 'relationships' | 'interference' | 'length';
+type QuickQuizStepId = 'worlds' | 'moods' | 'conflict' | 'relationships' | 'interference' | 'ending' | 'length';
 type QuickQuizOption = {
   id: string;
   label: Record<AppLanguage, string>;
@@ -751,12 +751,22 @@ const QUICK_QUIZ_STEPS: QuickQuizStep[] = [
     subtitle: { 'zh-CN': '选择一种游戏感，决定故事偏转的力度。', 'en-US': 'Pick the kind of story shift you want.' },
     maxSelections: 1,
     options: [
-      { id: 'gentle', label: { 'zh-CN': '温和改写', 'en-US': 'Gentle rewrite' }, outline: { 'zh-CN': '干涉更偏向温和改写，重视唯一走向里的过程变化', 'en-US': 'interference should gently reshape the path within one fixed ending' }, endingMode: 'single' },
-      { id: 'branching', label: { 'zh-CN': '明显分歧', 'en-US': 'Clear branches' }, outline: { 'zh-CN': '干涉会制造明显分歧', 'en-US': 'interference should create clear branches' }, endingMode: 'dual' },
-      { id: 'butterfly', label: { 'zh-CN': '蝴蝶效应', 'en-US': 'Butterfly effect' }, outline: { 'zh-CN': '小选择会逐步引发蝴蝶效应', 'en-US': 'small choices should gradually create butterfly effects' }, endingMode: 'dual' },
-      { id: 'darkcost', label: { 'zh-CN': '黑暗代价', 'en-US': 'Dark cost' }, outline: { 'zh-CN': '每次改变都要有清晰代价', 'en-US': 'every change should carry a visible cost' }, endingMode: 'dual' },
-      { id: 'defy', label: { 'zh-CN': '逆天改命', 'en-US': 'Defy fate' }, outline: { 'zh-CN': '干涉应有逆天改命的强烈张力', 'en-US': 'interference should feel like defying fate' }, endingMode: 'dual' },
-      { id: 'hiddenTruth', label: { 'zh-CN': '隐藏真相', 'en-US': 'Hidden truth' }, outline: { 'zh-CN': '干涉会逐步揭开隐藏真相', 'en-US': 'interference should uncover hidden truths' }, endingMode: 'dual' },
+      { id: 'gentle', label: { 'zh-CN': '温和改写', 'en-US': 'Gentle rewrite' }, outline: { 'zh-CN': '干涉更偏向温和改写，重视过程变化与人物理解', 'en-US': 'interference should gently reshape the path, character understanding, and consequences' } },
+      { id: 'branching', label: { 'zh-CN': '明显分歧', 'en-US': 'Clear branches' }, outline: { 'zh-CN': '干涉会制造明显分歧', 'en-US': 'interference should create clear branches' } },
+      { id: 'butterfly', label: { 'zh-CN': '蝴蝶效应', 'en-US': 'Butterfly effect' }, outline: { 'zh-CN': '小选择会逐步引发蝴蝶效应', 'en-US': 'small choices should gradually create butterfly effects' } },
+      { id: 'darkcost', label: { 'zh-CN': '黑暗代价', 'en-US': 'Dark cost' }, outline: { 'zh-CN': '每次改变都要有清晰代价', 'en-US': 'every change should carry a visible cost' } },
+      { id: 'defy', label: { 'zh-CN': '逆天改命', 'en-US': 'Defy fate' }, outline: { 'zh-CN': '干涉应有逆天改命的强烈张力', 'en-US': 'interference should feel like defying fate' } },
+      { id: 'hiddenTruth', label: { 'zh-CN': '隐藏真相', 'en-US': 'Hidden truth' }, outline: { 'zh-CN': '干涉会逐步揭开隐藏真相', 'en-US': 'interference should uncover hidden truths' } },
+    ],
+  },
+  {
+    id: 'ending',
+    title: { 'zh-CN': '想要怎样的终局结构？', 'en-US': 'What ending structure do you want?' },
+    subtitle: { 'zh-CN': '选择故事最终收束方式。唯一走向更像同一终点的不同旅程；三域走向更强调不可兼得的分歧。', 'en-US': 'Choose how the story resolves. Fixed ending focuses on different routes to one finale; three-domain path emphasizes mutually exclusive outcomes.' },
+    maxSelections: 1,
+    options: [
+      { id: 'single', label: { 'zh-CN': '唯一走向', 'en-US': 'Fixed ending' }, outline: { 'zh-CN': '最终收束到同一个核心终局，干涉改变过程、代价与理解', 'en-US': 'the story converges on one core finale while interference changes the route, cost, and understanding' }, endingMode: 'single' },
+      { id: 'dual', label: { 'zh-CN': '三域走向', 'en-US': 'Three-domain path' }, outline: { 'zh-CN': '故事保留左域、中域、右域的分歧收束', 'en-US': 'the story keeps left, middle, and right domains as distinct resolutions' }, endingMode: 'dual' },
     ],
   },
   {
@@ -778,6 +788,7 @@ const createDefaultQuickQuizAnswers = (): QuickQuizAnswers => ({
   conflict: [],
   relationships: [],
   interference: [],
+  ending: ['dual'],
   length: ['standard'],
 });
 
@@ -2983,6 +2994,9 @@ export default function App() {
     const interferenceOption = asSafeArray(answers.interference)
       .map((id) => getQuickQuizOption('interference', id))
       .find(Boolean);
+    const endingOption = asSafeArray(answers.ending)
+      .map((id) => getQuickQuizOption('ending', id))
+      .find(Boolean);
     const lengthOption = asSafeArray(answers.length)
       .map((id) => getQuickQuizOption('length', id))
       .find(Boolean);
@@ -2999,7 +3013,7 @@ export default function App() {
       customOutline: customOutlineFromQuiz,
       targetWordCount: Number(lengthOption?.targetWordCount || 800),
       narrativePerson: 'third',
-      endingMode: interferenceOption?.endingMode || 'dual',
+      endingMode: endingOption?.endingMode || 'dual',
       endingBias: { leftBaseWeight: 40, rightBaseWeight: 40 },
     };
   };
@@ -6100,7 +6114,7 @@ export default function App() {
         return;
       }
       if (!hasOverrideInput && quickGenerationMode === 'advanced' && selectedThemes.length > 4) {
-        showError('最多选择 4 个主题。');
+        showError(appLanguage === 'en-US' ? 'Choose up to 4 story tags.' : '最多选择 4 个主题。');
         return;
       }
     } catch (error) {
@@ -6196,7 +6210,7 @@ export default function App() {
       data.branches = (data.branches || []).map((branch: any) => ({
         ...branch,
         id: branch.id || `b_${Math.random().toString(36).slice(2, 11)}`,
-        name: branch.name || branch.theme || '未命名支线',
+        name: branch.name || branch.theme || (appLanguage === 'en-US' ? 'Untitled Branch' : '未命名支线'),
         sceneText: branch.sceneText || branch.desc || '',
         trigger: branch.trigger || {
           type: 'single',
@@ -6224,7 +6238,7 @@ export default function App() {
 
       const initialStatuses: Record<string, { status: string; isDead: boolean }> = {};
       (data.characters || []).forEach((character: any) => {
-        initialStatuses[character.id] = { status: '存活', isDead: false };
+        initialStatuses[character.id] = { status: appLanguage === 'en-US' ? 'Present' : '存活', isDead: false };
       });
 
       setBlueprint(data);
@@ -6598,6 +6612,29 @@ export default function App() {
     if (!imageFile) return;
     event.preventDefault();
     await handleAuthoringCoverUpload(imageFile);
+  };
+
+  const handleAuthoringCoverClipboardRead = async () => {
+    if (!navigator.clipboard || typeof navigator.clipboard.read !== 'function') {
+      showError(tr('当前浏览器不支持直接读取剪贴板图片。可以使用 Ctrl/Cmd+V 粘贴，或上传图片文件。', 'This browser cannot read clipboard images directly. Use Ctrl/Cmd+V paste, or upload an image file.'));
+      return;
+    }
+    try {
+      const clipboardItems = await navigator.clipboard.read();
+      for (const item of clipboardItems) {
+        const imageType = item.types.find((type) => type.startsWith('image/'));
+        if (!imageType) continue;
+        const blob = await item.getType(imageType);
+        const extension = imageType.split('/')[1] || 'png';
+        const file = new File([blob], `pasted-cover.${extension}`, { type: imageType });
+        await handleAuthoringCoverUpload(file);
+        return;
+      }
+      showError(tr('剪贴板里没有可用的图片。', 'No usable image found in the clipboard.'));
+    } catch (error: any) {
+      console.error(error);
+      showError(error?.message || tr('读取剪贴板图片失败。请确认浏览器授权，或改用 Ctrl/Cmd+V 粘贴。', 'Failed to read the clipboard image. Check browser permission, or use Ctrl/Cmd+V paste.'));
+    }
   };
 
   const handleGenerateAuthoringCover = async () => {
@@ -8631,6 +8668,7 @@ export default function App() {
         authoringCoverPrompt,
         setAuthoringCoverPrompt,
         handleAuthoringCoverPaste,
+        handleAuthoringCoverClipboardRead,
         handleAuthoringCoverUpload,
         applyAuthoringCover,
         isGeneratingCover,

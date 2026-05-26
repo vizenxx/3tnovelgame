@@ -71,22 +71,22 @@ export const ThemeSelectionView = (ctx: any) => {
           <Wand2 className="h-4 w-4" />
           {tr('命运引擎', 'Fate Engine')}
         </div>
-        <h1 className="text-4xl font-black text-white sm:text-5xl">{tr('快速生成故事', 'Quick Story Generation')}</h1>
+        <h1 className="text-4xl font-black text-white sm:text-5xl">{tr('快速生成故事', 'Story Maker')}</h1>
         <p className="text-sm leading-relaxed text-app-muted sm:text-base">
-          {tr('选择 1 到 4 个主题，或直接输入故事大纲。系统会先生成完整蓝图，再预先写好前 3 章供玩家开始干涉。', 'Choose 1 to 4 tags or enter an outline. The system creates a full blueprint, then writes the first 3 chapters so play can begin quickly.')}
+          {tr('选择 1 到 4 个主题，或直接输入故事大纲。系统会先生成完整蓝图，再预先写好前 3 章供玩家开始干涉。', 'Pick a quiz path or use creator settings. The app builds a full blueprint and prepares the first 3 chapters for play.')}
         </p>
       </div>
 
       <div className="mx-auto mt-8 flex w-full max-w-xl rounded-full border border-app-border bg-app-bg/70 p-1 text-xs font-black">
         {([
-          { id: 'quiz' as const, label: appLanguage === 'en-US' ? 'Play by quiz' : '想玩故事' },
-          { id: 'advanced' as const, label: appLanguage === 'en-US' ? 'Advanced creation' : '高级创作设置' },
+          { id: 'quiz' as const, label: appLanguage === 'en-US' ? 'Play Quiz' : '想玩故事' },
+          { id: 'advanced' as const, label: appLanguage === 'en-US' ? 'Creator Mode' : '高级创作设置' },
         ]).map((mode) => (
           <button
             key={mode.id}
             type="button"
             onClick={() => setQuickGenerationMode(mode.id)}
-            className={`flex-1 rounded-full px-3 py-2 transition-colors ${quickGenerationMode === mode.id ? 'bg-indigo-500 text-white' : 'text-app-muted hover:text-app-text'}`}
+            className={`flex-1 rounded-full px-2 py-2 text-center text-[11px] leading-tight transition-colors sm:px-3 sm:text-xs ${quickGenerationMode === mode.id ? 'bg-indigo-500 text-white' : 'text-app-muted hover:text-app-text'}`}
           >
             {mode.label}
           </button>
@@ -106,7 +106,7 @@ export const ThemeSelectionView = (ctx: any) => {
                 </div>
                 <p className="mt-1 text-xs leading-relaxed text-amber-100/70">
                   {appLanguage === 'en-US'
-                    ? 'Randomly draw every preference layer and start generating immediately.'
+                    ? 'Draw all preferences at random and generate right away.'
                     : '从每一层偏好中随机抽取设定，并直接开始生成故事。'}
                 </p>
               </div>
@@ -116,7 +116,7 @@ export const ThemeSelectionView = (ctx: any) => {
                 className={semanticButtonClass('secondary', { compact: true })}
               >
                 <Sparkles className="h-4 w-4" />
-                {appLanguage === 'en-US' ? 'Fully random' : '全随机生成'}
+                {appLanguage === 'en-US' ? 'Random' : '全随机生成'}
               </button>
             </div>
             <div className="mb-5 rounded-2xl border border-app-border bg-app-bg/55 p-4">
@@ -127,11 +127,11 @@ export const ThemeSelectionView = (ctx: any) => {
               >
                 <div>
                   <div className="text-sm font-black text-app-text">
-                    {appLanguage === 'en-US' ? 'Use a character idea?' : '有想放进故事的人物吗？'}
+                    {appLanguage === 'en-US' ? 'Add a character?' : '有想放进故事的人物吗？'}
                   </div>
                   <p className="mt-1 text-xs leading-relaxed text-app-muted">
                     {appLanguage === 'en-US'
-                      ? 'Optional. Add a person, relationship, or character seed for the story to build around.'
+                      ? 'Optional. Add a person, bond, or character seed for the story.'
                       : '可选。可以填一个人物、关系或人设需求，让故事围绕它自然展开。'}
                   </p>
                 </div>
@@ -145,21 +145,21 @@ export const ThemeSelectionView = (ctx: any) => {
                     <input
                       value={quickCharacterSeed.name}
                       onChange={(event) => setQuickCharacterSeed((prev) => ({ ...prev, name: event.target.value }))}
-                      placeholder={appLanguage === 'en-US' ? 'Character name, e.g. my sister' : '人物名称，例如：妹妹'}
+                      placeholder={appLanguage === 'en-US' ? 'Name, e.g. my sister' : '人物名称，例如：妹妹'}
                       className="w-full rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none transition-colors focus:border-indigo-500"
                     />
                     <input
                       value={quickCharacterSeed.role}
                       onChange={(event) => setQuickCharacterSeed((prev) => ({ ...prev, role: event.target.value }))}
-                      placeholder={appLanguage === 'en-US' ? 'Identity or relationship' : '身份或关系，例如：主角的妹妹'}
+                      placeholder={appLanguage === 'en-US' ? 'Role or relationship' : '身份或关系，例如：主角的妹妹'}
                       className="w-full rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none transition-colors focus:border-indigo-500"
                     />
                   </div>
                   <div className="grid gap-2 sm:grid-cols-3">
                     {([
-                      { value: 'protagonist' as const, label: appLanguage === 'en-US' ? 'Protagonist' : '作为主角' },
-                      { value: 'important' as const, label: appLanguage === 'en-US' ? 'Key character' : '重要角色' },
-                      { value: 'mystery' as const, label: appLanguage === 'en-US' ? 'Mystery role' : '神秘人物' },
+                      { value: 'protagonist' as const, label: appLanguage === 'en-US' ? 'Lead' : '作为主角' },
+                      { value: 'important' as const, label: appLanguage === 'en-US' ? 'Key role' : '重要角色' },
+                      { value: 'mystery' as const, label: appLanguage === 'en-US' ? 'Mystery' : '神秘人物' },
                     ]).map((option) => (
                       <button
                         key={option.value}
@@ -178,7 +178,7 @@ export const ThemeSelectionView = (ctx: any) => {
                   <textarea
                     value={quickCharacterSeed.note}
                     onChange={(event) => setQuickCharacterSeed((prev) => ({ ...prev, note: event.target.value }))}
-                    placeholder={appLanguage === 'en-US' ? 'Optional note: personality, secret, wish, conflict...' : '可选补充：性格、秘密、愿望、矛盾点……'}
+                    placeholder={appLanguage === 'en-US' ? 'Optional: personality, secret, wish, conflict...' : '可选补充：性格、秘密、愿望、矛盾点……'}
                     className="min-h-24 w-full resize-y rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none transition-colors focus:border-indigo-500"
                   />
                 </div>
@@ -252,7 +252,7 @@ export const ThemeSelectionView = (ctx: any) => {
                     className={semanticButtonClass('primary', { compact: true })}
                   >
                     <Sparkles className="h-4 w-4" />
-                    {appLanguage === 'en-US' ? 'Generate my story' : '生成想玩的故事'}
+                    {appLanguage === 'en-US' ? 'Generate Story' : '生成想玩的故事'}
                   </button>
                 )}
               </div>
@@ -288,7 +288,7 @@ export const ThemeSelectionView = (ctx: any) => {
       </div>
 
       <div className="mx-auto mt-6 w-full max-w-2xl px-4 text-left">
-        <label className="mb-3 block text-sm font-bold text-app-text">{tr('主题与标签（以逗号分隔）', 'Themes and tags, comma-separated')}</label>
+        <label className="mb-3 block text-sm font-bold text-app-text">{tr('主题与标签（以逗号分隔）', 'Tags')}</label>
         <input
           value={themeInputText}
           onChange={(event) => {
@@ -323,7 +323,7 @@ export const ThemeSelectionView = (ctx: any) => {
 
       <div className="mx-auto mt-10 w-full max-w-2xl px-4 text-left">
         <div className="mb-6 rounded-2xl border border-indigo-300/15 bg-indigo-500/10 p-4">
-          <label className="mb-2 block text-sm font-black text-indigo-100">{tr('套用世界观设定', 'Apply world setting')}</label>
+          <label className="mb-2 block text-sm font-black text-indigo-100">{tr('套用世界观设定', 'World Setting')}</label>
           <select
             value={quickSeriesBindingId}
             onChange={(event) => setQuickSeriesBindingId(event.target.value)}
@@ -416,7 +416,7 @@ export const ThemeSelectionView = (ctx: any) => {
                       onChange={(event) => setQuickSeriesSelection((prev) => ({ ...prev, useContinuity: event.target.checked }))}
                       className="accent-indigo-500"
                     />
-                    {tr('作为续作生成，设置前作继承锚点', 'Generate as sequel with previous-story anchors')}
+                    {tr('作为续作生成，设置前作继承锚点', 'Sequel mode: use previous-story anchors')}
                   </label>
                   {quickSeriesSelection.useContinuity && (
                     <div className="mt-3 space-y-3">
@@ -501,7 +501,7 @@ export const ThemeSelectionView = (ctx: any) => {
             );
           })()}
         </div>
-        <label className="mb-3 block text-sm font-bold text-app-text">{tr('专属故事大纲', 'Custom story outline')}</label>
+        <label className="mb-3 block text-sm font-bold text-app-text">{tr('专属故事大纲', 'Story outline')}</label>
         <textarea
           value={customOutline}
           onChange={(event) => setCustomOutline(event.target.value)}
@@ -608,7 +608,7 @@ export const ThemeSelectionView = (ctx: any) => {
         </div>
         <div className="mt-6 space-y-3">
           <div className="flex items-center justify-between text-sm">
-            <span className="font-bold text-app-muted">{tr('每章目标字数', 'Target words per chapter')}</span>
+            <span className="font-bold text-app-muted">{tr('每章目标字数', 'Words/chapter')}</span>
             <span className="font-black text-indigo-300">{targetWordCount} {tr('字', 'words')}</span>
           </div>
           <input
@@ -636,7 +636,7 @@ export const ThemeSelectionView = (ctx: any) => {
           className={`${semanticButtonClass('primary', { fullWidth: true })} mt-6`}
         >
           <Sparkles className="h-4 w-4" />
-          {tr('生成世界蓝图', 'Generate story blueprint')}
+          {tr('生成世界蓝图', 'Generate Blueprint')}
         </button>
       </div>
       </>
