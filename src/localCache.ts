@@ -1,6 +1,7 @@
 const DB_NAME = '3t-novelgame-local-cache';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = 'entries';
+const UPDATED_AT_INDEX = 'by_updated_at';
 
 type CacheEnvelope<T> = {
   key: string;
@@ -35,8 +36,14 @@ const openCacheDb = () => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = () => {
       const db = request.result;
+      let store: IDBObjectStore;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: 'key' });
+        store = db.createObjectStore(STORE_NAME, { keyPath: 'key' });
+      } else {
+        store = request.transaction!.objectStore(STORE_NAME);
+      }
+      if (!store.indexNames.contains(UPDATED_AT_INDEX)) {
+        store.createIndex(UPDATED_AT_INDEX, 'updatedAt', { unique: false });
       }
     };
     request.onsuccess = () => {
@@ -105,27 +112,46 @@ export async function pruneLocalCache(options?: { maxEntries?: number; maxAgeMs?
     const maxEntries = Math.max(20, options?.maxEntries ?? 160);
     const maxAgeMs = Math.max(24 * 60 * 60 * 1000, options?.maxAgeMs ?? 45 * 24 * 60 * 60 * 1000);
     const now = Date.now();
-    const entries = await withLocalCacheTimeout(new Promise<Array<CacheEnvelope<unknown>>>((resolve, reject) => {
+    const staleThreshold = now - maxAgeMs;
+
+    // Use the updatedAt index with a descending cursor so we only read entry keys,
+    // not full values. This avoids loading all story data into memory just to prune.
+    const keysToDelete = await withLocalCacheTimeout(new Promise<string[]>((resolve, reject) => {
       const transaction = db.transaction(STORE_NAME, 'readonly');
-      const request = transaction.objectStore(STORE_NAME).getAll();
-      request.onsuccess = () => resolve(Array.isArray(request.result) ? request.result : []);
-      request.onerror = () => reject(request.error);
+      const index = transaction.objectStore(STORE_NAME).index(UPDATED_AT_INDEX);
+      // Open cursor newest-first (prev = descending)
+      const cursorRequest = index.openKeyCursor(null, 'prev');
+      const toDelete: string[] = [];
+      let kept = 0;
+
+      cursorRequest.onsuccess = () => {
+        const cursor = cursorRequest.result;
+        if (!cursor) {
+          resolve(toDelete);
+          return;
+        }
+        const updatedAt = Number(cursor.key);
+        const primaryKey = cursor.primaryKey as string;
+        if (!updatedAt || updatedAt < staleThreshold) {
+          // Too old
+          toDelete.push(primaryKey);
+        } else if (kept >= maxEntries) {
+          // Over count limit
+          toDelete.push(primaryKey);
+        } else {
+          kept += 1;
+        }
+        cursor.continue();
+      };
+      cursorRequest.onerror = () => reject(cursorRequest.error);
     }));
-    const sorted = entries
-      .filter((entry) => entry?.key)
-      .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
-    const staleKeys = new Set<string>();
-    sorted.forEach((entry, index) => {
-      const updatedAt = Number(entry.updatedAt || 0);
-      if (index >= maxEntries || !updatedAt || now - updatedAt > maxAgeMs) {
-        staleKeys.add(entry.key);
-      }
-    });
-    if (staleKeys.size === 0) return;
+
+    if (keysToDelete.length === 0) return;
+
     await withLocalCacheTimeout(new Promise<void>((resolve, reject) => {
       const transaction = db.transaction(STORE_NAME, 'readwrite');
       const store = transaction.objectStore(STORE_NAME);
-      staleKeys.forEach((key) => store.delete(key));
+      keysToDelete.forEach((key) => store.delete(key));
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error);
     }));
@@ -133,4 +159,3 @@ export async function pruneLocalCache(options?: { maxEntries?: number; maxAgeMs?
     // Cache pruning should never block the app.
   }
 }
-

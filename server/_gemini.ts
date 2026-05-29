@@ -32,7 +32,7 @@ export function stripGeneratedMarkup(value: unknown) {
     .replace(/```/g, '')
     .replace(/\[\/?(?:focus|highlight|mark|changed?|diff|insert|delete)\]/gi, '')
     .replace(/(?:【|「|\[)?(?:高亮|标记|变化标记|highlight|markup)(?:】|」|\])?[：:]/gi, '')
-    .replace(/\u200b|\u200c|\u200d|\ufeff/g, '')
+    .replace(/​|‌|‍|﻿/g, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
@@ -143,14 +143,17 @@ export function getGeminiModelCandidates() {
   return Array.from(new Set(candidates));
 }
 
-export async function generateGeminiTextWithFallback(options: {
+type GenerateFallbackOptions<T> = {
   contents: string;
   config?: any;
+  parseResponse?: (rawText: string | undefined) => T;
   logContext?: GeminiLogContext;
   logInfo?: GeminiLogInfo;
   logError?: GeminiLogError;
   metadata?: Record<string, unknown>;
-}) {
+};
+
+async function _generateWithFallback<T>(options: GenerateFallbackOptions<T>) {
   const models = getGeminiModelCandidates();
   const keyEntries = getRotatedGeminiApiKeys();
   let lastError: unknown = null;
@@ -205,7 +208,18 @@ export async function generateGeminiTextWithFallback(options: {
     throw new Error('GEMINI_QUOTA_EXHAUSTED: all Gemini API keys exceeded quota for all configured text models.');
   }
 
-  throw lastError instanceof Error ? lastError : new Error('GEMINI_MODEL_FAILED: Gemini text generation failed.');
+  throw lastError instanceof Error ? lastError : new Error('GEMINI_MODEL_FAILED: Gemini generation failed.');
+}
+
+export async function generateGeminiTextWithFallback(options: {
+  contents: string;
+  config?: any;
+  logContext?: GeminiLogContext;
+  logInfo?: GeminiLogInfo;
+  logError?: GeminiLogError;
+  metadata?: Record<string, unknown>;
+}) {
+  return _generateWithFallback(options);
 }
 
 export async function generateGeminiJsonWithFallback<T>(options: {
@@ -217,62 +231,9 @@ export async function generateGeminiJsonWithFallback<T>(options: {
   logError?: GeminiLogError;
   metadata?: Record<string, unknown>;
 }) {
-  const models = getGeminiModelCandidates();
-  const keyEntries = getRotatedGeminiApiKeys();
-  let lastError: unknown = null;
-  let quotaFailures = 0;
-
-  for (const model of models) {
-    let modelQuotaFailures = 0;
-    for (const { apiKey, keyIndex } of keyEntries) {
-      try {
-        options.logInfo?.(options.logContext!, 'gemini-attempt', {
-          ...options.metadata,
-          model,
-          keyIndex,
-        });
-        const ai = createGeminiClient(apiKey);
-        const response = await ai.models.generateContent({
-          model,
-          contents: options.contents,
-          config: options.config,
-        });
-        const data = sanitizeGeneratedPayload(options.parseResponse(response.text));
-        options.logInfo?.(options.logContext!, 'gemini-success', {
-          ...options.metadata,
-          model,
-          keyIndex,
-        });
-        return { data, response, model, keyIndex };
-      } catch (error) {
-        lastError = error;
-        const quota = isGeminiQuotaError(error);
-        if (quota) {
-          quotaFailures += 1;
-          modelQuotaFailures += 1;
-        }
-        options.logError?.(options.logContext!, quota ? 'gemini-key-quota-failed' : 'gemini-attempt-failed', error, {
-          ...options.metadata,
-          model,
-          keyIndex,
-        });
-      }
-    }
-
-    if (modelQuotaFailures >= keyEntries.length) {
-      options.logInfo?.(options.logContext!, 'gemini-model-quota-exhausted', {
-        ...options.metadata,
-        model,
-        keyCount: keyEntries.length,
-      });
-    }
-  }
-
-  if (quotaFailures >= models.length * keyEntries.length) {
-    throw new Error('GEMINI_QUOTA_EXHAUSTED: all Gemini API keys exceeded quota for all configured text models.');
-  }
-
-  throw lastError instanceof Error ? lastError : new Error('GEMINI_MODEL_FAILED: Gemini JSON generation failed.');
+  const { response, model, keyIndex } = await _generateWithFallback(options);
+  const data = sanitizeGeneratedPayload(options.parseResponse(response.text));
+  return { data, response, model, keyIndex };
 }
 
 export function parseGeminiJson<T = any>(rawText: string | undefined): T {

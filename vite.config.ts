@@ -62,7 +62,7 @@ export default defineConfig(({mode}) => {
             if (id.includes('firebase')) return 'firebase';
             if (id.includes('react') || id.includes('scheduler')) return 'react-vendor';
             if (id.includes('lucide-react')) return 'icons';
-            if (id.includes('motion') || id.includes('framer-motion')) return 'motion';
+            if (id.includes('motion')) return 'motion';
           },
         },
       },

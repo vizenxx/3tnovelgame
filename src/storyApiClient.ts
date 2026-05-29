@@ -36,6 +36,23 @@ const STORY_API_TIMEOUT_MS = 12000;
 const OPTIONAL_AUTH_TOKEN_TIMEOUT_MS = 2500;
 const REQUIRED_AUTH_TOKEN_TIMEOUT_MS = 7000;
 const inFlightReadRequests = new Map<string, Promise<any>>();
+
+// Cache the Firebase ID token to avoid calling getIdToken() on every request.
+// Firebase tokens are valid for 1 hour; we refresh 2 minutes early.
+let cachedIdToken: { uid: string; value: string; expiresAt: number } | null = null;
+const TOKEN_REFRESH_BUFFER_MS = 2 * 60 * 1000;
+
+async function getCachedIdToken(user: { uid: string; getIdToken: (force?: boolean) => Promise<string> }, timeoutMs: number): Promise<string> {
+  const now = Date.now();
+  if (cachedIdToken && cachedIdToken.uid === user.uid && cachedIdToken.expiresAt - TOKEN_REFRESH_BUFFER_MS > now) {
+    return cachedIdToken.value;
+  }
+  const token = await withAuthTimeout(user.getIdToken(), timeoutMs);
+  // Firebase tokens are valid for 60 minutes from issuance. We don't know when they were issued,
+  // so cache for 30 minutes from when we fetched — safe margin regardless of token age.
+  cachedIdToken = { uid: user.uid, value: token, expiresAt: now + 30 * 60 * 1000 };
+  return token;
+}
 const DEDUPE_READ_ACTIONS = new Set([
   'getAppSettings',
   'getAuthorFollowState',
@@ -133,8 +150,8 @@ export async function storyApi<T = any>(
   if (options.auth || currentUser) {
     try {
       const token = currentUser
-        ? await withAuthTimeout(
-          currentUser.getIdToken(),
+        ? await getCachedIdToken(
+          currentUser,
           options.auth ? REQUIRED_AUTH_TOKEN_TIMEOUT_MS : OPTIONAL_AUTH_TOKEN_TIMEOUT_MS
         )
         : '';

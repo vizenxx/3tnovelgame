@@ -54,14 +54,8 @@ import { SocialOverlayLayer } from './components/SocialOverlayLayer';
 import { AccountCenterLayer } from './components/AccountCenterLayer';
 import { StoryInfoPanelLayer } from './components/StoryInfoPanelLayer';
 import { PrimaryBottomDock } from './components/PrimaryBottomDock';
-import { ArchiveView } from './components/ArchiveView';
 import { AccountCenterContent } from './components/AccountCenterView';
-import { ReadonlyStoryView } from './components/ReadonlyStoryView';
-import { SeriesWorldView } from './components/SeriesWorldView';
-import { ThemeSelectionView } from './components/ThemeSelectionView';
-import { AuthoringView } from './components/AuthoringView';
 import { GameplayModals } from './components/GameplayModals';
-import { SummaryView } from './components/SummaryView';
 import { AuthoringSaveSuccessModal, ConfirmationModal, SequelGateModal, type SequelGateModalState } from './components/GeneralModals';
 import { AuthorProfileModal, NotificationCenterModal, ShareComposerModal } from './components/SocialModals';
 import {
@@ -91,6 +85,12 @@ import { createTranslator, getInitialLanguage, LANGUAGE_STORAGE_KEY, type AppLan
 import { dictionaries } from './i18n/dictionaries';
 
 const AuthView = lazy(() => import('./components/AuthView').then((module) => ({ default: module.AuthView })));
+const ArchiveView = lazy(() => import('./components/ArchiveView').then((m) => ({ default: m.ArchiveView })));
+const ReadonlyStoryView = lazy(() => import('./components/ReadonlyStoryView').then((m) => ({ default: m.ReadonlyStoryView })));
+const SeriesWorldView = lazy(() => import('./components/SeriesWorldView').then((m) => ({ default: m.SeriesWorldView })));
+const ThemeSelectionView = lazy(() => import('./components/ThemeSelectionView').then((m) => ({ default: m.ThemeSelectionView })));
+const AuthoringView = lazy(() => import('./components/AuthoringView').then((m) => ({ default: m.AuthoringView })));
+const SummaryView = lazy(() => import('./components/SummaryView').then((m) => ({ default: m.SummaryView })));
 import { 
   signInWithRedirect,
   signInWithPopup,
@@ -9131,7 +9131,7 @@ export default function App() {
         <StartupShell message={startupMessage} title={t('app.name')} subtitle={t('startup.default')} tagline={tr('可分享 · 可改写的互动故事引擎', 'Shareable · Rewritable interactive story engine')} />
       ) : gameState === 'READONLY_STORY' && readonlyStoryData ? (
         <>
-          {renderReadonlyStoryView()}
+          <Suspense fallback={null}>{renderReadonlyStoryView()}</Suspense>
           {renderScrollToTopButton()}
           {accountEntryButton}
           {renderSocialOverlayLayer()}
@@ -9145,9 +9145,9 @@ export default function App() {
         <>
           {gameState === 'STORY_SELECT' && renderStorySelectView()}
           {gameState === 'ACCOUNT_CENTER' && renderAccountCenterView()}
-          {gameState === 'ARCHIVE' && renderArchiveView()}
-          {(gameState === 'SERIES_WORLD_LIST' || gameState === 'SERIES_WORLD_GENERATE' || gameState === 'SERIES_WORLD_EDIT') && renderSeriesWorldView()}
-          {gameState === 'THEME_SELECTION' && renderThemeSelectionView()}
+          {gameState === 'ARCHIVE' && <Suspense fallback={null}>{renderArchiveView()}</Suspense>}
+          {(gameState === 'SERIES_WORLD_LIST' || gameState === 'SERIES_WORLD_GENERATE' || gameState === 'SERIES_WORLD_EDIT') && <Suspense fallback={null}>{renderSeriesWorldView()}</Suspense>}
+          {gameState === 'THEME_SELECTION' && <Suspense fallback={null}>{renderThemeSelectionView()}</Suspense>}
           {gameState === 'GENERATING_BLUEPRINT' && (
             <div className="fixed inset-0 z-[5000] flex flex-col items-center justify-center bg-app-bg px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))] text-center">
               <motion.div
@@ -9160,9 +9160,9 @@ export default function App() {
             </div>
           )}
           {gameState === 'PLAYING' && renderPlayingView()}
-          {gameState === 'SUMMARY' && renderSummaryView()}
-          {gameState === 'AUTHORING' && renderAuthoringView()}
-          {gameState === 'READONLY_STORY' && renderReadonlyStoryView()}
+          {gameState === 'SUMMARY' && <Suspense fallback={null}>{renderSummaryView()}</Suspense>}
+          {gameState === 'AUTHORING' && <Suspense fallback={null}>{renderAuthoringView()}</Suspense>}
+          {gameState === 'READONLY_STORY' && <Suspense fallback={null}>{renderReadonlyStoryView()}</Suspense>}
 
           {gameState === 'PLAYING' && actionMenuButton}
           {renderPlayingQuickNav()}
