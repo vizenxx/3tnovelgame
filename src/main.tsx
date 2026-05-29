@@ -6,9 +6,14 @@ import './index.css';
 
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
+    // Capture before register() — null means first install, non-null means an existing SW is active.
+    const hadController = Boolean(navigator.serviceWorker.controller);
     let reloadingForNewWorker = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (reloadingForNewWorker) return;
+      // Only reload when swapping an existing SW (version update), not on first install.
+      // On first install hadController is false, so skipWaiting+claim would otherwise
+      // cause a spurious reload that shows the boot screen twice.
+      if (!hadController || reloadingForNewWorker) return;
       reloadingForNewWorker = true;
       window.location.reload();
     });
