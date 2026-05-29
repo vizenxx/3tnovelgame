@@ -427,7 +427,7 @@ const renderSummaryModal = () => {
           </div>
           {singleEnding && (
             <div className="mb-4 rounded-2xl border border-indigo-400/20 bg-indigo-500/10 px-4 py-3 text-sm font-black text-indigo-100">
-              {tr('当前走向：唯一走向', 'Current path: Fixed-ending path')}
+              {tr('当前走向：唯一走向', 'Fixed-ending path')}
             </div>
           )}
           {!singleEnding && (
@@ -447,7 +447,7 @@ const renderSummaryModal = () => {
           </div>
           {branchStats.runUnlocked.length > 0 && (
             <div className="mb-4 rounded-2xl border border-app-border bg-app-surface/30 p-4">
-              <div className="mb-2 text-[11px] font-black uppercase tracking-[0.18em] text-app-muted">{tr('本次触及支线', 'Branches touched this run')}</div>
+              <div className="mb-2 text-[11px] font-black uppercase tracking-[0.18em] text-app-muted">{tr('本次触及支线', 'Branches this run')}</div>
               <div className="flex flex-wrap gap-2">
                 {branchStats.runUnlocked.map((branch: any) => (
                   <span key={branch.id || branch.name} className="rounded-full bg-indigo-500/10 px-2.5 py-1 text-xs font-black text-indigo-200">

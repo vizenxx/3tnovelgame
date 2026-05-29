@@ -197,7 +197,7 @@ export const ReadonlyStoryView = ({
             className={semanticButtonClass('primary', { compact: true })}
           >
             <Zap className="h-4 w-4" />
-            {user ? tr('干涉原版故事', 'Interfere with original') : tr('登录后干涉', 'Sign in to interfere')}
+            {user ? tr('干涉原版故事', 'Interfere') : tr('登录后干涉', 'Sign in')}
           </button>
           <button
             type="button"
@@ -205,7 +205,7 @@ export const ReadonlyStoryView = ({
             className={semanticButtonClass('secondary', { compact: true })}
           >
             <Wand2 className="h-4 w-4" />
-            {user ? (canAdaptReadonlyStory(story.meta) ? tr('一键改编', 'Adapt') : tr('未开放改编', 'Adaptation unavailable')) : tr('注册成用户', 'Create account')}
+            {user ? (canAdaptReadonlyStory(story.meta) ? tr('一键改编', 'Adapt') : tr('未开放改编', 'Unavailable')) : tr('注册成用户', 'Create account')}
           </button>
           <button type="button" onClick={onBrowseLibrary} className={semanticButtonClass('ghost', { compact: true })}>
             <BookOpen className="h-4 w-4" />

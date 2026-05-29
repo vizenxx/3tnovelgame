@@ -232,7 +232,7 @@ const renderStoryBiasBar = (story: any) => {
     return (
       <div className="story-bias-bar story-bias-single" aria-label={tr('唯一走向结构', 'Fixed-ending structure')}>
         <div className="story-bias-side story-bias-center" data-active="true">
-          <span>{tr('唯一走向', 'Fixed-ending path')}</span>
+          <span>{tr('唯一走向', 'Fixed path')}</span>
         </div>
       </div>
     );
