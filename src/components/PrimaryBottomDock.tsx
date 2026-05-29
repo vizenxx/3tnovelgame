@@ -51,7 +51,7 @@ const primaryBottomDock = shouldShowPrimaryBottomDock && typeof document !== 'un
                 className={semanticMenuButtonClass('ghost')}
               >
                 <GitBranch className="h-4 w-4" />
-                {tr('创建世界观', 'Create world setting')}
+                {tr('创建世界观', 'New world')}
               </button>
               <button
                 type="button"

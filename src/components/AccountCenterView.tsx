@@ -106,17 +106,17 @@ export const AccountCenterContent = ({
   const archiveReturnTarget = mode === 'page' ? 'STORY_SELECT' : 'ACCOUNT_CENTER';
   const assetStats = [
     {
-      label: tr('收藏原作', 'Favorited originals'),
+      label: tr('收藏原作', 'Originals'),
       value: mySharedStories.filter((story: any) => story.archiveKind === 'favorite').length,
       onClick: () => onOpenArchiveFavorite(archiveReturnTarget),
     },
     {
-      label: tr('收藏命运', 'Saved fate lines'),
+      label: tr('收藏命运', 'Fate lines'),
       value: mySharedStories.filter((story: any) => story.archiveKind !== 'favorite').length,
       onClick: () => onOpenArchiveSaved(archiveReturnTarget),
     },
     {
-      label: tr('追踪作者', 'Followed authors'),
+      label: tr('追踪作者', 'Following'),
       value: followedAuthorsCount,
       onClick: () => onOpenArchiveAuthors(archiveReturnTarget),
     },

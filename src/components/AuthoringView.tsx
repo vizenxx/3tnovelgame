@@ -642,10 +642,10 @@ const renderAuthoringView = () => (
             <GitBranch className="mb-1 h-4 w-4 shrink-0" />{tr('系列设置', 'Series')}
           </button>
           <button type="button" onClick={() => setAuthoringTab('mainline')} className={`authoring-tab-button ${authoringTab === 'mainline' ? 'is-active' : ''}`}>
-            <BookOpen className="mb-1 h-4 w-4 shrink-0" />{tr('主线和结局', 'Mainline & Endings')}
+            <BookOpen className="mb-1 h-4 w-4 shrink-0" />{tr('主线和结局', 'Mainline')}
           </button>
           <button type="button" onClick={() => setAuthoringTab('branches')} className={`authoring-tab-button ${authoringTab === 'branches' ? 'is-active' : ''}`}>
-            <Sparkles className="mb-1 h-4 w-4 shrink-0" />{tr('角色和支线', 'Characters & Branches')}
+            <Sparkles className="mb-1 h-4 w-4 shrink-0" />{tr('角色和支线', 'Characters')}
           </button>
         </div>
 

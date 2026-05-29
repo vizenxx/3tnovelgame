@@ -251,7 +251,7 @@ const renderLeaveGameModal = () => (
                 onClick={handleSaveProgressAndReturn}
                 className="w-full rounded-2xl bg-indigo-600 py-4 text-sm font-black text-white shadow-lg shadow-indigo-600/20"
               >
-                {tr('保存进度并返回', 'Save progress and return')}
+                {tr('保存进度并返回', 'Save & return')}
               </button>
             )}
             <button
@@ -259,14 +259,14 @@ const renderLeaveGameModal = () => (
               onClick={handleSaveWorkAndReturn}
               className="w-full rounded-2xl bg-emerald-600 py-4 text-sm font-black text-white shadow-lg shadow-emerald-600/20"
             >
-              {tr('收藏命运并返回', 'Collect fate and return')}
+              {tr('收藏命运并返回', 'Collect & return')}
             </button>
             <button
               type="button"
               onClick={() => resetGame({ discardCloudProgress: true })}
               className="w-full rounded-2xl bg-app-surface py-4 text-sm font-bold text-app-muted"
             >
-              {tr('确认返回', 'Return')}
+              {tr('确认返回', 'Confirm return')}
             </button>
             <button
               type="button"

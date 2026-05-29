@@ -236,7 +236,7 @@ export const ArchiveView = ({
       <div className="mt-auto grid grid-cols-2 gap-2">
         <button type="button" onClick={() => onOpenAuthorProfile(author.authorId, author.authorName)} className={`${semanticButtonClass('secondary', { compact: true })} min-w-0 justify-center px-2 text-xs`}>
           <BookOpen className="h-4 w-4" />
-          {isEnglish ? 'Works' : '查看作者作品'}
+          {isEnglish ? 'Works' : '查看作品'}
         </button>
         <button type="button" onClick={() => void onUnfollowAuthor(author.authorId)} className={`${semanticButtonClass('ghost', { compact: true })} min-w-0 justify-center px-2 text-xs`}>
           <X className="h-4 w-4" />
