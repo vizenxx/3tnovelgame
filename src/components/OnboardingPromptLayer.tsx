@@ -1,40 +1,33 @@
 import React from 'react';
-import { OnboardingGuide, PushPermissionPrompt } from './HelpAndOnboarding';
+import { NewUserWelcomeModal, PushPermissionPrompt } from './HelpAndOnboarding';
 
 export function OnboardingPromptLayer({ ctx }: { ctx: any }) {
   const {
     showOnboardingGuide,
     tr,
     dismissOnboardingGuide,
-    startQuickGenerationFromOnboarding,
+    startTutorialFromOnboarding,
     showPushPermissionPrompt,
     pushSubscribeBusy,
     dismissPushPermissionPrompt,
     enablePushNotificationsFromPrompt,
   } = ctx;
 
-const renderOnboardingGuide = () => (
-  <OnboardingGuide
-    open={showOnboardingGuide}
-    tr={tr}
-    onDismiss={dismissOnboardingGuide}
-    onQuickGenerate={startQuickGenerationFromOnboarding}
-  />
-);
-const renderPushPermissionPrompt = () => (
-  <PushPermissionPrompt
-    open={showPushPermissionPrompt}
-    busy={pushSubscribeBusy}
-    tr={tr}
-    onDismiss={dismissPushPermissionPrompt}
-    onEnable={() => void enablePushNotificationsFromPrompt()}
-  />
-);
-
   return (
     <>
-      {renderOnboardingGuide()}
-      {renderPushPermissionPrompt()}
+      <NewUserWelcomeModal
+        open={showOnboardingGuide}
+        tr={tr}
+        onDismiss={dismissOnboardingGuide}
+        onStartTutorial={startTutorialFromOnboarding}
+      />
+      <PushPermissionPrompt
+        open={showPushPermissionPrompt}
+        busy={pushSubscribeBusy}
+        tr={tr}
+        onDismiss={dismissPushPermissionPrompt}
+        onEnable={() => void enablePushNotificationsFromPrompt()}
+      />
     </>
   );
 }

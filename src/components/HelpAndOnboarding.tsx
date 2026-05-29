@@ -1,10 +1,202 @@
 import React from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Bell, Loader2, Search, Sparkles, Wand2, X } from 'lucide-react';
+import { Bell, BookOpen, HelpCircle, Loader2, Search, Sparkles, X } from 'lucide-react';
 import { semanticButtonClass, semanticIconButtonClass } from './semanticClasses';
+import type { ViewIntroStep } from './ViewIntroOverlay';
 
 const safeModalBackdropClass = "fixed inset-0 flex items-center justify-center overflow-y-auto overscroll-contain px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]";
 type Translator = (zh: string, en: string) => string;
+
+// ─── Per-view intro step configs ──────────────────────────────────────────────
+
+export type ViewIntroConfig = { steps: ViewIntroStep[]; aboveDock: boolean };
+
+export const getViewIntroConfigs = (tr: Translator): Record<string, ViewIntroConfig> => ({
+  'story-select': {
+    aboveDock: true,
+    steps: [
+      {
+        title: tr('作品库', 'Story Library'),
+        body: tr(
+          '这里汇集了所有公开的互动故事。点击卡片查看详情，或点击「干涉」直接开始游玩。',
+          'All public interactive stories are here. Tap a card for details, or tap "Interfere" to start playing.'
+        ),
+      },
+      {
+        title: tr('搜索和排序', 'Search & Sort'),
+        body: tr(
+          '使用顶部搜索框按名称或主轴筛选，切换排序方式找到感兴趣的内容。',
+          'Filter by title or premise with the search bar, or switch the sort order to find what you like.'
+        ),
+      },
+    ],
+  },
+  'playing': {
+    aboveDock: false,
+    steps: [
+      {
+        title: tr('开始阅读', 'Reading a Story'),
+        body: tr(
+          '按章节顺序阅读。出现角色卡片时，代表这一章可以干涉命运。',
+          'Read through chapters in order. When character cards appear, you can interfere with fate in this chapter.'
+        ),
+      },
+      {
+        title: tr('干涉命运', 'Interfering'),
+        body: tr(
+          '每局最多三次干涉机会。选择角色，决定庇佑还是磨难——AI 会据此真实改写后续故事。',
+          'Up to three interventions per run. Choose a character, then bless or curse them — the story genuinely rewrites itself.'
+        ),
+      },
+      {
+        title: tr('命运走向条', 'Fate Bar'),
+        body: tr(
+          '顶部的走向条反映故事当前的结局倾向，不同干涉会把它拉向不同方向。',
+          'The fate bar at the top shows the current ending direction. Different interventions pull it toward different endings.'
+        ),
+      },
+    ],
+  },
+  'playing-tutorial': {
+    aboveDock: false,
+    steps: [
+      {
+        title: tr('欢迎来到入门试玩', 'Welcome to the Tutorial'),
+        body: tr(
+          '这是一段完整的离线教学故事，不消耗 AI 额度。先正常阅读，感受故事风格。',
+          'This is a complete offline tutorial story — no AI quota needed. Start by reading naturally to get a feel for the story.'
+        ),
+      },
+      {
+        title: tr('干涉点的出现', 'Intervention Points'),
+        body: tr(
+          '读到第 2 章末尾时，底部会出现角色卡片。选择角色，再选庇佑或磨难，故事会真实改写。',
+          'At the end of Chapter 2, character cards appear at the bottom. Choose a character, then bless or curse them — the story genuinely rewrites.'
+        ),
+      },
+      {
+        title: tr('三次机会', 'Three Chances'),
+        body: tr(
+          '第 2、4、6 章各有一次干涉机会，共三次。全部完成后查看最终命运，可以收藏或分享。',
+          'Chapters 2, 4, and 6 each have one intervention — three total. Afterwards, view your final fate and collect or share it.'
+        ),
+      },
+    ],
+  },
+  'summary': {
+    aboveDock: false,
+    steps: [
+      {
+        title: tr('命运结算', 'Fate Summary'),
+        body: tr(
+          '这一局已经结束。这里展示最终结局、本局触及的支线，以及你的整体命运走向。',
+          'This run is complete. See your final ending, branches touched this run, and the overall fate direction.'
+        ),
+      },
+      {
+        title: tr('收藏与分享', 'Collect & Share'),
+        body: tr(
+          '对这条命运线满意？收藏留存，或生成分享链接让别人阅读你的版本。',
+          'Happy with this fate line? Collect it to your archive, or share a link so others can read your version.'
+        ),
+      },
+    ],
+  },
+  'theme-selection': {
+    aboveDock: true,
+    steps: [
+      {
+        title: tr('快速生成故事', 'Quick Story Generation'),
+        body: tr(
+          '回答几个问题，或直接输入故事主轴，AI 会据此生成一部完整的七章互动故事。',
+          'Answer a few questions or type a premise, and AI generates a complete 7-chapter interactive story.'
+        ),
+      },
+      {
+        title: tr('世界观绑定', 'Bind a World'),
+        body: tr(
+          '如果已创建了世界观，可以在这里绑定，让新故事继承系列的角色与背景规则。',
+          'If you have a world setting, bind it here so the new story inherits its characters and background rules.'
+        ),
+      },
+    ],
+  },
+  'archive': {
+    aboveDock: true,
+    steps: [
+      {
+        title: tr('命运收藏馆', 'Fate Archive'),
+        body: tr(
+          '这里保存着你的所有收藏记录——「收藏原作」是想重读或干涉的故事，「收藏命运」是自己完成的命运线。',
+          'All your saved records are here. "Originals" are stories to revisit; "Fate lines" are your completed runs.'
+        ),
+      },
+      {
+        title: tr('追踪作者', 'Following Authors'),
+        body: tr(
+          '在「追踪作者」标签里管理追踪的作者，他们发布新作时你会收到通知。',
+          'Manage followed authors in the "Following" tab. You\'ll be notified when they publish new stories.'
+        ),
+      },
+    ],
+  },
+  'series-world': {
+    aboveDock: true,
+    steps: [
+      {
+        title: tr('世界观设定', 'World Settings'),
+        body: tr(
+          '世界观是系列故事的共同框架，包含世界规则、角色卡和情节素材，旗下所有作品可共享使用。',
+          'A world setting is the shared framework for a series — rules, character cards, and plot materials that all works can reuse.'
+        ),
+      },
+      {
+        title: tr('续作继承', 'Sequel Continuity'),
+        body: tr(
+          '可以设置续作的前置条件，要求玩家在前作达成特定结局或支线后，才能继承记录进入续作。',
+          'Set sequel requirements so players must reach a specific ending or branch in a prequel before entering the sequel.'
+        ),
+      },
+    ],
+  },
+  'readonly': {
+    aboveDock: false,
+    steps: [
+      {
+        title: tr('故事记录', 'Story Record'),
+        body: tr(
+          '这是别人分享的命运线记录，以只读方式呈现完整故事经过。',
+          'This is a shared fate line record, shown as a read-only story.'
+        ),
+      },
+      {
+        title: tr('干涉原版', 'Start Your Own'),
+        body: tr(
+          '阅读后点击「干涉」，可以从原版故事的起点出发，写出属于你的命运线版本。',
+          'After reading, tap "Interfere" to start from the original story and create your own version.'
+        ),
+      },
+    ],
+  },
+  'account-center': {
+    aboveDock: true,
+    steps: [
+      {
+        title: tr('个人中心', 'Account Center'),
+        body: tr(
+          '在这里管理账号信息、界面主题和通知设置。命运收藏馆、追踪作者和创作工台的入口也在这里。',
+          'Manage your account, theme, and notification settings here. Your archive, follows, and author studio are all accessible from here.'
+        ),
+      },
+    ],
+  },
+  'authoring': {
+    aboveDock: true,
+    steps: [], // Handled by AuthoringTourOverlay — kept as a placeholder so the key is marked done when the tour finishes
+  },
+});
+
+// ─── Inline help card ─────────────────────────────────────────────────────────
 
 export const InlineHelpCard = ({
   hidden,
@@ -45,16 +237,18 @@ export const InlineHelpCard = ({
   );
 };
 
-export const OnboardingGuide = ({
+// ─── New user welcome modal ───────────────────────────────────────────────────
+
+export const NewUserWelcomeModal = ({
   open,
   tr,
   onDismiss,
-  onQuickGenerate,
+  onStartTutorial,
 }: {
   open: boolean;
   tr: Translator;
   onDismiss: () => void;
-  onQuickGenerate: () => void;
+  onStartTutorial: () => void;
 }) => (
   <AnimatePresence>
     {open && (
@@ -66,46 +260,76 @@ export const OnboardingGuide = ({
         onClick={onDismiss}
       >
         <motion.div
-          initial={{ opacity: 0, y: 18, scale: 0.98 }}
+          initial={{ opacity: 0, y: 20, scale: 0.97 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 18, scale: 0.98 }}
-          className="app-modal-surface app-modal-safe-height w-full max-w-2xl overflow-y-auto rounded-[2rem] border border-indigo-300/20 p-5 shadow-2xl sm:p-6"
-          onClick={(event) => event.stopPropagation()}
+          exit={{ opacity: 0, y: 20, scale: 0.97 }}
+          transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+          className="app-modal-surface app-modal-safe-height w-full max-w-lg overflow-y-auto rounded-[2rem] border border-indigo-300/20 p-6 shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
         >
-          <div className="mb-5 flex items-start justify-between gap-4">
+          {/* Header */}
+          <div className="mb-6 flex items-start justify-between gap-4">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full border border-indigo-400/20 bg-indigo-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-indigo-200">
                 <Sparkles className="h-3.5 w-3.5" />
-                {tr('初次进入', 'First visit')}
+                {tr('欢迎', 'Welcome')}
               </div>
-              <h2 className="mt-4 text-2xl font-black text-app-text">{tr('欢迎来到命运故事台', 'Welcome to the Fate Story Stage')}</h2>
+              <h2 className="mt-3 text-2xl font-black text-app-text">
+                {tr('欢迎来到命运干涉', 'Welcome to Fate Interference')}
+              </h2>
               <p className="mt-2 text-sm leading-relaxed text-app-muted">
-                {tr('这里可以阅读故事、干涉章节、收藏命运线，也可以生成或改编作品。', 'Read stories, interfere with chapters, collect fate lines, or generate and adapt works.')}
+                {tr(
+                  '这里可以阅读互动故事、亲手改写别人的命运线，也可以创作自己的分支故事。',
+                  'Read interactive stories, rewrite others\' fate lines, or create your own branching narratives.'
+                )}
               </p>
             </div>
-            <button type="button" onClick={onDismiss} className={semanticIconButtonClass('ghost')} aria-label={tr('关闭引导', 'Close guide')}>
+            <button
+              type="button"
+              onClick={onDismiss}
+              className={semanticIconButtonClass('ghost')}
+              aria-label={tr('关闭', 'Close')}
+            >
               <X className="h-5 w-5" />
             </button>
           </div>
-          <div className="grid gap-3 sm:grid-cols-3">
-            {[
-              { title: tr('选一篇作品', 'Pick a story'), desc: tr('从作品库点击“干涉命运”进入游玩。', 'Tap “Interfere with Fate” from the library.') },
-              { title: tr('干涉章节', 'Interfere'), desc: tr('每局最多三次，故事会根据选择发生变化。', 'Each run has up to three interventions; the story changes with choices.') },
-              { title: tr('收藏与分享', 'Collect and share'), desc: tr('满意的命运可收藏到馆藏，或分享给其他读者。', 'Collect satisfying fate lines or share them with readers.') },
-            ].map((item) => (
-              <div key={item.title} className="rounded-2xl border border-app-border bg-app-surface/40 p-4">
-                <div className="text-sm font-black text-app-text">{item.title}</div>
-                <div className="mt-2 text-xs leading-relaxed text-app-muted">{item.desc}</div>
+
+          {/* Tutorial recommendation card */}
+          <div className="mb-6 rounded-2xl border border-indigo-500/20 bg-indigo-500/8 p-4">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 rounded-xl border border-indigo-400/20 bg-indigo-500/15 p-2 text-indigo-300">
+                <BookOpen className="h-4 w-4" />
               </div>
-            ))}
+              <div>
+                <div className="text-sm font-black text-indigo-100">
+                  {tr('入门试玩故事', 'Starter Tutorial Story')}
+                </div>
+                <div className="mt-1 text-xs leading-relaxed text-indigo-200/70">
+                  {tr(
+                    '约 5 分钟，完整体验阅读 → 干涉 → 结算流程。离线运行，不消耗 AI 额度。',
+                    'About 5 minutes. Experience the full read → intervene → ending flow. Runs offline, no AI quota needed.'
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-            <button type="button" onClick={onDismiss} className={semanticButtonClass('primary', { fullWidth: true })}>
-              {tr('去作品库看看', 'Browse library')}
+
+          {/* CTAs */}
+          <div className="flex flex-col gap-3">
+            <button
+              type="button"
+              onClick={onStartTutorial}
+              className={semanticButtonClass('primary', { fullWidth: true })}
+            >
+              <Sparkles className="h-4 w-4" />
+              {tr('开始入门试玩', 'Start Tutorial')}
             </button>
-            <button type="button" onClick={onQuickGenerate} className={semanticButtonClass('secondary', { fullWidth: true })}>
-              <Wand2 className="h-4 w-4" />
-              {tr('快速生成故事', 'Quick generate')}
+            <button
+              type="button"
+              onClick={onDismiss}
+              className={semanticButtonClass('ghost', { fullWidth: true })}
+            >
+              {tr('直接探索', 'Explore on my own')}
             </button>
           </div>
         </motion.div>
@@ -113,6 +337,11 @@ export const OnboardingGuide = ({
     )}
   </AnimatePresence>
 );
+
+// Keep old name as alias so any other call sites compile without changes
+export const OnboardingGuide = NewUserWelcomeModal as any;
+
+// ─── Push notification prompt ─────────────────────────────────────────────────
 
 export const PushPermissionPrompt = ({
   open,
@@ -172,18 +401,22 @@ export const PushPermissionPrompt = ({
   </AnimatePresence>
 );
 
+// ─── Authoring tour overlay ───────────────────────────────────────────────────
+
 export const AuthoringTourOverlay = ({
   tourStep,
   tr,
   setTourStep,
   setAuthoringTab,
   showMessage,
+  onTourDone,
 }: {
   tourStep: number | null;
   tr: Translator;
   setTourStep: (step: number | null) => void;
   setAuthoringTab: (tab: any) => void;
   showMessage: (message: string) => void;
+  onTourDone?: () => void;
 }) => {
   if (tourStep === null) return null;
   const guidedSteps = [
@@ -201,6 +434,7 @@ export const AuthoringTourOverlay = ({
   const finish = () => {
     setTourStep(null);
     localStorage.setItem('completed-authoring-tour', 'true');
+    onTourDone?.();
   };
   return (
     <div className="pointer-events-none fixed inset-0 z-[9999] p-4">
@@ -241,7 +475,26 @@ export const AuthoringTourOverlay = ({
   );
 };
 
-export const HelpFloatingButton = () => null;
+// ─── Help floating button ─────────────────────────────────────────────────────
+
+export const HelpFloatingButton = ({
+  onOpen,
+  tr,
+}: {
+  onOpen: () => void;
+  tr: Translator;
+}) => (
+  <button
+    type="button"
+    onClick={onOpen}
+    aria-label={tr('帮助中心', 'Help Center')}
+    className="help-float-button"
+  >
+    <HelpCircle className="h-5 w-5" />
+  </button>
+);
+
+// ─── Help center drawer ───────────────────────────────────────────────────────
 
 export const HelpCenterDrawer = ({
   open,
@@ -263,7 +516,7 @@ export const HelpCenterDrawer = ({
   const qas = [
     {
       q: tr('玩家应该怎样开始一部作品？', 'How does a player start a story?'),
-      a: tr('从作品库选择感兴趣的作品，点击“干涉命运”进入阅读。读到可干涉章节时，选择角色和行动。', 'Pick a story from the library, then choose “Interfere with Fate”. At an interactable chapter, choose a character and action.'),
+      a: tr('从作品库选择感兴趣的作品，点击"干涉"进入阅读。读到可干涉章节时，选择角色和行动。', 'Pick a story from the library, then tap "Interfere". At an interactable chapter, choose a character and action.'),
       tags: tr('玩家 作品库 干涉命运 阅读 收藏 分享', 'player library interfere reading collect share'),
     },
     {
@@ -301,7 +554,7 @@ export const HelpCenterDrawer = ({
                 <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-400">
                   <Sparkles className="h-4 w-4" />
                 </div>
-                <h2 className="text-lg font-black text-app-text">{tr('命运馆帮助中心', 'Help Center')}</h2>
+                <h2 className="text-lg font-black text-app-text">{tr('帮助中心', 'Help Center')}</h2>
               </div>
               <button type="button" onClick={onClose} className="rounded-lg p-2 text-app-muted transition-colors hover:bg-app-surface-soft hover:text-app-text" aria-label={tr('关闭帮助中心', 'Close Help Center')}>
                 <X className="h-5 w-5" />

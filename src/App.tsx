@@ -600,6 +600,7 @@ const GUEST_ACCOUNT_RETENTION_DAYS = 180;
 const STORY_LIST_CACHE_TTL_MS = 10 * 60 * 1000;
 const ONBOARDING_STORAGE_KEY = '3t-onboarding-v1-dismissed';
 const PUSH_PROMPT_DISMISSED_KEY = '3t-push-prompt-dismissed-v1';
+const VIEW_INTROS_STORAGE_KEY = '3t-view-intros';
 const GUEST_RETENTION_NOTICE =
   '游客账号如果连续 180 天没有登录或打开 app 保持活跃，可能会被系统自动清理。注册成正式账号后，当前作品和记录会继续保留。';
 
@@ -1711,11 +1712,53 @@ export default function App() {
   const [helpSearch, setHelpSearch] = useState('');
   const [isHelpDrawerOpen, setIsHelpDrawerOpen] = useState(false);
 
+  const [completedViewIntros, setCompletedViewIntros] = useState<Set<string>>(() => {
+    try {
+      return new Set<string>(JSON.parse(localStorage.getItem(VIEW_INTROS_STORAGE_KEY) || '[]'));
+    } catch { return new Set<string>(); }
+  });
+  const [activeViewIntroKey, setActiveViewIntroKey] = useState<string | null>(null);
+
+  const markViewIntroDone = (key: string) => {
+    setCompletedViewIntros((prev) => {
+      const next = new Set(prev);
+      next.add(key);
+      localStorage.setItem(VIEW_INTROS_STORAGE_KEY, JSON.stringify([...next]));
+      return next;
+    });
+    setActiveViewIntroKey(null);
+  };
+
+  // When the authoring tour finishes, mark authoring intro as done so ViewIntroOverlay never fires for it
+  const onAuthoringTourDone = () => markViewIntroDone('authoring');
+
 
 
   // Cartridge platform state
   const [activeStoryId, setActiveStoryId] = useState<string | null>(null);
   const [activeStoryMeta, setActiveStoryMeta] = useState<any | null>(null);
+
+  useEffect(() => {
+    if (!isSessionHydrated || !user) return;
+    const isTutorialPlay = gameState === 'PLAYING' && activeStoryId === 'tutorial-cartridge';
+    const key =
+      isTutorialPlay ? 'playing-tutorial'
+      : gameState === 'PLAYING' ? 'playing'
+      : gameState === 'SUMMARY' ? 'summary'
+      : gameState === 'STORY_SELECT' ? 'story-select'
+      : gameState === 'THEME_SELECTION' ? 'theme-selection'
+      : gameState === 'ARCHIVE' ? 'archive'
+      : (gameState === 'SERIES_WORLD_LIST' || gameState === 'SERIES_WORLD_GENERATE' || gameState === 'SERIES_WORLD_EDIT') ? 'series-world'
+      : gameState === 'READONLY_STORY' ? 'readonly'
+      : gameState === 'ACCOUNT_CENTER' ? 'account-center'
+      : null;
+    if (!key || completedViewIntros.has(key)) {
+      setActiveViewIntroKey(null);
+      return;
+    }
+    const timer = window.setTimeout(() => setActiveViewIntroKey(key), 700);
+    return () => window.clearTimeout(timer);
+  }, [gameState, activeStoryId, isSessionHydrated, user?.uid, completedViewIntros]);
   const [publicStories, setPublicStories] = useState<any[]>([]);
   const [myStories, setMyStories] = useState<any[]>([]);
   const [mySharedStories, setMySharedStories] = useState<any[]>([]);
@@ -4993,6 +5036,11 @@ export default function App() {
     navigateTo('THEME_SELECTION');
   };
 
+  const startTutorialFromOnboarding = () => {
+    dismissOnboardingGuide();
+    void startStoryPlay('tutorial-cartridge');
+  };
+
   const dismissPushPermissionPrompt = () => {
     if (typeof window !== 'undefined') {
       window.localStorage.setItem(PUSH_PROMPT_DISMISSED_KEY, '1');
@@ -5475,19 +5523,6 @@ export default function App() {
     setUiFeedback(progressData?.uiFeedback || { leftProgress: 0, rightProgress: 0, endingLabel: '中域' });
     navigateTo('PLAYING');
     scrollToTopAfterViewChange();
-    if (storyId === 'tutorial-cartridge' && !progressData) {
-      window.setTimeout(() => {
-        setConfirmationModal({
-          isOpen: true,
-          title: tr('入门试玩已开启', 'Tutorial story started'),
-          message: tr(
-            '这是一段完整离线教学故事，不会消耗 AI 额度。先阅读到第 2 章末尾，点击“干涉命运”，选择林晓和一次庇佑或磨难。第 4 章、第 6 章也会出现干涉点；完成三次后即可查看最终命运。',
-            'This is a complete offline tutorial story and does not use AI quota. Read to the end of Chapter 2, choose “Interfere with Fate”, then pick Lin Xiao and one blessing or hardship. Chapters 4 and 6 also contain intervention points; after three interventions, the final fate can be viewed.'
-          ),
-          onConfirm: () => {},
-        });
-      }, 250);
-    }
   };
 
   const startStoryPlay = async (storyId: string) => {
@@ -7903,6 +7938,7 @@ export default function App() {
         showOnboardingGuide,
         tr,
         dismissOnboardingGuide,
+        startTutorialFromOnboarding,
         startQuickGenerationFromOnboarding,
         showPushPermissionPrompt,
         pushSubscribeBusy,
@@ -8072,6 +8108,9 @@ export default function App() {
         setHelpSearch,
         setIsHelpDrawerOpen,
         restoreHelpCards,
+        activeViewIntroKey,
+        markViewIntroDone,
+        onAuthoringTourDone,
       }}
     />
   );
