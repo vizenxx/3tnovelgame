@@ -18,10 +18,11 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
       window.location.reload();
     });
 
+    // URL already carries __APP_BUILD_ID__, so the browser fetches a new SW
+    // on every deployment automatically. registration.update() is redundant
+    // and causes a mid-session reload when it finds a new version, which
+    // re-triggers the boot animation unexpectedly.
     navigator.serviceWorker.register(`/sw.js?v=${encodeURIComponent(__APP_BUILD_ID__)}`)
-      .then((registration) => {
-        registration.update().catch(() => {});
-      })
       .catch((error) => {
         console.error('Service worker registration failed:', error);
       });

@@ -3700,7 +3700,12 @@ export default function App() {
   const refreshStories = async (options: { force?: boolean; includeArchive?: boolean; publicSort?: StoryLibrarySort } = {}) => {
     if (!user || !db) return false;
     const requestedPublicSort = options.publicSort || storyLibrarySort;
-    setIsLoadingStories(true);
+    // Only show the loading skeleton when there is no content to show yet.
+    // When stories are already on screen, refresh silently in the background.
+    const hasExistingContent = publicStories.length > 0 || myStories.length > 0;
+    if (!hasExistingContent) {
+      setIsLoadingStories(true);
+    }
     markStoryListSegment('public', 'loading');
     markStoryListSegment('mine', 'loading');
     if (options.includeArchive) markStoryListSegment('archive', 'loading');
@@ -3715,6 +3720,10 @@ export default function App() {
           if (cached.value.shared) markStoryListSegment('archive', 'stale');
           return true;
         }
+      }
+      // Committed to a network fetch — show loading if not already showing.
+      if (hasExistingContent) {
+        setIsLoadingStories(true);
       }
       markStoryListSegment('public', 'syncing');
       markStoryListSegment('mine', 'syncing');
