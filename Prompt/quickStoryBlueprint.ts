@@ -102,6 +102,14 @@ Ending structure hard constraint: ${isSingleEnding
 
 Task: Create a complete blueprint for a seven-chapter interactive story.
 
+Narrative design principles (setting-agnostic — apply to any genre: war, fantasy, contemporary, sci-fi, historical):
+1. Two-sided dilemma, not good vs. evil: the protagonist must face a genuine conflict where both directions are defensible. The ideal design is two things both worth having that cannot coexist, or two losses where only one can be avoided. If the "right" choice is obvious, intervention becomes a formality.
+2. Personal stakes anchor: even in war or epic fantasy settings, anchor the story to one person's irreversible decision — a relationship, identity, loyalty, or belonging that, once lost, cannot be recovered. Readers will intervene for a person; they will not intervene for a world.
+3. Intervention timing — the moment before something slips away: each intervention chapter (2, 4, 6) must be set at the moment just before something precious quietly begins to slip away — while the protagonist has not yet noticed. The reader sees it; the protagonist does not. This information gap is what makes intervention feel urgent, not optional.
+4. Bless/curse symmetry: every interferable character must have a believable path where blessing them produces an unexpected complication, and cursing them produces unexpected clarity or growth. Both directions must make narrative sense. If only one direction is emotionally valid, the choice is fake.
+5. Two defensible endings: both the left-domain and right-domain endings must be something a reader could argue for. Ideally, players argue with each other about which ending is "really" correct — that disagreement is the engine of social sharing.
+6. Chapter 1 emotional anchor: before the first intervention (chapter 2), chapter 1 must give the reader one concrete detail, decision, or feeling they recognize from their own life — or from someone they care about. Recognition creates investment; investment creates the impulse to interfere.
+
 English-market style requirements:
 1. Write as native English interactive fiction, not translated Chinese prose.
 2. Use natural English names, idiomatic titles, and genre conventions familiar to English readers.
@@ -142,6 +150,14 @@ ${seriesInstruction}${continuityInstruction}${continuityHardInstruction}
   : '多线结局。当前版本使用默认/左/右三结局结构；请把它理解为未来可扩展为结局1、结局2、结局3...的多线机制。'}
 
 任务：生成一个完整的首篇章（7章）的故事蓝图骨架。
+
+叙事设计原则（不限世界观背景，适用于所有题材：战争、奇幻、现实、科幻、历史均适用）：
+1. 双向两难困境，而非善恶对立：主角必须面对一个真正的双向困境，两条路都有说得过去的理由。最理想的设计是：两件都值得追求的事无法同时拥有，或两种代价都难以承受只能选一种。如果「正确答案」一眼就能看出，干涉就沦为走程序。
+2. 个人尺度的关键性：即使是战争或史诗奇幻背景，也必须把故事锚定到某一个人身上不可逆的抉择——一段关系、一种身份、一种忠诚、一种归属，一旦失去就找不回来。读者会为一个人伸手，不会为一个世界伸手。
+3. 干涉点的时机——珍贵之物悄悄滑走的前一刻：每个干涉章节（第2、4、6章）必须设置在某件珍贵的事情正在悄悄滑走、主角还没意识到的前一刻。读者看见了，主角没看见——这种信息差制造的焦虑，才是让人觉得干涉紧迫而不可缺席的真正来源。
+4. 庇佑/磨难的双向说服力：每个可干涉的角色，都必须同时具备两种可信的走向：给他顺风，可能带来意外的连锁代价；给他逆境，可能让他看清本来看不清的事。两个方向都要有叙事说服力。如果只有一个方向在情感上说得通，这个选择就是假选择。
+5. 两个都能辩护的结局：左域结局和右域结局必须都是「有人会认为这才是对的」走向，而不是一圆满一悲剧。最理想的状态是：读者看完自己的结局后，想发给别人说「你看，我选的才是对的」——这种分歧感是社交传播的来源。
+6. 第一章的情感钩：在第一次干涉（第2章）出现之前，第一章必须让读者在某个具体的细节、决定或感受里认出自己——或认出某个他们在乎的人。认出自己，才产生想为这个人改变命运的冲动。
 
 要求（极度重要）：
 0. 若存在套用的世界观设定，必须优先遵守本次勾选的世界基准；若存在勾选角色卡，必须把它们作为主要可用角色池，除非用户明确排除；若存在继承节点，必须自然接住前作结果，不得粗暴否定前作，也不得随意忘掉继承状态中的主要人物。
