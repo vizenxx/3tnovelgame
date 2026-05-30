@@ -114,13 +114,9 @@ English-market style requirements:
 1. Write as native English interactive fiction, not translated Chinese prose.
 2. Use natural English names, idiomatic titles, and genre conventions familiar to English readers.
 3. Avoid Chinese book-title punctuation, literal cultivation/wuxia terms, or “fate domain” jargon unless explicitly requested by the premise.
-4. Keep the story playable: clear conflicts, character stakes, and intervention points.
-5. If an applied world setting exists, obey selected baseline rules before local plot convenience.
-6. If selected character cards exist, keep them as major available cast unless the request explicitly excludes them.
-7. If a continuation node exists, make this a natural sequel opening without invalidating the previous story result.
-8. If a continuation node contains characterStates or inherited major characters, keep those characters active by default unless the author request explicitly retires them.
 
 Output requirements:
+0. Context compliance: if an applied world setting exists, obey its selected baseline rules before local plot convenience; if selected character cards exist, keep them as major available cast unless the request explicitly excludes them; if a continuation node exists, make this a natural sequel opening without invalidating the previous result; if a continuation node contains characterStates or inherited major characters, keep those characters active by default unless the author request explicitly retires them.
 1. For performance reasons, never write full chapter prose in chapters.
 2. Each chapter must include a summary of 45-70 English words.
 3. Chapters must connect logically and avoid repeating the same beat.
@@ -169,13 +165,14 @@ ${seriesInstruction}${continuityInstruction}${continuityHardInstruction}
 6. 每个角色的 desc 必须是 15-35 字的具体简介，至少包含身份/动机/矛盾点中的两项。
 7. 设定 endingMode 字段，值必须是 ${isSingleEnding ? '"single"' : '"dual"'}；同时保留 left_mainline_default 和 right_mainline_default (0-100) 以兼容旧数学机制。
 8. endings 数组仍输出 3 条以兼容旧结构：normal=结局1/default，good=结局2/left，bad=结局3/right。${isSingleEnding ? '但三条必须明显收束到同一个核心终局，只允许过程、代价、人物理解有差异。' : '三条应是逻辑严密的三种第 7 章结局走向。'}
-9. 规划 6-10 个支线命运点（branches）。${isSingleEnding ? '支线可以有倾向权重，但不得导向互斥终局；它们应改变抵达单一终局的路径、代价与伏笔解释。' : '左右各半。支线情节必须根据左/右主线做数学设定，相互影响。'}角色性格和核心主线必须在后续章节的大纲里严格体现。
+9. 规划 6-10 个支线命运点（branches）。${isSingleEnding ? '支线可以有倾向权重，但不得导向互斥终局；它们应改变抵达单一终局的路径、代价与伏笔解释。' : '左右各半。支线情节必须根据左/右主线做数学设定，相互影响。'}
 10. 每条支线的 name 必须是“支线主题”，用于未解锁时展示，例如“锁住的信”“雨夜的债”“镜后的誓言”；不能只是角色姓名，也不能写成触发条件。
 11. 每个 triggerGroups 条件组必须提供 hint（8-18字），用于 UI 中的隐约提示。hint 要像伏笔或未揭开的预兆，必须与支线后果有关，但不能直接暴露完整触发条件。
 12. hint 不得出现第几章、角色ID、庇佑、磨难、点击、选择、执行、得到、解锁等机械操作语气。
 13. condition_char 只能使用已创建的角色ID；condition_chapter 必须是 2 到 6 的整数；condition_action 只能是 bless 或 curse。
 14. desc 必须写清该支线发生时的具体剧情变化、隐藏内幕和支线意义，不能与 hint 重复。
 15. chapters 的 title/summary 必须与上述叙事人称相容，避免设计会迫使正文切换人称的章节视角。
+16. 角色性格和核心主线必须在各章节的大纲里严格体现，确保前后章节之间的人物行为和事件走向保持一致。
 
 请严格按 JSON 输出，不要包含元数据。字数参考值：${args.targetWordCount}。`;
 }
