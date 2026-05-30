@@ -102,9 +102,9 @@ Ending structure hard constraint: ${isSingleEnding
 
 Task: Create a complete blueprint for a seven-chapter interactive story.
 
-Narrative design principles (setting-agnostic — apply to any genre: war, fantasy, contemporary, sci-fi, historical):
+Narrative design principles:
 1. Two-sided dilemma, not good vs. evil: the protagonist must face a genuine conflict where both directions are defensible. The ideal design is two things both worth having that cannot coexist, or two losses where only one can be avoided. If the "right" choice is obvious, intervention becomes a formality.
-2. Personal stakes anchor: even in war or epic fantasy settings, anchor the story to one person's irreversible decision — a relationship, identity, loyalty, or belonging that, once lost, cannot be recovered. Readers will intervene for a person; they will not intervene for a world.
+2. Personal stakes anchor: anchor the story to one person's irreversible decision — a relationship, identity, loyalty, or belonging that, once lost, cannot be recovered. Readers will intervene for a person; they will not intervene for a world.
 3. Intervention timing — the moment before something slips away: each intervention chapter (2, 4, 6) must be set at the moment just before something precious quietly begins to slip away — while the protagonist has not yet noticed. The reader sees it; the protagonist does not. This information gap is what makes intervention feel urgent, not optional.
 4. Bless/curse symmetry: every interferable character must have a believable path where blessing them produces an unexpected complication, and cursing them produces unexpected clarity or growth. Both directions must make narrative sense. If only one direction is emotionally valid, the choice is fake.
 5. Two defensible endings: both the left-domain and right-domain endings must be something a reader could argue for. Ideally, players argue with each other about which ending is "really" correct — that disagreement is the engine of social sharing.
@@ -151,9 +151,9 @@ ${seriesInstruction}${continuityInstruction}${continuityHardInstruction}
 
 任务：生成一个完整的首篇章（7章）的故事蓝图骨架。
 
-叙事设计原则（不限世界观背景，适用于所有题材：战争、奇幻、现实、科幻、历史均适用）：
+叙事设计原则：
 1. 双向两难困境，而非善恶对立：主角必须面对一个真正的双向困境，两条路都有说得过去的理由。最理想的设计是：两件都值得追求的事无法同时拥有，或两种代价都难以承受只能选一种。如果「正确答案」一眼就能看出，干涉就沦为走程序。
-2. 个人尺度的关键性：即使是战争或史诗奇幻背景，也必须把故事锚定到某一个人身上不可逆的抉择——一段关系、一种身份、一种忠诚、一种归属，一旦失去就找不回来。读者会为一个人伸手，不会为一个世界伸手。
+2. 个人尺度的关键性：把故事锚定到某一个人身上不可逆的抉择——一段关系、一种身份、一种忠诚、一种归属，一旦失去就找不回来。读者会为一个人伸手，不会为一个世界伸手。
 3. 干涉点的时机——珍贵之物悄悄滑走的前一刻：每个干涉章节（第2、4、6章）必须设置在某件珍贵的事情正在悄悄滑走、主角还没意识到的前一刻。读者看见了，主角没看见——这种信息差制造的焦虑，才是让人觉得干涉紧迫而不可缺席的真正来源。
 4. 庇佑/磨难的双向说服力：每个可干涉的角色，都必须同时具备两种可信的走向：给他顺风，可能带来意外的连锁代价；给他逆境，可能让他看清本来看不清的事。两个方向都要有叙事说服力。如果只有一个方向在情感上说得通，这个选择就是假选择。
 5. 两个都能辩护的结局：左域结局和右域结局必须都是「有人会认为这才是对的」走向，而不是一圆满一悲剧。最理想的状态是：读者看完自己的结局后，想发给别人说「你看，我选的才是对的」——这种分歧感是社交传播的来源。
