@@ -1,7 +1,8 @@
 export function ensureParagraphing(raw: string, opts?: { minParas?: number; maxParas?: number }) {
   const minParas = opts?.minParas ?? 6;
   const maxParas = opts?.maxParas ?? 10;
-  let text = String(raw ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+  // Normalize literal \n sequences (double-escaped by AI in JSON) to real newlines
+  let text = String(raw ?? '').replace(/\\n/g, '\n').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
   if (!text) return text;
 
   text = text.replace(/\n{3,}/g, '\n\n');

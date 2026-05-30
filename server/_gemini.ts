@@ -23,6 +23,7 @@ type GeminiLogError = (context: GeminiLogContext, event: string, error: unknown,
 
 export function stripGeneratedMarkup(value: unknown) {
   return String(value ?? '')
+    .replace(/\\n/g, '\n')  // normalize double-escaped newlines from AI JSON output
     .replace(/&lt;\s*\/?\s*mark\s*&gt;/gi, '')
     .replace(/&lt;\s*\/?\s*(?:span|strong|em|b|i|u|p|div|br|code|pre|section|article|aside|font|small|big|center|ruby|rt|rp)(?:\s+[^&]*?)?\s*&gt;/gi, '')
     .replace(/<\s*\/?\s*mark\s*>/gi, '')
