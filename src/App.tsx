@@ -8374,7 +8374,7 @@ export default function App() {
               <div className="prose prose-invert max-w-none space-y-6">
                 {isChapterTextReady(chapter) ? (
                   String(chapter.text || '').split('\n').filter(Boolean).map((p, pIdx) => (
-                    <p key={pIdx} style={readingParagraphStyle} className={`leading-relaxed ${isEnglish ? '' : 'first-letter:text-3xl first-letter:font-black first-letter:text-indigo-400 first-letter:mr-1'}`}>
+                    <p key={pIdx} style={readingParagraphStyle} className={`leading-relaxed ${isEnglish ? '' : 'first-letter:text-3xl first-letter:font-black first-letter:mr-1'}`}>
                       {renderReadingParagraph(p, blueprint?.characters, changeHighlights[chapter.chapter_num] || [])}
                     </p>
                   ))

@@ -119,7 +119,7 @@ English-market style requirements:
 Output requirements:
 0. Context compliance: if an applied world setting exists, obey its selected baseline rules before local plot convenience; if selected character cards exist, keep them as major available cast unless the request explicitly excludes them; if a continuation node exists, make this a natural sequel opening without invalidating the previous result; if a continuation node contains characterStates or inherited major characters, keep those characters active by default unless the author request explicitly retires them.
 1. For performance reasons, never write full chapter prose in chapters.
-2. Each chapter must include a summary of 45-70 English words.
+2. Each chapter must include a summary of 45-70 English words. Each chapter summary should cover 1 scene at short word counts, up to 2 scenes at longer word counts — do not stack more independent events than the chapter length can support. If a summary reads "then... and then... and then...", it is carrying too much for one chapter.
 3. Chapters must connect logically and avoid repeating the same beat.
 4. Each chapter must include a title of 2-7 English words.
 5. Create 3-5 characters. IDs must be c1, c2, ...
@@ -160,7 +160,7 @@ ${seriesInstruction}${continuityInstruction}${continuityHardInstruction}
 要求（极度重要）：
 0. 若存在套用的世界观设定，必须优先遵守本次勾选的世界基准；若存在勾选角色卡，必须把它们作为主要可用角色池，除非用户明确排除；若存在继承节点，必须自然接住前作结果，不得粗暴否定前作，也不得随意忘掉继承状态中的主要人物。
 1. 由于性能限制，严禁在 chapters 中生成章节全文。
-2. 每一章必须提供一个 summary（简短情节大纲，60-80字）。
+2. 每一章必须提供一个 summary（简短情节大纲，60-80字）。字数较短时每章只规划 1 个场景，字数较长时最多 2 个场景——不得堆叠超过该篇幅能承载的独立事件数量。如果大纲里出现「然后……又……再……」的连续结构，说明这一章承载了太多内容。
 3. 每一章的情节必须对上下章节有适当联系且重点不重复。
 4. 每一章必须提供一个 title（6-12字），与该章大纲一致。
 5. 设定 3-5 个角色，ID 必须为 c1, c2 ...
