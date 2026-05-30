@@ -108,6 +108,7 @@ Requirements:
 7. If intervention deltas or branch effects exist, express their ripple effects subtly through plot, decisions, clues, and consequences.
 8. Keep the requested narrative person consistent throughout. Do not switch viewpoint as a shortcut.
 9. Use idiomatic English prose and punctuation; avoid translated Chinese phrasing or meta system terms.
+10. Style matching: if the author's default chapter text is provided above, treat it as the definitive style reference. Mirror its sentence length and complexity, paragraph rhythm and density, dialogue-to-narration ratio, narrative distance, and vocabulary register. The generated text must feel written by the same author — not a generic AI voice.
 
 Return strict JSON Schema only. Do not include image prompts or meta-comments.`;
   }
@@ -131,9 +132,10 @@ ${(!args.worldStatePrompt.includes('故事基准') && args.endingProto) ? `作�
 3. 字数是硬性质量要求：目标 ${args.targetWordCount} 字，理想范围 ${idealMin}-${idealMax}，硬性范围 ${hardMin}-${hardMax}。不得输出短提纲，也不要明显超长。
 4. 全文必须拆成 6-10 段，每段 2-4 句，段落之间用两个换行符。段落之间要自然衔接，避免跳跃叙述。
 5. 必须严格遵守小说大纲/主轴和各角色的性格设定，人物互动必须符合前期建立的逻辑关系。
-6. 必须与“后续章节走向备忘”中的主线发展保持严密的铺垫和连贯性，不能在当前章引入与后续大纲冲突的设定。
+6. 必须与”后续章节走向备忘”中的主线发展保持严密的铺垫和连贯性，不能在当前章引入与后续大纲冲突的设定。
 7. 如果有干涉偏移记录或支线触发设定，必须在文风和剧情逻辑上隐晦地体现这些涟漪效应。
-8. 必须从本章开头到结尾严格保持指定叙事人称，不得段落间混用第一/第二/第三人称，也不得用“镜头切换”当作理由改变叙述视角。
+8. 必须从本章开头到结尾严格保持指定叙事人称，不得段落间混用第一/第二/第三人称，也不得用”镜头切换”当作理由改变叙述视角。
+9. 文风模仿（硬性要求）：若上方提供了”作者默认主线原文”，必须将其视为文风基准，精准模仿其句子长短与复杂度、段落节奏与密度、对话/内心独白比例、叙事距离和词汇风格。生成文本必须让读者感到与作者原文出自同一人之手，不得出现明显的 AI 通用腔调。
 
 请严格按照 JSON Schema 输出，不要包含图片 Prompt 或元注释。`;
 }

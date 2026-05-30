@@ -65,6 +65,8 @@ export function buildInterventionRewritePrompt(args: {
   endingMechanics?: any;
   targetWordCount: number;
   chapterWordTargets?: Record<number, number>;
+  /** Full text of the chapter being rewritten — used as style anchor */
+  originalChapterText?: string;
   language?: 'zh-CN' | 'en-US' | string;
 }) {
   const isSingleEnding = args.blueprint?.endingMode === 'single' || args.blueprint?.ending_mode === 'single';
@@ -99,6 +101,8 @@ ${JSON.stringify({
   } : null,
 }, null, 2)}
 ` : '';
+  const originalChapterSample = String(args.originalChapterText || '').trim().substring(0, 1000);
+
   if (isEnglish) {
     return `You are an English-language interactive fiction engine. The player has interfered with fate in chapter ${args.safeChapterNum}.
 
@@ -124,6 +128,9 @@ ${args.injected ? `Active branch injection package (integrate both prior active 
 
 ${(!args.worldStatePrompt.includes('Story baseline') && args.endingProto) ? `Author ending prototypes:\n- default: ${String(args.endingProto.default || '').substring(0, 800)}\n- left: ${String(args.endingProto.left || '').substring(0, 800)}\n- right: ${String(args.endingProto.right || '').substring(0, 800)}` : ''}
 
+${originalChapterSample ? `Original text of chapter ${args.safeChapterNum} (style anchor — the chapter being rewritten):
+${originalChapterSample}${String(args.originalChapterText || '').length > 1000 ? '\n...(truncated)' : ''}` : ''}
+
 Invisible intervention writing rules:
 1. Never mention “blessing”, “hardship”, “interference”, “player action”, “system instruction”, or other meta terms in the prose.
 2. Translate the intervention into natural causality: new events, accidents, insights, revealed clues, altered decisions, emotional pressure, or consequences.
@@ -142,11 +149,15 @@ ${wordTargetLines || `Chapter ${rewriteRange.startChapter}: target ${args.target
 7. All changes caused by this intervention must be written naturally into the story. Highlighting is handled by the frontend, not by prose tags.
 8. Also output change_highlights for temporary frontend highlighting: each item has chapter_num, quote, reason. quote must be an exact plain-text phrase already present in that chapter, with no tags.
 9. Even if no branch triggers, the ripple range must contain a perceptible shift and must not simply copy old prose.
-10. Use idiomatic English fiction style and natural English punctuation.
+10. Style matching (hard requirement): mirror the original chapter's writing style precisely — sentence length and complexity, paragraph rhythm and density, dialogue-to-narration ratio, narrative distance, and vocabulary register. The rewritten chapter must feel written by the same author as the original. Do not introduce a noticeably different prose voice.
 
 Return strict JSON only. Do not include metadata.`;
   }
   return `你是一个互动小说引擎。玩家在第 ${args.safeChapterNum} 章进行了一次命运干涉。
+${originalChapterSample ? `
+第 ${args.safeChapterNum} 章原文（文风与段落节奏样本——即本次被重写的章节）：
+${originalChapterSample}${String(args.originalChapterText || '').length > 1000 ? '\n……（截断）' : ''}
+` : ''}
 
 角色ID对照表：
 ${args.blueprint.characters.map((character: any) => `${character.name} (ID: ${character.id})`).join('\n')}
@@ -188,6 +199,7 @@ ${wordTargetLines || `第${rewriteRange.startChapter}章：目标 ${args.targetW
 7. 所有因本次干涉直接或间接导致的变化，必须自然写进叙事本身；高亮与差异展示由前端处理，不要把标记写入故事正文。
 8. 另外输出 change_highlights 数组，用于前端临时高亮变化处：每项包含 chapter_num、quote、reason；quote 必须是对应章节正文中已经出现的原句或短句，严禁包含任何标签。
 9. 即使未触发支线，也必须让涟漪范围内的章节出现可感知偏移，不能复制旧正文。
+10. 文风模仿（硬性要求）：必须精准模仿并延续上方原章节的文风特征——句子长短与复杂度、段落节奏与密度、对话/内心独白比例、叙事距离（旁观者/沉浸/第一视角等）、词汇风格（书面/口语/诗意）。干涉后的正文必须让读者感到仍是同一位作者的笔触，不应产生出戏感。
 
 请严格按 JSON 输出，不要包含元数据。`;
 }

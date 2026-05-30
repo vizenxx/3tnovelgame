@@ -370,6 +370,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         chapterWordTargets[chapter.chapter_num] = originalUnits > 120 ? originalUnits : safeTargetWordCount;
       });
 
+    const originalChapterText = safeChapters.find((c: any) => c.chapter_num === safeChapterNum)?.text || '';
+
     const prompt = `${generationLanguageInstruction(language)}\n\n${buildInterventionRewritePrompt({
       blueprint,
       safeChapterNum,
@@ -385,6 +387,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       endingMechanics,
       targetWordCount: safeTargetWordCount,
       chapterWordTargets,
+      originalChapterText,
       language,
     })}`;
 
