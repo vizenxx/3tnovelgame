@@ -109,7 +109,7 @@ Requirements:
 8. Keep the requested narrative person consistent throughout. Do not switch viewpoint as a shortcut.
 9. Use idiomatic English prose and punctuation; avoid translated Chinese phrasing or meta system terms.
 10. Style matching: if the author's default chapter text is provided above, treat it as the definitive style reference. Mirror its sentence length and complexity, paragraph rhythm and density, dialogue-to-narration ratio, narrative distance, and vocabulary register. The generated text must feel written by the same author — not a generic AI voice.
-11. Scene discipline — pacing proportional to word count: at ${args.targetWordCount} words, this chapter should hold 1 scene; at 800+ words, 2 scenes at most. A scene is a continuous stretch of time in one location. Do not jump time or location more times than the word count can support. Write as if the camera moves slowly and deliberately — slow presence beats fast coverage.
+11. Scene focus with prose bridging: each chapter should have one primary scene — the main dramatic moment that receives the majority of the word count. Prose fiction legitimately uses brief bridging passages to establish cause and continuity: a short temporal transition, a fragment of recalled context, a line of background that explains why this moment carries weight. These bridges serve the primary scene; they do not compete with it for space. The rule is: one primary scene dominates; everything else is connective tissue.
 12. Specificity over abstraction: one precise concrete detail — an object, a sound, a specific gesture, a fragment of inner voice — carries more emotional weight than several abstract statements. Show the particular, not the general.
 
 Return strict JSON Schema only. Do not include image prompts or meta-comments.`;
@@ -138,7 +138,7 @@ ${(!args.worldStatePrompt.includes('故事基准') && args.endingProto) ? `作�
 7. 如果有干涉偏移记录或支线触发设定，必须在文风和剧情逻辑上隐晦地体现这些涟漪效应。
 8. 必须从本章开头到结尾严格保持指定叙事人称，不得段落间混用第一/第二/第三人称，也不得用”镜头切换”当作理由改变叙述视角。
 9. 文风模仿（硬性要求）：若上方提供了”作者默认主线原文”，必须将其视为文风基准，精准模仿其句子长短与复杂度、段落节奏与密度、对话/内心独白比例、叙事距离和词汇风格。生成文本必须让读者感到与作者原文出自同一人之手，不得出现明显的 AI 通用腔调。
-10. 场景纪律——与字数成比例：在 ${args.targetWordCount} 字的篇幅下，这一章只容纳 1 个场景；800 字以上最多 2 个场景。场景是发生在同一地点的连续时间段。时间或地点的跳跃次数，不得超过字数能承载的量。把摄像机想象成在缓慢而有意识地移动——慢速驻留永远胜过快速覆盖。
+10. 主场景聚焦，散文性过渡辅助：每章应有一个主场景——核心戏剧时刻，占据绝大部分篇幅。散文叙事有权使用简短的过渡性内容来建立因果关系和连续性：一个短暂的时间位移、一段召唤过去语境的碎片、一句解释这个时刻为何有分量的背景。这些过渡性内容服务于主场景，而非与之竞争篇幅。原则是：主场景占主导，其余内容是连接组织。
 11. 具体胜过抽象：一个精确的具体细节——一件物品、一种声音、一个特定的动作、一段内心声音的碎片——比多句关于角色感受的抽象陈述更有情感分量。写出特殊的，而不是笼统的。
 
 请严格按照 JSON Schema 输出，不要包含图片 Prompt 或元注释。`;
