@@ -111,6 +111,8 @@ Requirements:
 10. Style matching: if the author's default chapter text is provided above, treat it as the definitive style reference. Mirror its sentence length and complexity, paragraph rhythm and density, dialogue-to-narration ratio, narrative distance, and vocabulary register. The generated text must feel written by the same author — not a generic AI voice.
 11. Scene focus with prose bridging: each chapter should have one primary scene — the main dramatic moment that receives the majority of the word count. Prose fiction legitimately uses brief bridging passages to establish cause and continuity: a short temporal transition, a fragment of recalled context, a line of background that explains why this moment carries weight. These bridges serve the primary scene; they do not compete with it for space. The rule is: one primary scene dominates; everything else is connective tissue.
 12. Specificity over abstraction: one precise concrete detail — an object, a sound, a specific gesture, a fragment of inner voice — carries more emotional weight than several abstract statements. Show the particular, not the general.
+13. Do not name emotional states directly. Never write "her heart filled with X", "he felt Y", or "a wave of Z washed over her". Instead, show a physical action, a line of dialogue, or a detail the character notices — and let the reader discover the emotion. If you find yourself explaining what a character feels, replace it with what they do.
+14. Physical symptoms of distress are one-time anchors, not recurring signals. A symptom used once (trembling hands, a cough, pallor) is a vivid detail. The same symptom repeated across multiple chapters loses all weight. Find a different concrete detail each time.
 
 Return strict JSON Schema only. Do not include image prompts or meta-comments.`;
   }
@@ -140,6 +142,8 @@ ${(!args.worldStatePrompt.includes('故事基准') && args.endingProto) ? `作�
 9. 文风模仿（硬性要求）：若上方提供了”作者默认主线原文”，必须将其视为文风基准，精准模仿其句子长短与复杂度、段落节奏与密度、对话/内心独白比例、叙事距离和词汇风格。生成文本必须让读者感到与作者原文出自同一人之手，不得出现明显的 AI 通用腔调。
 10. 主场景聚焦，散文性过渡辅助：每章应有一个主场景——核心戏剧时刻，占据绝大部分篇幅。散文叙事有权使用简短的过渡性内容来建立因果关系和连续性：一个短暂的时间位移、一段召唤过去语境的碎片、一句解释这个时刻为何有分量的背景。这些过渡性内容服务于主场景，而非与之竞争篇幅。原则是：主场景占主导，其余内容是连接组织。
 11. 具体胜过抽象：一个精确的具体细节——一件物品、一种声音、一个特定的动作、一段内心声音的碎片——比多句关于角色感受的抽象陈述更有情感分量。写出特殊的，而不是笼统的。
+12. 不要直接命名情绪状态。永远不要写「她心中充满了X」、「他感到Y」或「一股Z涌上心头」。用行动、对话，或角色注意到的某个细节来代替——让读者自己发现情绪。如果你发现自己在解释角色的感受，用他们的行为替换它。
+13. 身体苦痛的症状是一次性的锚点，不是反复出现的叙事信号。同一个症状（颤抖的手、咳嗽、脸色苍白）用一次是细节，多章反复出现便失去所有分量。每次需要传递困境时，找不同的具体细节。
 
 请严格按照 JSON Schema 输出，不要包含图片 Prompt 或元注释。`;
 }

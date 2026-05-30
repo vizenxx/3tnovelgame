@@ -134,6 +134,11 @@ Output requirements:
 14. condition_char must use an existing character ID; condition_chapter must be an integer from 2 to 6; condition_action must be bless or curse. Also output triggerGroups mirroring these fields, with hint on each group.
 15. chapter titles/summaries must fit the requested narrative person and avoid forcing viewpoint shifts.
 
+Before finalizing, verify all three:
+1. Is the central dilemma genuinely two-sided? If one ending is emotionally superior to the other from the start, it is not a real dilemma — the blueprint needs rebalancing.
+2. Can a reasonable reader make a case for both the left-domain and right-domain endings?
+3. Does chapter 1 contain at least one concrete detail — not a genre convention, but a specific, particular moment — that a reader can recognize from their own experience?
+
 Return strict JSON only. Do not include metadata. Reference chapter length: ${args.targetWordCount} words.`;
   }
 
@@ -175,6 +180,11 @@ ${seriesInstruction}${continuityInstruction}${continuityHardInstruction}
 14. desc 必须写清该支线发生时的具体剧情变化、隐藏内幕和支线意义，不能与 hint 重复。
 15. chapters 的 title/summary 必须与上述叙事人称相容，避免设计会迫使正文切换人称的章节视角。
 16. 角色性格和核心主线必须在各章节的大纲里严格体现，确保前后章节之间的人物行为和事件走向保持一致。
+
+提交前自查以下三条：
+1. 核心两难困境是否真的双向成立？如果其中一个结局从第一章起就在情感上明显优于另一个，这不是真正的两难——需要重新平衡蓝图。
+2. 左域结局和右域结局，一个理性的读者是否都能为之辩护？
+3. 第一章是否包含至少一个具体的特殊时刻——不是类型惯例，而是读者能从自身经历中认出的某个具体事物？
 
 请严格按 JSON 输出，不要包含元数据。字数参考值：${args.targetWordCount}。`;
 }
