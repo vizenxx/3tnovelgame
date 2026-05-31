@@ -1,6 +1,6 @@
 import React from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { X } from 'lucide-react';
+import { Sparkles, X } from 'lucide-react';
 import { semanticIconButtonClass } from './semanticClasses';
 
 export function StoryInfoPanelLayer({ ctx }: { ctx: any }) {
@@ -18,7 +18,13 @@ export function StoryInfoPanelLayer({ ctx }: { ctx: any }) {
     branchTierLabel,
     isEnglish,
     formatTriggerCondition,
+    revealedThreadIds = [],
   } = ctx;
+
+  const allThreads = Array.isArray(blueprint?.threads) ? blueprint.threads : [];
+  const revealedSet = new Set<string>(revealedThreadIds);
+  const revealedThreads = allThreads.filter((thread: any) => revealedSet.has(String(thread?.id)));
+  const hiddenThreadCount = allThreads.length - revealedThreads.length;
 
 const storyInfoPanel = (
   <AnimatePresence>
@@ -184,6 +190,32 @@ const storyInfoPanel = (
                     )}
                   </div>
                 </section>
+                {allThreads.length > 0 && (
+                  <section className="space-y-4">
+                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-app-muted">{tr('知因 · 因线', 'Threads')}</h4>
+                    <div className="grid gap-3">
+                      {revealedThreads.map((thread: any) => (
+                        <div key={thread.id} className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.06] p-4">
+                          <div className="mb-1.5 flex items-center gap-2">
+                            <Sparkles className="h-3.5 w-3.5 shrink-0 text-amber-300" />
+                            <div className="font-bold text-amber-100">{thread.title}</div>
+                          </div>
+                          <div className="text-xs leading-relaxed text-app-muted">{thread.content}</div>
+                        </div>
+                      ))}
+                      {hiddenThreadCount > 0 && (
+                        <div className="rounded-2xl border border-dashed border-app-border bg-app-surface/20 p-4 text-center">
+                          <div className="text-sm font-black text-app-text">
+                            {tr(`还有 ${hiddenThreadCount} 条因线未揭`, `${hiddenThreadCount} thread${hiddenThreadCount > 1 ? 's' : ''} still hidden`)}
+                          </div>
+                          <div className="mt-1 text-xs leading-relaxed text-app-muted">
+                            {tr('随着原剧情推进、支线或结局揭晓，它们会逐一显现。', 'They surface as the original story unfolds, or as branches and endings are revealed.')}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </section>
+                )}
               </>
             )}
           </div>

@@ -101,6 +101,23 @@ const blueprintSchema = {
         required: ['id', 'name', 'score', 'side', 'condition_char', 'condition_action', 'condition_chapter', 'desc', 'is_hidden'],
       },
     },
+    threads: {
+      type: Type.ARRAY,
+      description: 'Hidden cause-lines (Threads): author-set backstory/insight that stays hidden until revealed. They do NOT change the plot; they give the player reasons and emotional weight when deciding whether and how to interfere.',
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          id: { type: Type.STRING },
+          title: { type: Type.STRING, description: '揭露后展示的因线标题（6-14字）' },
+          content: { type: Type.STRING, description: '隐藏的内情/前因（40-90字），揭示角色或事件背后玩家原本不知道的根由，让玩家在干涉时更纠结' },
+          revealType: { type: Type.STRING, description: 'chapter_pristine | branch | ending' },
+          revealChapter: { type: Type.INTEGER, description: 'revealType=chapter_pristine 时：以原始未干涉状态读到第几章时揭露（2-7）' },
+          revealBranchId: { type: Type.STRING, description: 'revealType=branch 时：绑定的支线 id' },
+          revealEndingId: { type: Type.STRING, description: 'revealType=ending 时：绑定的结局（left/right/default）' },
+        },
+        required: ['id', 'title', 'content', 'revealType'],
+      },
+    },
   },
   required: ['title', 'main_axis', 'left_mainline_default', 'right_mainline_default', 'characters', 'chapters', 'endings', 'branches'],
 };
@@ -307,6 +324,32 @@ function normalizeBlueprint(raw: any, requestedEndingMode: 'single' | 'dual' = '
     };
   });
 
+  const branchIdSet = new Set(branches.map((branch: any) => String(branch.id)));
+  const threads = Array.isArray(raw.threads)
+    ? raw.threads.slice(0, 8).map((thread: any, index: number) => {
+        const revealType = ['chapter_pristine', 'branch', 'ending'].includes(String(thread?.revealType))
+          ? String(thread.revealType)
+          : 'chapter_pristine';
+        const revealBranchId = String(thread?.revealBranchId || '').trim();
+        return {
+          id: String(thread?.id || `t_${index + 1}`).trim() || `t_${index + 1}`,
+          title: String(thread?.title || `因线 ${index + 1}`).trim(),
+          content: String(thread?.content || '').trim(),
+          revealType,
+          revealChapter: Math.min(7, Math.max(2, Number(thread?.revealChapter) || 3)),
+          // Only keep a branch binding that points at a real branch; otherwise fall back to pristine.
+          revealBranchId: branchIdSet.has(revealBranchId) ? revealBranchId : '',
+          revealEndingId: ['left', 'right', 'default'].includes(String(thread?.revealEndingId)) ? String(thread.revealEndingId) : '',
+        };
+      }).filter((thread: any) => thread.content)
+        .map((thread: any) => {
+          // A branch/ending thread that lost its binding degrades to a pristine reveal so it can still surface.
+          if (thread.revealType === 'branch' && !thread.revealBranchId) return { ...thread, revealType: 'chapter_pristine' };
+          if (thread.revealType === 'ending' && !thread.revealEndingId) return { ...thread, revealType: 'chapter_pristine' };
+          return thread;
+        })
+    : [];
+
   return {
     ...raw,
     title: String(raw.title || '未命名命运').trim(),
@@ -318,6 +361,7 @@ function normalizeBlueprint(raw: any, requestedEndingMode: 'single' | 'dual' = '
     chapters,
     endings,
     branches,
+    threads,
   };
 }
 

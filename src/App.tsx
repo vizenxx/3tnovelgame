@@ -1620,6 +1620,10 @@ export default function App() {
   const [interventionGateChapter, setInterventionGateChapter] = useState<number | null>(null);
   // Gate modal stage: 'choose' = observe/interfere; 'select' = pick a character in-modal.
   const [interventionGateStage, setInterventionGateStage] = useState<'choose' | 'select'>('choose');
+  // Revealed Threads (知因): ids of hidden cause-lines that have surfaced. Kept once revealed.
+  const [revealedThreadIds, setRevealedThreadIds] = useState<string[]>([]);
+  // Transient toast naming the most recently revealed thread.
+  const [threadRevealNotice, setThreadRevealNotice] = useState<string | null>(null);
   const [isRewriting, setIsRewriting] = useState(false);
   const [interventionEffect, setInterventionEffect] = useState<'bless' | 'curse' | null>(null);
   const [activeInterventionOverlay, setActiveInterventionOverlay] = useState<{ type: 'bless' | 'curse' | 'ending', targetChapter: number, statusRaw: string } | null>(null);
@@ -2599,9 +2603,53 @@ export default function App() {
     setInterventionGateStage('choose');
     setShowSummaryModal(false);
     setActiveInterventionChapter(null);
+    setRevealedThreadIds([]);
     // Cloud progress (if any) is overwritten when the player next saves during the new run.
     scrollToTopAfterViewChange();
   };
+
+  // Thread (知因) reveal engine: surface hidden cause-lines as their conditions are met.
+  useEffect(() => {
+    if (gameState !== 'PLAYING' && gameState !== 'SUMMARY') return;
+    const threads = Array.isArray(blueprint?.threads) ? blueprint.threads : [];
+    if (threads.length === 0) return;
+    const alreadyRevealed = new Set(revealedThreadIds);
+    const endingDomain = endingValue > 5 ? 'left' : endingValue < -5 ? 'right' : 'default';
+    const branchUnlockedIds = new Set<string>([
+      ...unlockedBranches.map((branch: any) => String(branch.id)),
+      ...historicallyUnlockedBranches.map((branch: any) => String(branch.id)),
+    ]);
+    const newlyRevealed: string[] = [];
+    for (const thread of threads) {
+      const id = String(thread?.id || '');
+      if (!id || alreadyRevealed.has(id)) continue;
+      let reveal = false;
+      if (thread.revealType === 'branch') {
+        reveal = branchUnlockedIds.has(String(thread.revealBranchId));
+      } else if (thread.revealType === 'ending') {
+        reveal = Boolean(storyConclusion) && (thread.revealEndingId === endingDomain || thread.revealEndingId === 'default');
+      } else {
+        // chapter_pristine: reached this chapter having NOT interfered at or before it.
+        const ch = Number(thread.revealChapter) || 0;
+        const pristineUpToHere = intervenedChapters.every((c: number) => Number(c) > ch);
+        reveal = unlockedChapterNum >= ch && pristineUpToHere;
+      }
+      if (reveal) newlyRevealed.push(id);
+    }
+    if (newlyRevealed.length > 0) {
+      setRevealedThreadIds((prev) => Array.from(new Set([...prev, ...newlyRevealed])));
+      const lastId = newlyRevealed[newlyRevealed.length - 1];
+      const lastThread = threads.find((thread: any) => String(thread?.id) === lastId);
+      if (lastThread?.title) setThreadRevealNotice(String(lastThread.title));
+    }
+  }, [gameState, blueprint, unlockedChapterNum, intervenedChapters, unlockedBranches, historicallyUnlockedBranches, storyConclusion, endingValue, revealedThreadIds]);
+
+  // Auto-dismiss the thread reveal toast.
+  useEffect(() => {
+    if (!threadRevealNotice) return;
+    const timer = window.setTimeout(() => setThreadRevealNotice(null), 4200);
+    return () => window.clearTimeout(timer);
+  }, [threadRevealNotice]);
 
   // Character-selection grid shown inside the gate modal when the player chooses to interfere.
   const renderInterventionCharacterGrid = (chapter: any) => {
@@ -3775,6 +3823,7 @@ export default function App() {
     historicallyUnlockedBranches,
     intervenedChapters,
     unlockedChapterNum,
+    revealedThreadIds,
     naturalChapters,
     initialNaturalChapters,
     characterStatuses,
@@ -3819,6 +3868,7 @@ export default function App() {
       .reduce((max, chapter) => Math.max(max, Number(chapter.chapter_num) || 0), 1);
     // A finished run (ending reached) reveals all chapters so the full story is readable.
     setUnlockedChapterNum(snapshot.storyConclusion ? 7 : (Number(snapshot.unlockedChapterNum) || snapshotReadyMax));
+    setRevealedThreadIds(asSafeArray(snapshot.revealedThreadIds));
     setNaturalChapters(asSafeArray(snapshot.naturalChapters));
     setInitialNaturalChapters(asSafeArray(snapshot.initialNaturalChapters));
     setCharacterStatuses(snapshot.characterStatuses || {});
@@ -5673,6 +5723,7 @@ export default function App() {
           : 1
     );
     setInterventionGateChapter(null);
+    setRevealedThreadIds(progressData?.revealedThreadIds || []);
     setNaturalChapters(progressData?.naturalChapters || nextBlueprint.chapters);
     setInitialNaturalChapters(progressData?.initialNaturalChapters || nextBlueprint.chapters);
     setCharacterStatuses(progressData?.characterStatuses || initialStatuses);
@@ -6448,6 +6499,7 @@ export default function App() {
       setBlueprint(data);
       setChapters(data.chapters || []);
       setUnlockedChapterNum(1);
+      setRevealedThreadIds([]);
       setInterventionGateChapter(null);
       setChangeHighlights({});
       setNaturalChapters(data.chapters || []);
@@ -8350,6 +8402,7 @@ export default function App() {
         branchTierLabel,
         isEnglish,
         formatTriggerCondition,
+        revealedThreadIds,
       }}
     />
   );
@@ -9546,6 +9599,22 @@ export default function App() {
           )}
           {gameState === 'PLAYING' && renderPlayingView()}
           {gameState === 'PLAYING' && interventionGateModal}
+          <AnimatePresence>
+            {threadRevealNotice && (
+              <motion.div
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="fixed left-1/2 top-[max(4rem,calc(env(safe-area-inset-top)+3rem))] z-[2300] -translate-x-1/2 rounded-full border border-amber-500/30 bg-app-bg/95 px-5 py-2.5 shadow-2xl shadow-black/40 backdrop-blur-xl"
+              >
+                <div className="flex items-center gap-2 text-sm font-black text-amber-100">
+                  <Sparkles className="h-4 w-4 shrink-0 text-amber-300" />
+                  <span>{tr('揭露了新的因线', 'A thread surfaces')}</span>
+                  <span className="text-white">{threadRevealNotice}</span>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
           {gameState === 'SUMMARY' && <Suspense fallback={null}>{renderSummaryView()}</Suspense>}
           {gameState === 'AUTHORING' && <Suspense fallback={null}>{renderAuthoringView()}</Suspense>}
           {gameState === 'READONLY_STORY' && <Suspense fallback={null}>{renderReadonlyStoryView()}</Suspense>}
