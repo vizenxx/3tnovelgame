@@ -2570,6 +2570,39 @@ export default function App() {
     scrollToChapter(nextChapterNum);
   };
 
+  // Start the whole run over from chapter 1: discard this fate line and reset every run state.
+  // (This is "begin anew", not the back-intervention of an earlier chapter.)
+  const restartCurrentRun = () => {
+    const baseChapters = (Array.isArray(naturalChapters) && naturalChapters.length > 0)
+      ? naturalChapters
+      : (Array.isArray(initialNaturalChapters) && initialNaturalChapters.length > 0)
+        ? initialNaturalChapters
+        : (blueprint?.chapters || []);
+    const resetStatuses: Record<string, { status: string; isDead: boolean }> = {};
+    (blueprint?.characters || []).forEach((character: any) => {
+      resetStatuses[character.id] = { status: appLanguage === 'en-US' ? 'Present' : '存活', isDead: false };
+    });
+    setChapters(baseChapters.map((chapter: any) => ({ ...chapter })));
+    setUnlockedChapterNum(1);
+    setInterventionsLeft(3);
+    setIntervenedChapters([]);
+    setInterventionHistory([]);
+    setUnlockedBranches([]);
+    setHistoricallyUnlockedBranches([]);
+    setEndingValue(0);
+    setCharacterStatuses(resetStatuses);
+    setStoryConclusion(null);
+    setChangeHighlights({});
+    setWorldStateDigest(null);
+    setDeltaWorldStateByChapter({});
+    setInterventionGateChapter(null);
+    setInterventionGateStage('choose');
+    setShowSummaryModal(false);
+    setActiveInterventionChapter(null);
+    // Cloud progress (if any) is overwritten when the player next saves during the new run.
+    scrollToTopAfterViewChange();
+  };
+
   // Character-selection grid shown inside the gate modal when the player chooses to interfere.
   const renderInterventionCharacterGrid = (chapter: any) => {
     if (!blueprint || !chapter) return null;
@@ -8675,7 +8708,7 @@ export default function App() {
                           <>
                             <div className="text-lg font-black text-app-text">{tr('故事已抵达终点', 'The story has reached its end')}</div>
                             <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-app-muted">
-                              {tr('你可以就此接受这条命运线，或回到尚可改写的篇章，再搏一次。', 'You can accept this fate line as it stands, or return to a chapter you can still rewrite and try once more.')}
+                              {tr('你可以就此接受这条命运线，或推倒重来，从第一章重走整个故事。', 'You can accept this fate line as it stands, or begin the whole story anew from chapter one.')}
                             </p>
                             <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-center">
                               <button
@@ -8689,18 +8722,17 @@ export default function App() {
                               </button>
                               <button
                                 type="button"
-                                onClick={() => {
-                                  const target = Math.min(6, unlockedChapterNum - 1);
-                                  if (target >= 2) {
-                                    setInterventionGateChapter(target);
-                                    setInterventionGateStage('select');
-                                  }
-                                }}
+                                onClick={() => setConfirmationModal({
+                                  isOpen: true,
+                                  title: tr('重新开始整个故事？', 'Start the whole story over?'),
+                                  message: tr('当前这条命运线将被舍弃，回到第一章重新开始，三次干涉机会一并重置。', 'This fate line will be discarded — you return to chapter 1 and your three interventions reset.'),
+                                  onConfirm: () => restartCurrentRun(),
+                                })}
                                 disabled={isRewriting || isGeneratingConclusion || activeInterventionOverlay !== null}
                                 className={`${semanticButtonClass('secondary', { compact: true })} rounded-full px-6`}
                               >
-                                <Sparkles className="h-4 w-4" />
-                                {tr(`重新干涉（剩 ${interventionsLeft} 次）`, `Interfere again (${interventionsLeft} left)`)}
+                                <RefreshCcw className="h-4 w-4" />
+                                {tr('重新开始', 'Start over')}
                               </button>
                             </div>
                           </>
