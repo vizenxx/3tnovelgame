@@ -39,26 +39,6 @@ function normalizeChapter(chapter: any) {
   };
 }
 
-function normalizeChangeHighlights(raw: any, chapters: any[]) {
-  const chapterTextByNum = new Map<number, string>();
-  chapters.forEach((chapter) => {
-    chapterTextByNum.set(asNumber(chapter?.chapter_num, 0), String(chapter?.text || ''));
-  });
-  return (Array.isArray(raw) ? raw : [])
-    .map((item: any) => {
-      const chapterNum = asNumber(item?.chapter_num ?? item?.chapterNum, 0);
-      const quote = stripGeneratedMarkup(item?.quote || '').replace(/\s+/g, ' ').trim();
-      const reason = stripGeneratedMarkup(item?.reason || '').replace(/\s+/g, ' ').trim();
-      return { chapter_num: chapterNum, quote, reason };
-    })
-    .filter((item) => {
-      if (!item.chapter_num || item.quote.length < 4 || item.quote.length > 160) return false;
-      const chapterText = chapterTextByNum.get(item.chapter_num) || '';
-      return chapterText.includes(item.quote);
-    })
-    .slice(0, 12);
-}
-
 function normalizeFutureOutlines(raw: any, rewriteStartChapter: number, rewriteEndChapter: number, chapterWordTargets: Record<number, number>) {
   return (Array.isArray(raw) ? raw : [])
     .map((item: any) => {
@@ -210,19 +190,6 @@ const rewriteSchema = {
         },
         required: ['id', 'status', 'is_dead'],
       },
-    },
-    change_highlights: {
-      type: Type.ARRAY,
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          chapter_num: { type: Type.INTEGER, description: '发生变化摘录所在章节' },
-          quote: { type: Type.STRING, description: '正文中已经存在的纯文本原句或短句，不包含任何标签' },
-          reason: { type: Type.STRING, description: '简短说明该摘录为何是干涉造成的变化' },
-        },
-        required: ['chapter_num', 'quote'],
-      },
-      description: '供前端临时高亮的变化摘录，正文自身必须保持纯文本',
     },
     future_outlines: {
       type: Type.ARRAY,
@@ -422,7 +389,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!Array.isArray(aiData.character_updates)) {
       aiData.character_updates = [];
     }
-    aiData.change_highlights = normalizeChangeHighlights(aiData.change_highlights, aiData.chapters);
     aiData.future_outlines = normalizeFutureOutlines(aiData.future_outlines, safeChapterNum, rewriteEndChapter, chapterWordTargets);
 
     const leftProgress = Math.min(100, Math.max(0, (newEndingValue / 25) * 100));

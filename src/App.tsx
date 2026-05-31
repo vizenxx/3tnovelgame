@@ -1199,17 +1199,25 @@ const stripGeneratedMarkup = (value: unknown) => String(value || '')
   .replace(/\n{3,}/g, '\n\n')
   .trim();
 
-const normalizeChangeHighlightsForClient = (raw: any) => {
-  const next: Record<number, string[]> = {};
-  (Array.isArray(raw) ? raw : []).forEach((item: any) => {
-    const chapterNum = Number(item?.chapter_num ?? item?.chapterNum);
-    const quote = stripGeneratedMarkup(item?.quote || '').replace(/\s+/g, ' ').trim();
-    if (!Number.isFinite(chapterNum) || quote.length < 4 || quote.length > 160) return;
-    next[chapterNum] = [...(next[chapterNum] || []), quote];
-  });
-  return Object.fromEntries(
-    Object.entries(next).map(([chapterNum, quotes]) => [chapterNum, Array.from(new Set(quotes)).slice(0, 6)])
-  ) as Record<number, string[]>;
+// Compute change highlights locally by diffing the chapter's previous text against the
+// rewritten text — the sentences that newly appear are what the intervention changed.
+// (Replaces having the AI output change_highlights, which slowed the rewrite down.)
+const computeLocalChangeHighlights = (oldText: string, newText: string): string[] => {
+  const splitSentences = (text: string) => String(text || '')
+    .replace(/\r\n/g, '\n')
+    .split(/(?<=[。！？!?…\n])/)
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence.length >= 4);
+  const oldSentences = new Set(splitSentences(oldText));
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const sentence of splitSentences(newText)) {
+    if (oldSentences.has(sentence) || seen.has(sentence)) continue;
+    seen.add(sentence);
+    if (sentence.length <= 160) result.push(sentence);
+    if (result.length >= 12) break;
+  }
+  return result;
 };
 
 const toDefaultArtstyleChapters = (chapters?: Chapter[]) =>
@@ -7201,12 +7209,14 @@ export default function App() {
         nextChapters = mergedChapters as any;
         setChapters(nextChapters as any);
         const returnedChapterNums = new Set<number>(aiData.chapters.map((chapter: any) => Number(chapter.chapter_num)).filter(Number.isFinite));
-        const normalizedHighlights = normalizeChangeHighlightsForClient(aiData.change_highlights);
-        returnedChapterNums.forEach((chapterNum) => {
-          if (normalizedHighlights[chapterNum]?.length) {
-            nextChangeHighlights[chapterNum] = normalizedHighlights[chapterNum];
+        returnedChapterNums.forEach((num) => {
+          const oldText = String(previousByNum.get(num)?.text || '');
+          const newText = String(aiData.chapters.find((chapter: any) => Number(chapter.chapter_num) === num)?.text || '');
+          const localHighlights = computeLocalChangeHighlights(oldText, newText);
+          if (localHighlights.length) {
+            nextChangeHighlights[num] = localHighlights;
           } else {
-            delete nextChangeHighlights[chapterNum];
+            delete nextChangeHighlights[num];
           }
         });
         setChangeHighlights(nextChangeHighlights);

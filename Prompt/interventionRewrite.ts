@@ -149,9 +149,8 @@ ${wordTargetLines || `Chapter ${rewriteRange.startChapter}: target ${args.target
 4. Even for a large ripple, keep the original chapter's necessary setup and stable events unless the new branch/ending direction directly contradicts them.
 5. Each chapter must be split into 6-10 paragraphs, each 2-4 sentences, separated by two newline characters.
 6. Prose must be plain text. Never output HTML, Markdown, XML, code tags, <mark>, </mark>, or highlight brackets.
-7. All changes caused by this intervention must be written naturally into the story. Highlighting is handled by the frontend, not by prose tags.
-8. Also output change_highlights for temporary frontend highlighting: each item has chapter_num, quote, reason. quote must be an exact plain-text phrase already present in that chapter, with no tags.
-9. Even if no branch triggers, the ripple range must contain a perceptible shift and must not simply copy old prose.
+7. All changes caused by this intervention must be written naturally into the story. Highlighting is computed by the frontend by diffing against the previous text — do not add any tags or markers.
+8. Even if no branch triggers, the ripple range must contain a perceptible shift and must not simply copy old prose.
 10. Style matching (hard requirement): mirror the original chapter's writing style precisely — sentence length and complexity, paragraph rhythm and density, dialogue-to-narration ratio, narrative distance, and vocabulary register. The rewritten chapter must feel written by the same author as the original. Do not introduce a noticeably different prose voice.
 
 Return strict JSON only. Do not include metadata.`;
@@ -202,9 +201,8 @@ ${wordTargetLines || `第${rewriteRange.startChapter}章：目标 ${args.targetW
 4. 即使是大涟漪，也要保留原章节中仍然成立的必要铺垫和稳定事件；只有与新支线/新结局导向直接冲突的内容才需要改写、删减或补强。
 5. 每一章的正文必须拆成 6-10 段，每段 2-4 句，段落之间用两个换行符。
 6. 正文必须是纯文本叙事，严禁输出 HTML、Markdown、XML 或任何代码式标签；不要使用 <mark>、</mark>、【高亮】 等标记包住变化内容。
-7. 所有因本次干涉直接或间接导致的变化，必须自然写进叙事本身；高亮与差异展示由前端处理，不要把标记写入故事正文。
-8. 另外输出 change_highlights 数组，用于前端临时高亮变化处：每项包含 chapter_num、quote、reason；quote 必须是对应章节正文中已经出现的原句或短句，严禁包含任何标签。
-9. 即使未触发支线，也必须让涟漪范围内的章节出现可感知偏移，不能复制旧正文。
+7. 所有因本次干涉直接或间接导致的变化，必须自然写进叙事本身；高亮由前端通过与旧正文做差异比对自动计算，不要把任何标记写进正文。
+8. 即使未触发支线，也必须让涟漪范围内的章节出现可感知偏移，不能复制旧正文。
 10. 文风模仿（硬性要求）：必须精准模仿并延续上方原章节的文风特征——句子长短与复杂度、段落节奏与密度、对话/内心独白比例、叙事距离（旁观者/沉浸/第一视角等）、词汇风格（书面/口语/诗意）。干涉后的正文必须让读者感到仍是同一位作者的笔触，不应产生出戏感。
 
 请严格按 JSON 输出，不要包含元数据。`;
