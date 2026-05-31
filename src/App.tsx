@@ -1612,6 +1612,12 @@ export default function App() {
   const [historicallyUnlockedBranches, setHistoricallyUnlockedBranches] = useState<Branch[]>([]);
   const [intervenedChapters, setIntervenedChapters] = useState<number[]>([]);
   const [activeInterventionChapter, setActiveInterventionChapter] = useState<number | null>(null);
+  // Chapter-by-chapter reveal: the highest chapter number the player has unlocked for reading.
+  // Chapters beyond this are generated in the background but hidden, so interventions happen
+  // without the player having seen the next chapter's outcome.
+  const [unlockedChapterNum, setUnlockedChapterNum] = useState<number>(1);
+  // When set, the observe/interfere gate modal is open for this chapter number.
+  const [interventionGateChapter, setInterventionGateChapter] = useState<number | null>(null);
   const [isRewriting, setIsRewriting] = useState(false);
   const [interventionEffect, setInterventionEffect] = useState<'bless' | 'curse' | null>(null);
   const [activeInterventionOverlay, setActiveInterventionOverlay] = useState<{ type: 'bless' | 'curse' | 'ending', targetChapter: number, statusRaw: string } | null>(null);
@@ -2551,6 +2557,14 @@ export default function App() {
       const top = target.getBoundingClientRect().top + window.scrollY - 96;
       window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
     }, 80);
+  };
+
+  // Reveal the next chapter (observe / continue). Closes the gate modal and scrolls to it.
+  const advanceChapter = (fromChapterNum: number) => {
+    setInterventionGateChapter(null);
+    const nextChapterNum = Math.min(7, fromChapterNum + 1);
+    setUnlockedChapterNum((prev) => Math.max(prev, nextChapterNum));
+    scrollToChapter(nextChapterNum);
   };
 
   const getBranchTriggerChapter = (branch: any) => {
@@ -3644,6 +3658,7 @@ export default function App() {
     unlockedBranches,
     historicallyUnlockedBranches,
     intervenedChapters,
+    unlockedChapterNum,
     naturalChapters,
     initialNaturalChapters,
     characterStatuses,
@@ -3681,6 +3696,13 @@ export default function App() {
     setUnlockedBranches(normalizeUnlockedBranchesForBlueprint(asSafeArray(snapshot.unlockedBranches), snapshot.blueprint));
     setHistoricallyUnlockedBranches(historicalBranches);
     setIntervenedChapters(asSafeArray(snapshot.intervenedChapters));
+    // Old saves predate chapter-by-chapter reveal: fall back to the highest ready chapter
+    // so their progress is not hidden. New saves use the stored unlock pointer.
+    const snapshotReadyMax = asSafeArray<any>(snapshot.currentChapters)
+      .filter((chapter) => chapter?.text && String(chapter.text).trim().length > 0)
+      .reduce((max, chapter) => Math.max(max, Number(chapter.chapter_num) || 0), 1);
+    // A finished run (ending reached) reveals all chapters so the full story is readable.
+    setUnlockedChapterNum(snapshot.storyConclusion ? 7 : (Number(snapshot.unlockedChapterNum) || snapshotReadyMax));
     setNaturalChapters(asSafeArray(snapshot.naturalChapters));
     setInitialNaturalChapters(asSafeArray(snapshot.initialNaturalChapters));
     setCharacterStatuses(snapshot.characterStatuses || {});
@@ -5522,6 +5544,19 @@ export default function App() {
     setUnlockedBranches(normalizeUnlockedBranchesForBlueprint(progressData?.unlockedBranches || [], nextBlueprint));
     setHistoricallyUnlockedBranches(historicalBranches);
     setIntervenedChapters(progressData?.intervenedChapters || []);
+    // New run: start at chapter 1 and reveal one chapter at a time.
+    // Resumed run: use the saved unlock pointer; old saves fall back to highest ready chapter.
+    const resumeReadyMax = asSafeArray<any>(baseChapters)
+      .filter((chapter) => chapter?.text && String(chapter.text).trim().length > 0)
+      .reduce((max, chapter) => Math.max(max, Number(chapter.chapter_num) || 0), 1);
+    setUnlockedChapterNum(
+      progressData?.storyConclusion
+        ? 7
+        : progressData
+          ? (Number(progressData.unlockedChapterNum) || resumeReadyMax)
+          : 1
+    );
+    setInterventionGateChapter(null);
     setNaturalChapters(progressData?.naturalChapters || nextBlueprint.chapters);
     setInitialNaturalChapters(progressData?.initialNaturalChapters || nextBlueprint.chapters);
     setCharacterStatuses(progressData?.characterStatuses || initialStatuses);
@@ -6233,13 +6268,13 @@ export default function App() {
       data.chapters = ensureSevenChapterShells(data.chapters || []);
       await setLocalCache(quickGenerationDraftCacheKey(), { signature: draftSignature, blueprint: data });
 
-      const prefetchChapters = [1, 2, 3];
+      const prefetchChapters = [1, 2];
       for (const chapterNum of prefetchChapters) {
         if (isChapterTextReady((data.chapters || []).find((chapter: any) => chapter.chapter_num === chapterNum))) {
           continue;
         }
         generationStage = appLanguage === 'en-US' ? `generating chapter ${chapterNum}` : `生成第 ${chapterNum} 章`;
-        setGenerationStatus(isEnglish ? `Writing chapter ${chapterNum} (${chapterNum}/3)...` : `正在具象化世界细节 (${chapterNum}/3)...`);
+        setGenerationStatus(isEnglish ? `Writing chapter ${chapterNum} (${chapterNum}/2)...` : `正在具象化世界细节 (${chapterNum}/2)...`);
         setGenerationProgress(72 + chapterNum * 7);
         const chapterResponse = await withRetry(() => apiFetch('/api/ai?action=generate-next-chapter', {
           method: 'POST',
@@ -6296,6 +6331,8 @@ export default function App() {
 
       setBlueprint(data);
       setChapters(data.chapters || []);
+      setUnlockedChapterNum(1);
+      setInterventionGateChapter(null);
       setChangeHighlights({});
       setNaturalChapters(data.chapters || []);
       setInitialNaturalChapters((data.chapters || []).map((chapter: any) => ({
@@ -6348,8 +6385,12 @@ export default function App() {
       return;
     }
 
+    // Generate at most one chapter ahead of what the player has unlocked. An early
+    // intervention discards later chapters, so generating them eagerly wastes work —
+    // and revealing chapters one at a time is what makes interventions a blind bet.
+    const generationCeiling = unlockedChapterNum + 1;
     const missingChapter = chapters
-      .filter((chapter) => Number(chapter.chapter_num) > 1)
+      .filter((chapter) => Number(chapter.chapter_num) > 1 && Number(chapter.chapter_num) <= generationCeiling)
       .sort((a, b) => Number(a.chapter_num) - Number(b.chapter_num))
       .find((chapter) => !isChapterTextReady(chapter));
 
@@ -6421,7 +6462,7 @@ export default function App() {
     };
 
     void generateRemainingChapter();
-  }, [gameState, blueprint, chapters, interventionsLeft, isRewriting, activeInterventionOverlay, user, db, targetWordCount, narrativePerson, appLanguage]);
+  }, [gameState, blueprint, chapters, interventionsLeft, isRewriting, activeInterventionOverlay, user, db, targetWordCount, narrativePerson, appLanguage, unlockedChapterNum]);
 
   const enterAuthoring = async () => {
     navigateTo('AUTHORING');
@@ -7042,6 +7083,9 @@ export default function App() {
 
       const nextIntervenedChapters = [...intervenedChapters, chapterNum];
       setIntervenedChapters(nextIntervenedChapters);
+      // Stay on the intervened chapter to read the rewrite. For a back-intervention this pulls
+      // the unlock pointer back, washing out the later chapters that have to be re-read.
+      setUnlockedChapterNum(chapterNum);
       if (activeStoryId && db) {
         const progressPayload = {
           ...buildCurrentRunSnapshot(),
@@ -7050,6 +7094,7 @@ export default function App() {
           unlockedBranches: nextUnlockedBranches,
           historicallyUnlockedBranches: nextHistoricalBranches,
           intervenedChapters: nextIntervenedChapters,
+          unlockedChapterNum: chapterNum,
           characterStatuses: nextCharacterStatuses,
           interventionHistory: newHistory,
           currentChapters: nextChapters,
@@ -7061,11 +7106,9 @@ export default function App() {
           console.warn('[progress:auto-save-after-intervention]', error);
         });
       }
-      if (nextIntervenedChapters.length >= 3) {
-        setPendingSummaryRequest('auto_interventions');
-      } else {
-        setInterventionStatusNotice({ updates: changedStatusUpdates });
-      }
+      // Chapter-by-chapter mode: running out of interventions never jumps to the ending.
+      // The player keeps reading to the final chapter, where the ending is revealed.
+      setInterventionStatusNotice({ updates: changedStatusUpdates });
       
       setActiveInterventionOverlay(null);
       setIsRewriting(false);
@@ -8320,6 +8363,67 @@ export default function App() {
     )
     : null;
 
+  const interventionGateModal = (
+    <AnimatePresence>
+      {interventionGateChapter !== null && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className={`${safeModalBackdropClass} z-[3600] bg-black/80 backdrop-blur-md`}
+          onClick={() => setInterventionGateChapter(null)}
+        >
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.97 }}
+            transition={{ duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
+            className="app-modal-surface w-full max-w-md rounded-[2rem] border border-indigo-400/25 p-6 text-center shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="inline-flex items-center gap-2 rounded-full border border-indigo-400/20 bg-indigo-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-indigo-200">
+              <Sparkles className="h-3.5 w-3.5" />
+              {tr('命运的岔路', 'A fork in fate')}
+            </div>
+            <h3 className="mt-3 text-2xl font-black text-app-text">{tr('下一章即将展开', 'The next chapter awaits')}</h3>
+            <p className="mt-2 text-sm leading-relaxed text-app-muted">
+              {tr('你还看不到下一章的走向。此刻要出手干涉，还是静观其变？', 'You cannot yet see where the next chapter leads. Interfere now, or watch it unfold?')}
+            </p>
+            <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-app-surface/60 px-4 py-1.5 text-xs font-black text-app-text">
+              {tr('剩余干涉', 'Interventions left')}
+              <span className="text-indigo-300">{interventionsLeft} / 3</span>
+            </div>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => { if (interventionGateChapter !== null) advanceChapter(interventionGateChapter); }}
+                className={semanticButtonClass('secondary', { fullWidth: true })}
+              >
+                <BookOpen className="h-4 w-4" />
+                {tr('观望，继续', 'Watch & continue')}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const ch = interventionGateChapter;
+                  setInterventionGateChapter(null);
+                  if (ch !== null) {
+                    setActiveInterventionChapter(ch);
+                    scrollToChapter(ch);
+                  }
+                }}
+                className={semanticButtonClass('primary', { fullWidth: true })}
+              >
+                <Sparkles className="h-4 w-4" />
+                {tr('干涉', 'Interfere')}
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
   const renderPlayingView = () => (
     <div className="reading-page relative mx-auto max-w-4xl rounded-b-[2.5rem] px-6 pb-[calc(10.5rem+env(safe-area-inset-bottom))] pt-[max(6rem,calc(env(safe-area-inset-top)+5rem))] sm:px-8 sm:pb-[calc(8.5rem+env(safe-area-inset-bottom))]">
       {blueprint && (
@@ -8353,7 +8457,9 @@ export default function App() {
       </div>
 
       <div className="mx-auto max-w-3xl space-y-10">
-        {chapters.map((chapter, idx) => (
+        {chapters
+          .filter((chapter) => Number(chapter.chapter_num) <= unlockedChapterNum)
+          .map((chapter, idx) => (
           <motion.section
             id={`chapter-${chapter.chapter_num}`}
             key={chapter.chapter_num || idx}
@@ -8400,24 +8506,70 @@ export default function App() {
                   !storyConclusion &&
                   availableCharacters.length > 0;
 
-                if (!canInterveneInChapter) return null;
-
                 const isExpanded = activeInterventionChapter === chapter.chapter_num;
                 const isAlreadyIntervened = intervenedChapters.includes(chapter.chapter_num);
+                const isLatest = Number(chapter.chapter_num) === unlockedChapterNum;
+                const isReady = isChapterTextReady(chapter);
+                // Re-interference reaches back at most two chapters. Once the player moves on
+                // past them, earlier chapters lock for this run.
+                const withinReinterveneWindow = Number(chapter.chapter_num) >= unlockedChapterNum - 2;
+                const canReintervene = canInterveneInChapter && withinReinterveneWindow;
+
+                // Latest chapter still generating — no controls yet.
+                if (isLatest && !isReady) return null;
+                // Earlier read chapter outside the re-interfere window — render nothing.
+                if (!isLatest && !canReintervene && !isExpanded) return null;
 
                 return (
                   <div className="mt-10">
-                    <div className="flex justify-center">
-                      <button
-                        type="button"
-                        onClick={() => setActiveInterventionChapter(isExpanded ? null : chapter.chapter_num)}
-                        disabled={isRewriting || isGeneratingConclusion || activeInterventionOverlay !== null}
-                        className={`${semanticButtonClass(isAlreadyIntervened ? 'secondary' : 'primary', { compact: true })} rounded-full px-5`}
-                      >
-                        <Sparkles className="h-4 w-4" />
-                        {isAlreadyIntervened ? (appLanguage === 'en-US' ? 'Interfere again' : '再次干涉') : t('library.intervene')}
-                      </button>
-                    </div>
+                    {/* Earlier, already-read chapter: re-interfere entry. Costs a turn and rewrites later chapters. */}
+                    {!isLatest && canReintervene && !isExpanded && (
+                      <div className="flex justify-center">
+                        <button
+                          type="button"
+                          onClick={() => setActiveInterventionChapter(chapter.chapter_num)}
+                          disabled={isRewriting || isGeneratingConclusion || activeInterventionOverlay !== null}
+                          className={`${semanticButtonClass('secondary', { compact: true })} rounded-full px-5`}
+                        >
+                          <Sparkles className="h-4 w-4" />
+                          {appLanguage === 'en-US' ? 'Interfere again' : '再次干涉'}
+                        </button>
+                      </div>
+                    )}
+                    {/* Latest unlocked chapter: continue (blind choice) / view ending. */}
+                    {isLatest && !isExpanded && (
+                      <div className="flex justify-center">
+                        {chapter.chapter_num >= 7 ? (
+                          <button
+                            type="button"
+                            onClick={() => handleGenerateSummary('manual')}
+                            disabled={isRewriting || isGeneratingConclusion}
+                            className={`${semanticButtonClass('primary', { compact: true })} rounded-full px-6`}
+                          >
+                            <Sparkles className="h-4 w-4" />
+                            {t('play.finalFate')}
+                          </button>
+                        ) : canInterveneInChapter && !isAlreadyIntervened ? (
+                          <button
+                            type="button"
+                            onClick={() => setInterventionGateChapter(chapter.chapter_num)}
+                            disabled={isRewriting || isGeneratingConclusion || activeInterventionOverlay !== null}
+                            className={`${semanticButtonClass('primary', { compact: true })} rounded-full px-6`}
+                          >
+                            {tr('继续 →', 'Continue →')}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => advanceChapter(chapter.chapter_num)}
+                            disabled={isRewriting || isGeneratingConclusion}
+                            className={`${semanticButtonClass('secondary', { compact: true })} rounded-full px-6`}
+                          >
+                            {tr('继续阅读 →', 'Continue →')}
+                          </button>
+                        )}
+                      </div>
+                    )}
 
                     <AnimatePresence initial={false}>
                       {isExpanded && (
@@ -8435,6 +8587,14 @@ export default function App() {
                               <div className="text-xs leading-relaxed text-app-muted">
                                 {tr('请选择本章登场角色，再决定施加庇佑或磨难。支线提示只作为命运走向的参考，不会直接写进故事表面。', 'Choose a character in this chapter, then apply blessing or hardship. Branch hints guide fate direction but are not written directly into the story surface.')}
                               </div>
+                              <button
+                                type="button"
+                                onClick={() => setActiveInterventionChapter(null)}
+                                disabled={isRewriting}
+                                className="mt-3 text-xs font-bold text-app-muted underline decoration-app-border underline-offset-4 transition-colors hover:text-app-text disabled:opacity-40"
+                              >
+                                {isLatest ? tr('返回（重新选择观望或干涉）', 'Back (choose watch or interfere)') : tr('取消', 'Cancel')}
+                              </button>
                             </div>
                             <div className="grid w-full gap-3 sm:grid-cols-2 lg:grid-cols-3">
                               {availableCharacters.map((char) => {
@@ -8526,17 +8686,7 @@ export default function App() {
         ))}
       </div>
 
-      {gameState === 'PLAYING' && intervenedChapters.length >= 3 && (
-        <div className="mt-12 text-center">
-          <button
-            onClick={() => handleGenerateSummary('auto_interventions')}
-            className="group relative inline-flex items-center gap-3 rounded-2xl bg-white px-10 py-5 text-lg font-black text-black shadow-2xl transition-all hover:scale-105"
-          >
-            <Sparkles className="h-6 w-6 text-indigo-500 group-hover:animate-pulse" />
-            {t('play.finalFate')}
-          </button>
-        </div>
-      )}
+      {/* Ending is reached by reading through to the final chapter (chapter-by-chapter mode). */}
       {blueprint && (
         <div className="app-card-quiet mt-10 rounded-3xl p-5">
           <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
@@ -9208,6 +9358,7 @@ export default function App() {
             </div>
           )}
           {gameState === 'PLAYING' && renderPlayingView()}
+          {gameState === 'PLAYING' && interventionGateModal}
           {gameState === 'SUMMARY' && <Suspense fallback={null}>{renderSummaryView()}</Suspense>}
           {gameState === 'AUTHORING' && <Suspense fallback={null}>{renderAuthoringView()}</Suspense>}
           {gameState === 'READONLY_STORY' && <Suspense fallback={null}>{renderReadonlyStoryView()}</Suspense>}

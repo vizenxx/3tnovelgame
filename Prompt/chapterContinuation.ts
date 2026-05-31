@@ -10,11 +10,13 @@ export function buildChapterWorldStatePrompt(args: {
 }) {
   const isEnglish = args.language === 'en-US';
   const prevText = String(args.prevChapterText || '').substring(0, 1000);
+  // Chapter-by-chapter generation is unhurried, so feed real prose from earlier chapters
+  // (not just summaries) — this is what lets each new chapter match tone and stay coherent.
   const historySummaries = (args.historyChapters || [])
     .filter((chapter: any) => chapter.chapter_num !== args.targetChapterNum - 1)
     .map((chapter: any) => isEnglish
-      ? `Chapter ${chapter.chapter_num} (${chapter.title || ''}): ${chapter.summary || String(chapter.text || '').substring(0, 150)}`
-      : `第${chapter.chapter_num}章（${chapter.title || ''}）：${chapter.summary || String(chapter.text || '').substring(0, 150)}`)
+      ? `Chapter ${chapter.chapter_num} (${chapter.title || ''}): ${String(chapter.text || chapter.summary || '').substring(0, 400)}`
+      : `第${chapter.chapter_num}章（${chapter.title || ''}）：${String(chapter.text || chapter.summary || '').substring(0, 400)}`)
     .join('\n');
 
   if (args.worldState?.canonical) {
@@ -31,7 +33,7 @@ ${(args.worldState.deltas || []).map((delta: any) => delta.characters_changed?.m
 Ending direction guide: ${args.worldState.endingDirection || 'neutral'}
 ${args.worldState.endingDirection && args.worldState.endingDirection !== 'neutral' && args.endingProto ? `Ending prototype reference:\n${String(args.endingProto[args.worldState.endingDirection] || '').substring(0, 400)}` : ''}
 
-${historySummaries ? `Previous chapters (summaries):\n${historySummaries}\n` : ''}Previous chapter full text (chapter ${args.targetChapterNum - 1}, narrative and style anchor):
+${historySummaries ? `Earlier chapters (prose excerpts for tone and continuity):\n${historySummaries}\n` : ''}Previous chapter full text (chapter ${args.targetChapterNum - 1}, narrative and style anchor):
 ${prevText}`;
     }
     return `故事基准（硬约束，不可违背）：
@@ -46,13 +48,13 @@ ${(args.worldState.deltas || []).map((delta: any) => delta.characters_changed?.m
 结尾方向引导：${args.worldState.endingDirection || 'neutral'}
 ${args.worldState.endingDirection && args.worldState.endingDirection !== 'neutral' && args.endingProto ? `结局原型参考：\n${String(args.endingProto[args.worldState.endingDirection] || '').substring(0, 400)}` : ''}
 
-${historySummaries ? `前置章节摘要：\n${historySummaries}\n` : ''}直接前文（第 ${args.targetChapterNum - 1} 章完整正文，叙事与文风锚点）：
+${historySummaries ? `前情章节正文节选（用于衔接文体与连贯）：\n${historySummaries}\n` : ''}直接前文（第 ${args.targetChapterNum - 1} 章完整正文，叙事与文风锚点）：
 ${prevText}`;
   }
 
   return isEnglish
-    ? `${historySummaries ? `Previous chapters (summaries):\n${historySummaries}\n\n` : ''}${prevText ? `Previous chapter full text (chapter ${args.targetChapterNum - 1}):\n${prevText}` : ''}`
-    : `${historySummaries ? `前置章节摘要：\n${historySummaries}\n\n` : ''}${prevText ? `直接前文（第 ${args.targetChapterNum - 1} 章完整正文）：\n${prevText}` : ''}`;
+    ? `${historySummaries ? `Earlier chapters (prose excerpts for tone and continuity):\n${historySummaries}\n\n` : ''}${prevText ? `Previous chapter full text (chapter ${args.targetChapterNum - 1}):\n${prevText}` : ''}`
+    : `${historySummaries ? `前情章节正文节选（用于衔接文体与连贯）：\n${historySummaries}\n\n` : ''}${prevText ? `直接前文（第 ${args.targetChapterNum - 1} 章完整正文）：\n${prevText}` : ''}`;
 }
 
 export function buildChapterContinuationPrompt(args: {
