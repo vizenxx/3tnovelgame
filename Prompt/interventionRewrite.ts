@@ -139,6 +139,7 @@ Invisible intervention writing rules:
 5. If active branches do not conflict, weave their events, setups, and foreshadowing together. If they conflict, preserve traces of prior events where possible, but let the newest branch lead the direction.
 6. Do not name emotional states directly. Show a physical action, a detail the character notices, or a line of dialogue — let the reader infer the feeling. If you find yourself writing “she felt X” or “a wave of Y”, replace it with behavior.
 7. Physical symptoms of distress are one-time anchors. If a symptom has already appeared in the original chapters, do not repeat it to signal distress in the rewritten chapters — find a different concrete detail.
+8. Dialogue must use quotation marks. In Chinese: "……"; in English: "……". Never embed spoken words as indirect speech without quotation marks.
 
 Requirements:
 1. Batch generation rule: return the full rewritten text for chapter ${args.safeChapterNum} only. If the ripple range reaches later chapters, do not write their full prose now; return them in future_outlines with chapter_num, summary, reason, and word_target so the app can generate them one by one in the background.
@@ -191,6 +192,7 @@ ${(!args.worldStatePrompt.includes('故事基准') && args.endingProto) ? `作�
 5. 若多个当前有效支线不冲突，必须尽量把各支线的事件、设定、伏笔都融入故事；若支线情节冲突，必须尽可能保留前次情节的痕迹与因果，但以后次/本次新触发支线为主导决定新的走向。
 6. 不要直接命名情绪状态。用行动、角色注意到的细节或对话来代替「她感到X」「一股Y涌上心头」——让读者自己推断情绪。
 7. 身体苦痛的症状是一次性锚点。如果原章节中某个症状已经出现过，重写章节中不要再用它来传递困境，找不同的具体细节。
+8. 对话必须使用引号标注。中文使用"……"；英文使用"……"。严禁把人物说的话以间接引语的方式嵌入叙述句中而不加引号。
 
 要求：
 1. 分批生成规则：本次只返回第 ${args.safeChapterNum} 章的完整重写正文。如果涟漪范围影响到后续章节，不要现在写它们的完整正文；请放到 future_outlines，每项包含 chapter_num、summary、reason、word_target，让 App 在后台逐章生成。

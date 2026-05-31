@@ -107,7 +107,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: '蓝图参数不合法。' });
     }
 
-    const historyChapters = allChapters.filter((chapter: any) => chapter?.text && String(chapter.text).trim().length > 0);
+    const historyChapters = allChapters.filter((chapter: any) =>
+      chapter?.text &&
+      String(chapter.text).trim().length > 0 &&
+      Number(chapter.chapter_num) < safeTargetChapterNum
+    );
     const blueprintChapter = blueprint?.chapters?.find((chapter: any) => chapter.chapter_num === safeTargetChapterNum);
     const liveChapter = allChapters.find((chapter: any) => chapter.chapter_num === safeTargetChapterNum);
     const outlineSummary = (liveChapter?.summary && String(liveChapter.summary).trim())

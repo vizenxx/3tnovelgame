@@ -9,6 +9,14 @@ export function buildChapterWorldStatePrompt(args: {
   language?: 'zh-CN' | 'en-US' | string;
 }) {
   const isEnglish = args.language === 'en-US';
+  const prevText = String(args.prevChapterText || '').substring(0, 1000);
+  const historySummaries = (args.historyChapters || [])
+    .filter((chapter: any) => chapter.chapter_num !== args.targetChapterNum - 1)
+    .map((chapter: any) => isEnglish
+      ? `Chapter ${chapter.chapter_num} (${chapter.title || ''}): ${chapter.summary || String(chapter.text || '').substring(0, 150)}`
+      : `第${chapter.chapter_num}章（${chapter.title || ''}）：${chapter.summary || String(chapter.text || '').substring(0, 150)}`)
+    .join('\n');
+
   if (args.worldState?.canonical) {
     if (isEnglish) {
       return `Story baseline (hard constraint, do not contradict):
@@ -23,8 +31,8 @@ ${(args.worldState.deltas || []).map((delta: any) => delta.characters_changed?.m
 Ending direction guide: ${args.worldState.endingDirection || 'neutral'}
 ${args.worldState.endingDirection && args.worldState.endingDirection !== 'neutral' && args.endingProto ? `Ending prototype reference:\n${String(args.endingProto[args.worldState.endingDirection] || '').substring(0, 400)}` : ''}
 
-Immediate previous text (chapter ${args.targetChapterNum - 1}, style anchor):
-${String(args.prevChapterText || '').substring(0, 400)}`;
+${historySummaries ? `Previous chapters (summaries):\n${historySummaries}\n` : ''}Previous chapter full text (chapter ${args.targetChapterNum - 1}, narrative and style anchor):
+${prevText}`;
     }
     return `故事基准（硬约束，不可违背）：
 人物：${JSON.stringify(args.worldState.canonical.characters || [])}
@@ -38,13 +46,13 @@ ${(args.worldState.deltas || []).map((delta: any) => delta.characters_changed?.m
 结尾方向引导：${args.worldState.endingDirection || 'neutral'}
 ${args.worldState.endingDirection && args.worldState.endingDirection !== 'neutral' && args.endingProto ? `结局原型参考：\n${String(args.endingProto[args.worldState.endingDirection] || '').substring(0, 400)}` : ''}
 
-直接前文（第 ${args.targetChapterNum - 1} 章，文风锚点）：
-${String(args.prevChapterText || '').substring(0, 400)}`;
+${historySummaries ? `前置章节摘要：\n${historySummaries}\n` : ''}直接前文（第 ${args.targetChapterNum - 1} 章完整正文，叙事与文风锚点）：
+${prevText}`;
   }
 
   return isEnglish
-    ? `Story history recap: ${(args.historyChapters || []).map((chapter: any) => `[${chapter.chapter_num}] ${String(chapter.text || '').substring(0, 200)}...`).join('\n')}`
-    : `历史剧情回忆：${(args.historyChapters || []).map((chapter: any) => `[${chapter.chapter_num}] ${String(chapter.text || '').substring(0, 200)}...`).join('\n')}`;
+    ? `${historySummaries ? `Previous chapters (summaries):\n${historySummaries}\n\n` : ''}${prevText ? `Previous chapter full text (chapter ${args.targetChapterNum - 1}):\n${prevText}` : ''}`
+    : `${historySummaries ? `前置章节摘要：\n${historySummaries}\n\n` : ''}${prevText ? `直接前文（第 ${args.targetChapterNum - 1} 章完整正文）：\n${prevText}` : ''}`;
 }
 
 export function buildChapterContinuationPrompt(args: {
@@ -113,6 +121,8 @@ Requirements:
 12. Specificity over abstraction: one precise concrete detail — an object, a sound, a specific gesture, a fragment of inner voice — carries more emotional weight than several abstract statements. Show the particular, not the general.
 13. Do not name emotional states directly. Never write "her heart filled with X", "he felt Y", or "a wave of Z washed over her". Instead, show a physical action, a line of dialogue, or a detail the character notices — and let the reader discover the emotion. If you find yourself explaining what a character feels, replace it with what they do.
 14. Physical symptoms of distress are one-time anchors, not recurring signals. A symptom used once (trembling hands, a cough, pallor) is a vivid detail. The same symptom repeated across multiple chapters loses all weight. Find a different concrete detail each time.
+15. Do not open by restating what happened before. The reader just finished the previous chapter — do not summarize it, re-describe the setting, or explain where the characters are. Begin in motion, mid-action, or in the middle of a thought.
+16. Dialogue must use quotation marks. In Chinese: "……" marks; in English: "……" marks. Never embed spoken words into narration as indirect speech without quotation marks. Dialogue lines may begin on a new paragraph for clarity.
 
 Return strict JSON Schema only. Do not include image prompts or meta-comments.`;
   }
@@ -144,6 +154,8 @@ ${(!args.worldStatePrompt.includes('故事基准') && args.endingProto) ? `作�
 11. 具体胜过抽象：一个精确的具体细节——一件物品、一种声音、一个特定的动作、一段内心声音的碎片——比多句关于角色感受的抽象陈述更有情感分量。写出特殊的，而不是笼统的。
 12. 不要直接命名情绪状态。永远不要写「她心中充满了X」、「他感到Y」或「一股Z涌上心头」。用行动、对话，或角色注意到的某个细节来代替——让读者自己发现情绪。如果你发现自己在解释角色的感受，用他们的行为替换它。
 13. 身体苦痛的症状是一次性的锚点，不是反复出现的叙事信号。同一个症状（颤抖的手、咳嗽、脸色苍白）用一次是细节，多章反复出现便失去所有分量。每次需要传递困境时，找不同的具体细节。
+14. 不要用重述上一章内容的方式开头。读者刚读完前一章——不要摘要它、重新描述场景或解释人物现在在哪里。直接从行动、动作或思维中途开始。
+15. 对话必须使用引号标注。中文使用"……"；英文使用"……"。严禁把人物说的话以间接引语的方式嵌入叙述句中而不加引号。对话行可以独立成段以增加清晰度。
 
 请严格按照 JSON Schema 输出，不要包含图片 Prompt 或元注释。`;
 }
