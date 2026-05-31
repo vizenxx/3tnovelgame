@@ -2651,6 +2651,17 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, [threadRevealNotice]);
 
+  // Pristine threads bound to a chapter: the root causes a chapter should weave in, but only
+  // when the player reaches it WITHOUT having interfered at or before it (else the cause changed).
+  const pristineThreadsForChapter = (chapterNum: number, threadsSource: any, intervenedSource: any) => {
+    const threads = Array.isArray(threadsSource) ? threadsSource : [];
+    const pristine = (Array.isArray(intervenedSource) ? intervenedSource : []).every((c: any) => Number(c) > chapterNum);
+    if (!pristine) return [];
+    return threads
+      .filter((thread: any) => thread?.revealType === 'chapter_pristine' && Number(thread?.revealChapter) === chapterNum)
+      .map((thread: any) => ({ title: thread.title, content: thread.content }));
+  };
+
   // Character-selection grid shown inside the gate modal when the player chooses to interfere.
   const renderInterventionCharacterGrid = (chapter: any) => {
     if (!blueprint || !chapter) return null;
@@ -3861,13 +3872,12 @@ export default function App() {
     setUnlockedBranches(normalizeUnlockedBranchesForBlueprint(asSafeArray(snapshot.unlockedBranches), snapshot.blueprint));
     setHistoricallyUnlockedBranches(historicalBranches);
     setIntervenedChapters(asSafeArray(snapshot.intervenedChapters));
-    // Old saves predate chapter-by-chapter reveal: fall back to the highest ready chapter
-    // so their progress is not hidden. New saves use the stored unlock pointer.
-    const snapshotReadyMax = asSafeArray<any>(snapshot.currentChapters)
-      .filter((chapter) => chapter?.text && String(chapter.text).trim().length > 0)
-      .reduce((max, chapter) => Math.max(max, Number(chapter.chapter_num) || 0), 1);
-    // A finished run (ending reached) reveals all chapters so the full story is readable.
-    setUnlockedChapterNum(snapshot.storyConclusion ? 7 : (Number(snapshot.unlockedChapterNum) || snapshotReadyMax));
+    // Chapter-by-chapter is the only mode now. Old saves predate the unlock pointer: resume at
+    // their highest intervened chapter (already-generated chapters unlock instantly as the player
+    // continues), never the old all-at-once layout. A finished run reveals all chapters.
+    const snapshotMaxIntervened = asSafeArray<any>(snapshot.intervenedChapters)
+      .reduce((max, chapter) => Math.max(max, Number(chapter) || 0), 0);
+    setUnlockedChapterNum(snapshot.storyConclusion ? 7 : (Number(snapshot.unlockedChapterNum) || Math.max(1, snapshotMaxIntervened)));
     setRevealedThreadIds(asSafeArray(snapshot.revealedThreadIds));
     setNaturalChapters(asSafeArray(snapshot.naturalChapters));
     setInitialNaturalChapters(asSafeArray(snapshot.initialNaturalChapters));
@@ -5710,16 +5720,15 @@ export default function App() {
     setUnlockedBranches(normalizeUnlockedBranchesForBlueprint(progressData?.unlockedBranches || [], nextBlueprint));
     setHistoricallyUnlockedBranches(historicalBranches);
     setIntervenedChapters(progressData?.intervenedChapters || []);
-    // New run: start at chapter 1 and reveal one chapter at a time.
-    // Resumed run: use the saved unlock pointer; old saves fall back to highest ready chapter.
-    const resumeReadyMax = asSafeArray<any>(baseChapters)
-      .filter((chapter) => chapter?.text && String(chapter.text).trim().length > 0)
-      .reduce((max, chapter) => Math.max(max, Number(chapter.chapter_num) || 0), 1);
+    // New run: start at chapter 1, reveal one chapter at a time (the only mode).
+    // Resumed run: saved unlock pointer; old saves resume at their highest intervened chapter.
+    const resumeMaxIntervened = asSafeArray<any>(progressData?.intervenedChapters)
+      .reduce((max, chapter) => Math.max(max, Number(chapter) || 0), 0);
     setUnlockedChapterNum(
       progressData?.storyConclusion
         ? 7
         : progressData
-          ? (Number(progressData.unlockedChapterNum) || resumeReadyMax)
+          ? (Number(progressData.unlockedChapterNum) || Math.max(1, resumeMaxIntervened))
           : 1
     );
     setInterventionGateChapter(null);
@@ -6451,6 +6460,7 @@ export default function App() {
             targetChapterNum: chapterNum,
             targetWordCount: activeGenerationInput.targetWordCount,
             narrativePerson: activeGenerationInput.narrativePerson,
+            boundThreads: pristineThreadsForChapter(chapterNum, data.threads, []),
             language: appLanguage,
           }),
         }, 90000), 3, 2500);
@@ -6587,6 +6597,7 @@ export default function App() {
             targetChapterNum: missingChapter.chapter_num,
             targetWordCount: Number((missingChapter as any).word_target) || targetWordCount,
             narrativePerson: blueprint.narrative_person || narrativePerson,
+            boundThreads: pristineThreadsForChapter(Number(missingChapter.chapter_num), blueprint?.threads, intervenedChapters),
             language: appLanguage,
           }),
         }, 90000), 3, 2500);

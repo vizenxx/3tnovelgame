@@ -136,9 +136,10 @@ Output requirements:
 15. chapter titles/summaries must fit the requested narrative person and avoid forcing viewpoint shifts.
 
 Threads (hidden cause-lines):
-16. Also produce 3-6 "threads" — hidden cause-lines that do NOT change the plot. Each is a piece of backstory or inner truth the reader does not know at first: why a character is the way they are, a secret cost, a buried motive, a hidden connection. Their purpose is to give the player reasons — and hesitation — when deciding whether and how to interfere.
-17. Distribute reveal conditions across the three types: most as 'chapter_pristine' (revealChapter 2-7, surfaced when the player reads that far WITHOUT having interfered — a reward for observing), some as 'branch' (revealBranchId bound to an existing branch id, surfaced when that branch unlocks), and some as 'ending' (revealEndingId = left/right/default, surfaced with that ending). A pristine thread is what the player would have learned had they not meddled; it should make later interference feel weightier.
-18. Thread content must be concrete and specific, never vague mood or decoration — it should change how the player feels about intervening.
+16. Also produce 3-6 "threads" — hidden CAUSES behind the story that do NOT change the plot. A thread is a root cause or buried origin (why a character became who they are, the real reason behind a bond, the true source of a conflict) — a cause, never a consequence (consequences are what branches are for). Knowing it deepens the player's understanding and makes interfering more fraught; not knowing it never decides the plot's outcome.
+17. Anchor every thread in the prose that reveals it. Whatever reveals a thread — the pristine chapter, the bound branch, or the ending — that text itself MUST mention or show the cause (even briefly); the thread record is merely the fuller version of something the prose already touches. Never write a thread whose revealing text would say nothing of it.
+18. Reveal types: most 'chapter_pristine' (revealChapter 2-7, surfaced only when the player reaches that chapter WITHOUT having interfered at or before it — interfering changes the original cause, so the thread simply never surfaces), some 'branch' (revealBranchId bound to an existing branch id), some 'ending' (revealEndingId = left/right/default).
+19. Thread content must be concrete and specific, never vague mood or decoration.
 
 Before finalizing, verify all four:
 1. Can you state the spine — the single dramatic question — in one sentence, and does each of the seven chapter summaries visibly tighten it? If any chapter does not move the question forward, that chapter is filler and must be redesigned.
@@ -190,9 +191,10 @@ ${seriesInstruction}${continuityInstruction}${continuityHardInstruction}
 16. 角色性格和核心主线必须在各章节的大纲里严格体现，确保前后章节之间的人物行为和事件走向保持一致。
 
 知因（隐藏因线）：
-17. 另外生成 3-6 条「知因」(threads)——隐藏的因线，不改变情节。每条是读者起初不知道的前因或内情：某个角色为何如此、一笔隐秘的代价、一个埋藏的动机、一段隐藏的关联。它们的作用是：在玩家决定是否及如何干涉时，给他理由，也给他犹豫。
-18. 揭露条件分散在三种类型：多数用 'chapter_pristine'（revealChapter 2-7，玩家以原始、未干涉的状态读到该章时揭露——这是对观望的奖励）；一部分用 'branch'（revealBranchId 绑定到已有支线 id，随该支线解锁揭露）；一部分用 'ending'（revealEndingId 为 left/right/default，随该结局揭露）。原状态知因是玩家「若不插手本会知道的真相」，它应当让后续的干涉显得更有分量。
-19. 知因内容必须具体而特定，绝不能是含糊的气氛词或装饰——它应当改变玩家对「要不要干涉」的感受。
+17. 另外生成 3-6 条「知因」(threads)——藏在故事背后、不改变情节的「起因」。每条是一个根由或埋藏的源头：某个角色为何成为现在的样子、一段关系背后真正的缘由、一场冲突真实的源头。它是「起因」，绝不是「结果」（结果是支线的职责）。知道它会加深玩家对故事的理解、让干涉更纠结；但不知道它，绝不会决定剧情的最终走向。
+18. 每条知因都必须锚定在「揭露它的那段正文」里。无论由什么揭露——原状态章节、绑定的支线，还是结局——那段正文本身就必须提及或展示这个起因（哪怕只是一笔带过）；知因记录只是正文已经触及之事的更完整版本。绝不允许写一条「揭露它的正文里却只字未提」的知因。
+19. 揭露类型：多数用 'chapter_pristine'（revealChapter 2-7，仅当玩家在该章及之前从未干涉、以原始状态读到该章时才揭露——干涉会改变原本的起因，于是这条知因便永不浮现）；一部分用 'branch'（revealBranchId 绑定已有支线 id）；一部分用 'ending'（revealEndingId 为 left/right/default）。
+20. 知因内容必须具体而特定，绝不能是含糊的气氛词或装饰。
 
 提交前自查以下四条：
 0. 能否用一句话说出脊柱——那个唯一的核心戏剧问题？七条章节 summary 是否每一条都让这个问题更紧？如果某一章没有把问题往前推，它就是填充章节，必须重新设计。

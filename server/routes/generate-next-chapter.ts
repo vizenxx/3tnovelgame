@@ -86,7 +86,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const user = await requireFirebaseAuth(req, res);
     if (!user) return;
 
-    const { blueprint, currentChapters, chapters: chaptersBody, targetChapterNum, targetWordCount, worldState, narrativePerson } = req.body || {};
+    const { blueprint, currentChapters, chapters: chaptersBody, targetChapterNum, targetWordCount, worldState, narrativePerson, boundThreads } = req.body || {};
     const language = normalizeGenerationLanguage(req.body?.language);
     const safeTargetChapterNum = Math.min(7, Math.max(1, Number(targetChapterNum) || 1));
     const safeTargetWordCount = Math.min(1200, Math.max(400, Number(targetWordCount) || 400));
@@ -146,6 +146,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       endingProto,
       targetChapterNum: safeTargetChapterNum,
       targetWordCount: safeTargetWordCount,
+      boundThreads: Array.isArray(boundThreads) ? boundThreads : [],
       language,
     })}`;
 

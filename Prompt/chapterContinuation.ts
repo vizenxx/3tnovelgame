@@ -67,10 +67,17 @@ export function buildChapterContinuationPrompt(args: {
   endingProto?: any;
   targetChapterNum: number;
   targetWordCount: number;
+  boundThreads?: Array<{ title?: string; content?: string }>;
   language?: 'zh-CN' | 'en-US' | string;
 }) {
   const isSingleEnding = args.blueprint?.endingMode === 'single' || args.blueprint?.ending_mode === 'single';
   const isEnglish = args.language === 'en-US';
+  const threads = Array.isArray(args.boundThreads) ? args.boundThreads.filter((thread) => thread && thread.content) : [];
+  const threadBlock = threads.length > 0
+    ? (isEnglish
+        ? `\nHidden causes to weave in (Threads): in its original, un-interfered form this chapter MUST naturally touch on the root cause(s) below — a brief mention or a shown detail is enough, but the prose must surface each so the reader can sense it (the player sees a fuller record separately). These are causes, not plot twists; do not let them take over the chapter:\n${threads.map((thread) => `- ${thread.title}: ${thread.content}`).join('\n')}`
+        : `\n需要织入的隐藏起因（知因）：以原始、未干涉的形态呈现时，本章必须自然带出下列根由——一笔带过或借一个细节展示即可，但正文必须让每一条浮现、让读者能感知到它（玩家会另行看到更完整的记录）。它们是「起因」而非情节转折，不要喧宾夺主：\n${threads.map((thread) => `- ${thread.title}：${thread.content}`).join('\n')}`)
+    : '';
   const idealMin = Math.round(args.targetWordCount * 0.93);
   const idealMax = Math.round(args.targetWordCount * 1.07);
   const hardMin = Math.round(args.targetWordCount * 0.85);
@@ -101,7 +108,7 @@ Characters: ${args.blueprint.characters.map((character: any) => `${character.id}
 Ending structure: ${isSingleEnding ? 'Single ending. Later chapters may change the route, but the finale should naturally converge on the same core ending.' : 'Branching endings. Current compatibility slots are default / left / right, with future expansion possible.'}
 ${seriesBlock}
 ${args.worldStatePrompt}
-Current chapter outline: ${args.outlineSummary}
+Current chapter outline: ${args.outlineSummary}${threadBlock}
 ${args.futureOutlines ? `Future outline notes:\n${args.futureOutlines}` : ''}
 ${args.defaultText ? `Author default mainline text (chapter ${args.targetChapterNum}, priority reference):\n${String(args.defaultText).substring(0, 1200)}` : ''}
 ${(!args.worldStatePrompt.includes('Story baseline') && args.endingProto) ? `Author ending prototypes:\n- default: ${String(args.endingProto.default || '').substring(0, 400)}\n- left: ${String(args.endingProto.left || '').substring(0, 400)}\n- right: ${String(args.endingProto.right || '').substring(0, 400)}` : ''}
@@ -137,7 +144,7 @@ Return strict JSON Schema only. Do not include image prompts or meta-comments.`;
 结局结构：${isSingleEnding ? '单一结局。后续章节必须允许过程变化，但终章需要自然收束到同一个核心结局。' : '多线结局。当前使用默认/左/右三结局，未来可扩展为更多结局。'}
 ${seriesBlock}
 ${args.worldStatePrompt}
-当前章节大纲指引：${args.outlineSummary}
+当前章节大纲指引：${args.outlineSummary}${threadBlock}
 ${args.futureOutlines ? `后续章节走向备忘：\n${args.futureOutlines}` : ''}
 ${args.defaultText ? `作者默认主线原文（第${args.targetChapterNum}章，作为优先参考原型）：\n${String(args.defaultText).substring(0, 1200)}` : ''}
 ${(!args.worldStatePrompt.includes('故事基准') && args.endingProto) ? `作者结局原型：\n- default: ${String(args.endingProto.default || '').substring(0, 400)}\n- left: ${String(args.endingProto.left || '').substring(0, 400)}\n- right: ${String(args.endingProto.right || '').substring(0, 400)}` : ''}
