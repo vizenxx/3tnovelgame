@@ -123,6 +123,7 @@ Requirements:
 14. Physical symptoms of distress are one-time anchors, not recurring signals. A symptom used once (trembling hands, a cough, pallor) is a vivid detail. The same symptom repeated across multiple chapters loses all weight. Find a different concrete detail each time.
 15. Do not open by restating what happened before. The reader just finished the previous chapter — do not summarize it, re-describe the setting, or explain where the characters are. Begin in motion, mid-action, or in the middle of a thought.
 16. Dialogue must use quotation marks. In Chinese: "……" marks; in English: "……" marks. Never embed spoken words into narration as indirect speech without quotation marks. Dialogue lines may begin on a new paragraph for clarity.
+17. Forward motion is the purpose of the scene: a slow, inhabited scene is not a static one. Honor this chapter's outline, and by the end, something the reader was uncertain about must have shifted — a stake raised, a hidden truth surfaced, or a choice forced closer. Dwelling gives the scene its texture; advancing the story's central tension gives it its purpose. Never end a chapter in the same emotional and situational place where it began. The reader should finish each chapter understanding the story's core question a little more sharply, and wanting to know how it resolves.
 
 Return strict JSON Schema only. Do not include image prompts or meta-comments.`;
   }
@@ -156,6 +157,7 @@ ${(!args.worldStatePrompt.includes('故事基准') && args.endingProto) ? `作�
 13. 身体苦痛的症状是一次性的锚点，不是反复出现的叙事信号。同一个症状（颤抖的手、咳嗽、脸色苍白）用一次是细节，多章反复出现便失去所有分量。每次需要传递困境时，找不同的具体细节。
 14. 不要用重述上一章内容的方式开头。读者刚读完前一章——不要摘要它、重新描述场景或解释人物现在在哪里。直接从行动、动作或思维中途开始。
 15. 对话必须使用引号标注。中文使用"……"；英文使用"……"。严禁把人物说的话以间接引语的方式嵌入叙述句中而不加引号。对话行可以独立成段以增加清晰度。
+16. 推进是场景的目的：慢速沉浸的场景不等于静止的场景。忠实于本章大纲，到这一章结束时，读者原本不确定的某样东西必须发生位移——赌注被抬高、隐藏的真相浮现，或一个选择被逼得更近。驻留给场景质感，推进故事的核心张力才给它目的。永远不要让一章结束在它开始时同样的情绪与处境上。读者读完每一章，都应该对故事的核心问题理解得更清晰一分，并更想知道它将如何收场。
 
 请严格按照 JSON Schema 输出，不要包含图片 Prompt 或元注释。`;
 }

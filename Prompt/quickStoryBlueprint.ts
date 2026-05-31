@@ -103,6 +103,7 @@ Ending structure hard constraint: ${isSingleEnding
 Task: Create a complete blueprint for a seven-chapter interactive story.
 
 Narrative design principles:
+0. Spine — the single dramatic question (most important, decide this first): before anything else, fix the one dramatic question that drives the entire story — a question the reader carries from chapter 1 and that the ending answers. It is not the premise or the setting; it is the unresolved tension the reader is waiting to see settled (for example: "Will she give up the one thing that defines her to save him?"). State it in one sentence. Every chapter must visibly tighten this question — raise its stakes, narrow the options, or deepen what is at risk. If you cannot name the spine in one sentence, the story has no direction and must be redesigned. The protagonist must want something concrete and face a concrete obstacle to it; "vibes" and atmosphere are not a substitute for wanting.
 1. Two-sided dilemma, not good vs. evil: the protagonist must face a genuine conflict where both directions are defensible. The ideal design is two things both worth having that cannot coexist, or two losses where only one can be avoided. If the "right" choice is obvious, intervention becomes a formality.
 2. Personal stakes anchor: anchor the story to one person's irreversible decision — a relationship, identity, loyalty, or belonging that, once lost, cannot be recovered. Readers will intervene for a person; they will not intervene for a world.
 3. Intervention timing — the moment before something slips away: chapters that carry an intervention point should be set at the moment just before something precious quietly begins to slip away — while the protagonist has not yet noticed. The reader sees it; the protagonist does not. This information gap is what makes intervention feel urgent, not optional.
@@ -119,7 +120,7 @@ English-market style requirements:
 Output requirements:
 0. Context compliance: if an applied world setting exists, obey its selected baseline rules before local plot convenience; if selected character cards exist, keep them as major available cast unless the request explicitly excludes them; if a continuation node exists, make this a natural sequel opening without invalidating the previous result; if a continuation node contains characterStates or inherited major characters, keep those characters active by default unless the author request explicitly retires them.
 1. For performance reasons, never write full chapter prose in chapters.
-2. Each chapter must include a summary of 45-70 English words. Each chapter should have one primary dramatic scene plus any brief temporal bridging needed to establish cause and continuity (a time-jump, a recalled memory, a short contextual passage). The summary should name the primary scene clearly — what moment anchors this chapter — not list a chain of separate events.
+2. Each chapter must include a summary of 45-70 English words. Each chapter should have one primary dramatic scene plus any brief temporal bridging needed to establish cause and continuity (a time-jump, a recalled memory, a short contextual passage). The summary should name the primary scene clearly — what moment anchors this chapter — not list a chain of separate events. Crucially, each summary must show how this chapter advances the spine: by the end of the chapter, the central dramatic question must be tighter than it was at the start. The seven summaries read in order should form one rising arc toward the dilemma, not seven self-contained vignettes.
 3. Chapters must connect logically and avoid repeating the same beat.
 4. Each chapter must include a title of 2-7 English words.
 5. Create 3-5 characters. IDs must be c1, c2, ...
@@ -134,10 +135,11 @@ Output requirements:
 14. condition_char must use an existing character ID; condition_chapter must be an integer from 2 to 6; condition_action must be bless or curse. Also output triggerGroups mirroring these fields, with hint on each group.
 15. chapter titles/summaries must fit the requested narrative person and avoid forcing viewpoint shifts.
 
-Before finalizing, verify all three:
-1. Is the central dilemma genuinely two-sided? If one ending is emotionally superior to the other from the start, it is not a real dilemma — the blueprint needs rebalancing.
-2. Can a reasonable reader make a case for both the left-domain and right-domain endings?
-3. Does chapter 1 contain at least one concrete detail — not a genre convention, but a specific, particular moment — that a reader can recognize from their own experience?
+Before finalizing, verify all four:
+1. Can you state the spine — the single dramatic question — in one sentence, and does each of the seven chapter summaries visibly tighten it? If any chapter does not move the question forward, that chapter is filler and must be redesigned.
+2. Is the central dilemma genuinely two-sided? If one ending is emotionally superior to the other from the start, it is not a real dilemma — the blueprint needs rebalancing.
+3. Can a reasonable reader make a case for both the left-domain and right-domain endings?
+4. Does chapter 1 contain at least one concrete detail — not a genre convention, but a specific, particular moment — that a reader can recognize from their own experience?
 
 Return strict JSON only. Do not include metadata. Reference chapter length: ${args.targetWordCount} words.`;
   }
@@ -154,6 +156,7 @@ ${seriesInstruction}${continuityInstruction}${continuityHardInstruction}
 任务：生成一个完整的首篇章（7章）的故事蓝图骨架。
 
 叙事设计原则：
+0. 脊柱——唯一的核心戏剧问题（最重要，最先确定）：在动笔之前，先定下贯穿整个故事的那一个核心戏剧问题——读者从第一章就揣着、由结局来回答的问题。它不是故事前提，也不是世界观设定，而是读者一直等着看它如何收场的那股未解张力（例如：「她会不会舍弃那个定义了自己的东西，去救他？」）。用一句话把它说清楚。每一章都必须让这个问题更紧——抬高赌注、收窄选择，或加深受威胁的东西。如果你无法用一句话说出这条脊柱，这个故事就没有方向，必须重新设计。主角必须想要一个具体的东西，并面对一个具体的阻碍；氛围和情绪渲染替代不了「想要」。
 1. 双向两难困境，而非善恶对立：主角必须面对一个真正的双向困境，两条路都有说得过去的理由。最理想的设计是：两件都值得追求的事无法同时拥有，或两种代价都难以承受只能选一种。如果「正确答案」一眼就能看出，干涉就沦为走程序。
 2. 个人尺度的关键性：把故事锚定到某一个人身上不可逆的抉择——一段关系、一种身份、一种忠诚、一种归属，一旦失去就找不回来。读者会为一个人伸手，不会为一个世界伸手。
 3. 干涉点的时机——珍贵之物悄悄滑走的前一刻：每个承载干涉机会的章节，都应设置在某件珍贵的事情正在悄悄滑走、主角还没意识到的前一刻。读者看见了，主角没看见——这种信息差制造的焦虑，才是让人觉得干涉紧迫而不可缺席的真正来源。
@@ -165,7 +168,7 @@ ${seriesInstruction}${continuityInstruction}${continuityHardInstruction}
 要求（极度重要）：
 0. 若存在套用的世界观设定，必须优先遵守本次勾选的世界基准；若存在勾选角色卡，必须把它们作为主要可用角色池，除非用户明确排除；若存在继承节点，必须自然接住前作结果，不得粗暴否定前作，也不得随意忘掉继承状态中的主要人物。
 1. 由于性能限制，严禁在 chapters 中生成章节全文。
-2. 每一章必须提供一个 summary（简短情节大纲，60-80字）。每章应有一个主要戏剧场景，加上建立因果和连续性所需的简短时空过渡（时间跳跃、短暂回忆、背景铺垫）。summary 应清楚说明这一章以什么场景为核心——而不是罗列一串独立事件的序列。
+2. 每一章必须提供一个 summary（简短情节大纲，60-80字）。每章应有一个主要戏剧场景，加上建立因果和连续性所需的简短时空过渡（时间跳跃、短暂回忆、背景铺垫）。summary 应清楚说明这一章以什么场景为核心——而不是罗列一串独立事件的序列。关键是：每条 summary 必须体现这一章如何推进脊柱——到这一章结束时，核心戏剧问题必须比开头更紧。七条 summary 顺着读下来，应该构成一条朝着两难困境不断上升的弧线，而不是七个各自独立的氛围片段。
 3. 每一章的情节必须对上下章节有适当联系且重点不重复。
 4. 每一章必须提供一个 title（6-12字），与该章大纲一致。
 5. 设定 3-5 个角色，ID 必须为 c1, c2 ...
@@ -181,7 +184,8 @@ ${seriesInstruction}${continuityInstruction}${continuityHardInstruction}
 15. chapters 的 title/summary 必须与上述叙事人称相容，避免设计会迫使正文切换人称的章节视角。
 16. 角色性格和核心主线必须在各章节的大纲里严格体现，确保前后章节之间的人物行为和事件走向保持一致。
 
-提交前自查以下三条：
+提交前自查以下四条：
+0. 能否用一句话说出脊柱——那个唯一的核心戏剧问题？七条章节 summary 是否每一条都让这个问题更紧？如果某一章没有把问题往前推，它就是填充章节，必须重新设计。
 1. 核心两难困境是否真的双向成立？如果其中一个结局从第一章起就在情感上明显优于另一个，这不是真正的两难——需要重新平衡蓝图。
 2. 左域结局和右域结局，一个理性的读者是否都能为之辩护？
 3. 第一章是否包含至少一个具体的特殊时刻——不是类型惯例，而是读者能从自身经历中认出的某个具体事物？
