@@ -1618,6 +1618,8 @@ export default function App() {
   const [unlockedChapterNum, setUnlockedChapterNum] = useState<number>(1);
   // When set, the observe/interfere gate modal is open for this chapter number.
   const [interventionGateChapter, setInterventionGateChapter] = useState<number | null>(null);
+  // Gate modal stage: 'choose' = observe/interfere; 'select' = pick a character in-modal.
+  const [interventionGateStage, setInterventionGateStage] = useState<'choose' | 'select'>('choose');
   const [isRewriting, setIsRewriting] = useState(false);
   const [interventionEffect, setInterventionEffect] = useState<'bless' | 'curse' | null>(null);
   const [activeInterventionOverlay, setActiveInterventionOverlay] = useState<{ type: 'bless' | 'curse' | 'ending', targetChapter: number, statusRaw: string } | null>(null);
@@ -2562,9 +2564,90 @@ export default function App() {
   // Reveal the next chapter (observe / continue). Closes the gate modal and scrolls to it.
   const advanceChapter = (fromChapterNum: number) => {
     setInterventionGateChapter(null);
+    setInterventionGateStage('choose');
     const nextChapterNum = Math.min(7, fromChapterNum + 1);
     setUnlockedChapterNum((prev) => Math.max(prev, nextChapterNum));
     scrollToChapter(nextChapterNum);
+  };
+
+  // Character-selection grid shown inside the gate modal when the player chooses to interfere.
+  const renderInterventionCharacterGrid = (chapter: any) => {
+    if (!blueprint || !chapter) return null;
+    const availableCharacters = getChapterAvailableCharacters(chapter, blueprint);
+    return (
+      <div className="grid w-full gap-3 sm:grid-cols-2">
+        {availableCharacters.map((char: any) => {
+          const branchHints = Array.from(new Set(
+            (blueprint.branches || []).flatMap((branch: any) => {
+              const triggers = branch.triggerGroups || (branch.trigger ? [branch.trigger] : []);
+              if (triggers.length === 0) {
+                if (branch.condition_chapter === chapter.chapter_num && branch.condition_char === char.id && branch.hint) {
+                  return [branch.hint];
+                }
+                return [];
+              }
+              const matched: string[] = [];
+              for (const tg of triggers) {
+                let isMatch = false;
+                if (tg.type === 'single' || (!tg.type && tg.single)) {
+                  const s = tg.single || {};
+                  if (s.chapterNum === chapter.chapter_num && s.charId === char.id) isMatch = true;
+                } else if (tg.type === 'count' || (!tg.type && tg.count)) {
+                  const c = tg.count || {};
+                  if (c.charId === char.id && chapter.chapter_num <= (c.upToChapterNum || 6)) isMatch = true;
+                }
+                if (isMatch) {
+                  const h = tg.hint || branch.hint;
+                  if (h) matched.push(h);
+                }
+              }
+              return matched;
+            })
+          )).filter(Boolean).slice(0, 2);
+          return (
+            <div key={char.id} className="rounded-2xl border border-app-border bg-app-bg/60 p-4 text-left">
+              <div className="mb-3">
+                <div className="flex items-start justify-between">
+                  <div className="text-sm font-black text-app-text">{char.name}</div>
+                  {characterStatuses[char.id] && (
+                    <div className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${characterStatuses[char.id].isDead ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                      {characterStatuses[char.id].status || tr('在场', 'Present')}
+                    </div>
+                  )}
+                </div>
+                {branchHints.length > 0 && (
+                  <div className="mt-2 space-y-1 text-xs leading-relaxed text-app-muted">
+                    {branchHints.map((hint: string, hintIdx: number) => (
+                      <div key={`${char.id}-hint-${hintIdx}`}>{hint}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleIntervene(chapter.chapter_num, char.id, 'bless')}
+                  disabled={interventionsLeft <= 0 || isRewriting}
+                  className="flex min-h-14 items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-3 text-sm font-black text-emerald-300 transition-colors hover:border-emerald-400/60 hover:bg-emerald-500/15 disabled:opacity-30"
+                >
+                  <Zap className="h-4 w-4" />
+                  {tr('庇佑', 'Bless')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleIntervene(chapter.chapter_num, char.id, 'curse')}
+                  disabled={interventionsLeft <= 0 || isRewriting}
+                  className="flex min-h-14 items-center justify-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-3 text-sm font-black text-rose-300 transition-colors hover:border-rose-400/60 hover:bg-rose-500/15 disabled:opacity-30"
+                >
+                  <Skull className="h-4 w-4" />
+                  {tr('磨难', 'Hardship')}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
   };
 
   const getBranchTriggerChapter = (branch: any) => {
@@ -6388,7 +6471,9 @@ export default function App() {
     // Generate at most one chapter ahead of what the player has unlocked. An early
     // intervention discards later chapters, so generating them eagerly wastes work —
     // and revealing chapters one at a time is what makes interventions a blind bet.
-    const generationCeiling = unlockedChapterNum + 1;
+    // Generate two chapters ahead of what's unlocked so "observe" never waits: when the
+    // player reveals the next chapter, the one after it is already being prepared.
+    const generationCeiling = unlockedChapterNum + 2;
     const missingChapter = chapters
       .filter((chapter) => Number(chapter.chapter_num) > 1 && Number(chapter.chapter_num) <= generationCeiling)
       .sort((a, b) => Number(a.chapter_num) - Number(b.chapter_num))
@@ -6908,6 +6993,8 @@ export default function App() {
     try {
       setIsRewriting(true);
       setActiveInterventionChapter(null);
+      setInterventionGateChapter(null);
+      setInterventionGateStage('choose');
       setInterventionEffect(action);
       setActiveInterventionOverlay({ type: action, targetChapter: chapterNum, statusRaw: "因果重塑中..." });
       
@@ -6939,7 +7026,10 @@ export default function App() {
           method: 'POST',
           body: JSON.stringify({
             blueprint,
-            chapters,
+            // Chapter-by-chapter mode: only the chapters up to and including the intervened one
+            // are needed. Later chapters are unlocked/regenerated afterwards, so sending them
+            // wastes payload and prompt budget — trimming them speeds up the rewrite.
+            chapters: chapters.filter((chapterItem) => Number(chapterItem.chapter_num) <= chapterNum),
             chapterNum,
             charId,
             action,
@@ -7284,7 +7374,9 @@ export default function App() {
   };
 
   const handleGenerateSummary = async (source: 'auto_interventions' | 'manual') => {
-    if (!activeStoryId || isGeneratingConclusion || !blueprint) return;
+    // activeStoryId is null for an unsaved quick-generated story — the summary must still
+    // generate. Only the progress save further down depends on activeStoryId.
+    if (isGeneratingConclusion || !blueprint) return;
     if (storyConclusion) {
       setShowSummaryModal(true);
       return;
@@ -7341,7 +7433,7 @@ export default function App() {
       }
       setStoryConclusion(conclusionText);
       setShowSummaryModal(true);
-      if (db && user) {
+      if (db && user && activeStoryId) {
         const completionRecord = createFateCompletionRecord({ storyConclusion: conclusionText });
         const finalPayload = {
           ...buildCurrentRunSnapshot(),
@@ -8378,46 +8470,62 @@ export default function App() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.97 }}
             transition={{ duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
-            className="app-modal-surface w-full max-w-md rounded-[2rem] border border-indigo-400/25 p-6 text-center shadow-2xl"
+            className="app-modal-surface app-modal-safe-height w-full max-w-lg overflow-y-auto rounded-[2rem] border border-indigo-400/25 p-6 text-center shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="inline-flex items-center gap-2 rounded-full border border-indigo-400/20 bg-indigo-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-indigo-200">
-              <Sparkles className="h-3.5 w-3.5" />
-              {tr('命运的岔路', 'A fork in fate')}
-            </div>
-            <h3 className="mt-3 text-2xl font-black text-app-text">{tr('下一章即将展开', 'The next chapter awaits')}</h3>
-            <p className="mt-2 text-sm leading-relaxed text-app-muted">
-              {tr('你还看不到下一章的走向。此刻要出手干涉，还是静观其变？', 'You cannot yet see where the next chapter leads. Interfere now, or watch it unfold?')}
-            </p>
-            <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-app-surface/60 px-4 py-1.5 text-xs font-black text-app-text">
-              {tr('剩余干涉', 'Interventions left')}
-              <span className="text-indigo-300">{interventionsLeft} / 3</span>
-            </div>
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-              <button
-                type="button"
-                onClick={() => { if (interventionGateChapter !== null) advanceChapter(interventionGateChapter); }}
-                className={semanticButtonClass('secondary', { fullWidth: true })}
-              >
-                <BookOpen className="h-4 w-4" />
-                {tr('观望，继续', 'Watch & continue')}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const ch = interventionGateChapter;
-                  setInterventionGateChapter(null);
-                  if (ch !== null) {
-                    setActiveInterventionChapter(ch);
-                    scrollToChapter(ch);
-                  }
-                }}
-                className={semanticButtonClass('primary', { fullWidth: true })}
-              >
-                <Sparkles className="h-4 w-4" />
-                {tr('干涉', 'Interfere')}
-              </button>
-            </div>
+            {interventionGateStage === 'choose' ? (
+              <>
+                <div className="inline-flex items-center gap-2 rounded-full border border-indigo-400/20 bg-indigo-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-indigo-200">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  {tr('命运的岔路', 'A fork in fate')}
+                </div>
+                <h3 className="mt-3 text-2xl font-black text-app-text">{tr('下一章即将展开', 'The next chapter awaits')}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-app-muted">
+                  {tr('你还看不到下一章的走向。此刻要出手干涉，还是静观其变？', 'You cannot yet see where the next chapter leads. Interfere now, or watch it unfold?')}
+                </p>
+                <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-app-surface/60 px-4 py-1.5 text-xs font-black text-app-text">
+                  {tr('剩余干涉', 'Interventions left')}
+                  <span className="text-indigo-300">{interventionsLeft} / 3</span>
+                </div>
+                <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                  <button
+                    type="button"
+                    onClick={() => { if (interventionGateChapter !== null) advanceChapter(interventionGateChapter); }}
+                    className={semanticButtonClass('secondary', { fullWidth: true })}
+                  >
+                    <BookOpen className="h-4 w-4" />
+                    {tr('观望，继续', 'Watch & continue')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInterventionGateStage('select')}
+                    className={semanticButtonClass('primary', { fullWidth: true })}
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    {tr('干涉', 'Interfere')}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-black text-app-text">{tr('选择干涉对象', 'Choose who to affect')}</h3>
+                  <div className="rounded-full bg-app-surface/60 px-3 py-1 text-xs font-black text-app-text">{interventionsLeft} / 3</div>
+                </div>
+                <p className="mb-4 mt-1 text-left text-xs leading-relaxed text-app-muted">
+                  {tr('选择本章登场的角色，决定施加庇佑或磨难。', 'Pick a character in this chapter, then bless or burden them.')}
+                </p>
+                {interventionGateChapter !== null && renderInterventionCharacterGrid(chapters.find((chapterItem) => Number(chapterItem.chapter_num) === interventionGateChapter))}
+                <button
+                  type="button"
+                  onClick={() => setInterventionGateStage('choose')}
+                  disabled={isRewriting}
+                  className="mt-4 text-xs font-bold text-app-muted underline decoration-app-border underline-offset-4 transition-colors hover:text-app-text disabled:opacity-40"
+                >
+                  {tr('返回', 'Back')}
+                </button>
+              </>
+            )}
           </motion.div>
         </motion.div>
       )}
@@ -8527,7 +8635,7 @@ export default function App() {
                       <div className="flex justify-center">
                         <button
                           type="button"
-                          onClick={() => setActiveInterventionChapter(chapter.chapter_num)}
+                          onClick={() => { setInterventionGateChapter(chapter.chapter_num); setInterventionGateStage('select'); }}
                           disabled={isRewriting || isGeneratingConclusion || activeInterventionOverlay !== null}
                           className={`${semanticButtonClass('secondary', { compact: true })} rounded-full px-5`}
                         >
@@ -8536,20 +8644,10 @@ export default function App() {
                         </button>
                       </div>
                     )}
-                    {/* Latest unlocked chapter: continue (blind choice) / view ending. */}
-                    {isLatest && !isExpanded && (
+                    {/* Latest chapter, not the finale: continue (a blind choice at intervenable chapters). */}
+                    {isLatest && !isExpanded && chapter.chapter_num < 7 && (
                       <div className="flex justify-center">
-                        {chapter.chapter_num >= 7 ? (
-                          <button
-                            type="button"
-                            onClick={() => handleGenerateSummary('manual')}
-                            disabled={isRewriting || isGeneratingConclusion}
-                            className={`${semanticButtonClass('primary', { compact: true })} rounded-full px-6`}
-                          >
-                            <Sparkles className="h-4 w-4" />
-                            {t('play.finalFate')}
-                          </button>
-                        ) : canInterveneInChapter && !isAlreadyIntervened ? (
+                        {canInterveneInChapter && !isAlreadyIntervened ? (
                           <button
                             type="button"
                             onClick={() => setInterventionGateChapter(chapter.chapter_num)}
@@ -8570,6 +8668,63 @@ export default function App() {
                         )}
                       </div>
                     )}
+                    {/* Finale (chapter 7): accept the fate, or spend a remaining turn to rewrite. */}
+                    {isLatest && !isExpanded && chapter.chapter_num >= 7 && (
+                      <div className="mt-2 rounded-[1.75rem] border border-amber-500/25 bg-amber-500/10 p-6 text-center">
+                        {interventionsLeft > 0 ? (
+                          <>
+                            <div className="text-lg font-black text-app-text">{tr('故事已抵达终点', 'The story has reached its end')}</div>
+                            <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-app-muted">
+                              {tr('你可以就此接受这条命运线，或回到尚可改写的篇章，再搏一次。', 'You can accept this fate line as it stands, or return to a chapter you can still rewrite and try once more.')}
+                            </p>
+                            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-center">
+                              <button
+                                type="button"
+                                onClick={() => handleGenerateSummary('manual')}
+                                disabled={isRewriting || isGeneratingConclusion}
+                                className={`${semanticButtonClass('primary', { compact: true })} rounded-full px-6`}
+                              >
+                                <Sparkles className="h-4 w-4" />
+                                {tr('接受命运', 'Accept this fate')}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const target = Math.min(6, unlockedChapterNum - 1);
+                                  if (target >= 2) {
+                                    setInterventionGateChapter(target);
+                                    setInterventionGateStage('select');
+                                  }
+                                }}
+                                disabled={isRewriting || isGeneratingConclusion || activeInterventionOverlay !== null}
+                                className={`${semanticButtonClass('secondary', { compact: true })} rounded-full px-6`}
+                              >
+                                <Sparkles className="h-4 w-4" />
+                                {tr(`重新干涉（剩 ${interventionsLeft} 次）`, `Interfere again (${interventionsLeft} left)`)}
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="text-lg font-black text-app-text">{tr('命运已定', 'Fate is sealed')}</div>
+                            <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-app-muted">
+                              {tr('三次干涉皆已落定，这条命运线再无更改的余地。', 'All three interventions are spent. This fate line can no longer be changed.')}
+                            </p>
+                            <div className="mt-5 flex justify-center">
+                              <button
+                                type="button"
+                                onClick={() => handleGenerateSummary('manual')}
+                                disabled={isGeneratingConclusion}
+                                className={`${semanticButtonClass('primary', { compact: true })} rounded-full px-6`}
+                              >
+                                <Sparkles className="h-4 w-4" />
+                                {tr('查看命运结算', 'View the fate summary')}
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
 
                     <AnimatePresence initial={false}>
                       {isExpanded && (
@@ -8585,7 +8740,7 @@ export default function App() {
                             <div className="max-w-xl text-center">
                               <div className="mb-1 text-sm font-black text-app-text">{tr('因果节点已就绪', 'Causal node ready')}</div>
                               <div className="text-xs leading-relaxed text-app-muted">
-                                {tr('请选择本章登场角色，再决定施加庇佑或磨难。支线提示只作为命运走向的参考，不会直接写进故事表面。', 'Choose a character in this chapter, then apply blessing or hardship. Branch hints guide fate direction but are not written directly into the story surface.')}
+                                {tr('选择本章登场的角色，决定施加庇佑或磨难。', 'Pick a character in this chapter, then bless or burden them.')}
                               </div>
                               <button
                                 type="button"
