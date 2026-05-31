@@ -109,7 +109,7 @@ Narrative design principles:
 3. Intervention timing — the moment before something slips away: chapters that carry an intervention point should be set at the moment just before something precious quietly begins to slip away — while the protagonist has not yet noticed. The reader sees it; the protagonist does not. This information gap is what makes intervention feel urgent, not optional.
 4. Bless/curse symmetry: every interferable character must have a believable path where blessing them produces an unexpected complication, and cursing them produces unexpected clarity or growth. Both directions must make narrative sense. If only one direction is emotionally valid, the choice is fake.
 5. Two defensible endings: both the left-domain and right-domain endings must be something a reader could argue for. Ideally, players argue with each other about which ending is "really" correct — that disagreement is the engine of social sharing.
-6. Chapter 1 emotional anchor: before the first intervention (chapter 2), chapter 1 must give the reader one concrete detail, decision, or feeling they recognize from their own life — or from someone they care about. Recognition creates investment; investment creates the impulse to interfere.
+6. Chapter 1 establishes before it complicates: the first chapter's job is to make the reader understand who the protagonist is, what they want, and why they want it — this is the ground on which every later tension stands. Do not open with a high-tension action whose motivation the reader cannot yet follow; that reads as "movement for its own sake". Establish the person first, then let one concrete, recognizable detail (from the reader's own life or someone they care about) create investment. A reader who finishes chapter 1 should fully understand why this person will care about what happens next. Chapter 1 does not need to raise stakes — it needs to make the stakes legible. The spine's tension begins tightening in earnest from chapter 2.
 7. Scope discipline — match the story to its length: the full story spans roughly ${args.targetWordCount * 7} words in total — the length of a focused short story, not a novel. Do not compress a novel's worth of events into this space. Choose a scope that fits: a single arc, a few weeks at most, one central tension. Fewer events handled with depth always beats many events handled superficially.
 
 English-market style requirements:
@@ -162,7 +162,7 @@ ${seriesInstruction}${continuityInstruction}${continuityHardInstruction}
 3. 干涉点的时机——珍贵之物悄悄滑走的前一刻：每个承载干涉机会的章节，都应设置在某件珍贵的事情正在悄悄滑走、主角还没意识到的前一刻。读者看见了，主角没看见——这种信息差制造的焦虑，才是让人觉得干涉紧迫而不可缺席的真正来源。
 4. 庇佑/磨难的双向说服力：每个可干涉的角色，都必须同时具备两种可信的走向：给他顺风，可能带来意外的连锁代价；给他逆境，可能让他看清本来看不清的事。两个方向都要有叙事说服力。如果只有一个方向在情感上说得通，这个选择就是假选择。
 5. 两个都能辩护的结局：左域结局和右域结局必须都是「有人会认为这才是对的」走向，而不是一圆满一悲剧。最理想的状态是：读者看完自己的结局后，想发给别人说「你看，我选的才是对的」——这种分歧感是社交传播的来源。
-6. 第一章的情感钩：在第一次干涉（第2章）出现之前，第一章必须让读者在某个具体的细节、决定或感受里认出自己——或认出某个他们在乎的人。认出自己，才产生想为这个人改变命运的冲动。
+6. 第一章先建立，再复杂化：第一章的首要职责，是让读者理解主角是谁、想要什么、为什么想要——这是后续一切张力的立足地基。不要用一个读者还无法理解其动机的高张力行为来开篇，那读起来就是「为了推进而推进」。先把这个人立起来，再用一个具体的、能让读者认出自己（或认出某个在乎的人）的细节制造投入。读者读完第一章，应当完全理解这个人为什么会在意接下来发生的事。第一章不需要抬高赌注——它需要让赌注变得可理解。脊柱的张力从第二章开始真正收紧。
 7. 规模克制——让故事适配它的篇幅：七章合计约 ${args.targetWordCount * 7} 字，相当于一篇精炼的短篇小说，不是长篇。不要把一部小说的事件量压进这个空间。选择一个合适的规模：单一弧线，至多数周的时间跨度，一个核心张力。少量事件写得深刻，永远好过大量事件被迫走马观花。
 
 要求（极度重要）：
