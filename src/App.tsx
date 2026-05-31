@@ -7099,7 +7099,7 @@ export default function App() {
       setActiveInterventionOverlay({ type: action, targetChapter: chapterNum, statusRaw: "因果重塑中..." });
       
       const charName = blueprint.characters.find(c => c.id === charId)?.name || "未知角色";
-      simulation = startProgressSimulation(12000, isEnglish
+      simulation = startProgressSimulation(25000, isEnglish
         ? [
             `Observing ${charName}'s fate line...`,
             `Weaving the cause and effect of ${action === 'bless' ? 'grace' : 'ordeal'}...`,
@@ -7492,7 +7492,7 @@ export default function App() {
       setSummaryEntrySource(source);
       setActiveInterventionOverlay({ type: 'ending', targetChapter: 7, statusRaw: '终局演绎中...' });
       
-      simulation = startProgressSimulation(8000, isEnglish
+      simulation = startProgressSimulation(18000, isEnglish
         ? [
             'Gathering the remaining causes...',
             'Reading the final direction of fate...',
@@ -9709,9 +9709,12 @@ export default function App() {
               />
             )}
             {activeInterventionOverlay && (
-              <LoadingOverlay 
+              <LoadingOverlay
                 progress={generationProgress}
                 status={generationStatus}
+                subtext={activeInterventionOverlay.type === 'ending'
+                  ? (isEnglish ? 'Weaving the finale — this usually takes 15-30 seconds.' : '正在收束终局，通常需要 15-30 秒，请稍候。')
+                  : (isEnglish ? 'Rewriting the chapter and its ripples — this usually takes 15-30 seconds.' : '正在重塑章节与涟漪，通常需要 15-30 秒，请稍候。')}
                 variant={activeInterventionOverlay.type}
                 language={appLanguage}
               />
