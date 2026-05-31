@@ -6518,6 +6518,7 @@ export default function App() {
       setCharacterStatuses(initialStatuses);
       setInterventionsLeft(3);
       setEndingValue(0);
+      setUiFeedback({ leftProgress: 0, rightProgress: 0, endingLabel: '中域' });
       setUnlockedBranches([]);
       setIntervenedChapters([]);
       setInterventionHistory([]);
@@ -7116,11 +7117,13 @@ export default function App() {
         const response = await apiFetch('/api/ai?action=intervene', {
           method: 'POST',
           body: JSON.stringify({
+            // Keep every chapter's summary so the rewrite can re-plan the ripple (future_outlines)
+            // against the author's original later beats — but drop the full prose of later chapters
+            // to trim the prompt. Chapters up to the intervened one keep their full text as context.
             blueprint,
-            // Chapter-by-chapter mode: only the chapters up to and including the intervened one
-            // are needed. Later chapters are unlocked/regenerated afterwards, so sending them
-            // wastes payload and prompt budget — trimming them speeds up the rewrite.
-            chapters: chapters.filter((chapterItem) => Number(chapterItem.chapter_num) <= chapterNum),
+            chapters: chapters.map((chapterItem) => (
+              Number(chapterItem.chapter_num) > chapterNum ? { ...chapterItem, text: '' } : chapterItem
+            )),
             chapterNum,
             charId,
             action,
