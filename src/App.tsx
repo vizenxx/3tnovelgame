@@ -1622,8 +1622,8 @@ export default function App() {
   const [interventionGateStage, setInterventionGateStage] = useState<'choose' | 'select'>('choose');
   // Revealed Threads (知因): ids of hidden cause-lines that have surfaced. Kept once revealed.
   const [revealedThreadIds, setRevealedThreadIds] = useState<string[]>([]);
-  // Transient toast naming the most recently revealed thread.
-  const [threadRevealNotice, setThreadRevealNotice] = useState<string | null>(null);
+  // Threads revealed in the latest batch, shown in a modal like a branch unlock.
+  const [threadRevealNotice, setThreadRevealNotice] = useState<Array<{ title: string; content: string }> | null>(null);
   const [isRewriting, setIsRewriting] = useState(false);
   const [interventionEffect, setInterventionEffect] = useState<'bless' | 'curse' | null>(null);
   const [activeInterventionOverlay, setActiveInterventionOverlay] = useState<{ type: 'bless' | 'curse' | 'ending', targetChapter: number, statusRaw: string } | null>(null);
@@ -2638,18 +2638,13 @@ export default function App() {
     }
     if (newlyRevealed.length > 0) {
       setRevealedThreadIds((prev) => Array.from(new Set([...prev, ...newlyRevealed])));
-      const lastId = newlyRevealed[newlyRevealed.length - 1];
-      const lastThread = threads.find((thread: any) => String(thread?.id) === lastId);
-      if (lastThread?.title) setThreadRevealNotice(String(lastThread.title));
+      const revealedObjs = newlyRevealed
+        .map((id) => threads.find((thread: any) => String(thread?.id) === id))
+        .filter(Boolean)
+        .map((thread: any) => ({ title: String(thread.title || ''), content: String(thread.content || '') }));
+      if (revealedObjs.length > 0) setThreadRevealNotice(revealedObjs);
     }
   }, [gameState, blueprint, unlockedChapterNum, intervenedChapters, unlockedBranches, historicallyUnlockedBranches, storyConclusion, endingValue, revealedThreadIds]);
-
-  // Auto-dismiss the thread reveal toast.
-  useEffect(() => {
-    if (!threadRevealNotice) return;
-    const timer = window.setTimeout(() => setThreadRevealNotice(null), 4200);
-    return () => window.clearTimeout(timer);
-  }, [threadRevealNotice]);
 
   // Pristine threads bound to a chapter: the root causes a chapter should weave in, but only
   // when the player reaches it WITHOUT having interfered at or before it (else the cause changed).
@@ -9611,18 +9606,42 @@ export default function App() {
           {gameState === 'PLAYING' && renderPlayingView()}
           {gameState === 'PLAYING' && interventionGateModal}
           <AnimatePresence>
-            {threadRevealNotice && (
+            {threadRevealNotice && threadRevealNotice.length > 0 && (
               <motion.div
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="fixed left-1/2 top-[max(4rem,calc(env(safe-area-inset-top)+3rem))] z-[2300] -translate-x-1/2 rounded-full border border-amber-500/30 bg-app-bg/95 px-5 py-2.5 shadow-2xl shadow-black/40 backdrop-blur-xl"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className={`${safeModalBackdropClass} z-[3400] bg-black/80 backdrop-blur-md`}
+                onClick={() => setThreadRevealNotice(null)}
               >
-                <div className="flex items-center gap-2 text-sm font-black text-amber-100">
-                  <Sparkles className="h-4 w-4 shrink-0 text-amber-300" />
-                  <span>{tr('揭露了新的因线', 'A thread surfaces')}</span>
-                  <span className="text-white">{threadRevealNotice}</span>
-                </div>
+                <motion.div
+                  initial={{ opacity: 0, y: 20, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 20, scale: 0.97 }}
+                  transition={{ duration: 0.26, ease: [0.16, 1, 0.3, 1] }}
+                  className="app-modal-surface app-modal-safe-height w-full max-w-md overflow-y-auto rounded-[2rem] border border-amber-500/30 p-6 shadow-2xl"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-amber-500/25 bg-amber-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-amber-200">
+                    <Sparkles className="h-3.5 w-3.5" />
+                    {threadRevealNotice.length > 1 ? tr(`揭露了 ${threadRevealNotice.length} 条知因`, `${threadRevealNotice.length} threads surface`) : tr('揭露知因', 'A thread surfaces')}
+                  </div>
+                  <div className="space-y-5">
+                    {threadRevealNotice.map((thread, index) => (
+                      <div key={index}>
+                        <h3 className="text-xl font-black text-app-text">{thread.title}</h3>
+                        <p className="mt-1.5 text-sm leading-relaxed text-app-muted">{thread.content}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setThreadRevealNotice(null)}
+                    className={`${semanticButtonClass('primary', { fullWidth: true })} mt-6`}
+                  >
+                    {tr('知道了', 'Got it')}
+                  </button>
+                </motion.div>
               </motion.div>
             )}
           </AnimatePresence>
