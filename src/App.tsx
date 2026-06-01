@@ -7574,6 +7574,16 @@ export default function App() {
     handleGenerateSummary(source);
   }, [pendingSummaryRequest, isRewriting, isGeneratingConclusion, activeStoryId, blueprint, chapters]);
 
+  // Out of interventions and the final chapter is unlocked → auto-settle, so the reader sees
+  // the fate summary before reading the finale. (With interventions left, the player keeps the
+  // right to interfere, so we never auto-settle — they must choose "Seal this fate".)
+  useEffect(() => {
+    if (gameState !== 'PLAYING' || !blueprint || isRewriting || isGeneratingConclusion) return;
+    if (unlockedChapterNum >= 7 && interventionsLeft <= 0 && !storyConclusion) {
+      void handleGenerateSummary('auto_interventions');
+    }
+  }, [gameState, blueprint, unlockedChapterNum, interventionsLeft, storyConclusion, isRewriting, isGeneratingConclusion]);
+
   const handleShareStory = async () => {
     if (!user || !blueprint) return;
     let shareStage = 'start';
@@ -8780,17 +8790,22 @@ export default function App() {
                           <>
                             <div className="text-lg font-black text-app-text">{tr('故事已抵达终点', 'The story has reached its end')}</div>
                             <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-app-muted">
-                              {tr('你可以就此接受这条命运线，或推倒重来，从第一章重走整个故事。', 'You can accept this fate line as it stands, or begin the whole story anew from chapter one.')}
+                              {tr(`你还有 ${interventionsLeft} 次干涉机会——可以回到尚可改写的篇章再搏一次，或就此让命运落定。`, `You still have ${interventionsLeft} intervention${interventionsLeft > 1 ? 's' : ''} left — return to a chapter you can still rewrite, or let fate settle as it stands.`)}
                             </p>
                             <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-center">
                               <button
                                 type="button"
-                                onClick={() => handleGenerateSummary('manual')}
+                                onClick={() => setConfirmationModal({
+                                  isOpen: true,
+                                  title: tr('让命运就此落定？', 'Let fate settle now?'),
+                                  message: tr(`你还剩 ${interventionsLeft} 次干涉机会。选择「命运已定」会放弃这些机会、直接进行结算，且无法再回头改写。确定吗？`, `You still have ${interventionsLeft} intervention${interventionsLeft > 1 ? 's' : ''} left. Sealing fate gives them up and goes straight to the summary — you won't be able to rewrite anything afterward. Continue?`),
+                                  onConfirm: () => handleGenerateSummary('manual'),
+                                })}
                                 disabled={isRewriting || isGeneratingConclusion}
                                 className={`${semanticButtonClass('primary', { compact: true })} rounded-full px-6`}
                               >
                                 <Sparkles className="h-4 w-4" />
-                                {tr('接受命运', 'Accept this fate')}
+                                {tr('命运已定', 'Seal this fate')}
                               </button>
                               <button
                                 type="button"
@@ -8812,17 +8827,17 @@ export default function App() {
                           <>
                             <div className="text-lg font-black text-app-text">{tr('命运已定', 'Fate is sealed')}</div>
                             <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-app-muted">
-                              {tr('三次干涉皆已落定，这条命运线再无更改的余地。', 'All three interventions are spent. This fate line can no longer be changed.')}
+                              {tr('三次干涉皆已落定。下方便是这条命运线的结局。', 'All three interventions are spent. Below is how this fate line ends.')}
                             </p>
                             <div className="mt-5 flex justify-center">
                               <button
                                 type="button"
                                 onClick={() => handleGenerateSummary('manual')}
                                 disabled={isGeneratingConclusion}
-                                className={`${semanticButtonClass('primary', { compact: true })} rounded-full px-6`}
+                                className={`${semanticButtonClass('secondary', { compact: true })} rounded-full px-6`}
                               >
                                 <Sparkles className="h-4 w-4" />
-                                {tr('查看命运结算', 'View the fate summary')}
+                                {tr('重看命运结算', 'View the summary again')}
                               </button>
                             </div>
                           </>
