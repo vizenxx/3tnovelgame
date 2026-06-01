@@ -155,7 +155,7 @@ export const ThemeSelectionView = (ctx: any) => {
                       className="w-full rounded-xl border border-app-border bg-app-input-bg px-4 py-3 text-sm text-app-text outline-none transition-colors focus:border-indigo-500"
                     />
                   </div>
-                  <div className="grid gap-2 sm:grid-cols-3">
+                  <div className="grid grid-cols-3 gap-2">
                     {([
                       { value: 'protagonist' as const, label: appLanguage === 'en-US' ? 'Lead' : '作为主角' },
                       { value: 'important' as const, label: appLanguage === 'en-US' ? 'Key role' : '重要角色' },
@@ -200,7 +200,7 @@ export const ThemeSelectionView = (ctx: any) => {
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
               {step.options.map((option) => {
                 const active = selected.includes(option.id);
                 return (

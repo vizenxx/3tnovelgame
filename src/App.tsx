@@ -2140,6 +2140,10 @@ export default function App() {
   const hasLoadedInitialStoryListRef = useRef(false);
   const archiveRefreshInFlightRef = useRef<Promise<void> | null>(null);
   const fetchingChapterRef = useRef<number | null>(null);
+  // Bumped whenever an intervention starts. A background chapter generation that finishes after
+  // an intervention began carries a stale epoch and is discarded, so it can never overwrite the
+  // chapters the intervention just rewrote or cleared.
+  const backgroundGenerationEpochRef = useRef(0);
   const quickGenerationDraftSignatureRef = useRef<string | null>(null);
   const [backgroundGeneratingChapter, setBackgroundGeneratingChapter] = useState<number | null>(null);
   const [isOnline, setIsOnline] = useState(() => typeof navigator === 'undefined' ? true : navigator.onLine !== false);
@@ -5070,7 +5074,14 @@ export default function App() {
     );
   };
 
-  const handleRegenerateQuickStory = () => {
+  const handleRegenerateQuickStory = async () => {
+    // Invalidate any in-flight background chapter generation from the previous story. With the
+    // generation ceiling now open, the background generator is almost always still running here;
+    // if it finished AFTER we clear the draft cache below, it would write the previous story's
+    // blueprint back into the draft — and the next "generate" would reuse it, jumping back to the
+    // old story (needing a second attempt to truly regenerate). Bumping the epoch makes that
+    // in-flight result get dropped before it can re-save the draft.
+    backgroundGenerationEpochRef.current += 1;
     setBlueprint(null);
     setChapters([]);
     setChangeHighlights({});
@@ -5085,6 +5096,12 @@ export default function App() {
     setActiveStoryMeta(null);
     setBackgroundGeneratingChapter(null);
     fetchingChapterRef.current = null;
+    // Force a genuinely new generation: drop the cached draft so that an unchanged signature does
+    // NOT make handleGenerateBlueprint reuse the previous blueprint (which showed up as "jumping
+    // back to the last story's chapter 1"). In chapter-by-chapter mode the draft rarely clears on
+    // its own, since the full 7 chapters seldom finish generating.
+    quickGenerationDraftSignatureRef.current = null;
+    await deleteLocalCache(quickGenerationDraftCacheKey()).catch(() => {});
     navigateTo('THEME_SELECTION');
   };
 
@@ -6484,6 +6501,8 @@ export default function App() {
       setUnlockedChapterNum(1);
       setRevealedThreadIds([]);
       setInterventionGateChapter(null);
+      setInterventionGateStage('choose');
+      setThreadRevealNotice(null);
       setChangeHighlights({});
       setNaturalChapters(data.chapters || []);
       setInitialNaturalChapters((data.chapters || []).map((chapter: any) => ({
@@ -6537,12 +6556,14 @@ export default function App() {
       return;
     }
 
-    // Generate at most one chapter ahead of what the player has unlocked. An early
-    // intervention discards later chapters, so generating them eagerly wastes work —
-    // and revealing chapters one at a time is what makes interventions a blind bet.
-    // Generate two chapters ahead of what's unlocked so "observe" never waits: when the
-    // player reveals the next chapter, the one after it is already being prepared.
-    const generationCeiling = unlockedChapterNum + 2;
+    // Fill in every remaining chapter continuously, not just a couple ahead of the unlock
+    // pointer. Chapter-by-chapter *reveal* still gates what the player sees, so interventions
+    // remain a blind bet — but preparing the prose ahead means observing or reading on never
+    // stops to wait. Concentrating the wait up front (like the old all-at-once flow) is far
+    // less jarring than pausing to generate at every observe/intervene step. The cost is that
+    // an early intervention may discard chapters generated ahead — an acceptable trade for
+    // never making the player wait mid-read.
+    const generationCeiling = 7;
     const missingChapter = chapters
       .filter((chapter) => Number(chapter.chapter_num) > 1 && Number(chapter.chapter_num) <= generationCeiling)
       .sort((a, b) => Number(a.chapter_num) - Number(b.chapter_num))
@@ -6560,6 +6581,7 @@ export default function App() {
 
     fetchingChapterRef.current = missingChapter.chapter_num;
     setBackgroundGeneratingChapter(missingChapter.chapter_num);
+    const generationEpoch = backgroundGenerationEpochRef.current;
 
     const generateRemainingChapter = async () => {
       try {
@@ -6579,6 +6601,11 @@ export default function App() {
         const chapterData = await chapterResponse.json();
         if (!chapterData?.text || typeof chapterData.text !== 'string' || chapterData.text.trim().length < 50) {
           throw new Error('Invalid generated chapter text');
+        }
+        // An intervention started while this chapter was generating — its epoch no longer matches,
+        // so drop this stale result instead of letting it overwrite the rewritten chapters.
+        if (backgroundGenerationEpochRef.current !== generationEpoch) {
+          return;
         }
 
         setChapters((prev) => {
@@ -7062,6 +7089,9 @@ export default function App() {
     
     try {
       setIsRewriting(true);
+      // Invalidate any background chapter generation already in flight: its result is based on
+      // pre-intervention story state and must not land on top of the rewrite.
+      backgroundGenerationEpochRef.current += 1;
       setActiveInterventionChapter(null);
       setInterventionGateChapter(null);
       setInterventionGateStage('choose');

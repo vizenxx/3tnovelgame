@@ -110,7 +110,7 @@ Narrative design principles:
 4. Bless/curse symmetry: every interferable character must have a believable path where blessing them produces an unexpected complication, and cursing them produces unexpected clarity or growth. Both directions must make narrative sense. If only one direction is emotionally valid, the choice is fake.
 5. Two defensible endings: both the left-domain and right-domain endings must be something a reader could argue for. Ideally, players argue with each other about which ending is "really" correct — that disagreement is the engine of social sharing.
 6. Chapter 1 establishes before it complicates: the first chapter's job is to make the reader understand who the protagonist is, what they want, and why they want it — this is the ground on which every later tension stands. Do not open with a high-tension action whose motivation the reader cannot yet follow; that reads as "movement for its own sake". Establish the person first, then let one concrete, recognizable detail (from the reader's own life or someone they care about) create investment. A reader who finishes chapter 1 should fully understand why this person will care about what happens next. Chapter 1 does not need to raise stakes — it needs to make the stakes legible. The spine's tension begins tightening in earnest from chapter 2.
-7. Scope discipline — match the story to its length: the full story spans roughly ${args.targetWordCount * 7} words in total — the length of a focused short story, not a novel. Do not compress a novel's worth of events into this space. Choose a scope that fits: a single arc, a few weeks at most, one central tension. Fewer events handled with depth always beats many events handled superficially.
+7. Scope and pacing — fit the story to its length: the full story spans roughly ${args.targetWordCount * 7} words — a focused short story's worth of space. Scope is about how much story, not how much time: a story may unfold over a single night or span years — what matters is choosing an event load light enough that, within these seven chapters, the plot keeps advancing AND each primary scene has room to be rendered with care, and the whole arc resolves completely and unhurriedly inside the word budget. Cramming in more events than the length can carry forces every scene down into summary — that thin, rushed texture is the real source of monotony. Fewer events handled with depth always beats many events handled superficially.
 
 English-market style requirements:
 1. Write as native English interactive fiction, not translated Chinese prose.
@@ -120,7 +120,7 @@ English-market style requirements:
 Output requirements:
 0. Context compliance: if an applied world setting exists, obey its selected baseline rules before local plot convenience; if selected character cards exist, keep them as major available cast unless the request explicitly excludes them; if a continuation node exists, make this a natural sequel opening without invalidating the previous result; if a continuation node contains characterStates or inherited major characters, keep those characters active by default unless the author request explicitly retires them.
 1. For performance reasons, never write full chapter prose in chapters.
-2. Each chapter must include a summary of 45-70 English words. Each chapter should have one primary dramatic scene plus any brief temporal bridging needed to establish cause and continuity (a time-jump, a recalled memory, a short contextual passage). The summary should name the primary scene clearly — what moment anchors this chapter — not list a chain of separate events. Crucially, each summary must show how this chapter advances the spine: by the end of the chapter, the central dramatic question must be tighter than it was at the start. The seven summaries read in order should form one rising arc toward the dilemma, not seven self-contained vignettes.
+2. Each chapter must include a summary of 45-70 English words. Each chapter should center on one primary dramatic scene, plus only the brief connective passage needed to establish cause and continuity — let the story's own needs decide what form that transition takes, rather than imposing any fixed form on it. The summary should name the primary scene clearly — what moment anchors this chapter — not list a chain of separate events. Crucially, each summary must show how this chapter advances the spine: by the end of the chapter, the central dramatic question must be tighter than it was at the start. The seven summaries read in order should form one rising arc toward the dilemma, not seven self-contained vignettes.
 3. Chapters must connect logically and avoid repeating the same beat.
 4. Each chapter must include a title of 2-7 English words.
 5. Create 3-5 characters. IDs must be c1, c2, ...
@@ -136,7 +136,7 @@ Output requirements:
 15. chapter titles/summaries must fit the requested narrative person and avoid forcing viewpoint shifts.
 
 Threads (hidden cause-lines):
-16. Also produce 3-6 "threads" — hidden CAUSES behind the story that do NOT change the plot. A thread is a root cause or buried origin (why a character became who they are, the real reason behind a bond, the true source of a conflict) — a cause, never a consequence (consequences are what branches are for). Knowing it deepens the player's understanding and makes interfering more fraught; not knowing it never decides the plot's outcome.
+16. Also produce 3-4 "threads" — hidden CAUSES behind the story that do NOT change the plot. A thread is a root cause or buried origin (why a character became who they are, the real reason behind a bond, the true source of a conflict) — a cause, never a consequence (consequences are what branches are for). Knowing it deepens the player's understanding and makes interfering more fraught; not knowing it never decides the plot's outcome.
 17. Anchor every thread in the prose that reveals it. Whatever reveals a thread — the pristine chapter, the bound branch, or the ending — that text itself MUST mention or show the cause (even briefly); the thread record is merely the fuller version of something the prose already touches. Never write a thread whose revealing text would say nothing of it.
 18. Reveal types: most 'chapter_pristine' (revealChapter 2-7, surfaced only when the player reaches that chapter WITHOUT having interfered at or before it — interfering changes the original cause, so the thread simply never surfaces), some 'branch' (revealBranchId bound to an existing branch id), some 'ending' (revealEndingId = left/right/default).
 19. Thread content must be concrete and specific, never vague mood or decoration.
@@ -169,12 +169,12 @@ ${seriesInstruction}${continuityInstruction}${continuityHardInstruction}
 4. 庇佑/磨难的双向说服力：每个可干涉的角色，都必须同时具备两种可信的走向：给他顺风，可能带来意外的连锁代价；给他逆境，可能让他看清本来看不清的事。两个方向都要有叙事说服力。如果只有一个方向在情感上说得通，这个选择就是假选择。
 5. 两个都能辩护的结局：左域结局和右域结局必须都是「有人会认为这才是对的」走向，而不是一圆满一悲剧。最理想的状态是：读者看完自己的结局后，想发给别人说「你看，我选的才是对的」——这种分歧感是社交传播的来源。
 6. 第一章先建立，再复杂化：第一章的首要职责，是让读者理解主角是谁、想要什么、为什么想要——这是后续一切张力的立足地基。不要用一个读者还无法理解其动机的高张力行为来开篇，那读起来就是「为了推进而推进」。先把这个人立起来，再用一个具体的、能让读者认出自己（或认出某个在乎的人）的细节制造投入。读者读完第一章，应当完全理解这个人为什么会在意接下来发生的事。第一章不需要抬高赌注——它需要让赌注变得可理解。脊柱的张力从第二章开始真正收紧。
-7. 规模克制——让故事适配它的篇幅：七章合计约 ${args.targetWordCount * 7} 字，相当于一篇精炼的短篇小说，不是长篇。不要把一部小说的事件量压进这个空间。选择一个合适的规模：单一弧线，至多数周的时间跨度，一个核心张力。少量事件写得深刻，永远好过大量事件被迫走马观花。
+7. 规模与节奏——让故事适配它的篇幅：七章合计约 ${args.targetWordCount * 7} 字，相当于一篇精炼短篇的体量。规模指的是「装多少故事」，而不是「跨多少时间」：故事可以只发生在一夜，也可以横跨数年——真正要紧的是把事件量控制得足够轻，使这七章里情节能持续推进、同时每个主场景都有从容描绘的空间，整条弧线在字数预算内完整、不仓促地收束。事件贪多，会逼着每一场戏都退化成概述——那种又薄又赶的质感，正是单调的真正来源。少量事件写得深刻，永远好过大量事件走马观花。
 
 要求（极度重要）：
 0. 若存在套用的世界观设定，必须优先遵守本次勾选的世界基准；若存在勾选角色卡，必须把它们作为主要可用角色池，除非用户明确排除；若存在继承节点，必须自然接住前作结果，不得粗暴否定前作，也不得随意忘掉继承状态中的主要人物。
 1. 由于性能限制，严禁在 chapters 中生成章节全文。
-2. 每一章必须提供一个 summary（简短情节大纲，60-80字）。每章应有一个主要戏剧场景，加上建立因果和连续性所需的简短时空过渡（时间跳跃、短暂回忆、背景铺垫）。summary 应清楚说明这一章以什么场景为核心——而不是罗列一串独立事件的序列。关键是：每条 summary 必须体现这一章如何推进脊柱——到这一章结束时，核心戏剧问题必须比开头更紧。七条 summary 顺着读下来，应该构成一条朝着两难困境不断上升的弧线，而不是七个各自独立的氛围片段。
+2. 每一章必须提供一个 summary（简短情节大纲，60-80字）。每章应以一个主要戏剧场景为核心，再加上建立因果与连续性所必需的简短衔接——具体用什么形态的过渡，交由情节本身的需要决定，不预设固定形式。summary 应清楚说明这一章以什么场景为核心——而不是罗列一串独立事件的序列。关键是：每条 summary 必须体现这一章如何推进脊柱——到这一章结束时，核心戏剧问题必须比开头更紧。七条 summary 顺着读下来，应该构成一条朝着两难困境不断上升的弧线，而不是七个各自独立的氛围片段。
 3. 每一章的情节必须对上下章节有适当联系且重点不重复。
 4. 每一章必须提供一个 title（6-12字），与该章大纲一致。
 5. 设定 3-5 个角色，ID 必须为 c1, c2 ...
@@ -191,7 +191,7 @@ ${seriesInstruction}${continuityInstruction}${continuityHardInstruction}
 16. 角色性格和核心主线必须在各章节的大纲里严格体现，确保前后章节之间的人物行为和事件走向保持一致。
 
 知因（隐藏因线）：
-17. 另外生成 3-6 条「知因」(threads)——藏在故事背后、不改变情节的「起因」。每条是一个根由或埋藏的源头：某个角色为何成为现在的样子、一段关系背后真正的缘由、一场冲突真实的源头。它是「起因」，绝不是「结果」（结果是支线的职责）。知道它会加深玩家对故事的理解、让干涉更纠结；但不知道它，绝不会决定剧情的最终走向。
+17. 另外生成 3-4 条「知因」(threads)——藏在故事背后、不改变情节的「起因」。每条是一个根由或埋藏的源头：某个角色为何成为现在的样子、一段关系背后真正的缘由、一场冲突真实的源头。它是「起因」，绝不是「结果」（结果是支线的职责）。知道它会加深玩家对故事的理解、让干涉更纠结；但不知道它，绝不会决定剧情的最终走向。
 18. 每条知因都必须锚定在「揭露它的那段正文」里。无论由什么揭露——原状态章节、绑定的支线，还是结局——那段正文本身就必须提及或展示这个起因（哪怕只是一笔带过）；知因记录只是正文已经触及之事的更完整版本。绝不允许写一条「揭露它的正文里却只字未提」的知因。
 19. 揭露类型：多数用 'chapter_pristine'（revealChapter 2-7，仅当玩家在该章及之前从未干涉、以原始状态读到该章时才揭露——干涉会改变原本的起因，于是这条知因便永不浮现）；一部分用 'branch'（revealBranchId 绑定已有支线 id）；一部分用 'ending'（revealEndingId 为 left/right/default）。
 20. 知因内容必须具体而特定，绝不能是含糊的气氛词或装饰。
