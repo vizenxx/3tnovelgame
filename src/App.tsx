@@ -6447,14 +6447,18 @@ export default function App() {
       // Chapter-by-chapter mode: only chapter 1 needs to be ready before entering. The rest are
       // generated in the background as the player advances, so a long prefetch queue here just
       // makes quick-generation slower and more failure-prone. Pre-generate only the opening chapter.
-      const prefetchChapters = [1];
+      // Show-one / prepare-one: pre-generate the first TWO chapters so that observing after
+      // chapter 1 reveals chapter 2 with no wait. From there the background generator stays one
+      // chapter ahead as the player advances. (The blueprint route's maxDuration is the real fix
+      // for generation failures, so a 2-chapter prefetch is safe again.)
+      const prefetchChapters = [1, 2];
       for (const chapterNum of prefetchChapters) {
         if (isChapterTextReady((data.chapters || []).find((chapter: any) => chapter.chapter_num === chapterNum))) {
           continue;
         }
         generationStage = appLanguage === 'en-US' ? `generating chapter ${chapterNum}` : `生成第 ${chapterNum} 章`;
-        setGenerationStatus(isEnglish ? `Writing the opening chapter...` : `正在具象化开篇...`);
-        setGenerationProgress(78);
+        setGenerationStatus(isEnglish ? `Writing chapter ${chapterNum}...` : `正在具象化第 ${chapterNum} 章...`);
+        setGenerationProgress(72 + chapterNum * 9);
         const chapterResponse = await withRetry(() => apiFetch('/api/ai?action=generate-next-chapter', {
           method: 'POST',
           body: JSON.stringify({
