@@ -6447,14 +6447,17 @@ export default function App() {
       data.chapters = ensureSevenChapterShells(data.chapters || []);
       await setLocalCache(quickGenerationDraftCacheKey(), { signature: draftSignature, blueprint: data });
 
-      const prefetchChapters = [1, 2];
+      // Chapter-by-chapter mode: only chapter 1 needs to be ready before entering. The rest are
+      // generated in the background as the player advances, so a long prefetch queue here just
+      // makes quick-generation slower and more failure-prone. Pre-generate only the opening chapter.
+      const prefetchChapters = [1];
       for (const chapterNum of prefetchChapters) {
         if (isChapterTextReady((data.chapters || []).find((chapter: any) => chapter.chapter_num === chapterNum))) {
           continue;
         }
         generationStage = appLanguage === 'en-US' ? `generating chapter ${chapterNum}` : `生成第 ${chapterNum} 章`;
-        setGenerationStatus(isEnglish ? `Writing chapter ${chapterNum} (${chapterNum}/2)...` : `正在具象化世界细节 (${chapterNum}/2)...`);
-        setGenerationProgress(72 + chapterNum * 7);
+        setGenerationStatus(isEnglish ? `Writing the opening chapter...` : `正在具象化开篇...`);
+        setGenerationProgress(78);
         const chapterResponse = await withRetry(() => apiFetch('/api/ai?action=generate-next-chapter', {
           method: 'POST',
           body: JSON.stringify({
@@ -7575,14 +7578,16 @@ export default function App() {
   }, [pendingSummaryRequest, isRewriting, isGeneratingConclusion, activeStoryId, blueprint, chapters]);
 
   // Out of interventions and the final chapter is unlocked → auto-settle, so the reader sees
-  // the fate summary before reading the finale. (With interventions left, the player keeps the
-  // right to interfere, so we never auto-settle — they must choose "Seal this fate".)
+  // the fate summary before reading the finale. Wait until chapter 7's prose is ready so the
+  // summary covers the whole story, finale included. (With interventions left we never
+  // auto-settle — the player keeps the right to interfere and must choose "Seal this fate".)
   useEffect(() => {
     if (gameState !== 'PLAYING' || !blueprint || isRewriting || isGeneratingConclusion) return;
-    if (unlockedChapterNum >= 7 && interventionsLeft <= 0 && !storyConclusion) {
+    const finaleChapter = chapters.find((chapter) => Number(chapter.chapter_num) === 7);
+    if (unlockedChapterNum >= 7 && interventionsLeft <= 0 && !storyConclusion && isChapterTextReady(finaleChapter)) {
       void handleGenerateSummary('auto_interventions');
     }
-  }, [gameState, blueprint, unlockedChapterNum, interventionsLeft, storyConclusion, isRewriting, isGeneratingConclusion]);
+  }, [gameState, blueprint, chapters, unlockedChapterNum, interventionsLeft, storyConclusion, isRewriting, isGeneratingConclusion]);
 
   const handleShareStory = async () => {
     if (!user || !blueprint) return;

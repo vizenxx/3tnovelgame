@@ -6,6 +6,11 @@ import { getRequestLogContext, logGenerationError, logGenerationInfo } from '../
 import { buildQuickStoryBlueprintPrompt } from '../../Prompt/quickStoryBlueprint.js';
 import { generationLanguageInstruction, normalizeGenerationLanguage } from '../_language.js';
 
+// Blueprint generation produces a large structured payload (now including threads),
+// so it needs the same extended budget as the other generation routes — without this it
+// fell back to the platform default and timed out, making quick-generation fail often.
+export const maxDuration = 60;
+
 const blueprintSchema = {
   type: Type.OBJECT,
   properties: {
