@@ -4943,14 +4943,11 @@ export default function App() {
           8000,
           '首页作品同步超时，已先进入首页。'
         ).catch((error) => {
-          console.warn('Initial story library load skipped:', error);
-          setManualConnectivityNotice({
-            tone: 'weak',
-            title: isEnglish ? 'Story library is still syncing' : '作品库仍在同步',
-            detail: isEnglish
-              ? 'The home page is available first. Use refresh if the list does not appear.'
-              : '已先进入首页；如果作品列表没有出现，可以稍后点击刷新。',
-          });
+          // The 8s budget only means "enter the home page without waiting" — it does NOT cancel
+          // refreshStories, which keeps running in the background and populates the list when it
+          // returns. Cached content (if any) is already on screen, so stay silent rather than
+          // showing a sync notice that just reads as an error.
+          console.warn('Initial story library sync still in flight:', error);
           return false;
         });
         hasLoadedInitialStoryListRef.current = Boolean(loadedStories);
