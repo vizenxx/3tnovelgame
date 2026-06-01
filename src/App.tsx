@@ -8779,20 +8779,6 @@ export default function App() {
                                 <Sparkles className="h-4 w-4" />
                                 {tr('命运已定', 'Seal this fate')}
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => setConfirmationModal({
-                                  isOpen: true,
-                                  title: tr('重新生成一个新故事？', 'Generate a brand new story?'),
-                                  message: tr('当前这条命运线将被舍弃，回到快速生成页重新设定主题，再生成一个全新的故事。', 'This fate line will be discarded — you return to the quick-generation page to set a theme and generate a brand new story.'),
-                                  onConfirm: () => { setActiveStoryId(null); navigateTo('THEME_SELECTION'); },
-                                })}
-                                disabled={isRewriting || isGeneratingConclusion || activeInterventionOverlay !== null}
-                                className={`${semanticButtonClass('secondary', { compact: true })} rounded-full px-6`}
-                              >
-                                <RefreshCcw className="h-4 w-4" />
-                                {tr('重新生成', 'Generate new')}
-                              </button>
                             </div>
                           </>
                         ) : (
