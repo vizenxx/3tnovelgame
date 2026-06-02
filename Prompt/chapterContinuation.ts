@@ -114,24 +114,22 @@ ${JSON.stringify({
 }, null, 2)}
 ` : '';
   if (isEnglish) {
-    return `You are the prose engine for an English-language interactive fiction game.
+    return `You are the author of this story. You have a complete vision of the full arc — where it begins, what each chapter must accomplish, and where it ends. You are now writing chapter ${args.targetChapterNum}.
 
-STORY BLUEPRINT (primary authority — the skeleton every chapter must serve):
-Story premise: ${args.blueprint.main_axis}
-Narrative person: ${buildNarrativePersonInstruction(args.narrativePerson || args.blueprint.narrative_person, 'chapter', args.language)}
-Characters: ${args.blueprint.characters.map((character: any) => `${character.id}:${character.name}(${character.desc})`).join('; ')}
-Ending structure: ${isSingleEnding ? 'Single ending. Later chapters may change the route, but the finale should naturally converge on the same core ending.' : 'Branching endings. Current compatibility slots are default / left / right, with future expansion possible.'}
+YOUR STORY
+"${args.blueprint.title || 'Untitled'}" — ${args.blueprint.main_axis}
+Point of view: ${buildNarrativePersonInstruction(args.narrativePerson || args.blueprint.narrative_person, 'chapter', args.language)}
+Characters: ${args.blueprint.characters.map((character: any) => `${character.id}: ${character.name} — ${character.desc}`).join(' | ')}
+Ending shape: ${isSingleEnding ? 'Single convergent ending — interventions change the route and cost, but the finale must naturally close on the same core resolution.' : 'Branching ending domains (default / left / right) — the story may resolve differently depending on how fate has been shaped.'}
 ${seriesBlock}
-THIS CHAPTER'S PRIMARY TASK (blueprint-defined, must be fully realized):
-Chapter ${args.targetChapterNum} goal: ${args.outlineSummary}${threadBlock}
-${args.futureOutlines ? `Later chapter outlines (keep continuity, do not contradict):\n${args.futureOutlines}` : ''}
-${args.defaultText ? `Author default mainline text (chapter ${args.targetChapterNum}, style reference):\n${String(args.defaultText).substring(0, 1200)}` : ''}
-${(!args.worldStatePrompt.includes('Story baseline') && args.endingProto) ? `Author ending prototypes:\n- default: ${String(args.endingProto.default || '').substring(0, 400)}\n- left: ${String(args.endingProto.left || '').substring(0, 400)}\n- right: ${String(args.endingProto.right || '').substring(0, 400)}` : ''}
+CHAPTER ${args.targetChapterNum} — WHAT THIS CHAPTER MUST DO
+${args.outlineSummary}${threadBlock}
 
-SECONDARY CONTEXT (style and bridging reference only — do not let this override the blueprint task above):
+${args.futureOutlines ? `HOW THE STORY CONTINUES AFTER THIS CHAPTER (maintain continuity — do not contradict):\n${args.futureOutlines}\n` : ''}${args.defaultText ? `AUTHOR'S ESTABLISHED TEXT FOR THIS CHAPTER (treat as your own prior draft — match its voice exactly):\n${String(args.defaultText).substring(0, 1200)}\n` : ''}${(!args.worldStatePrompt.includes('Story baseline') && args.endingProto) ? `ENDING PROTOTYPES (let the current ending direction quietly shape the chapter's emotional trajectory):\n- default: ${String(args.endingProto.default || '').substring(0, 400)}\n- left: ${String(args.endingProto.left || '').substring(0, 400)}\n- right: ${String(args.endingProto.right || '').substring(0, 400)}\n` : ''}
+WHAT YOU HAVE WRITTEN SO FAR (your own earlier work — use it for natural style continuity and bridging, not as a constraint on this chapter's direction):
 ${args.worldStatePrompt}
 
-Task: Write the full prose for chapter ${args.targetChapterNum}.
+Write the full prose for chapter ${args.targetChapterNum}.
 
 Requirements:
 1. Continue directly from prior events and preserve the established style.
@@ -155,24 +153,22 @@ Requirements:
 
 Return strict JSON Schema only. Do not include image prompts or meta-comments.`;
   }
-  return `你是一个互动小说引擎的织梦者。
+  return `你是这个故事的作者，对整个弧线有完整的构想——你清楚故事从哪里来、每一章承担什么戏剧任务、以及它将走向何处。你现在正在写第 ${args.targetChapterNum} 章。
 
-故事蓝图（主要权威——所有章节必须服务于这个骨架）：
-小说大纲/主轴：${args.blueprint.main_axis}
+你的故事
+《${args.blueprint.title || '未命名'}》——${args.blueprint.main_axis}
 叙事人称：${buildNarrativePersonInstruction(args.narrativePerson || args.blueprint.narrative_person, 'chapter', args.language)}
-角色列表：${args.blueprint.characters.map((character: any) => `${character.id}:${character.name}(${character.desc})`).join('; ')}
-结局结构：${isSingleEnding ? '单一结局。后续章节必须允许过程变化，但终章需要自然收束到同一个核心结局。' : '多线结局。当前使用默认/左/右三结局，未来可扩展为更多结局。'}
+登场角色：${args.blueprint.characters.map((character: any) => `${character.id}：${character.name}——${character.desc}`).join(' | ')}
+结局走向：${isSingleEnding ? '单一收束结局——干涉改变的是过程与代价，终章必须自然归拢到同一个核心结局。' : '多线结局域（默认/左/右）——命运的走向因干涉而不同，故事可能在不同的结局域落定。'}
 ${seriesBlock}
-本章首要任务（蓝图定义，必须完整实现，是本章写作的核心依据）：
-第 ${args.targetChapterNum} 章目标：${args.outlineSummary}${threadBlock}
-${args.futureOutlines ? `后续章节走向（保持连贯，不得矛盾）：\n${args.futureOutlines}` : ''}
-${args.defaultText ? `作者默认主线原文（第${args.targetChapterNum}章，文风参考）：\n${String(args.defaultText).substring(0, 1200)}` : ''}
-${(!args.worldStatePrompt.includes('故事基准') && args.endingProto) ? `作者结局原型：\n- default: ${String(args.endingProto.default || '').substring(0, 400)}\n- left: ${String(args.endingProto.left || '').substring(0, 400)}\n- right: ${String(args.endingProto.right || '').substring(0, 400)}` : ''}
+第 ${args.targetChapterNum} 章——这一章必须完成的事
+${args.outlineSummary}${threadBlock}
 
-辅助参考（仅用于文风衔接与自然过渡，不得凌驾于上方蓝图任务之上）：
+${args.futureOutlines ? `这一章之后故事的走向（保持连贯，不得矛盾）：\n${args.futureOutlines}\n` : ''}${args.defaultText ? `你为这一章写下的底稿（视为你自己的前期草稿，严格延续其笔触与文风）：\n${String(args.defaultText).substring(0, 1200)}\n` : ''}${(!args.worldStatePrompt.includes('故事基准') && args.endingProto) ? `结局原型（让当前结局方向悄悄渗透进这一章的情感走势）：\n- default: ${String(args.endingProto.default || '').substring(0, 400)}\n- left: ${String(args.endingProto.left || '').substring(0, 400)}\n- right: ${String(args.endingProto.right || '').substring(0, 400)}\n` : ''}
+你已经写下的内容（你自己的前几章——用于保持文风的自然延续与场景衔接，而非约束本章的方向与走势）：
 ${args.worldStatePrompt}
 
-任务：续写第 ${args.targetChapterNum} 章全文内容。
+写第 ${args.targetChapterNum} 章全文。
 
 要求（必须绝对服从）：
 1. 必须顺接前文剧情，延续文风。
