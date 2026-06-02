@@ -355,6 +355,13 @@ function normalizeBlueprint(raw: any, requestedEndingMode: 'single' | 'dual' = '
         })
     : [];
 
+  // Hard limits: threads 2-4, branches 2-6, combined ≤ 8.
+  // Threads take priority; excess is trimmed from branches first.
+  const cappedThreads = threads.slice(0, 4);
+  const combinedMax = 8;
+  const maxBranches = Math.min(6, combinedMax - cappedThreads.length);
+  const cappedBranches = branches.slice(0, Math.max(3, maxBranches));
+
   return {
     ...raw,
     title: String(raw.title || '未命名命运').trim(),
@@ -365,8 +372,8 @@ function normalizeBlueprint(raw: any, requestedEndingMode: 'single' | 'dual' = '
     characters,
     chapters,
     endings,
-    branches,
-    threads,
+    branches: cappedBranches,
+    threads: cappedThreads,
   };
 }
 

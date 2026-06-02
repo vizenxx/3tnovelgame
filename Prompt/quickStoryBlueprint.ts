@@ -127,7 +127,7 @@ Output requirements:
 6. Each character desc must be a concrete 12-28 word English description containing at least two of: role, motive, contradiction.
 7. Set endingMode to ${isSingleEnding ? '"single"' : '"dual"'}; also keep left_mainline_default and right_mainline_default (0-100) for compatibility.
 8. The endings array must still output 3 items for compatibility: normal=default, good=left, bad=right. ${isSingleEnding ? 'All three must converge on the same core finale, with only route, cost, and understanding differing.' : 'All three should be coherent chapter-seven ending directions.'}
-9. Plan 6-10 branch fate points. ${isSingleEnding ? 'Single-ending stories still need branches. They must not guide toward left/right ending domains or mutually exclusive finales; they should change route, cost, clues, relationships, revealed meaning, and how naturally the same finale is reached.' : 'Split them roughly between left and right. Branch events must work with the left/right mainline math.'}
+9. Plan 3-6 branch fate points. Threads (rule 16) and branches combined should total 6-8 — if you plan 4 threads, plan 2-4 branches; if you plan 2-3 threads, plan 4-6 branches. ${isSingleEnding ? 'Single-ending stories still need branches. They must not guide toward left/right ending domains or mutually exclusive finales; they should change route, cost, clues, relationships, revealed meaning, and how naturally the same finale is reached.' : 'Split them roughly between left and right. Branch events must work with the left/right mainline math.'}
 10. A branch is an individual story event setup. name must be a short branch theme such as "The Glass Debt" or "The Locked Letter"; it must never be only a character name or a trigger instruction.
 11. desc must clearly state the concrete story change, hidden implication, and why this branch matters. It must not simply repeat the hint.
 12. Every triggerGroups item must include hint. The hint is the locked-branch teaser shown to players: 5-14 natural English words, metaphorical or layered, related to the branch consequence, but never revealing the exact trigger.
@@ -136,7 +136,7 @@ Output requirements:
 15. chapter titles/summaries must fit the requested narrative person and avoid forcing viewpoint shifts.
 
 Threads (hidden cause-lines):
-16. Also produce 3-4 "threads" — hidden CAUSES behind the story that do NOT change the plot. A thread is a root cause or buried origin (why a character became who they are, the real reason behind a bond, the true source of a conflict) — a cause, never a consequence (consequences are what branches are for). Knowing it deepens the player's understanding and makes interfering more fraught; not knowing it never decides the plot's outcome.
+16. Also produce 2-4 "threads" (minimum 2 required) — hidden CAUSES behind the story that do NOT change the plot. A thread is a root cause or buried origin (why a character became who they are, the real reason behind a bond, the true source of a conflict) — a cause, never a consequence (consequences are what branches are for). Knowing it deepens the player's understanding and makes interfering more fraught; not knowing it never decides the plot's outcome.
 17. Anchor every thread in the prose that reveals it. Whatever reveals a thread — the pristine chapter, the bound branch, or the ending — that text itself MUST mention or show the cause (even briefly); the thread record is merely the fuller version of something the prose already touches. Never write a thread whose revealing text would say nothing of it.
 18. Reveal types: most 'chapter_pristine' (revealChapter 2-7, surfaced only when the player reaches that chapter WITHOUT having interfered at or before it — interfering changes the original cause, so the thread simply never surfaces), some 'branch' (revealBranchId bound to an existing branch id), some 'ending' (revealEndingId = left/right/default).
 19. Thread content must be concrete and specific, never vague mood or decoration.
@@ -181,7 +181,7 @@ ${seriesInstruction}${continuityInstruction}${continuityHardInstruction}
 6. 每个角色的 desc 必须是 15-35 字的具体简介，至少包含身份/动机/矛盾点中的两项。
 7. 设定 endingMode 字段，值必须是 ${isSingleEnding ? '"single"' : '"dual"'}；同时保留 left_mainline_default 和 right_mainline_default (0-100) 以兼容旧数学机制。
 8. endings 数组仍输出 3 条以兼容旧结构：normal=结局1/default，good=结局2/left，bad=结局3/right。${isSingleEnding ? '但三条必须明显收束到同一个核心终局，只允许过程、代价、人物理解有差异。' : '三条应是逻辑严密的三种第 7 章结局走向。'}
-9. 规划 6-10 个支线命运点（branches）。${isSingleEnding ? '支线可以有倾向权重，但不得导向互斥终局；它们应改变抵达单一终局的路径、代价与伏笔解释。' : '左右各半。支线情节必须根据左/右主线做数学设定，相互影响。'}
+9. 规划 3-6 个支线命运点（branches）。知因（第17条）与支线合计应在 6-8 个之间——若规划了 4 条知因，支线规划 2-4 个；若规划了 2-3 条知因，支线规划 4-6 个。${isSingleEnding ? '支线可以有倾向权重，但不得导向互斥终局；它们应改变抵达单一终局的路径、代价与伏笔解释。' : '左右各半。支线情节必须根据左/右主线做数学设定，相互影响。'}
 10. 每条支线的 name 必须是“支线主题”，用于未解锁时展示，例如“锁住的信”“雨夜的债”“镜后的誓言”；不能只是角色姓名，也不能写成触发条件。
 11. 每个 triggerGroups 条件组必须提供 hint（8-18字），用于 UI 中的隐约提示。hint 要像伏笔或未揭开的预兆，必须与支线后果有关，但不能直接暴露完整触发条件。
 12. hint 不得出现第几章、角色ID、庇佑、磨难、点击、选择、执行、得到、解锁等机械操作语气。
@@ -191,7 +191,7 @@ ${seriesInstruction}${continuityInstruction}${continuityHardInstruction}
 16. 角色性格和核心主线必须在各章节的大纲里严格体现，确保前后章节之间的人物行为和事件走向保持一致。
 
 知因（隐藏因线）：
-17. 另外生成 3-4 条「知因」(threads)——藏在故事背后、不改变情节的「起因」。每条是一个根由或埋藏的源头：某个角色为何成为现在的样子、一段关系背后真正的缘由、一场冲突真实的源头。它是「起因」，绝不是「结果」（结果是支线的职责）。知道它会加深玩家对故事的理解、让干涉更纠结；但不知道它，绝不会决定剧情的最终走向。
+17. 另外生成 2-4 条「知因」(threads，最少 2 条)——藏在故事背后、不改变情节的「起因」。每条是一个根由或埋藏的源头：某个角色为何成为现在的样子、一段关系背后真正的缘由、一场冲突真实的源头。它是「起因」，绝不是「结果」（结果是支线的职责）。知道它会加深玩家对故事的理解、让干涉更纠结；但不知道它，绝不会决定剧情的最终走向。
 18. 每条知因都必须锚定在「揭露它的那段正文」里。无论由什么揭露——原状态章节、绑定的支线，还是结局——那段正文本身就必须提及或展示这个起因（哪怕只是一笔带过）；知因记录只是正文已经触及之事的更完整版本。绝不允许写一条「揭露它的正文里却只字未提」的知因。
 19. 揭露类型：多数用 'chapter_pristine'（revealChapter 2-7，仅当玩家在该章及之前从未干涉、以原始状态读到该章时才揭露——干涉会改变原本的起因，于是这条知因便永不浮现）；一部分用 'branch'（revealBranchId 绑定已有支线 id）；一部分用 'ending'（revealEndingId 为 left/right/default）。
 20. 知因内容必须具体而特定，绝不能是含糊的气氛词或装饰。
