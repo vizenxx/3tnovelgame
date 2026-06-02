@@ -115,16 +115,21 @@ ${JSON.stringify({
 ` : '';
   if (isEnglish) {
     return `You are the prose engine for an English-language interactive fiction game.
+
+STORY BLUEPRINT (primary authority — the skeleton every chapter must serve):
 Story premise: ${args.blueprint.main_axis}
 Narrative person: ${buildNarrativePersonInstruction(args.narrativePerson || args.blueprint.narrative_person, 'chapter', args.language)}
 Characters: ${args.blueprint.characters.map((character: any) => `${character.id}:${character.name}(${character.desc})`).join('; ')}
 Ending structure: ${isSingleEnding ? 'Single ending. Later chapters may change the route, but the finale should naturally converge on the same core ending.' : 'Branching endings. Current compatibility slots are default / left / right, with future expansion possible.'}
 ${seriesBlock}
-${args.worldStatePrompt}
-Current chapter outline: ${args.outlineSummary}${threadBlock}
-${args.futureOutlines ? `Future outline notes:\n${args.futureOutlines}` : ''}
-${args.defaultText ? `Author default mainline text (chapter ${args.targetChapterNum}, priority reference):\n${String(args.defaultText).substring(0, 1200)}` : ''}
+THIS CHAPTER'S PRIMARY TASK (blueprint-defined, must be fully realized):
+Chapter ${args.targetChapterNum} goal: ${args.outlineSummary}${threadBlock}
+${args.futureOutlines ? `Later chapter outlines (keep continuity, do not contradict):\n${args.futureOutlines}` : ''}
+${args.defaultText ? `Author default mainline text (chapter ${args.targetChapterNum}, style reference):\n${String(args.defaultText).substring(0, 1200)}` : ''}
 ${(!args.worldStatePrompt.includes('Story baseline') && args.endingProto) ? `Author ending prototypes:\n- default: ${String(args.endingProto.default || '').substring(0, 400)}\n- left: ${String(args.endingProto.left || '').substring(0, 400)}\n- right: ${String(args.endingProto.right || '').substring(0, 400)}` : ''}
+
+SECONDARY CONTEXT (style and bridging reference only — do not let this override the blueprint task above):
+${args.worldStatePrompt}
 
 Task: Write the full prose for chapter ${args.targetChapterNum}.
 
@@ -151,16 +156,21 @@ Requirements:
 Return strict JSON Schema only. Do not include image prompts or meta-comments.`;
   }
   return `你是一个互动小说引擎的织梦者。
+
+故事蓝图（主要权威——所有章节必须服务于这个骨架）：
 小说大纲/主轴：${args.blueprint.main_axis}
 叙事人称：${buildNarrativePersonInstruction(args.narrativePerson || args.blueprint.narrative_person, 'chapter', args.language)}
 角色列表：${args.blueprint.characters.map((character: any) => `${character.id}:${character.name}(${character.desc})`).join('; ')}
 结局结构：${isSingleEnding ? '单一结局。后续章节必须允许过程变化，但终章需要自然收束到同一个核心结局。' : '多线结局。当前使用默认/左/右三结局，未来可扩展为更多结局。'}
 ${seriesBlock}
-${args.worldStatePrompt}
-当前章节大纲指引：${args.outlineSummary}${threadBlock}
-${args.futureOutlines ? `后续章节走向备忘：\n${args.futureOutlines}` : ''}
-${args.defaultText ? `作者默认主线原文（第${args.targetChapterNum}章，作为优先参考原型）：\n${String(args.defaultText).substring(0, 1200)}` : ''}
+本章首要任务（蓝图定义，必须完整实现，是本章写作的核心依据）：
+第 ${args.targetChapterNum} 章目标：${args.outlineSummary}${threadBlock}
+${args.futureOutlines ? `后续章节走向（保持连贯，不得矛盾）：\n${args.futureOutlines}` : ''}
+${args.defaultText ? `作者默认主线原文（第${args.targetChapterNum}章，文风参考）：\n${String(args.defaultText).substring(0, 1200)}` : ''}
 ${(!args.worldStatePrompt.includes('故事基准') && args.endingProto) ? `作者结局原型：\n- default: ${String(args.endingProto.default || '').substring(0, 400)}\n- left: ${String(args.endingProto.left || '').substring(0, 400)}\n- right: ${String(args.endingProto.right || '').substring(0, 400)}` : ''}
+
+辅助参考（仅用于文风衔接与自然过渡，不得凌驾于上方蓝图任务之上）：
+${args.worldStatePrompt}
 
 任务：续写第 ${args.targetChapterNum} 章全文内容。
 
