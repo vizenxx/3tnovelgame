@@ -111,6 +111,7 @@ Narrative design principles:
 5. Two defensible endings: both the left-domain and right-domain endings must be something a reader could argue for. Ideally, players argue with each other about which ending is "really" correct — that disagreement is the engine of social sharing.
 6. Chapter 1 establishes before it complicates: the first chapter's job is to make the reader understand who the protagonist is, what they want, and why they want it — this is the ground on which every later tension stands. Do not open with a high-tension action whose motivation the reader cannot yet follow; that reads as "movement for its own sake". Establish the person first, then let one concrete, recognizable detail (from the reader's own life or someone they care about) create investment. A reader who finishes chapter 1 should fully understand why this person will care about what happens next. Chapter 1 does not need to raise stakes — it needs to make the stakes legible. The spine's tension begins tightening in earnest from chapter 2.
 7. Scope and pacing — fit the story to its length: the full story spans roughly ${args.targetWordCount * 7} words — a focused short story's worth of space. Scope is about how much story, not how much time: a story may unfold over a single night or span years — what matters is choosing an event load light enough that, within these seven chapters, the plot keeps advancing AND each primary scene has room to be rendered with care, and the whole arc resolves completely and unhurriedly inside the word budget. Cramming in more events than the length can carry forces every scene down into summary — that thin, rushed texture is the real source of monotony. Fewer events handled with depth always beats many events handled superficially.
+8. Story architecture — seven chapters, seven different functions: not every chapter's primary job is to push the next plot event. A complete arc needs chapters that serve different purposes: one that grounds the reader in the protagonist's world before the crisis fully intrudes; one that surfaces something long-buried and reframes what the reader already knew; one that lets a moment settle so its weight can register before the story accelerates again; one that narrows the dilemma to its final, irreducible form. The reader should feel the weight of what existed before the story begins — characters carry histories, the seeds of the central conflict were planted long before chapter 1, and some chapters earn their place by making us feel the depth of that history rather than simply delivering the next event. A story where every chapter is "and then the pressure increased" is monotonous regardless of how well each individual chapter is written. Design the shape of the arc first — which chapters establish, which reveal prior cause, which deepen, which let weight settle, which crisis, which resolve — then fill in the scenes.
 
 English-market style requirements:
 1. Write as native English interactive fiction, not translated Chinese prose.
@@ -120,7 +121,7 @@ English-market style requirements:
 Output requirements:
 0. Context compliance: if an applied world setting exists, obey its selected baseline rules before local plot convenience; if selected character cards exist, keep them as major available cast unless the request explicitly excludes them; if a continuation node exists, make this a natural sequel opening without invalidating the previous result; if a continuation node contains characterStates or inherited major characters, keep those characters active by default unless the author request explicitly retires them.
 1. For performance reasons, never write full chapter prose in chapters.
-2. Each chapter must include a summary of 45-70 English words. Each chapter should center on one primary dramatic scene, plus only the brief connective passage needed to establish cause and continuity — let the story's own needs decide what form that transition takes, rather than imposing any fixed form on it. The summary should name the primary scene clearly — what moment anchors this chapter — not list a chain of separate events. Crucially, each summary must show how this chapter advances the spine: by the end of the chapter, the central dramatic question must be tighter than it was at the start. The seven summaries read in order should form one rising arc toward the dilemma, not seven self-contained vignettes.
+2. Each chapter must include a summary of 45-70 English words. Each chapter should center on one primary dramatic scene, plus only the brief connective passage needed to establish cause and continuity — let the story's own needs decide what form that transition takes, rather than imposing any fixed form on it. The summary should name the primary scene clearly — what moment anchors this chapter — not list a chain of separate events. Crucially, each summary must show how this chapter advances the spine: by the end of the chapter, the central dramatic question must be tighter than it was at the start. The seven summaries read in order should form a shaped arc — not seven self-contained vignettes, and not seven iterations of the same escalating pressure. Different chapters serve different functions (establishing, revealing prior cause, deepening understanding, letting weight settle, crisis, resolution); together they give the story texture, rhythm, and the sense that things existed and mattered before the story began.
 3. Chapters must connect logically and avoid repeating the same beat.
 4. Each chapter must include a title of 2-7 English words.
 5. Create 3-5 characters. IDs must be c1, c2, ...
@@ -142,7 +143,7 @@ Threads (hidden cause-lines):
 19. Thread content must be concrete and specific, never vague mood or decoration.
 
 Before finalizing, verify all four:
-1. Can you state the spine — the single dramatic question — in one sentence, and does each of the seven chapter summaries visibly tighten it? If any chapter does not move the question forward, that chapter is filler and must be redesigned.
+1. Can you state the spine in one sentence? Do the seven summaries together form a shaped arc — with chapters that establish, reveal prior cause, deepen, let weight settle, and resolve — rather than a linear slope of escalating pressure? A chapter that surfaces backstory or lets a moment settle is not filler. A chapter that neither advances the central question nor deepens the reader's understanding of the stakes is.
 2. Is the central dilemma genuinely two-sided? If one ending is emotionally superior to the other from the start, it is not a real dilemma — the blueprint needs rebalancing.
 3. Can a reasonable reader make a case for both the left-domain and right-domain endings?
 4. Does chapter 1 contain at least one concrete detail — not a genre convention, but a specific, particular moment — that a reader can recognize from their own experience?
@@ -170,11 +171,12 @@ ${seriesInstruction}${continuityInstruction}${continuityHardInstruction}
 5. 两个都能辩护的结局：左域结局和右域结局必须都是「有人会认为这才是对的」走向，而不是一圆满一悲剧。最理想的状态是：读者看完自己的结局后，想发给别人说「你看，我选的才是对的」——这种分歧感是社交传播的来源。
 6. 第一章先建立，再复杂化：第一章的首要职责，是让读者理解主角是谁、想要什么、为什么想要——这是后续一切张力的立足地基。不要用一个读者还无法理解其动机的高张力行为来开篇，那读起来就是「为了推进而推进」。先把这个人立起来，再用一个具体的、能让读者认出自己（或认出某个在乎的人）的细节制造投入。读者读完第一章，应当完全理解这个人为什么会在意接下来发生的事。第一章不需要抬高赌注——它需要让赌注变得可理解。脊柱的张力从第二章开始真正收紧。
 7. 规模与节奏——让故事适配它的篇幅：七章合计约 ${args.targetWordCount * 7} 字，相当于一篇精炼短篇的体量。规模指的是「装多少故事」，而不是「跨多少时间」：故事可以只发生在一夜，也可以横跨数年——真正要紧的是把事件量控制得足够轻，使这七章里情节能持续推进、同时每个主场景都有从容描绘的空间，整条弧线在字数预算内完整、不仓促地收束。事件贪多，会逼着每一场戏都退化成概述——那种又薄又赶的质感，正是单调的真正来源。少量事件写得深刻，永远好过大量事件走马观花。
+8. 故事结构——七章，七种不同职能：并非每一章的主要职责都是「推进下一个情节事件」。一个完整的弧线需要担任不同职能的章节共同构成：有的章让读者在危机还没有全面到来之前，先在主角的世界里驻留；有的章让一件早已种下的事浮出水面，重新框定读者对已知情节的理解；有的章让某个时刻沉淀下来，使赌注的重量在故事再次加速之前真正落地；有的章把两难困境收窄到最终无法回避的形态。读者应当感受到故事开始之前就已存在的重量——角色是带着历史来的，核心矛盾的种子在第一章之前就已种下，而某些章节的职责正是让读者感受这段历史的深度，而不只是送出下一个事件。一个每章都是「然后压力又增加了」的故事，无论单章写得多好，整体依然是单调的。先设计弧线的形状——哪些章建立、哪些章揭示前因、哪些章深化、哪些章沉淀、哪些章危机、哪些章收束——再填入场景。
 
 要求（极度重要）：
 0. 若存在套用的世界观设定，必须优先遵守本次勾选的世界基准；若存在勾选角色卡，必须把它们作为主要可用角色池，除非用户明确排除；若存在继承节点，必须自然接住前作结果，不得粗暴否定前作，也不得随意忘掉继承状态中的主要人物。
 1. 由于性能限制，严禁在 chapters 中生成章节全文。
-2. 每一章必须提供一个 summary（简短情节大纲，60-80字）。每章应以一个主要戏剧场景为核心，再加上建立因果与连续性所必需的简短衔接——具体用什么形态的过渡，交由情节本身的需要决定，不预设固定形式。summary 应清楚说明这一章以什么场景为核心——而不是罗列一串独立事件的序列。关键是：每条 summary 必须体现这一章如何推进脊柱——到这一章结束时，核心戏剧问题必须比开头更紧。七条 summary 顺着读下来，应该构成一条朝着两难困境不断上升的弧线，而不是七个各自独立的氛围片段。
+2. 每一章必须提供一个 summary（简短情节大纲，60-80字）。每章应以一个主要戏剧场景为核心，再加上建立因果与连续性所必需的简短衔接——具体用什么形态的过渡，交由情节本身的需要决定，不预设固定形式。summary 应清楚说明这一章以什么场景为核心——而不是罗列一串独立事件的序列。关键是：每条 summary 必须体现这一章如何推进脊柱——到这一章结束时，核心戏剧问题必须比开头更紧。七条 summary 顺着读下来，应该呈现出一条有形状的弧线——既不是七个各自独立的氛围片段，也不是把同一种「压力升级」重复七遍的单调斜面。不同章节担任不同职能（建立、揭示前因、深化理解、让重量沉淀、危机、收束），合起来才构成有层次、有呼吸感、让读者感受到故事开始之前就已存在之重量的整体。
 3. 每一章的情节必须对上下章节有适当联系且重点不重复。
 4. 每一章必须提供一个 title（6-12字），与该章大纲一致。
 5. 设定 3-5 个角色，ID 必须为 c1, c2 ...
@@ -197,7 +199,7 @@ ${seriesInstruction}${continuityInstruction}${continuityHardInstruction}
 20. 知因内容必须具体而特定，绝不能是含糊的气氛词或装饰。
 
 提交前自查以下四条：
-0. 能否用一句话说出脊柱——那个唯一的核心戏剧问题？七条章节 summary 是否每一条都让这个问题更紧？如果某一章没有把问题往前推，它就是填充章节，必须重新设计。
+0. 能否用一句话说出脊柱？七条章节 summary 合起来，是否构成了一条有形状的弧线——而不是把同一种「压力升级」线性重复七遍的斜面？揭示前因的章节、让重量沉淀的章节，不是填充；既没有推进核心问题、又没有深化读者对困境理解的章节，才是。
 1. 核心两难困境是否真的双向成立？如果其中一个结局从第一章起就在情感上明显优于另一个，这不是真正的两难——需要重新平衡蓝图。
 2. 左域结局和右域结局，一个理性的读者是否都能为之辩护？
 3. 第一章是否包含至少一个具体的特殊时刻——不是类型惯例，而是读者能从自身经历中认出的某个具体事物？
