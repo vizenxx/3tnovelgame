@@ -127,6 +127,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const defaultText = blueprint?.authorAssets?.defaultChapters?.[safeTargetChapterNum]?.text;
     const endingProto = blueprint?.authorAssets?.endingPrototypes;
     const prevChapterText = allChapters.find((chapter: any) => chapter.chapter_num === safeTargetChapterNum - 1)?.text || '';
+    const timeContext = String(
+      liveChapter?.time_context || blueprintChapter?.time_context || ''
+    ).trim();
 
     const worldStatePrompt = buildChapterWorldStatePrompt({
       worldState,
@@ -134,6 +137,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       prevChapterText,
       historyChapters,
       targetChapterNum: safeTargetChapterNum,
+      timeContext,
       language,
     });
     const prompt = `${generationLanguageInstruction(language)}\n\n${buildChapterContinuationPrompt({

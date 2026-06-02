@@ -39,13 +39,14 @@ const blueprintSchema = {
           chapter_num: { type: Type.INTEGER },
           title: { type: Type.STRING, description: '章节标题（6-12字）' },
           summary: { type: Type.STRING, description: '该章节的剧情要点大纲(20-40字)' },
+          time_context: { type: Type.STRING, description: '本章相对上一章的时间关系，如"紧接上章"、"数日后"、"数周后"、"数月后"，第1章填"故事开始"' },
           present_characters: {
             type: Type.ARRAY,
             items: { type: Type.STRING },
             description: '本章出场的角色ID列表',
           },
         },
-        required: ['chapter_num', 'title', 'summary', 'present_characters'],
+        required: ['chapter_num', 'title', 'summary', 'time_context', 'present_characters'],
       },
     },
     endings: {
@@ -145,6 +146,7 @@ function normalizeBlueprint(raw: any, requestedEndingMode: 'single' | 'dual' = '
         chapter_num: Math.min(7, Math.max(1, Number(chapter?.chapter_num) || index + 1)),
         title: String(chapter?.title || `第${index + 1}章`).trim(),
         summary: String(chapter?.summary || '命运仍在雾中等待成形。').trim(),
+        time_context: String(chapter?.time_context || (index === 0 ? '故事开始' : '紧接上章')).trim(),
         present_characters: Array.isArray(chapter?.present_characters)
           ? chapter.present_characters.map((id: any) => String(id)).filter(Boolean)
           : characters.map((character: any) => character.id).slice(0, 3),

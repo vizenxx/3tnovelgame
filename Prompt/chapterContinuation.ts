@@ -6,10 +6,16 @@ export function buildChapterWorldStatePrompt(args: {
   prevChapterText?: string;
   historyChapters?: any[];
   targetChapterNum: number;
+  timeContext?: string;
   language?: 'zh-CN' | 'en-US' | string;
 }) {
   const isEnglish = args.language === 'en-US';
   const prevText = String(args.prevChapterText || '').substring(0, 1000);
+  const timeNote = args.timeContext && args.timeContext !== '故事开始' && args.timeContext !== 'story opens'
+    ? (isEnglish
+        ? `Temporal position of this chapter: ${args.timeContext}. Open the chapter in a way that naturally reflects this time gap — do not begin as if this moment immediately follows the previous chapter's final scene.\n`
+        : `本章时间位置：${args.timeContext}。开篇应自然地体现这段时间间隔，不要像紧接上一章末尾那样直接继续。\n`)
+    : '';
   // Chapter-by-chapter generation is unhurried, so feed real prose from earlier chapters
   // (not just summaries) — this is what lets each new chapter match tone and stay coherent.
   const historySummaries = (args.historyChapters || [])
@@ -21,7 +27,7 @@ export function buildChapterWorldStatePrompt(args: {
 
   if (args.worldState?.canonical) {
     if (isEnglish) {
-      return `Story baseline (hard constraint, do not contradict):
+      return `${timeNote}Story baseline (hard constraint, do not contradict):
 Characters: ${JSON.stringify(args.worldState.canonical.characters || [])}
 Objects: ${JSON.stringify(args.worldState.canonical.objects || [])}
 Scenes: ${JSON.stringify(args.worldState.canonical.scenes || [])}
@@ -36,7 +42,7 @@ ${args.worldState.endingDirection && args.worldState.endingDirection !== 'neutra
 ${historySummaries ? `Earlier chapters (prose excerpts for tone and continuity):\n${historySummaries}\n` : ''}Previous chapter full text (chapter ${args.targetChapterNum - 1}, narrative and style anchor):
 ${prevText}`;
     }
-    return `故事基准（硬约束，不可违背）：
+    return `${timeNote}故事基准（硬约束，不可违背）：
 人物：${JSON.stringify(args.worldState.canonical.characters || [])}
 物件：${JSON.stringify(args.worldState.canonical.objects || [])}
 场景：${JSON.stringify(args.worldState.canonical.scenes || [])}
@@ -53,8 +59,8 @@ ${prevText}`;
   }
 
   return isEnglish
-    ? `${historySummaries ? `Earlier chapters (prose excerpts for tone and continuity):\n${historySummaries}\n\n` : ''}${prevText ? `Previous chapter full text (chapter ${args.targetChapterNum - 1}):\n${prevText}` : ''}`
-    : `${historySummaries ? `前情章节正文节选（用于衔接文体与连贯）：\n${historySummaries}\n\n` : ''}${prevText ? `直接前文（第 ${args.targetChapterNum - 1} 章完整正文）：\n${prevText}` : ''}`;
+    ? `${timeNote}${historySummaries ? `Earlier chapters (prose excerpts for tone and continuity):\n${historySummaries}\n\n` : ''}${prevText ? `Previous chapter full text (chapter ${args.targetChapterNum - 1}):\n${prevText}` : ''}`
+    : `${timeNote}${historySummaries ? `前情章节正文节选（用于衔接文体与连贯）：\n${historySummaries}\n\n` : ''}${prevText ? `直接前文（第 ${args.targetChapterNum - 1} 章完整正文）：\n${prevText}` : ''}`;
 }
 
 export function buildChapterContinuationPrompt(args: {
