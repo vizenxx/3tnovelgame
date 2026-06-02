@@ -6434,7 +6434,7 @@ export default function App() {
       // chapter 1 reveals chapter 2 with no wait. From there the background generator stays one
       // chapter ahead as the player advances. (The blueprint route's maxDuration is the real fix
       // for generation failures, so a 2-chapter prefetch is safe again.)
-      const prefetchChapters = [1, 2];
+      const prefetchChapters = [1];
       for (const chapterNum of prefetchChapters) {
         if (isChapterTextReady((data.chapters || []).find((chapter: any) => chapter.chapter_num === chapterNum))) {
           continue;
