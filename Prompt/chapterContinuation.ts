@@ -4,6 +4,7 @@ export function buildChapterWorldStatePrompt(args: {
   worldState?: any;
   endingProto?: any;
   prevChapterText?: string;
+  prevChapterSummary?: string;
   historyChapters?: any[];
   targetChapterNum: number;
   timeContext?: string;
@@ -11,6 +12,14 @@ export function buildChapterWorldStatePrompt(args: {
 }) {
   const isEnglish = args.language === 'en-US';
   const prevText = String(args.prevChapterText || '').substring(0, 1000);
+  // When prevChapterSummary is provided (time-jump chapters), use it as a compact stand-in for
+  // the full previous chapter text so the generator knows what happened without being anchored
+  // to the immediate prior scene.
+  const prevSummaryBlock = args.prevChapterSummary
+    ? (isEnglish
+        ? `Previous chapter (summary only — do not continue from its final scene): ${args.prevChapterSummary}`
+        : `上一章内容（仅摘要——请勿从其末尾场景直接续写）：${args.prevChapterSummary}`)
+    : '';
   const timeNote = args.timeContext && args.timeContext !== '故事开始' && args.timeContext !== 'story opens'
     ? (isEnglish
         ? `Temporal position of this chapter: ${args.timeContext}. Open the chapter in a way that naturally reflects this time gap — do not begin as if this moment immediately follows the previous chapter's final scene.\n`
@@ -39,8 +48,7 @@ ${(args.worldState.deltas || []).map((delta: any) => delta.characters_changed?.m
 Ending direction guide: ${args.worldState.endingDirection || 'neutral'}
 ${args.worldState.endingDirection && args.worldState.endingDirection !== 'neutral' && args.endingProto ? `Ending prototype reference:\n${String(args.endingProto[args.worldState.endingDirection] || '').substring(0, 400)}` : ''}
 
-${historySummaries ? `Earlier chapters (prose excerpts for tone and continuity):\n${historySummaries}\n` : ''}Previous chapter full text (chapter ${args.targetChapterNum - 1}, narrative and style anchor):
-${prevText}`;
+${historySummaries ? `Earlier chapters (prose excerpts for tone and continuity):\n${historySummaries}\n` : ''}${prevSummaryBlock || (prevText ? `Previous chapter full text (chapter ${args.targetChapterNum - 1}, narrative and style anchor):\n${prevText}` : '')}`;
     }
     return `${timeNote}故事基准（硬约束，不可违背）：
 人物：${JSON.stringify(args.worldState.canonical.characters || [])}
@@ -54,13 +62,12 @@ ${(args.worldState.deltas || []).map((delta: any) => delta.characters_changed?.m
 结尾方向引导：${args.worldState.endingDirection || 'neutral'}
 ${args.worldState.endingDirection && args.worldState.endingDirection !== 'neutral' && args.endingProto ? `结局原型参考：\n${String(args.endingProto[args.worldState.endingDirection] || '').substring(0, 400)}` : ''}
 
-${historySummaries ? `前情章节正文节选（用于衔接文体与连贯）：\n${historySummaries}\n` : ''}直接前文（第 ${args.targetChapterNum - 1} 章完整正文，叙事与文风锚点）：
-${prevText}`;
+${historySummaries ? `前情章节正文节选（用于衔接文体与连贯）：\n${historySummaries}\n` : ''}${prevSummaryBlock || (prevText ? `直接前文（第 ${args.targetChapterNum - 1} 章完整正文，叙事与文风锚点）：\n${prevText}` : '')}`;
   }
 
   return isEnglish
-    ? `${timeNote}${historySummaries ? `Earlier chapters (prose excerpts for tone and continuity):\n${historySummaries}\n\n` : ''}${prevText ? `Previous chapter full text (chapter ${args.targetChapterNum - 1}):\n${prevText}` : ''}`
-    : `${timeNote}${historySummaries ? `前情章节正文节选（用于衔接文体与连贯）：\n${historySummaries}\n\n` : ''}${prevText ? `直接前文（第 ${args.targetChapterNum - 1} 章完整正文）：\n${prevText}` : ''}`;
+    ? `${timeNote}${historySummaries ? `Earlier chapters (prose excerpts for tone and continuity):\n${historySummaries}\n\n` : ''}${prevSummaryBlock || (prevText ? `Previous chapter full text (chapter ${args.targetChapterNum - 1}):\n${prevText}` : '')}`
+    : `${timeNote}${historySummaries ? `前情章节正文节选（用于衔接文体与连贯）：\n${historySummaries}\n\n` : ''}${prevSummaryBlock || (prevText ? `直接前文（第 ${args.targetChapterNum - 1} 章完整正文）：\n${prevText}` : '')}`;
 }
 
 export function buildChapterContinuationPrompt(args: {

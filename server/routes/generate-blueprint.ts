@@ -39,7 +39,7 @@ const blueprintSchema = {
           chapter_num: { type: Type.INTEGER },
           title: { type: Type.STRING, description: '章节标题（6-12字）' },
           summary: { type: Type.STRING, description: '该章节的剧情要点大纲(20-40字)' },
-          time_context: { type: Type.STRING, description: '本章相对上一章的时间关系，如"紧接上章"、"数日后"、"数周后"、"数月后"，第1章填"故事开始"' },
+          time_context: { type: Type.STRING, description: '本章相对上一章的时间位置。第1章填"故事开始"。其余章节必须刻意安排变化——七章中"紧接上章"最多出现2次，其余应为"数日后""数周后""数月后"等具有跨度的表达，以建立故事的时间层次感' },
           present_characters: {
             type: Type.ARRAY,
             items: { type: Type.STRING },

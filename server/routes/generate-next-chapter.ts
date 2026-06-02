@@ -7,7 +7,7 @@ import { buildChapterContinuationPrompt, buildChapterWorldStatePrompt } from '..
 import { generationLanguageInstruction, normalizeGenerationLanguage } from '../_language.js';
 import { assertProseQuality, ensureParagraphing } from '../_generationQuality.js';
 
-export const maxDuration = 60;
+export const maxDuration = 90;
 
 function stripGeneratedMarkup(raw: unknown) {
   return String(raw ?? '')
@@ -126,15 +126,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const defaultText = blueprint?.authorAssets?.defaultChapters?.[safeTargetChapterNum]?.text;
     const endingProto = blueprint?.authorAssets?.endingPrototypes;
-    const prevChapterText = allChapters.find((chapter: any) => chapter.chapter_num === safeTargetChapterNum - 1)?.text || '';
+    const prevChapterEntry = allChapters.find((chapter: any) => chapter.chapter_num === safeTargetChapterNum - 1);
+    const prevChapterText = prevChapterEntry?.text || '';
+    const prevChapterSummary = String(prevChapterEntry?.summary || blueprintChapter?.summary || '').trim();
     const timeContext = String(
       liveChapter?.time_context || blueprintChapter?.time_context || ''
     ).trim();
-
+    // When a chapter has a temporal gap, don't anchor the generator to the previous chapter's
+    // final scene — it overwhelms the time_context note and causes "one day" flow. Send only the
+    // previous chapter's summary so the generator knows what happened without being pulled to
+    // continue from the last moment.
+    const isTimeJump = timeContext && timeContext !== '紧接上章' && timeContext !== 'immediately follows' && timeContext !== '故事开始' && timeContext !== 'story opens';
     const worldStatePrompt = buildChapterWorldStatePrompt({
       worldState,
       endingProto,
-      prevChapterText,
+      prevChapterText: isTimeJump ? '' : prevChapterText,
+      prevChapterSummary: isTimeJump ? prevChapterSummary : '',
       historyChapters,
       targetChapterNum: safeTargetChapterNum,
       timeContext,
