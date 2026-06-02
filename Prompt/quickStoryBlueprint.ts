@@ -103,25 +103,22 @@ Ending structure hard constraint: ${isSingleEnding
 Task: Create a complete blueprint for a seven-chapter interactive story.
 
 Narrative design principles:
-0. Spine — the single dramatic question (most important, decide this first): before anything else, fix the one dramatic question that drives the entire story — a question the reader carries from chapter 1 and that the ending answers. It is not the premise or the setting; it is the unresolved tension the reader is waiting to see settled (for example: "Will she give up the one thing that defines her to save him?"). State it in one sentence. Every chapter must visibly tighten this question — raise its stakes, narrow the options, or deepen what is at risk. If you cannot name the spine in one sentence, the story has no direction and must be redesigned. The protagonist must want something concrete and face a concrete obstacle to it; "vibes" and atmosphere are not a substitute for wanting.
-1. Two-sided dilemma, not good vs. evil: the protagonist must face a genuine conflict where both directions are defensible. The ideal design is two things both worth having that cannot coexist, or two losses where only one can be avoided. If the "right" choice is obvious, intervention becomes a formality.
-2. Personal stakes anchor: anchor the story to one person's irreversible decision — a relationship, identity, loyalty, or belonging that, once lost, cannot be recovered. Readers will intervene for a person; they will not intervene for a world.
-3. Intervention timing — the moment before something slips away: chapters that carry an intervention point should be set at the moment just before something precious quietly begins to slip away — while the protagonist has not yet noticed. The reader sees it; the protagonist does not. This information gap is what makes intervention feel urgent, not optional.
-4. Bless/curse symmetry: every interferable character must have a believable path where blessing them produces an unexpected complication, and cursing them produces unexpected clarity or growth. Both directions must make narrative sense. If only one direction is emotionally valid, the choice is fake.
-5. Two defensible endings: both the left-domain and right-domain endings must be something a reader could argue for. Ideally, players argue with each other about which ending is "really" correct — that disagreement is the engine of social sharing.
-6. Chapter 1 establishes before it complicates: the first chapter's job is to make the reader understand who the protagonist is, what they want, and why they want it — this is the ground on which every later tension stands. Do not open with a high-tension action whose motivation the reader cannot yet follow; that reads as "movement for its own sake". Establish the person first, then let one concrete, recognizable detail (from the reader's own life or someone they care about) create investment. A reader who finishes chapter 1 should fully understand why this person will care about what happens next. Chapter 1 does not need to raise stakes — it needs to make the stakes legible. The spine's tension begins tightening in earnest from chapter 2.
-7. Scope and pacing — fit the story to its length: the full story spans roughly ${args.targetWordCount * 7} words — a focused short story's worth of space. Scope is about how much story, not how much time: a story may unfold over a single night or span years — what matters is choosing an event load light enough that, within these seven chapters, the plot keeps advancing AND each primary scene has room to be rendered with care, and the whole arc resolves completely and unhurriedly inside the word budget. Cramming in more events than the length can carry forces every scene down into summary — that thin, rushed texture is the real source of monotony. Fewer events handled with depth always beats many events handled superficially.
-8. Story architecture — seven chapters, seven different functions: not every chapter's primary job is to push the next plot event. A complete arc needs chapters that serve different purposes: one that grounds the reader in the protagonist's world before the crisis fully intrudes; one that surfaces something long-buried and reframes what the reader already knew; one that lets a moment settle so its weight can register before the story accelerates again; one that narrows the dilemma to its final, irreducible form. The reader should feel the weight of what existed before the story begins — characters carry histories, the seeds of the central conflict were planted long before chapter 1, and some chapters earn their place by making us feel the depth of that history rather than simply delivering the next event. A story where every chapter is "and then the pressure increased" is monotonous regardless of how well each individual chapter is written. Design the shape of the arc first — which chapters establish, which reveal prior cause, which deepen, which let weight settle, which crisis, which resolve — then fill in the scenes.
+0. Spine first: before anything else, fix the single dramatic question the reader carries from chapter 1 to the ending. State it in one sentence. Every chapter must visibly tighten it. If you can't name it in one sentence, redesign. The protagonist must want something concrete and face a concrete obstacle — atmosphere is not a substitute for wanting.
+1. Two-sided dilemma: the protagonist faces a genuine conflict where both directions are defensible — two things worth having that can't coexist, or two losses where only one can be avoided. If the right choice is obvious, intervention is a formality.
+2. Personal stakes: anchor to one person's irreversible decision — a relationship, identity, or belonging that once lost can't be recovered. Readers intervene for a person, not a world.
+3. Intervention timing: set interferable chapters at the moment just before something precious slips away while the protagonist hasn't noticed. That information gap is what makes interference feel urgent.
+4. Bless/curse symmetry: every interferable character needs a believable path where blessing brings unexpected complication and cursing brings unexpected clarity. Both directions must be narratively valid.
+5. Two defensible endings: both left and right domain endings must be something a reader could argue for. Disagreement about which is correct is the goal.
+6. Chapter 1 establishes before it complicates: ground the reader in who the protagonist is, what they want, and why — before tension escalates. Stakes begin tightening from chapter 2.
+7. Scope: choose an event load that fits roughly ${args.targetWordCount * 7} words — light enough that each primary scene has room for depth and the arc resolves completely. Fewer events handled with depth beats many events summarized.
+8. Story architecture: not every chapter's job is to push the next plot event. Design chapters that serve different functions — establishing, revealing prior cause, deepening understanding, letting weight settle, crisis, resolution. Characters carry histories; the seeds of conflict were planted before chapter 1. Seven iterations of “pressure increased” is monotonous regardless of individual chapter quality.
 
-English-market style requirements:
-1. Write as native English interactive fiction, not translated Chinese prose.
-2. Use natural English names, idiomatic titles, and genre conventions familiar to English readers.
-3. Avoid Chinese book-title punctuation, literal cultivation/wuxia terms, or “fate domain” jargon unless explicitly requested by the premise.
+Write as native English interactive fiction — natural names, idiomatic language, no translated Chinese conventions.
 
 Output requirements:
 0. Context compliance: if an applied world setting exists, obey its selected baseline rules before local plot convenience; if selected character cards exist, keep them as major available cast unless the request explicitly excludes them; if a continuation node exists, make this a natural sequel opening without invalidating the previous result; if a continuation node contains characterStates or inherited major characters, keep those characters active by default unless the author request explicitly retires them.
 1. For performance reasons, never write full chapter prose in chapters.
-2. Each chapter must include a summary of 45-70 English words. Each chapter should center on one primary dramatic scene, plus only the brief connective passage needed to establish cause and continuity — let the story's own needs decide what form that transition takes, rather than imposing any fixed form on it. The summary should name the primary scene clearly — what moment anchors this chapter — not list a chain of separate events. Crucially, each summary must show how this chapter advances the spine: by the end of the chapter, the central dramatic question must be tighter than it was at the start. The seven summaries read in order should form a shaped arc — not seven self-contained vignettes, and not seven iterations of the same escalating pressure. Different chapters serve different functions (establishing, revealing prior cause, deepening understanding, letting weight settle, crisis, resolution); together they give the story texture, rhythm, and the sense that things existed and mattered before the story began.
+2. Each chapter needs a summary of 45-70 words naming its primary dramatic scene and how it serves the arc (establishing, revealing prior cause, deepening, settling weight, crisis, or resolution) — not a chain of events. The seven summaries together must form a shaped arc, not seven escalating pressure steps.
 3. Chapters must connect logically and avoid repeating the same beat.
 4. Each chapter must include a title of 2-7 English words.
 5. Create 3-5 characters. IDs must be c1, c2, ...
@@ -142,12 +139,6 @@ Threads (hidden cause-lines):
 18. Reveal types: most 'chapter_pristine' (revealChapter 2-7, surfaced only when the player reaches that chapter WITHOUT having interfered at or before it — interfering changes the original cause, so the thread simply never surfaces), some 'branch' (revealBranchId bound to an existing branch id), some 'ending' (revealEndingId = left/right/default).
 19. Thread content must be concrete and specific, never vague mood or decoration.
 
-Before finalizing, verify all four:
-1. Can you state the spine in one sentence? Do the seven summaries together form a shaped arc — with chapters that establish, reveal prior cause, deepen, let weight settle, and resolve — rather than a linear slope of escalating pressure? A chapter that surfaces backstory or lets a moment settle is not filler. A chapter that neither advances the central question nor deepens the reader's understanding of the stakes is.
-2. Is the central dilemma genuinely two-sided? If one ending is emotionally superior to the other from the start, it is not a real dilemma — the blueprint needs rebalancing.
-3. Can a reasonable reader make a case for both the left-domain and right-domain endings?
-4. Does chapter 1 contain at least one concrete detail — not a genre convention, but a specific, particular moment — that a reader can recognize from their own experience?
-
 Return strict JSON only. Do not include metadata. Reference chapter length: ${args.targetWordCount} words.`;
   }
 
@@ -163,20 +154,20 @@ ${seriesInstruction}${continuityInstruction}${continuityHardInstruction}
 任务：生成一个完整的首篇章（7章）的故事蓝图骨架。
 
 叙事设计原则：
-0. 脊柱——唯一的核心戏剧问题（最重要，最先确定）：在动笔之前，先定下贯穿整个故事的那一个核心戏剧问题——读者从第一章就揣着、由结局来回答的问题。它不是故事前提，也不是世界观设定，而是读者一直等着看它如何收场的那股未解张力（例如：「她会不会舍弃那个定义了自己的东西，去救他？」）。用一句话把它说清楚。每一章都必须让这个问题更紧——抬高赌注、收窄选择，或加深受威胁的东西。如果你无法用一句话说出这条脊柱，这个故事就没有方向，必须重新设计。主角必须想要一个具体的东西，并面对一个具体的阻碍；氛围和情绪渲染替代不了「想要」。
-1. 双向两难困境，而非善恶对立：主角必须面对一个真正的双向困境，两条路都有说得过去的理由。最理想的设计是：两件都值得追求的事无法同时拥有，或两种代价都难以承受只能选一种。如果「正确答案」一眼就能看出，干涉就沦为走程序。
-2. 个人尺度的关键性：把故事锚定到某一个人身上不可逆的抉择——一段关系、一种身份、一种忠诚、一种归属，一旦失去就找不回来。读者会为一个人伸手，不会为一个世界伸手。
-3. 干涉点的时机——珍贵之物悄悄滑走的前一刻：每个承载干涉机会的章节，都应设置在某件珍贵的事情正在悄悄滑走、主角还没意识到的前一刻。读者看见了，主角没看见——这种信息差制造的焦虑，才是让人觉得干涉紧迫而不可缺席的真正来源。
-4. 庇佑/磨难的双向说服力：每个可干涉的角色，都必须同时具备两种可信的走向：给他顺风，可能带来意外的连锁代价；给他逆境，可能让他看清本来看不清的事。两个方向都要有叙事说服力。如果只有一个方向在情感上说得通，这个选择就是假选择。
-5. 两个都能辩护的结局：左域结局和右域结局必须都是「有人会认为这才是对的」走向，而不是一圆满一悲剧。最理想的状态是：读者看完自己的结局后，想发给别人说「你看，我选的才是对的」——这种分歧感是社交传播的来源。
-6. 第一章先建立，再复杂化：第一章的首要职责，是让读者理解主角是谁、想要什么、为什么想要——这是后续一切张力的立足地基。不要用一个读者还无法理解其动机的高张力行为来开篇，那读起来就是「为了推进而推进」。先把这个人立起来，再用一个具体的、能让读者认出自己（或认出某个在乎的人）的细节制造投入。读者读完第一章，应当完全理解这个人为什么会在意接下来发生的事。第一章不需要抬高赌注——它需要让赌注变得可理解。脊柱的张力从第二章开始真正收紧。
-7. 规模与节奏——让故事适配它的篇幅：七章合计约 ${args.targetWordCount * 7} 字，相当于一篇精炼短篇的体量。规模指的是「装多少故事」，而不是「跨多少时间」：故事可以只发生在一夜，也可以横跨数年——真正要紧的是把事件量控制得足够轻，使这七章里情节能持续推进、同时每个主场景都有从容描绘的空间，整条弧线在字数预算内完整、不仓促地收束。事件贪多，会逼着每一场戏都退化成概述——那种又薄又赶的质感，正是单调的真正来源。少量事件写得深刻，永远好过大量事件走马观花。
-8. 故事结构——七章，七种不同职能：并非每一章的主要职责都是「推进下一个情节事件」。一个完整的弧线需要担任不同职能的章节共同构成：有的章让读者在危机还没有全面到来之前，先在主角的世界里驻留；有的章让一件早已种下的事浮出水面，重新框定读者对已知情节的理解；有的章让某个时刻沉淀下来，使赌注的重量在故事再次加速之前真正落地；有的章把两难困境收窄到最终无法回避的形态。读者应当感受到故事开始之前就已存在的重量——角色是带着历史来的，核心矛盾的种子在第一章之前就已种下，而某些章节的职责正是让读者感受这段历史的深度，而不只是送出下一个事件。一个每章都是「然后压力又增加了」的故事，无论单章写得多好，整体依然是单调的。先设计弧线的形状——哪些章建立、哪些章揭示前因、哪些章深化、哪些章沉淀、哪些章危机、哪些章收束——再填入场景。
+0. 先定脊柱：用一句话说出贯穿全篇的唯一核心戏剧问题——读者从第一章就揣着、由结局回答的那股张力。每章必须让它更紧。说不出来就重新设计。主角要有具体想要的东西和具体阻碍，氛围替代不了「想要」。
+1. 真正的双向两难：两条路都有说得通的理由——两件都值得的事无法并存，或两种代价只能选一种。正确答案显而易见，干涉就沦为走程序。
+2. 个人尺度：锚定到某个人不可逆的抉择——关系、身份、忠诚，失去就找不回。读者为一个人伸手，不为一个世界。
+3. 干涉时机：承载干涉的章节设在珍贵之物悄悄滑走、主角还未察觉的前一刻。读者看见了，主角没看见——这种信息差让干涉变得紧迫。
+4. 庇佑/磨难双向成立：每个可干涉的角色，顺风可能带来意外代价，逆境可能带来意外清明。两个方向都要有叙事说服力。
+5. 两个都能辩护的结局：左域和右域结局都应是「有人认为这才对」的走向，读完后想发给别人辩论。
+6. 第一章先建立再复杂化：先让读者理解主角是谁、想要什么、为什么——这是后续张力的地基。张力从第二章开始收紧。
+7. 规模适配篇幅：七章合计约 ${args.targetWordCount * 7} 字。选择事件量足够轻、使每个主场景都有深度空间且弧线完整收束的规模。事件贪多会把每场戏逼成概述，正是单调的来源。
+8. 七章各有职能：并非每章都是「推进下一事件」。完整弧线需要：建立主角世界、揭示早已种下的前因、深化对困境的理解、让重量沉淀、危机、收束。角色带着历史来，矛盾种子在第一章前就已种下——某些章的职责是让读者感受这段历史的深度。每章都是「压力又增加了」，整体必然单调。
 
 要求（极度重要）：
 0. 若存在套用的世界观设定，必须优先遵守本次勾选的世界基准；若存在勾选角色卡，必须把它们作为主要可用角色池，除非用户明确排除；若存在继承节点，必须自然接住前作结果，不得粗暴否定前作，也不得随意忘掉继承状态中的主要人物。
 1. 由于性能限制，严禁在 chapters 中生成章节全文。
-2. 每一章必须提供一个 summary（简短情节大纲，60-80字）。每章应以一个主要戏剧场景为核心，再加上建立因果与连续性所必需的简短衔接——具体用什么形态的过渡，交由情节本身的需要决定，不预设固定形式。summary 应清楚说明这一章以什么场景为核心——而不是罗列一串独立事件的序列。关键是：每条 summary 必须体现这一章如何推进脊柱——到这一章结束时，核心戏剧问题必须比开头更紧。七条 summary 顺着读下来，应该呈现出一条有形状的弧线——既不是七个各自独立的氛围片段，也不是把同一种「压力升级」重复七遍的单调斜面。不同章节担任不同职能（建立、揭示前因、深化理解、让重量沉淀、危机、收束），合起来才构成有层次、有呼吸感、让读者感受到故事开始之前就已存在之重量的整体。
+2. 每章必须提供 summary（60-80字），说明本章的主要戏剧场景及其在弧线中的职能（建立/揭示前因/深化/沉淀/危机/收束），而非罗列事件序列。七条 summary 顺读下来应呈现有形状的弧线，而不是七遍「压力升级」的斜面。
 3. 每一章的情节必须对上下章节有适当联系且重点不重复。
 4. 每一章必须提供一个 title（6-12字），与该章大纲一致。
 5. 设定 3-5 个角色，ID 必须为 c1, c2 ...
@@ -197,12 +188,6 @@ ${seriesInstruction}${continuityInstruction}${continuityHardInstruction}
 18. 每条知因都必须锚定在「揭露它的那段正文」里。无论由什么揭露——原状态章节、绑定的支线，还是结局——那段正文本身就必须提及或展示这个起因（哪怕只是一笔带过）；知因记录只是正文已经触及之事的更完整版本。绝不允许写一条「揭露它的正文里却只字未提」的知因。
 19. 揭露类型：多数用 'chapter_pristine'（revealChapter 2-7，仅当玩家在该章及之前从未干涉、以原始状态读到该章时才揭露——干涉会改变原本的起因，于是这条知因便永不浮现）；一部分用 'branch'（revealBranchId 绑定已有支线 id）；一部分用 'ending'（revealEndingId 为 left/right/default）。
 20. 知因内容必须具体而特定，绝不能是含糊的气氛词或装饰。
-
-提交前自查以下四条：
-0. 能否用一句话说出脊柱？七条章节 summary 合起来，是否构成了一条有形状的弧线——而不是把同一种「压力升级」线性重复七遍的斜面？揭示前因的章节、让重量沉淀的章节，不是填充；既没有推进核心问题、又没有深化读者对困境理解的章节，才是。
-1. 核心两难困境是否真的双向成立？如果其中一个结局从第一章起就在情感上明显优于另一个，这不是真正的两难——需要重新平衡蓝图。
-2. 左域结局和右域结局，一个理性的读者是否都能为之辩护？
-3. 第一章是否包含至少一个具体的特殊时刻——不是类型惯例，而是读者能从自身经历中认出的某个具体事物？
 
 请严格按 JSON 输出，不要包含元数据。字数参考值：${args.targetWordCount}。`;
 }
