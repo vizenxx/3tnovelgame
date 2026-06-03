@@ -104,7 +104,7 @@ ${JSON.stringify({
   const originalChapterSample = String(args.originalChapterText || '').trim().substring(0, 1000);
 
   if (isEnglish) {
-    return `You are an English-language interactive fiction engine. The player has interfered with fate in chapter ${args.safeChapterNum}.
+    return `You are the author of this story. The player has intervened in fate — and this intervention asks you, as the author, to reconsider chapter ${args.safeChapterNum}. Your task is not to overwrite arbitrarily, but to find the natural consequences of this change and let them flow through the prose as if they had always been going to happen this way.
 
 Character ID map:
 ${args.blueprint.characters.map((character: any) => `${character.name} (ID: ${character.id})`).join('\n')}
@@ -147,15 +147,15 @@ Requirements:
 ${wordTargetLines || `Chapter ${rewriteRange.startChapter}: target ${args.targetWordCount} words; ideal ${Math.round(args.targetWordCount * 0.93)}-${Math.round(args.targetWordCount * 1.07)}; hard range ${Math.round(args.targetWordCount * 0.85)}-${Math.round(args.targetWordCount * 1.15)}.`}
 3. Preserve unaffected passages, scene rhythm, and paragraph proportions whenever possible. Do not rewrite for novelty. Change only what the ripple, branch, character state, or continuity requires.
 4. Even for a large ripple, keep the original chapter's necessary setup and stable events unless the new branch/ending direction directly contradicts them.
-5. Each chapter must be split into 6-10 paragraphs, each 2-4 sentences, separated by two newline characters.
+5. Let paragraph length follow the weight of the moment — a single sentence for a sharp cut, longer passages for dwelling. The variation in rhythm is part of the prose's meaning. Separate paragraphs with two newline characters.
 6. Prose must be plain text. Never output HTML, Markdown, XML, code tags, <mark>, </mark>, or highlight brackets.
 7. All changes caused by this intervention must be written naturally into the story. Highlighting is computed by the frontend by diffing against the previous text — do not add any tags or markers.
 8. Even if no branch triggers, the ripple range must contain a perceptible shift and must not simply copy old prose.
-10. Style matching (hard requirement): mirror the original chapter's writing style precisely — sentence length and complexity, paragraph rhythm and density, dialogue-to-narration ratio, narrative distance, and vocabulary register. The rewritten chapter must feel written by the same author as the original. Do not introduce a noticeably different prose voice.
+10. Carry forward the original chapter's voice — its sentence rhythm, narrative distance, dialogue-to-narration ratio, vocabulary register. The rewritten chapter must feel written by the same author. Where the original had depth and texture, preserve and extend it. Where it was thinner than it should have been, you may deepen it while keeping the same voice — don't inherit its weaknesses.
 
 Return strict JSON only. Do not include metadata.`;
   }
-  return `你是一个互动小说引擎。玩家在第 ${args.safeChapterNum} 章进行了一次命运干涉。
+  return `你是这个故事的作者。玩家干涉了命运的走向，这要求你以作者的视角重新审视第 ${args.safeChapterNum} 章——不是凭空改写，而是找到这次改变的自然因果，让它渗透进叙事，仿佛它本来就会这样发生。
 ${originalChapterSample ? `
 第 ${args.safeChapterNum} 章原文（文风与段落节奏样本——即本次被重写的章节）：
 ${originalChapterSample}${String(args.originalChapterText || '').length > 1000 ? '\n……（截断）' : ''}
@@ -199,11 +199,11 @@ ${(!args.worldStatePrompt.includes('故事基准') && args.endingProto) ? `作�
 ${wordTargetLines || `第${rewriteRange.startChapter}章：目标 ${args.targetWordCount} 字；理想 ${Math.round(args.targetWordCount * 0.93)}-${Math.round(args.targetWordCount * 1.07)}；硬性范围 ${Math.round(args.targetWordCount * 0.85)}-${Math.round(args.targetWordCount * 1.15)}。`}
 3. 尽量保留未受影响的段落、场景节奏、铺垫和稳定事件，不要为了“看起来重写”而重写；只调整涟漪、支线、角色状态、结局导向或连续性真正需要改变的部分。
 4. 即使是大涟漪，也要保留原章节中仍然成立的必要铺垫和稳定事件；只有与新支线/新结局导向直接冲突的内容才需要改写、删减或补强。
-5. 每一章的正文必须拆成 6-10 段，每段 2-4 句，段落之间用两个换行符。
+5. 段落长短由时刻的重量决定——一个清醒的转折可以是一句话，一段在感受里游走的叙述可以更长。节奏的变化本身是意义的一部分。段落之间用两个换行符分隔。
 6. 正文必须是纯文本叙事，严禁输出 HTML、Markdown、XML 或任何代码式标签；不要使用 <mark>、</mark>、【高亮】 等标记包住变化内容。
 7. 所有因本次干涉直接或间接导致的变化，必须自然写进叙事本身；高亮由前端通过与旧正文做差异比对自动计算，不要把任何标记写进正文。
 8. 即使未触发支线，也必须让涟漪范围内的章节出现可感知偏移，不能复制旧正文。
-10. 文风模仿（硬性要求）：必须精准模仿并延续上方原章节的文风特征——句子长短与复杂度、段落节奏与密度、对话/内心独白比例、叙事距离（旁观者/沉浸/第一视角等）、词汇风格（书面/口语/诗意）。干涉后的正文必须让读者感到仍是同一位作者的笔触，不应产生出戏感。
+10. 延续原章节的声音：句子节奏、叙事距离、对话与内心独白的比例、词汇风格——这些都要保持，使重写后的章节让读者感到仍是同一位作者的笔触。原文有深度和质地的地方保留并延伸；原文显得薄浅的地方，可以在保持声音的前提下加深——不要继承原文的局限。
 
 请严格按 JSON 输出，不要包含元数据。`;
 }
