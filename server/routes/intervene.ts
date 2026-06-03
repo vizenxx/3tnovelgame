@@ -316,7 +316,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const injected = activeInjectedBranches.length > 0
       ? activeInjectedBranches
       : null;
+    const rewriteEndChapter = Math.min(7, Math.max(safeChapterNum, asNumber(endingMechanics.rewriteRange?.endChapter, 7)));
+    const rippleReason = String(endingMechanics.rewriteRange?.reason || 'local');
+    const chapterWordTargets: Record<number, number> = {};
+    safeChapters
+      .filter((chapter: any) => chapter.chapter_num >= safeChapterNum && chapter.chapter_num <= rewriteEndChapter)
+      .forEach((chapter: any) => {
+        const originalUnits = countProseUnits(String(chapter?.text || ''));
+        chapterWordTargets[chapter.chapter_num] = originalUnits > 120 ? originalUnits : safeTargetWordCount;
+      });
+
+    // Boundary anchors (uniform ripple principle):
+    //  - entry anchor: chapter N-1 full text — where the rewrite must connect from
+    //  - exit anchor: the first UNCHANGED chapter after the ripple region (endChapter+1) — what
+    //    the rewrite/re-outline must reconnect into. None when the ripple reaches chapter 7
+    //    (the ending prototype is the landing reference instead).
+    //  - earlier chapters (1..N-2): summaries only, for plot continuity, never full prose.
     const prevChapterText = safeChapters.find((chapter: any) => chapter.chapter_num === safeChapterNum - 1)?.text || '';
+    const exitChapterNum = rewriteEndChapter < 7 ? rewriteEndChapter + 1 : 0;
+    const exitChapterText = exitChapterNum
+      ? (safeChapters.find((c: any) => c.chapter_num === exitChapterNum)?.text || '')
+      : '';
+    const earlierSummaries = safeChapters
+      .filter((c: any) => c.chapter_num < safeChapterNum - 1)
+      .map((c: any) => ({ chapter_num: c.chapter_num, summary: c.summary || String(c.text || '').slice(0, 80) }));
 
     const worldStatePrompt = buildInterventionWorldStatePrompt({
       blueprint,
@@ -325,17 +348,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       safeChapters,
       safeChapterNum,
       prevChapterText,
+      earlierSummaries,
       language,
     });
-
-    const rewriteEndChapter = Math.min(7, Math.max(safeChapterNum, asNumber(endingMechanics.rewriteRange?.endChapter, 7)));
-    const chapterWordTargets: Record<number, number> = {};
-    safeChapters
-      .filter((chapter: any) => chapter.chapter_num >= safeChapterNum && chapter.chapter_num <= rewriteEndChapter)
-      .forEach((chapter: any) => {
-        const originalUnits = countProseUnits(String(chapter?.text || ''));
-        chapterWordTargets[chapter.chapter_num] = originalUnits > 120 ? originalUnits : safeTargetWordCount;
-      });
 
     const originalChapterText = safeChapters.find((c: any) => c.chapter_num === safeChapterNum)?.text || '';
 
@@ -355,6 +370,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       targetWordCount: safeTargetWordCount,
       chapterWordTargets,
       originalChapterText,
+      rippleReason,
+      rewriteEndChapter,
+      exitChapterNum,
+      exitChapterText,
       language,
     })}`;
 

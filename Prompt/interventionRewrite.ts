@@ -5,6 +5,7 @@ export function buildInterventionWorldStatePrompt(args: {
   safeChapters: any[];
   safeChapterNum: number;
   prevChapterText?: string;
+  earlierSummaries?: Array<{ chapter_num: number; summary: string }>;
   language?: 'zh-CN' | 'en-US' | string;
 }) {
   const isEnglish = args.language === 'en-US';
@@ -45,9 +46,28 @@ ${args.worldState.endingDirection && args.worldState.endingDirection !== 'neutra
 ${String(args.prevChapterText || '').substring(0, 400)}`;
   }
 
+  // No canonical world-state yet (quick-generated story): instead of dumping every prior
+  // chapter's full prose, send earlier chapters as plot summaries (continuity) plus only the
+  // immediately previous chapter in full (the entry anchor for connection and style).
+  const earlierLines = (args.earlierSummaries || [])
+    .map((item) => isEnglish ? `Chapter ${item.chapter_num}: ${item.summary}` : `第${item.chapter_num}章：${item.summary}`)
+    .join('\n');
+  const prevFull = String(args.prevChapterText || '').substring(0, 1000);
   return isEnglish
-    ? `Previous plot recap: ${args.safeChapters.filter((chapter: any) => chapter.chapter_num < args.safeChapterNum).map((chapter: any) => `Chapter ${chapter.chapter_num}: ${chapter.text}`).join('\n\n')}`
-    : `前置剧情摘要：${args.safeChapters.filter((chapter: any) => chapter.chapter_num < args.safeChapterNum).map((chapter: any) => `第${chapter.chapter_num}章：${chapter.text}`).join('\n\n')}`;
+    ? `Story premise: ${args.blueprint.main_axis || '(not provided)'}
+
+Earlier chapters (plot summaries, for continuity):
+${earlierLines || '(none)'}
+
+Immediately previous chapter (chapter ${args.safeChapterNum - 1}, full text — connection and style anchor):
+${prevFull}`
+    : `故事主轴：${args.blueprint.main_axis || '（未提供）'}
+
+前置章节（情节概要，用于连贯）：
+${earlierLines || '（无）'}
+
+直接前文（第 ${args.safeChapterNum - 1} 章完整正文，衔接与文风锚点）：
+${prevFull}`;
 }
 
 export function buildInterventionRewritePrompt(args: {
@@ -67,12 +87,38 @@ export function buildInterventionRewritePrompt(args: {
   chapterWordTargets?: Record<number, number>;
   /** Full text of the chapter being rewritten — used as style anchor */
   originalChapterText?: string;
+  rippleReason?: string;
+  rewriteEndChapter?: number;
+  exitChapterNum?: number;
+  exitChapterText?: string;
   language?: 'zh-CN' | 'en-US' | string;
 }) {
   const isSingleEnding = args.blueprint?.endingMode === 'single' || args.blueprint?.ending_mode === 'single';
   const mechanics = args.endingMechanics || {};
   const rewriteRange = mechanics.rewriteRange || { startChapter: args.safeChapterNum, endChapter: 7, reason: 'local' };
   const isEnglish = args.language === 'en-US';
+  const N = args.safeChapterNum;
+  const reason = args.rippleReason || rewriteRange.reason || 'local';
+  const endCh = args.rewriteEndChapter || rewriteRange.endChapter || 7;
+  const exitNum = args.exitChapterNum || 0;
+  const exitText = String(args.exitChapterText || '').substring(0, 1000);
+  const rippleTask = (() => {
+    if (isEnglish) {
+      if (reason === 'local') return `RIPPLE SCOPE — LOCAL: a small, self-contained change confined to chapter ${N}. Locate the 1-3 passages the intervention directly affects and revise only those; reproduce the rest of the chapter faithfully (do not rewrite untouched passages for novelty). Return the full chapter ${N} text. Do NOT produce future_outlines — later chapters are untouched.`;
+      if (reason === 'small_branch') return `RIPPLE SCOPE — SMALL BRANCH: a minor branch event surfaces in chapter ${N}. Weave in the scene this branch requires, changing only what that scene needs and keeping the rest of the chapter intact. Return the full chapter ${N} text. Do NOT produce future_outlines.`;
+      if (reason === 'medium_branch') return `RIPPLE SCOPE — MEDIUM BRANCH: a branch reshapes chapters ${N}–${endCh}. Rewrite chapter ${N} in full to introduce it, then give future_outlines for chapters ${N + 1}–${endCh} that flow naturally AND reconnect into chapter ${exitNum} (its full text is the landing anchor below — your re-outlined chapters must lead into it with no contradiction). Do not touch the story beyond chapter ${endCh}. This ripple does NOT change the ending — do not steer toward a different finale.`;
+      return `RIPPLE SCOPE — MAJOR: this ripple redirects the story toward a changed ending. Rewrite chapter ${N} in full to begin the new trajectory, then give future_outlines for chapters ${N + 1}–7 that re-plan the remaining arc so it arrives naturally at the new ending direction (ending prototype provided above). Keep the world's core rules and established facts intact even as the direction shifts.`;
+    }
+    if (reason === 'local') return `涟漪范围——局部：仅限第 ${N} 章的小幅自洽改动。定位本次干涉直接影响的 1-3 处段落，只改这几处，其余段落忠实保留（不要为了「看起来重写」去动没受影响的部分）。返回第 ${N} 章完整正文。不要产出 future_outlines——后续章节不受影响。`;
+    if (reason === 'small_branch') return `涟漪范围——小支线：第 ${N} 章浮现一个小支线事件。织入这个支线所需的场景，只改这个场景需要改的，其余章节内容保持原样。返回第 ${N} 章完整正文。不要产出 future_outlines。`;
+    if (reason === 'medium_branch') return `涟漪范围——中支线：一个支线重塑第 ${N}–${endCh} 章。把第 ${N} 章完整重写以引入它，再为第 ${N + 1}–${endCh} 章给出 future_outlines，使其自然推进并重新汇回第 ${exitNum} 章（其完整正文见下方落地锚点——你重拟的章节走向必须顺接进它、不得矛盾）。不要改动第 ${endCh} 章之后的故事。本涟漪不改变结局——不要把情节导向不同的终局。`;
+    return `涟漪范围——重大：本涟漪将故事导向已改变的结局。把第 ${N} 章完整重写以开启新走向，再为第 ${N + 1}–7 章给出 future_outlines，重新规划剩余弧线，使其自然抵达新的结局方向（结局原型见上方）。即使方向改变，也必须保持世界的底层规则与既定事实不被违背。`;
+  })();
+  const exitAnchorBlock = exitNum && exitText
+    ? (isEnglish
+        ? `\nLANDING ANCHOR — chapter ${exitNum} (this chapter is NOT changing; your rewritten/re-outlined region must lead into it naturally, contradicting nothing in it):\n${exitText}\n`
+        : `\n落地锚点——第 ${exitNum} 章（此章不变；你重写/重拟的区间必须自然汇入它，不与其中任何内容矛盾）：\n${exitText}\n`)
+    : '';
   const seriesContext = args.blueprint?.seriesContext;
   const continuityNode = args.blueprint?.continuityNode;
   const wordTargetLines = Object.entries(args.chapterWordTargets || {})
@@ -118,6 +164,8 @@ Fate math result:
 - Ending domain: ${mechanics.endingDomain || 'middle'}; strongest guided ending: ${mechanics.selectedEndingId || 'default'}
 - Ripple rewrite range: chapter ${rewriteRange.startChapter} to chapter ${rewriteRange.endChapter}; reason: ${rewriteRange.reason}
 
+${rippleTask}
+${exitAnchorBlock}
 Chapter outline overview:
 ${args.safeChapters.map((chapter: any) => `Chapter ${chapter.chapter_num}: ${chapter.summary || String(chapter.text || '').substring(0, 80)}`).join('\n')}
 
@@ -142,7 +190,7 @@ Invisible intervention writing rules:
 8. Dialogue must use quotation marks. In Chinese: "……"; in English: "……". Never embed spoken words as indirect speech without quotation marks.
 
 Requirements:
-1. Batch generation rule: return the full rewritten text for chapter ${args.safeChapterNum} only. If the ripple range reaches later chapters, do not write their full prose now; return them in future_outlines with chapter_num, summary, reason, and word_target so the app can generate them one by one in the background.
+1. Follow the RIPPLE SCOPE above: it decides how much of chapter ${args.safeChapterNum} to change and whether to produce future_outlines. Always return the full prose of chapter ${args.safeChapterNum}. When future_outlines are called for, never write later chapters' full prose now — each future_outlines item carries chapter_num, summary, reason, word_target, and the app generates that prose later.
 2. Word count is a hard quality requirement. Use these per-chapter targets based on the original chapter length:
 ${wordTargetLines || `Chapter ${rewriteRange.startChapter}: target ${args.targetWordCount} words; ideal ${Math.round(args.targetWordCount * 0.93)}-${Math.round(args.targetWordCount * 1.07)}; hard range ${Math.round(args.targetWordCount * 0.85)}-${Math.round(args.targetWordCount * 1.15)}.`}
 3. Preserve unaffected passages, scene rhythm, and paragraph proportions whenever possible. Do not rewrite for novelty. Change only what the ripple, branch, character state, or continuity requires.
@@ -173,6 +221,8 @@ ${seriesBlock}
 - 结局域：${mechanics.endingDomain || 'middle'}；最高导向结局：${mechanics.selectedEndingId || 'default'}
 - 涟漪重写范围：第 ${rewriteRange.startChapter} 章到第 ${rewriteRange.endChapter} 章；原因：${rewriteRange.reason}
 
+${rippleTask}
+${exitAnchorBlock}
 各章情节概况（大纲）：
 ${args.safeChapters.map((chapter: any) => `第${chapter.chapter_num}章：${chapter.summary || String(chapter.text || '').substring(0, 80)}`).join('\n')}
 
@@ -194,7 +244,7 @@ ${(!args.worldStatePrompt.includes('故事基准') && args.endingProto) ? `作�
 8. 对话必须使用引号标注。中文使用"……"；英文使用"……"。严禁把人物说的话以间接引语的方式嵌入叙述句中而不加引号。
 
 要求：
-1. 分批生成规则：本次只返回第 ${args.safeChapterNum} 章的完整重写正文。如果涟漪范围影响到后续章节，不要现在写它们的完整正文；请放到 future_outlines，每项包含 chapter_num、summary、reason、word_target，让 App 在后台逐章生成。
+1. 遵循上方「涟漪范围」：它决定第 ${args.safeChapterNum} 章要改多少、以及是否产出 future_outlines。无论哪种情况，都必须返回第 ${args.safeChapterNum} 章的完整正文。当需要 future_outlines 时，绝不现在写后续章节的完整正文；每项 future_outlines 含 chapter_num、summary、reason、word_target，由 App 之后逐章生成那些正文。
 2. 字数是硬性质量要求。每个被重写章节都必须参考原章节字数，尽量维持相近长度：
 ${wordTargetLines || `第${rewriteRange.startChapter}章：目标 ${args.targetWordCount} 字；理想 ${Math.round(args.targetWordCount * 0.93)}-${Math.round(args.targetWordCount * 1.07)}；硬性范围 ${Math.round(args.targetWordCount * 0.85)}-${Math.round(args.targetWordCount * 1.15)}。`}
 3. 尽量保留未受影响的段落、场景节奏、铺垫和稳定事件，不要为了“看起来重写”而重写；只调整涟漪、支线、角色状态、结局导向或连续性真正需要改变的部分。
