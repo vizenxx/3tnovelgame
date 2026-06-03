@@ -16,6 +16,11 @@ const blueprintSchema = {
   properties: {
     title: { type: Type.STRING, description: '第一篇章标题' },
     main_axis: { type: Type.STRING, description: '第一篇章的核心主轴/大纲，作为后续发展的基架' },
+    world_rules: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+      description: '2-4条本作品不可违背的底层铁律（无论玩家如何干涉、情节如何改变都必须成立的设定）。例如世界运作规则、某角色的不可逆底线（如"主角始终保有完整四肢"）、力量/代价的硬性约束。这些是干涉重写时的最高优先级约束。',
+    },
     endingMode: { type: Type.STRING, description: 'single or dual' },
     left_mainline_default: { type: Type.NUMBER, description: '左侧主线默认影响率 (0-100)' },
     right_mainline_default: { type: Type.NUMBER, description: '右侧主线默认影响率 (0-100)' },
@@ -364,10 +369,15 @@ function normalizeBlueprint(raw: any, requestedEndingMode: 'single' | 'dual' = '
   const maxBranches = Math.min(6, combinedMax - cappedThreads.length);
   const cappedBranches = branches.slice(0, Math.max(3, maxBranches));
 
+  const worldRules = Array.isArray(raw.world_rules)
+    ? raw.world_rules.map((rule: any) => String(rule || '').trim()).filter(Boolean).slice(0, 5)
+    : [];
+
   return {
     ...raw,
     title: String(raw.title || '未命名命运').trim(),
     main_axis: String(raw.main_axis || raw.outline || '一个关于选择、代价与命运分歧的互动故事。').trim(),
+    world_rules: worldRules,
     endingMode,
     left_mainline_default: Math.min(100, Math.max(0, Number(raw.left_mainline_default) || 40)),
     right_mainline_default: Math.min(100, Math.max(0, Number(raw.right_mainline_default) || 40)),

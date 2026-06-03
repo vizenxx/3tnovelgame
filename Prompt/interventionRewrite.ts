@@ -121,6 +121,12 @@ export function buildInterventionRewritePrompt(args: {
     : '';
   const seriesContext = args.blueprint?.seriesContext;
   const continuityNode = args.blueprint?.continuityNode;
+  const worldRules = Array.isArray(args.blueprint?.world_rules) ? args.blueprint.world_rules.filter(Boolean) : [];
+  const worldRulesBlock = worldRules.length > 0
+    ? (isEnglish
+        ? `\nINVIOLABLE WORLD RULES (highest priority — the rewrite must never violate these, no matter how fate shifts):\n${worldRules.map((rule: string) => `- ${rule}`).join('\n')}\n`
+        : `\n不可违背的世界铁律（最高优先级——无论命运如何偏移，重写都绝不能违反）：\n${worldRules.map((rule: string) => `- ${rule}`).join('\n')}\n`)
+    : '';
   const wordTargetLines = Object.entries(args.chapterWordTargets || {})
     .sort(([a], [b]) => Number(a) - Number(b))
     .map(([chapterNum, target]) => {
@@ -154,7 +160,7 @@ ${JSON.stringify({
 
 Character ID map:
 ${args.blueprint.characters.map((character: any) => `${character.name} (ID: ${character.id})`).join('\n')}
-
+${worldRulesBlock}
 ${args.worldStatePrompt}
 ${seriesBlock}
 
@@ -211,7 +217,7 @@ ${originalChapterSample}${String(args.originalChapterText || '').length > 1000 ?
 
 角色ID对照表：
 ${args.blueprint.characters.map((character: any) => `${character.name} (ID: ${character.id})`).join('\n')}
-
+${worldRulesBlock}
 ${args.worldStatePrompt}
 ${seriesBlock}
 

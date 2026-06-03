@@ -85,6 +85,12 @@ export function buildChapterContinuationPrompt(args: {
 }) {
   const isSingleEnding = args.blueprint?.endingMode === 'single' || args.blueprint?.ending_mode === 'single';
   const isEnglish = args.language === 'en-US';
+  const worldRules = Array.isArray(args.blueprint?.world_rules) ? args.blueprint.world_rules.filter(Boolean) : [];
+  const worldRulesBlock = worldRules.length > 0
+    ? (isEnglish
+        ? `\nInviolable world rules (never violate, no matter what): ${worldRules.join(' / ')}`
+        : `\n不可违背的世界铁律（无论如何都不能违反）：${worldRules.join(' / ')}`)
+    : '';
   const threads = Array.isArray(args.boundThreads) ? args.boundThreads.filter((thread) => thread && thread.content) : [];
   const threadBlock = threads.length > 0
     ? (isEnglish
@@ -120,7 +126,7 @@ YOUR STORY
 "${args.blueprint.title || 'Untitled'}" — ${args.blueprint.main_axis}
 Point of view: ${buildNarrativePersonInstruction(args.narrativePerson || args.blueprint.narrative_person, 'chapter', args.language)}
 Characters: ${args.blueprint.characters.map((character: any) => `${character.id}: ${character.name} — ${character.desc}`).join(' | ')}
-Ending shape: ${isSingleEnding ? 'Single convergent ending — interventions change the route and cost, but the finale must naturally close on the same core resolution.' : 'Branching ending domains (default / left / right) — the story may resolve differently depending on how fate has been shaped.'}
+Ending shape: ${isSingleEnding ? 'Single convergent ending — interventions change the route and cost, but the finale must naturally close on the same core resolution.' : 'Branching ending domains (default / left / right) — the story may resolve differently depending on how fate has been shaped.'}${worldRulesBlock}
 ${seriesBlock}
 CHAPTER ${args.targetChapterNum} — WHAT THIS CHAPTER MUST DO
 ${args.outlineSummary}${threadBlock}
@@ -159,7 +165,7 @@ Return strict JSON Schema only. Do not include image prompts or meta-comments.`;
 《${args.blueprint.title || '未命名'}》——${args.blueprint.main_axis}
 叙事人称：${buildNarrativePersonInstruction(args.narrativePerson || args.blueprint.narrative_person, 'chapter', args.language)}
 登场角色：${args.blueprint.characters.map((character: any) => `${character.id}：${character.name}——${character.desc}`).join(' | ')}
-结局走向：${isSingleEnding ? '单一收束结局——干涉改变的是过程与代价，终章必须自然归拢到同一个核心结局。' : '多线结局域（默认/左/右）——命运的走向因干涉而不同，故事可能在不同的结局域落定。'}
+结局走向：${isSingleEnding ? '单一收束结局——干涉改变的是过程与代价，终章必须自然归拢到同一个核心结局。' : '多线结局域（默认/左/右）——命运的走向因干涉而不同，故事可能在不同的结局域落定。'}${worldRulesBlock}
 ${seriesBlock}
 第 ${args.targetChapterNum} 章——这一章必须完成的事
 ${args.outlineSummary}${threadBlock}
