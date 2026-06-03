@@ -22,8 +22,8 @@ export function buildChapterWorldStatePrompt(args: {
     : '';
   const timeNote = args.timeContext && args.timeContext !== '故事开始' && args.timeContext !== 'story opens'
     ? (isEnglish
-        ? `Temporal position of this chapter: ${args.timeContext}. Open the chapter in a way that naturally reflects this time gap — do not begin as if this moment immediately follows the previous chapter's final scene.\n`
-        : `本章时间位置：${args.timeContext}。开篇应自然地体现这段时间间隔，不要像紧接上一章末尾那样直接继续。\n`)
+        ? `Temporal position: ${args.timeContext}. Make the passage of time felt through what has changed — not through a narrator's announcement. Show it through a character who carries themselves a little differently now; a familiar object or place that has subtly shifted; a silence between people that has accumulated into something specific; a reaction that would only exist if weeks or months had been lived through. The reader should sense elapsed time through what they perceive — a detail, a texture, a quality of interaction — not through being told.\n`
+        : `本章时间位置：${args.timeContext}。让时间的流逝通过「已经改变的东西」被感知，而不是通过叙述者的宣告。用人物现在细微不同的言行举止；一个熟悉的物件或空间悄然改变的状态；两人之间积压成特定形态的沉默；一种只有经历过这段时间才会有的反应方式——让读者从感知到的质地里理解时间已过去，而不是从被告知里知道。\n`)
     : '';
   // Chapter-by-chapter generation is unhurried, so feed real prose from earlier chapters
   // (not just summaries) — this is what lets each new chapter match tone and stay coherent.
