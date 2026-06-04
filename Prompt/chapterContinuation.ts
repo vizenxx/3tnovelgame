@@ -78,7 +78,8 @@ export function buildChapterContinuationPrompt(args: {
   narrativePerson?: string;
   worldStatePrompt: string;
   outlineSummary: string;
-  futureOutlines?: string;
+  arcDesign?: string;
+  arcOverview?: string;
   defaultText?: string;
   endingProto?: any;
   targetChapterNum: number;
@@ -131,11 +132,13 @@ Point of view: ${buildNarrativePersonInstruction(args.narrativePerson || args.bl
 Characters: ${args.blueprint.characters.map((character: any) => `${character.id}: ${character.name} — ${character.desc}`).join(' | ')}
 Ending shape: ${isSingleEnding ? 'Single convergent ending — interventions change the route and cost, but the finale must naturally close on the same core resolution.' : 'Branching ending domains (default / left / right) — the story may resolve differently depending on how fate has been shaped.'}${worldRulesBlock}
 ${seriesBlock}
-CHAPTER ${args.targetChapterNum} — WHAT THIS CHAPTER MUST DO
+THE ARC YOU ARE REALIZING (the blueprint's macro design — every chapter serves this shape; you realize it, you do not improvise outside it):
+${args.arcDesign || '(derive from the chapter map and main axis)'}
+${args.arcOverview ? `Chapter map — each chapter's place, time position, and job (you are writing the marked one):\n${args.arcOverview}\n` : ''}
+CHAPTER ${args.targetChapterNum} — WHAT THIS CHAPTER MUST DO (its design within the arc above — this is your PRIMARY driver)
 ${args.outlineSummary}${threadBlock}
-
-${args.futureOutlines ? `HOW THE STORY CONTINUES AFTER THIS CHAPTER (maintain continuity — do not contradict):\n${args.futureOutlines}\n` : ''}${args.defaultText ? `AUTHOR'S ESTABLISHED TEXT FOR THIS CHAPTER (treat as your own prior draft — match its voice exactly):\n${String(args.defaultText).substring(0, 1200)}\n` : ''}${(!args.worldStatePrompt.includes('Story baseline') && args.endingProto) ? `ENDING PROTOTYPES (let the current ending direction quietly shape the chapter's emotional trajectory):\n- default: ${String(args.endingProto.default || '').substring(0, 400)}\n- left: ${String(args.endingProto.left || '').substring(0, 400)}\n- right: ${String(args.endingProto.right || '').substring(0, 400)}\n` : ''}
-WHAT YOU HAVE WRITTEN SO FAR (your own earlier work — the END of the previous chapter is the situation this chapter continues FROM. The blueprint decides WHAT happens, but you must build it on this ground, honoring where things were left and matching the voice — never ignore it):
+${args.defaultText ? `\nAUTHOR'S ESTABLISHED TEXT FOR THIS CHAPTER (treat as your own prior draft — match its voice exactly):\n${String(args.defaultText).substring(0, 1200)}\n` : ''}${(!args.worldStatePrompt.includes('Story baseline') && args.endingProto) ? `ENDING PROTOTYPES (let the current ending direction quietly shape the chapter's emotional trajectory):\n- default: ${String(args.endingProto.default || '').substring(0, 400)}\n- left: ${String(args.endingProto.left || '').substring(0, 400)}\n- right: ${String(args.endingProto.right || '').substring(0, 400)}\n` : ''}
+CONTINUITY REFERENCE (facts already on the page and the voice to match — secondary to the chapter's arc design above. HOW you connect to it is decided by this chapter's time position in the map: a chapter that immediately follows continues the previous beat; a chapter set after a time gap opens in the new time and treats the previous ending as past, conveyed through what has changed — do NOT mechanically continue the last scene when the arc calls for a leap):
 ${args.worldStatePrompt}
 
 Write the full prose for chapter ${args.targetChapterNum}.
@@ -170,11 +173,13 @@ Return strict JSON Schema only. Do not include image prompts or meta-comments.`;
 登场角色：${args.blueprint.characters.map((character: any) => `${character.id}：${character.name}——${character.desc}`).join(' | ')}
 结局走向：${isSingleEnding ? '单一收束结局——干涉改变的是过程与代价，终章必须自然归拢到同一个核心结局。' : '多线结局域（默认/左/右）——命运的走向因干涉而不同，故事可能在不同的结局域落定。'}${worldRulesBlock}
 ${seriesBlock}
-第 ${args.targetChapterNum} 章——这一章必须完成的事
+你要实现的整条弧线（蓝图的宏观设计——每一章都服务于这个形状；你是去实现它，而不是在它之外即兴）：
+${args.arcDesign || '（从下方章节地图与主轴推导）'}
+${args.arcOverview ? `章节地图——每章的位置、时间位与职能（要写的就是标注的那一章）：\n${args.arcOverview}\n` : ''}
+第 ${args.targetChapterNum} 章——这一章必须完成的事（它在上方弧线中的设计，这是你的首要驱动）
 ${args.outlineSummary}${threadBlock}
-
-${args.futureOutlines ? `这一章之后故事的走向（保持连贯，不得矛盾）：\n${args.futureOutlines}\n` : ''}${args.defaultText ? `你为这一章写下的底稿（视为你自己的前期草稿，严格延续其笔触与文风）：\n${String(args.defaultText).substring(0, 1200)}\n` : ''}${(!args.worldStatePrompt.includes('故事基准') && args.endingProto) ? `结局原型（让当前结局方向悄悄渗透进这一章的情感走势）：\n- default: ${String(args.endingProto.default || '').substring(0, 400)}\n- left: ${String(args.endingProto.left || '').substring(0, 400)}\n- right: ${String(args.endingProto.right || '').substring(0, 400)}\n` : ''}
-你已经写下的内容（你自己的前几章——上一章结尾的处境，就是本章要从中接续下去的起点。蓝图决定「发生什么」，但你必须在这个起点之上构建本章，尊重事情被留在了哪里、延续既有文风，绝不能无视它）：
+${args.defaultText ? `\n你为这一章写下的底稿（视为你自己的前期草稿，严格延续其笔触与文风）：\n${String(args.defaultText).substring(0, 1200)}\n` : ''}${(!args.worldStatePrompt.includes('故事基准') && args.endingProto) ? `结局原型（让当前结局方向悄悄渗透进这一章的情感走势）：\n- default: ${String(args.endingProto.default || '').substring(0, 400)}\n- left: ${String(args.endingProto.left || '').substring(0, 400)}\n- right: ${String(args.endingProto.right || '').substring(0, 400)}\n` : ''}
+连贯性参考（已经写在纸上的事实，以及要延续的笔触——次于上方本章的弧线设计。如何与它衔接，由本章在地图里的「时间位」决定：紧接上章的章节就接住上一拍；处在时间跨度之后的章节，则在新的时间里展开、把上一章结尾当作已过去的历史、用「已经改变的东西」来交代——当弧线要求跳跃时，绝不要机械地接着上一个场景写下去）：
 ${args.worldStatePrompt}
 
 写第 ${args.targetChapterNum} 章全文。

@@ -16,6 +16,7 @@ const blueprintSchema = {
   properties: {
     title: { type: Type.STRING, description: '第一篇章标题' },
     main_axis: { type: Type.STRING, description: '第一篇章的核心主轴/大纲，作为后续发展的基架' },
+    arc_design: { type: Type.STRING, description: '整条7章弧线的宏观设计(80-140字)：这个故事总共跨越多长时间(一夜/数周/数年皆可)、节奏如何分布(哪几章紧凑贴近、哪几处跳过一段时间让变化沉淀)、整体形状(七章各自的职能如何串成一条有起伏的弧而非线性升压)。这是7章共同服从的骨架，各章 summary 与 time_context 都要从这个宏观设计推导出来。' },
     world_rules: {
       type: Type.ARRAY,
       items: { type: Type.STRING },
@@ -43,7 +44,7 @@ const blueprintSchema = {
         properties: {
           chapter_num: { type: Type.INTEGER },
           title: { type: Type.STRING, description: '章节标题（6-12字）' },
-          summary: { type: Type.STRING, description: '该章节的剧情要点大纲(20-40字)' },
+          summary: { type: Type.STRING, description: '本章在整条弧线中的设计(60-90字)：主要戏剧场景 + 本章承担的职能(建立/揭示前因/深化/沉淀/危机/收束) + 叙事质地(缓慢省思/急迫紧张/内向亲密)。不是流水账事件序列，而是「这一章要给读者什么体验、把核心问题推到哪一步」。' },
           time_context: { type: Type.STRING, description: '本章相对上一章的时间位置。第1章填"故事开始"。其余章节必须刻意安排变化——七章中"紧接上章"最多出现2次，其余应为"数日后""数周后""数月后"等具有跨度的表达，以建立故事的时间层次感' },
           present_characters: {
             type: Type.ARRAY,
@@ -377,6 +378,7 @@ function normalizeBlueprint(raw: any, requestedEndingMode: 'single' | 'dual' = '
     ...raw,
     title: String(raw.title || '未命名命运').trim(),
     main_axis: String(raw.main_axis || raw.outline || '一个关于选择、代价与命运分歧的互动故事。').trim(),
+    arc_design: String(raw.arc_design || '').trim(),
     world_rules: worldRules,
     endingMode,
     left_mainline_default: Math.min(100, Math.max(0, Number(raw.left_mainline_default) || 40)),

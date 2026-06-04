@@ -117,12 +117,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const outlineSummary = (liveChapter?.summary && String(liveChapter.summary).trim())
       ? String(liveChapter.summary).trim()
       : (blueprintChapter?.summary || '');
-    const futureOutlines = allChapters
-      .filter((chapter: any) => chapter.chapter_num > safeTargetChapterNum && chapter.summary && String(chapter.summary).trim())
-      .map((chapter: any) => language === 'en-US'
-        ? `Chapter ${chapter.chapter_num} outline: ${String(chapter.summary).trim()}`
-        : `第${chapter.chapter_num}章要点：${String(chapter.summary).trim()}`)
-      .join('\n');
+    // Full arc map: every chapter's place, time position, and job — so the generator writes THIS
+    // chapter as part of a designed arc, not as a local continuation of the previous one. The
+    // current chapter is marked. Live summary (post-intervention) overrides the blueprint's.
+    const liveByNum = new Map<number, any>(allChapters.map((c: any) => [Number(c.chapter_num), c]));
+    const arcChapters = (Array.isArray(blueprint?.chapters) ? blueprint.chapters : [])
+      .slice()
+      .sort((a: any, b: any) => Number(a.chapter_num) - Number(b.chapter_num));
+    const arcOverview = arcChapters.map((bc: any) => {
+      const live = liveByNum.get(Number(bc.chapter_num));
+      const sum = (live?.summary && String(live.summary).trim()) ? String(live.summary).trim() : String(bc.summary || '').trim();
+      const tc = String(live?.time_context || bc.time_context || '').trim();
+      const isCurrent = Number(bc.chapter_num) === safeTargetChapterNum;
+      const marker = isCurrent ? '>>> ' : '    ';
+      return language === 'en-US'
+        ? `${marker}Chapter ${bc.chapter_num}${tc ? ` [${tc}]` : ''}: ${sum}${isCurrent ? '  ← YOU ARE WRITING THIS' : ''}`
+        : `${marker}第${bc.chapter_num}章${tc ? `（${tc}）` : ''}：${sum}${isCurrent ? '  ← 本次要写的就是这一章' : ''}`;
+    }).join('\n');
+    const arcDesign = String(blueprint?.arc_design || '').trim();
 
     const defaultText = blueprint?.authorAssets?.defaultChapters?.[safeTargetChapterNum]?.text;
     const endingProto = blueprint?.authorAssets?.endingPrototypes;
@@ -153,7 +165,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       narrativePerson,
       worldStatePrompt,
       outlineSummary,
-      futureOutlines,
+      arcDesign,
+      arcOverview,
       defaultText,
       endingProto,
       targetChapterNum: safeTargetChapterNum,
