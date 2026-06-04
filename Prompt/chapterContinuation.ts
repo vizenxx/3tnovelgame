@@ -132,13 +132,13 @@ CHAPTER ${args.targetChapterNum} — WHAT THIS CHAPTER MUST DO
 ${args.outlineSummary}${threadBlock}
 
 ${args.futureOutlines ? `HOW THE STORY CONTINUES AFTER THIS CHAPTER (maintain continuity — do not contradict):\n${args.futureOutlines}\n` : ''}${args.defaultText ? `AUTHOR'S ESTABLISHED TEXT FOR THIS CHAPTER (treat as your own prior draft — match its voice exactly):\n${String(args.defaultText).substring(0, 1200)}\n` : ''}${(!args.worldStatePrompt.includes('Story baseline') && args.endingProto) ? `ENDING PROTOTYPES (let the current ending direction quietly shape the chapter's emotional trajectory):\n- default: ${String(args.endingProto.default || '').substring(0, 400)}\n- left: ${String(args.endingProto.left || '').substring(0, 400)}\n- right: ${String(args.endingProto.right || '').substring(0, 400)}\n` : ''}
-WHAT YOU HAVE WRITTEN SO FAR (your own earlier work — use it for natural style continuity and bridging, not as a constraint on this chapter's direction):
+WHAT YOU HAVE WRITTEN SO FAR (your own earlier work — the END of the previous chapter is the situation this chapter continues FROM. The blueprint decides WHAT happens, but you must build it on this ground, honoring where things were left and matching the voice — never ignore it):
 ${args.worldStatePrompt}
 
 Write the full prose for chapter ${args.targetChapterNum}.
 
 Requirements:
-1. Honor the story's continuity and the established voice — but each chapter enters the world in its own way. Don't force an immediate pickup from the previous chapter's final moment; a chapter that opens with atmosphere, a character's awareness, or a thought mid-way through is as continuous as one that picks up the action directly.
+1. Continue from where the previous chapter left off. Whatever was unresolved at its end — an imminent danger, a charged confrontation, a question left hanging — must be addressed here, never silently dropped. You have freedom in HOW you open (atmosphere, a character's awareness, mid-thought, or direct action), but you must NEVER cut to an unrelated scene or mood without a causal bridge. If the place, situation, or mood changes, the prose itself must carry the reader across that change — show how we got here; if time has passed (see any temporal note above), let the gap account for it. Teleporting into a new scene as if the previous chapter's tension never happened breaks the story.
 2. Set chapter_num to ${args.targetChapterNum}.
 3. Word count is a hard quality requirement: target ${args.targetWordCount} English words, ideal ${idealMin}-${idealMax}, hard range ${hardMin}-${hardMax}. Do not return a short outline or an overlong chapter.
 4. Let paragraph length be determined by the moment. A sharp realisation can be a single sentence. A slow drift through memory or sensation might run six or seven. Vary the rhythm deliberately — the contrast between short and long paragraphs is itself a carrier of meaning and pacing. Separate paragraphs with two newline characters.
@@ -171,13 +171,13 @@ ${seriesBlock}
 ${args.outlineSummary}${threadBlock}
 
 ${args.futureOutlines ? `这一章之后故事的走向（保持连贯，不得矛盾）：\n${args.futureOutlines}\n` : ''}${args.defaultText ? `你为这一章写下的底稿（视为你自己的前期草稿，严格延续其笔触与文风）：\n${String(args.defaultText).substring(0, 1200)}\n` : ''}${(!args.worldStatePrompt.includes('故事基准') && args.endingProto) ? `结局原型（让当前结局方向悄悄渗透进这一章的情感走势）：\n- default: ${String(args.endingProto.default || '').substring(0, 400)}\n- left: ${String(args.endingProto.left || '').substring(0, 400)}\n- right: ${String(args.endingProto.right || '').substring(0, 400)}\n` : ''}
-你已经写下的内容（你自己的前几章——用于保持文风的自然延续与场景衔接，而非约束本章的方向与走势）：
+你已经写下的内容（你自己的前几章——上一章结尾的处境，就是本章要从中接续下去的起点。蓝图决定「发生什么」，但你必须在这个起点之上构建本章，尊重事情被留在了哪里、延续既有文风，绝不能无视它）：
 ${args.worldStatePrompt}
 
 写第 ${args.targetChapterNum} 章全文。
 
 要求（必须绝对服从）：
-1. 延续故事的连续性与已有的写作声音——但每章进入世界的方式可以是自己的。不必强行接住上一章最后那个时刻；以氛围、存在感或人物思维中途切入的章节，与直接接续行动的章节同样具有连贯性。
+1. 必须从上一章结束的地方接续下去。上一章结尾悬而未决的一切——逼近的危险、剑拔弩张的对峙、悬在空中的疑问——本章都必须处理，绝不能悄无声息地丢弃。开篇「方式」可以自由（氛围、人物的感知、思绪中途、或直接进入行动），但绝不能在没有因果桥梁的情况下，硬切到一个不相干的场景或氛围。如果地点、处境或氛围发生变化，正文本身必须带读者跨过这个变化——交代我们是怎么来到这里的；如果时间已经流逝（见上方的时间提示），就让这段间隔来解释它。仿佛上一章的张力从未发生过、直接瞬移到新场景——这会摧毁整个故事。
 2. 章节号必须设置为 ${args.targetChapterNum}。
 3. 字数是硬性质量要求：目标 ${args.targetWordCount} 字，理想范围 ${idealMin}-${idealMax}，硬性范围 ${hardMin}-${hardMax}。不得输出短提纲，也不要明显超长。
 4. 段落的长短由时刻本身决定。一个清醒的认知可以是一句话。一段意识在记忆或感官里漫游可能六七句。刻意变化节奏——短段与长段的对比本身就是意义与节拍的载体。段落之间用两个换行符分隔。
