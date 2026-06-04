@@ -11,14 +11,17 @@ export function buildChapterWorldStatePrompt(args: {
   language?: 'zh-CN' | 'en-US' | string;
 }) {
   const isEnglish = args.language === 'en-US';
-  const prevText = String(args.prevChapterText || '').substring(0, 1000);
-  // When prevChapterSummary is provided (time-jump chapters), use it as a compact stand-in for
-  // the full previous chapter text so the generator knows what happened without being anchored
-  // to the immediate prior scene.
-  const prevSummaryBlock = args.prevChapterSummary
+  // Summary-governed continuity anchor: the previous chapter's SUMMARY is the structural record
+  // of where the story stood; its ENDING passage (tail, not head) is the precise last beat to
+  // connect from and the voice to match. The chapter generator moves FROM this point TO this
+  // chapter's own summary, with time_context governing how far.
+  const prevTail = String(args.prevChapterText || '').slice(-500).trim();
+  const prevBlock = (args.prevChapterSummary || prevTail)
     ? (isEnglish
-        ? `Previous chapter (summary only — do not continue from its final scene): ${args.prevChapterSummary}`
-        : `上一章内容（仅摘要——请勿从其末尾场景直接续写）：${args.prevChapterSummary}`)
+        ? `WHERE THE STORY STANDS — end of chapter ${args.targetChapterNum - 1}:
+- What that chapter covered: ${args.prevChapterSummary || '(see ending below)'}${prevTail ? `\n- How it actually ended (this is the exact state to continue from, and the voice to match):\n…${prevTail}` : ''}`
+        : `故事此刻的位置——第 ${args.targetChapterNum - 1} 章结束时：
+- 该章讲了什么：${args.prevChapterSummary || '（见下方结尾）'}${prevTail ? `\n- 它实际如何收尾（这就是要从中接续的确切状态，以及要延续的笔触）：\n……${prevTail}` : ''}`)
     : '';
   const timeNote = args.timeContext && args.timeContext !== '故事开始' && args.timeContext !== 'story opens'
     ? (isEnglish
@@ -48,7 +51,7 @@ ${(args.worldState.deltas || []).map((delta: any) => delta.characters_changed?.m
 Ending direction guide: ${args.worldState.endingDirection || 'neutral'}
 ${args.worldState.endingDirection && args.worldState.endingDirection !== 'neutral' && args.endingProto ? `Ending prototype reference:\n${String(args.endingProto[args.worldState.endingDirection] || '').substring(0, 400)}` : ''}
 
-${historySummaries ? `Earlier chapters (prose excerpts for tone and continuity):\n${historySummaries}\n` : ''}${prevSummaryBlock || (prevText ? `Previous chapter full text (chapter ${args.targetChapterNum - 1}, narrative and style anchor):\n${prevText}` : '')}`;
+${historySummaries ? `Earlier chapters (prose excerpts for tone and continuity):\n${historySummaries}\n` : ''}${prevBlock}`;
     }
     return `${timeNote}故事基准（硬约束，不可违背）：
 人物：${JSON.stringify(args.worldState.canonical.characters || [])}
@@ -62,12 +65,12 @@ ${(args.worldState.deltas || []).map((delta: any) => delta.characters_changed?.m
 结尾方向引导：${args.worldState.endingDirection || 'neutral'}
 ${args.worldState.endingDirection && args.worldState.endingDirection !== 'neutral' && args.endingProto ? `结局原型参考：\n${String(args.endingProto[args.worldState.endingDirection] || '').substring(0, 400)}` : ''}
 
-${historySummaries ? `前情章节正文节选（用于衔接文体与连贯）：\n${historySummaries}\n` : ''}${prevSummaryBlock || (prevText ? `直接前文（第 ${args.targetChapterNum - 1} 章完整正文，叙事与文风锚点）：\n${prevText}` : '')}`;
+${historySummaries ? `前情章节正文节选（用于衔接文体与连贯）：\n${historySummaries}\n` : ''}${prevBlock}`;
   }
 
   return isEnglish
-    ? `${timeNote}${historySummaries ? `Earlier chapters (prose excerpts for tone and continuity):\n${historySummaries}\n\n` : ''}${prevSummaryBlock || (prevText ? `Previous chapter full text (chapter ${args.targetChapterNum - 1}):\n${prevText}` : '')}`
-    : `${timeNote}${historySummaries ? `前情章节正文节选（用于衔接文体与连贯）：\n${historySummaries}\n\n` : ''}${prevSummaryBlock || (prevText ? `直接前文（第 ${args.targetChapterNum - 1} 章完整正文）：\n${prevText}` : '')}`;
+    ? `${timeNote}${historySummaries ? `Earlier chapters (prose excerpts for tone and continuity):\n${historySummaries}\n\n` : ''}${prevBlock}`
+    : `${timeNote}${historySummaries ? `前情章节正文节选（用于衔接文体与连贯）：\n${historySummaries}\n\n` : ''}${prevBlock}`;
 }
 
 export function buildChapterContinuationPrompt(args: {
@@ -138,7 +141,7 @@ ${args.worldStatePrompt}
 Write the full prose for chapter ${args.targetChapterNum}.
 
 Requirements:
-1. Continue from where the previous chapter left off. Whatever was unresolved at its end — an imminent danger, a charged confrontation, a question left hanging — must be addressed here, never silently dropped. You have freedom in HOW you open (atmosphere, a character's awareness, mid-thought, or direct action), but you must NEVER cut to an unrelated scene or mood without a causal bridge. If the place, situation, or mood changes, the prose itself must carry the reader across that change — show how we got here; if time has passed (see any temporal note above), let the gap account for it. Teleporting into a new scene as if the previous chapter's tension never happened breaks the story.
+1. This chapter carries the story FROM where the previous chapter ended TO what this chapter must accomplish (its summary above) — two different points, and your work is the movement between them, with the time note governing how far. Avoid two failures equally: (a) do NOT silently drop the previous chapter's unresolved end-state (a looming danger, an open confrontation) and hard-cut to an unrelated scene — when place / time / mood shifts, the prose must bridge it (show how we got here; if time has passed, let the gap account for it); (b) do NOT stall by replaying or lingering in the previous scene — the summary says this chapter is a NEW beat, so actively reach it rather than circling the last one. Your opening style is free (atmosphere, awareness, mid-thought, or action) as long as it both connects backward and moves the story forward.
 2. Set chapter_num to ${args.targetChapterNum}.
 3. Word count is a hard quality requirement: target ${args.targetWordCount} English words, ideal ${idealMin}-${idealMax}, hard range ${hardMin}-${hardMax}. Do not return a short outline or an overlong chapter.
 4. Let paragraph length be determined by the moment. A sharp realisation can be a single sentence. A slow drift through memory or sensation might run six or seven. Vary the rhythm deliberately — the contrast between short and long paragraphs is itself a carrier of meaning and pacing. Separate paragraphs with two newline characters.
@@ -177,7 +180,7 @@ ${args.worldStatePrompt}
 写第 ${args.targetChapterNum} 章全文。
 
 要求（必须绝对服从）：
-1. 必须从上一章结束的地方接续下去。上一章结尾悬而未决的一切——逼近的危险、剑拔弩张的对峙、悬在空中的疑问——本章都必须处理，绝不能悄无声息地丢弃。开篇「方式」可以自由（氛围、人物的感知、思绪中途、或直接进入行动），但绝不能在没有因果桥梁的情况下，硬切到一个不相干的场景或氛围。如果地点、处境或氛围发生变化，正文本身必须带读者跨过这个变化——交代我们是怎么来到这里的；如果时间已经流逝（见上方的时间提示），就让这段间隔来解释它。仿佛上一章的张力从未发生过、直接瞬移到新场景——这会摧毁整个故事。
+1. 本章要把故事从「上一章结束处」带到「本章该完成的事」（见上方本章摘要）——这是两个不同的点，你的工作就是它们之间的移动，由时间提示掌控跨度。两种错误要同等避免：(a) 不要把上一章悬而未决的结尾（逼近的危险、未了的对峙、悬空的疑问）悄悄丢掉、硬切到不相干的场景——地点／时间／氛围若变，正文必须架桥跨过去（交代我们怎么来到这里；若时间已流逝，让这段间隔来解释）；(b) 也不要停滞——不要原地重演、或赖在上一章的场景里打转，摘要说明本章是一个「新的节拍」，要主动抵达它，而不是绕着上一拍转。开篇方式自由（氛围、感知、思绪中途、或行动），只要它既向后衔接、又把故事向前推进。
 2. 章节号必须设置为 ${args.targetChapterNum}。
 3. 字数是硬性质量要求：目标 ${args.targetWordCount} 字，理想范围 ${idealMin}-${idealMax}，硬性范围 ${hardMin}-${hardMax}。不得输出短提纲，也不要明显超长。
 4. 段落的长短由时刻本身决定。一个清醒的认知可以是一句话。一段意识在记忆或感官里漫游可能六七句。刻意变化节奏——短段与长段的对比本身就是意义与节拍的载体。段落之间用两个换行符分隔。

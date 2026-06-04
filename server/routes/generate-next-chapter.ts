@@ -128,20 +128,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const endingProto = blueprint?.authorAssets?.endingPrototypes;
     const prevChapterEntry = allChapters.find((chapter: any) => chapter.chapter_num === safeTargetChapterNum - 1);
     const prevChapterText = prevChapterEntry?.text || '';
-    const prevChapterSummary = String(prevChapterEntry?.summary || blueprintChapter?.summary || '').trim();
+    const prevBlueprintChapter = blueprint?.chapters?.find((chapter: any) => chapter.chapter_num === safeTargetChapterNum - 1);
+    const prevChapterSummary = String(prevChapterEntry?.summary || prevBlueprintChapter?.summary || '').trim();
     const timeContext = String(
       liveChapter?.time_context || blueprintChapter?.time_context || ''
     ).trim();
-    // When a chapter has a temporal gap, don't anchor the generator to the previous chapter's
-    // final scene — it overwhelms the time_context note and causes "one day" flow. Send only the
-    // previous chapter's summary so the generator knows what happened without being pulled to
-    // continue from the last moment.
-    const isTimeJump = timeContext && timeContext !== '紧接上章' && timeContext !== 'immediately follows' && timeContext !== '故事开始' && timeContext !== 'story opens';
+    // Summary-governed continuity: always give the generator the previous chapter's SUMMARY
+    // (the structural "where the story stood") plus its ENDING passage (the precise last beat to
+    // continue from + voice). The summary + time_context together govern how far to move; the
+    // full previous prose is no longer used as a binary anchor (which caused either teleporting
+    // or one-day flow).
     const worldStatePrompt = buildChapterWorldStatePrompt({
       worldState,
       endingProto,
-      prevChapterText: isTimeJump ? '' : prevChapterText,
-      prevChapterSummary: isTimeJump ? prevChapterSummary : '',
+      prevChapterText,
+      prevChapterSummary,
       historyChapters,
       targetChapterNum: safeTargetChapterNum,
       timeContext,
