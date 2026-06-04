@@ -2586,6 +2586,37 @@ export default function App() {
     scrollToChapter(nextChapterNum);
   };
 
+  // Observing advances the unlock pointer, which slides the "interfere back at most 2 chapters"
+  // window forward — permanently dropping the chapter at (unlockedChapterNum - 2) out of reach.
+  // If that chapter is still a usable, un-spent intervention opportunity, confirm before giving it up.
+  const observeWithGuard = (fromChapterNum: number) => {
+    const advancingPast = fromChapterNum + 1 > unlockedChapterNum;
+    const droppedChapter = unlockedChapterNum - 2;
+    const droppedChapterObj = chapters.find((chapterItem) => Number(chapterItem.chapter_num) === droppedChapter);
+    const givingUpIntervention =
+      advancingPast &&
+      droppedChapter >= 2 &&
+      droppedChapter <= 6 &&
+      interventionsLeft > 0 &&
+      !storyConclusion &&
+      !intervenedChapters.includes(droppedChapter) &&
+      !!droppedChapterObj &&
+      getChapterAvailableCharacters(droppedChapterObj, blueprint).length > 0;
+    if (givingUpIntervention) {
+      setConfirmationModal({
+        isOpen: true,
+        title: tr('确认放弃干涉权？', 'Give up this intervention?'),
+        message: tr(
+          `回头干涉最多只能回到最近 2 章。继续观望后，第 ${droppedChapter} 章将永久离开可干涉范围，你将无法再回去干涉它。确定放弃第 ${droppedChapter} 章的干涉权、继续观望吗？`,
+          `You can interfere back at most 2 chapters. If you keep watching, chapter ${droppedChapter} leaves the interferable range for good and you won't be able to go back to it. Give up the right to interfere at chapter ${droppedChapter} and continue watching?`
+        ),
+        onConfirm: () => advanceChapter(fromChapterNum),
+      });
+      return;
+    }
+    advanceChapter(fromChapterNum);
+  };
+
   // Thread (知因) reveal engine: surface hidden cause-lines as their conditions are met.
   useEffect(() => {
     if (gameState !== 'PLAYING' && gameState !== 'SUMMARY') return;
@@ -8607,7 +8638,7 @@ export default function App() {
                 <div className="mt-6 flex flex-col gap-3 sm:flex-row">
                   <button
                     type="button"
-                    onClick={() => { if (interventionGateChapter !== null) advanceChapter(interventionGateChapter); }}
+                    onClick={() => { if (interventionGateChapter !== null) observeWithGuard(interventionGateChapter); }}
                     className={semanticButtonClass('secondary', { fullWidth: true })}
                   >
                     <BookOpen className="h-4 w-4" />
