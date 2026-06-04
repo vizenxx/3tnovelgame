@@ -2146,6 +2146,12 @@ export default function App() {
   const backgroundGenerationEpochRef = useRef(0);
   const quickGenerationDraftSignatureRef = useRef<string | null>(null);
   const [backgroundGeneratingChapter, setBackgroundGeneratingChapter] = useState<number | null>(null);
+  // Bumping this re-runs the background-generation effect, used to recover a chapter whose
+  // generation failed (it would otherwise stay stuck as an empty shell forever, since the effect's
+  // other dependencies don't change after a failure). Auto-retry is capped per chapter; beyond the
+  // cap the player gets a manual "regenerate this chapter" button.
+  const [chapterRetryNonce, setChapterRetryNonce] = useState(0);
+  const autoRetryCountRef = useRef<Record<number, number>>({});
   const [isOnline, setIsOnline] = useState(() => typeof navigator === 'undefined' ? true : navigator.onLine !== false);
   const [connectivityDismissedAt, setConnectivityDismissedAt] = useState(0);
   const [manualConnectivityNotice, setManualConnectivityNotice] = useState<ConnectivityDrawerState | null>(null);
@@ -6638,6 +6644,8 @@ export default function App() {
         if (backgroundGenerationEpochRef.current !== generationEpoch) {
           return;
         }
+        // Success — clear the auto-retry counter for this chapter.
+        autoRetryCountRef.current[Number(missingChapter.chapter_num)] = 0;
 
         setChapters((prev) => {
           const shouldUpdateQuickDraft = interventionsLeft >= 3;
@@ -6668,6 +6676,17 @@ export default function App() {
         });
       } catch (error) {
         console.warn('Background generation failed for chapter', missingChapter.chapter_num, error);
+        // Self-heal a transient failure (timeout/network) so the chapter doesn't stay a stuck shell.
+        // Capped per chapter; once exhausted the player uses the manual "regenerate" button. Skip if
+        // an intervention has since changed the epoch (that flow will handle regeneration).
+        if (backgroundGenerationEpochRef.current === generationEpoch) {
+          const num = Number(missingChapter.chapter_num);
+          const tries = autoRetryCountRef.current[num] || 0;
+          if (tries < 2) {
+            autoRetryCountRef.current[num] = tries + 1;
+            window.setTimeout(() => setChapterRetryNonce((nonce) => nonce + 1), 4000);
+          }
+        }
       } finally {
         fetchingChapterRef.current = null;
         setBackgroundGeneratingChapter(null);
@@ -6675,7 +6694,7 @@ export default function App() {
     };
 
     void generateRemainingChapter();
-  }, [gameState, blueprint, chapters, interventionsLeft, isRewriting, activeInterventionOverlay, user, db, targetWordCount, narrativePerson, appLanguage, unlockedChapterNum]);
+  }, [gameState, blueprint, chapters, interventionsLeft, isRewriting, activeInterventionOverlay, user, db, targetWordCount, narrativePerson, appLanguage, unlockedChapterNum, chapterRetryNonce]);
 
   const enterAuthoring = async () => {
     navigateTo('AUTHORING');
@@ -8741,11 +8760,24 @@ export default function App() {
                     </p>
                   ))
                 ) : (
-                  <div className="flex items-center gap-3 rounded-2xl border border-indigo-500/20 bg-indigo-500/10 p-5 text-sm font-bold text-indigo-100">
-                    <Loader2 className={`h-5 w-5 ${backgroundGeneratingChapter === chapter.chapter_num ? 'animate-spin' : ''}`} />
-                    {backgroundGeneratingChapter === chapter.chapter_num
-                      ? (isEnglish ? `Chapter ${chapter.chapter_num} is generating and will appear when ready.` : `第${chapter.chapter_num}章正在生成中，完成后会自动出现。`)
-                      : (isEnglish ? `Chapter ${chapter.chapter_num} is queued for generation.` : `第${chapter.chapter_num}章已排入生成队列。`)}
+                  <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/10 p-5 text-sm font-bold text-indigo-100">
+                    <div className="flex items-center gap-3">
+                      <Loader2 className={`h-5 w-5 ${backgroundGeneratingChapter === chapter.chapter_num ? 'animate-spin' : ''}`} />
+                      {backgroundGeneratingChapter === chapter.chapter_num
+                        ? (isEnglish ? `Chapter ${chapter.chapter_num} is generating and will appear when ready.` : `第${chapter.chapter_num}章正在生成中，完成后会自动出现。`)
+                        : backgroundGeneratingChapter !== null
+                          ? (isEnglish ? `Chapter ${chapter.chapter_num} is queued — it starts once the current chapter finishes.` : `第${chapter.chapter_num}章已排队，前一章生成完会自动开始。`)
+                          : (isEnglish ? `Chapter ${chapter.chapter_num}'s generation seems to have stalled.` : `第${chapter.chapter_num}章的生成似乎中断了。`)}
+                    </div>
+                    {backgroundGeneratingChapter === null && !isRewriting && (
+                      <button
+                        type="button"
+                        onClick={() => { autoRetryCountRef.current[Number(chapter.chapter_num)] = 0; setChapterRetryNonce((nonce) => nonce + 1); }}
+                        className={`mt-3 ${semanticButtonClass('secondary', { compact: true })}`}
+                      >
+                        <RefreshCcw className="h-4 w-4" /> {isEnglish ? 'Regenerate this chapter' : '重新生成此章'}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
