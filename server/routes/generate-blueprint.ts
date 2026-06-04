@@ -9,7 +9,7 @@ import { generationLanguageInstruction, normalizeGenerationLanguage } from '../_
 // Blueprint generation produces a large structured payload (now including threads),
 // so it needs the same extended budget as the other generation routes — without this it
 // fell back to the platform default and timed out, making quick-generation fail often.
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const blueprintSchema = {
   type: Type.OBJECT,

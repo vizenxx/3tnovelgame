@@ -6412,7 +6412,7 @@ export default function App() {
         const response = await apiFetch('/api/ai?action=generate-blueprint', {
           method: 'POST',
           body: JSON.stringify({ ...activeGenerationInput, language: appLanguage }),
-        }, 90000);
+        }, 120000);
         if (!response.ok) throw new Error(await readErrorMessage(response));
         data = await response.json();
       }
@@ -6453,7 +6453,7 @@ export default function App() {
             boundThreads: pristineThreadsForChapter(chapterNum, data.threads, []),
             language: appLanguage,
           }),
-        }, 90000), 3, 2500);
+        }, 120000), 3, 2500);
         if (!chapterResponse.ok) throw new Error(await readErrorMessage(chapterResponse));
         const chapterData = await chapterResponse.json();
         data.chapters = (data.chapters || []).map((chapter: any) => (
@@ -6596,7 +6596,7 @@ export default function App() {
             boundThreads: pristineThreadsForChapter(Number(missingChapter.chapter_num), blueprint?.threads, intervenedChapters),
             language: appLanguage,
           }),
-        }, 90000), 3, 2500);
+        }, 120000), 3, 2500);
         if (!chapterResponse.ok) throw new Error(await readErrorMessage(chapterResponse));
         const chapterData = await chapterResponse.json();
         if (!chapterData?.text || typeof chapterData.text !== 'string' || chapterData.text.trim().length < 50) {

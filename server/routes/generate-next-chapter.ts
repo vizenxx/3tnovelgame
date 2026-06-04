@@ -7,7 +7,7 @@ import { buildChapterContinuationPrompt, buildChapterWorldStatePrompt } from '..
 import { generationLanguageInstruction, normalizeGenerationLanguage } from '../_language.js';
 import { assertProseQuality, ensureParagraphing } from '../_generationQuality.js';
 
-export const maxDuration = 90;
+export const maxDuration = 120;
 
 function stripGeneratedMarkup(raw: unknown) {
   return String(raw ?? '')

@@ -9,7 +9,7 @@ import generateSummary from '../server/routes/generate-summary.js';
 import digestChapter from '../server/routes/digest-chapter.js';
 import intervene from '../server/routes/intervene.js';
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 type ApiHandler = (req: VercelRequest, res: VercelResponse) => Promise<unknown> | unknown;
 
