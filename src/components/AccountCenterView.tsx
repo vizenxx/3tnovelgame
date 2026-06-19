@@ -21,7 +21,7 @@ import {
 import { semanticButtonClass, semanticIconButtonClass } from './semanticClasses';
 import type { AppLanguage } from '../i18n';
 
-type AppTheme = 'dark' | 'light';
+type AppTheme = 'dark' | 'light' | 'apple';
 type AccountMode = 'personal' | 'settings';
 type RenderMode = 'page' | 'modal';
 
@@ -275,12 +275,13 @@ export const AccountCenterContent = ({
                         {tr('浅色主题使用柔和低疲劳配色，暗色主题保留原本氛围。', 'Light theme uses softer low-fatigue colors; dark theme keeps the original atmosphere.')}
                       </div>
                     </div>
-                    {appTheme === 'light' ? <Sun className="h-5 w-5 text-amber-500" /> : <Moon className="h-5 w-5 text-indigo-300" />}
+                    {appTheme === 'light' ? <Sun className="h-5 w-5 text-amber-500" /> : appTheme === 'apple' ? <Sparkles className="h-5 w-5 text-blue-500" /> : <Moon className="h-5 w-5 text-indigo-300" />}
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     {[
                       { value: 'dark' as const, label: tr('暗色', 'Dark') },
                       { value: 'light' as const, label: tr('浅色', 'Light') },
+                      { value: 'apple' as const, label: tr('Apple', 'Apple') },
                     ].map((option) => (
                       <button
                         key={option.value}

@@ -125,7 +125,7 @@ import {
 type GameState = 'STORY_SELECT' | 'AUTHORING' | 'THEME_SELECTION' | 'SERIES_WORLD_LIST' | 'SERIES_WORLD_GENERATE' | 'SERIES_WORLD_EDIT' | 'GENERATING_BLUEPRINT' | 'PLAYING' | 'SUMMARY' | 'READONLY_STORY' | 'ARCHIVE' | 'ACCOUNT_CENTER';
 type NarrativePerson = 'first' | 'second' | 'third';
 type EndingMode = 'single' | 'dual';
-type AppTheme = 'dark' | 'light';
+type AppTheme = 'dark' | 'light' | 'apple';
 type StoryLibrarySort = 'updated' | 'likes' | 'interventions' | 'favorites' | 'shares' | 'words';
 type AuthoringListSort = 'updated' | 'created' | 'likes' | 'favorites' | 'shares' | 'interventions';
 type QuickGenerationMode = 'quiz' | 'advanced';
@@ -2090,11 +2090,15 @@ export default function App() {
     showError(tr('替换完成！', 'Replace complete.'));
     setAuthoringFindReplaceOpen(false);
   };
-  const [appTheme, setAppTheme] = useState<AppTheme>(() => (
-    typeof window !== 'undefined' && window.localStorage?.getItem('app-theme') === 'light'
-      ? 'light'
-      : 'dark'
-  ));
+  const [appTheme, setAppTheme] = useState<AppTheme>(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const saved = window.localStorage.getItem('app-theme') as AppTheme;
+      if (saved === 'light' || saved === 'dark' || saved === 'apple') {
+        return saved;
+      }
+    }
+    return 'dark';
+  });
   const [readingTextOpacity, setReadingTextOpacity] = useState(() => {
     const saved = typeof window !== 'undefined' ? Number(window.localStorage?.getItem('reading-text-brightness')) : 1;
     return Number.isFinite(saved) ? Math.max(0.7, Math.min(1, saved)) : 1;
@@ -2195,11 +2199,11 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = appTheme;
-    document.documentElement.style.colorScheme = appTheme;
+    document.documentElement.style.colorScheme = appTheme === 'light' ? 'light' : appTheme === 'apple' ? 'light' : 'dark';
     window.localStorage?.setItem('app-theme', appTheme);
 
     // Dynamic theme-color meta tag
-    const themeColor = appTheme === 'light' ? '#f3eee6' : '#050508';
+    const themeColor = appTheme === 'light' ? '#f3eee6' : appTheme === 'apple' ? '#f5f5f7' : '#050508';
     let meta = document.querySelector('meta[name="theme-color"]');
     if (meta) {
       meta.setAttribute('content', themeColor);
@@ -2208,7 +2212,7 @@ export default function App() {
     // Dynamic PWA webmanifest link
     const manifestLink = document.querySelector('link[rel="manifest"]');
     if (manifestLink) {
-      manifestLink.setAttribute('href', appTheme === 'light' ? '/manifest-light.webmanifest' : '/manifest.webmanifest');
+      manifestLink.setAttribute('href', (appTheme === 'light' || appTheme === 'apple') ? '/manifest-light.webmanifest' : '/manifest.webmanifest');
     }
   }, [appTheme]);
 
