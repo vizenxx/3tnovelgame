@@ -30,7 +30,7 @@ const safeWindow = () => (typeof window === 'undefined' ? null : window);
 export const isDevMetricsEnabled = () => {
   const win = safeWindow();
   if (!win) return false;
-  return import.meta.env.DEV || win.localStorage.getItem('3t-dev-metrics') === '1';
+  return import.meta.env.VITE_SHOW_DEV_METRICS === '1' || win.localStorage.getItem('3t-dev-metrics') === '1';
 };
 
 const exposeMetricsForConsole = () => {

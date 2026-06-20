@@ -35,7 +35,7 @@ export function AccountCenterLayer({ ctx, part = 'modal' }: { ctx: any; part?: '
     enablePushNotifications,
     setIsHelpDrawerOpen,
     handleLogout,
-    startStoryPlay,
+    startTutorialFromOnboarding,
     setAdminFeatureDraft,
     handleSaveAdminSettings,
     isAccountCenterOpen,
@@ -98,7 +98,7 @@ const renderAccountCenterContent = (mode: 'page' | 'modal' = 'modal') => (
     }}
     onStartTutorial={() => {
       if (mode === 'modal') setIsAccountCenterOpen(false);
-      void startStoryPlay('tutorial-cartridge');
+      startTutorialFromOnboarding();
     }}
     onToggleCoverGeneration={() => setAdminFeatureDraft((prev) => ({ ...prev, coverGenerationEnabled: !prev.coverGenerationEnabled }))}
     onSaveAdminSettings={handleSaveAdminSettings}

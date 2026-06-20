@@ -16,7 +16,6 @@ const STORY_CARD_SELECT = [
   'visibility',
   'author_id',
   'author_name',
-  'cover_url',
   'popularity',
   'like_count',
   'intervention_count',
@@ -58,7 +57,6 @@ const SHARED_CARD_SELECT = [
   'original_author_name',
   'intervener_id',
   'intervener_name',
-  'cover_url',
   'source_story_id',
   'average_chapter_words',
   'chapter_count',
@@ -89,6 +87,15 @@ const getBranchPublicHint = (branch: any) => {
   return groupHint || '';
 };
 const isMissingFateRecordColumn = (error: unknown) => /fate_record|schema cache|column/i.test(String((error as any)?.message || error || ''));
+const MAX_INLINE_CARD_COVER_CHARS = Number(process.env.STORY_CARD_INLINE_COVER_MAX_CHARS || 60000);
+
+function cardCoverUrl(url?: string) {
+  const value = String(url || '');
+  // Early covers can be full base64 data URLs. Returning those in story lists
+  // makes the home page several MB, so full covers stay for detail/full reads.
+  if (value.startsWith('data:image/') && value.length > MAX_INLINE_CARD_COVER_CHARS) return '';
+  return value;
+}
 const guestName = (uid: string) => `游客+${String(uid || '').slice(0, 6).toUpperCase()}`;
 
 class StoryStoreHttpError extends Error {
@@ -135,7 +142,7 @@ function storyListItem(row: any) {
     visibility: row.visibility,
     authorId: row.author_id,
     authorName: row.author_name,
-    coverUrl: row.cover_url,
+    coverUrl: cardCoverUrl(row.cover_url),
     popularity: row.popularity,
     likeCount: row.like_count,
     interventionCount: row.intervention_count,
@@ -349,7 +356,7 @@ function sharedRecord(row: any) {
     originalAuthorName: row.original_author_name,
     intervenerId: row.intervener_id,
     intervenerName: row.intervener_name,
-    coverUrl: row.cover_url,
+    coverUrl: cardCoverUrl(row.cover_url),
     sourceStoryId: row.source_story_id,
     averageChapterWords: row.average_chapter_words,
     chapterCount: row.chapter_count,

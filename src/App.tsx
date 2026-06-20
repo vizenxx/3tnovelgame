@@ -83,6 +83,7 @@ import { areStoryChaptersEquivalent, hashStoryChapters } from './storyContentHas
 import { getFriendlyServerError } from './friendlyErrors';
 import { createTranslator, getInitialLanguage, LANGUAGE_STORAGE_KEY, type AppLanguage } from './i18n';
 import { dictionaries } from './i18n/dictionaries';
+import { shouldAutoPromptForPush, shouldShowConnectivityDrawer } from './uiStatePolicy';
 
 const AuthView = lazy(() => import('./components/AuthView').then((module) => ({ default: module.AuthView })));
 const ArchiveView = lazy(() => import('./components/ArchiveView').then((m) => ({ default: m.ArchiveView })));
@@ -1554,6 +1555,12 @@ export default function App() {
     if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
     if (Notification.permission !== 'default') return;
     if (window.localStorage.getItem(PUSH_PROMPT_DISMISSED_KEY)) return;
+    if (!shouldAutoPromptForPush({
+      isSessionHydrated,
+      hasUser: Boolean(user),
+      permission: Notification.permission,
+      hasDismissedPrompt: Boolean(window.localStorage.getItem(PUSH_PROMPT_DISMISSED_KEY)),
+    })) return;
     const timer = window.setTimeout(() => setShowPushPermissionPrompt(true), 1200);
     return () => window.clearTimeout(timer);
   }, [isSessionHydrated, user?.uid]);
@@ -3984,30 +3991,25 @@ export default function App() {
       const mineFailed = mineResult.status === 'rejected';
       const segmentErrors = [publicResult, mineResult].filter((result) => result.status === 'rejected');
       if (segmentErrors.length === 2 && !cached?.value) {
-        const message = '作品库同步失败，请稍后重试。';
+        const message = tr('作品库同步失败，请稍后重试。', 'Story library sync failed. Please try again later.');
         setStoryListLoadError(message);
-        setManualConnectivityNotice({ tone: 'error', title: '作品库同步失败', detail: message });
-        showError(message);
         return false;
       }
       const partialMessage = publicFailed && !mineFailed
-        ? '公开作品同步失败，我的作品仍可浏览。'
+        ? tr('公开作品同步失败，我的作品仍可浏览。', 'Public stories failed to sync. My works can still be browsed.')
         : mineFailed && !publicFailed
-          ? '我的作品同步失败，公开作品仍可浏览。'
+          ? tr('我的作品同步失败，公开作品仍可浏览。', 'My works failed to sync. Public stories can still be browsed.')
           : segmentErrors.length
-            ? '部分作品列表同步失败，已保留可用内容。'
+            ? tr('部分作品列表同步失败，已保留可用内容。', 'Some story lists failed to sync. Available content is kept.')
             : null;
       setStoryListLoadError(partialMessage);
-      if (partialMessage) setManualConnectivityNotice({ tone: 'weak', title: '部分作品列表同步失败', detail: partialMessage });
-      if (partialMessage) showError(partialMessage);
       return segmentErrors.length < 2;
     } catch (error: any) {
       console.error(error);
       const cached = await getStoryListCache();
       if (cached?.value) applyStoryListCache(cached.value);
-      const message = getFriendlyServerError(error, '作品库同步失败。');
+      const message = getFriendlyServerError(error, tr('作品库同步失败。', 'Story library sync failed.'));
       setStoryListLoadError(message);
-      showError(message);
       return false;
     } finally {
       setIsLoadingStories(false);
@@ -4078,7 +4080,6 @@ export default function App() {
       setFollowedAuthors(rows || []);
     } catch (error) {
       console.warn('followed authors sync failed:', error);
-      showError(tr('追踪作者列表同步失败，请稍后再试。', 'Failed to sync followed authors. Please try again later.'));
     } finally {
       setFollowedAuthorsLoading(false);
     }
@@ -4595,6 +4596,10 @@ export default function App() {
   const openSystemSettings = () => {
     setAccountCenterMode('settings');
     setIsCreationDockOpen(false);
+    if (gameState === 'ACCOUNT_CENTER') {
+      setIsAccountCenterOpen(false);
+      return;
+    }
     setIsAccountCenterOpen(true);
   };
 
@@ -4931,30 +4936,38 @@ export default function App() {
     const loadSessionOnce = async () => {
       const cachedRun = await getLocalCache<any>(activeRunCacheKey());
       if (cancelled) return;
-      void refreshFollowedAuthors();
-      const userDoc = await withTimeout(
+      window.setTimeout(() => {
+        if (!cancelled) void refreshFollowedAuthors();
+      }, 1200);
+      void withTimeout(
         getDoc(doc(db as any, 'users', user.uid)),
         3500,
         '用户资料读取超时。'
-      ).catch((error) => {
+      ).then((userDoc) => {
+        if (userDoc?.exists() && !cancelled) {
+          setMyBio(userDoc.data()?.bio || '');
+        }
+      }).catch((error) => {
         console.warn('User profile load skipped:', error);
-        return null;
       });
-      if (userDoc?.exists() && !cancelled) {
-        setMyBio(userDoc.data()?.bio || '');
-      }
       if (cachedRun?.value?.gameState === 'PLAYING') {
         await applyLocalRunSnapshot(cachedRun.value);
       } else {
         setSessionId(user.uid);
         resetToHome();
         setStartupMessage(isEnglish ? 'Reading story archive...' : '正在读取作品档案...');
+        const storySync = refreshStories();
+        void storySync.then((loadedStories) => {
+          hasLoadedInitialStoryListRef.current = Boolean(loadedStories);
+        }).catch((error) => {
+          console.warn('Initial story library sync failed in background:', error);
+        });
         const loadedStories = await withTimeout(
-          refreshStories(),
-          8000,
+          storySync,
+          1500,
           '首页作品同步超时，已先进入首页。'
         ).catch((error) => {
-          // The 8s budget only means "enter the home page without waiting" — it does NOT cancel
+          // The startup budget only means "enter the home page without waiting" — it does NOT cancel
           // refreshStories, which keeps running in the background and populates the list when it
           // returns. Cached content (if any) is already on screen, so stay silent rather than
           // showing a sync notice that just reads as an error.
@@ -5269,7 +5282,14 @@ export default function App() {
 
   const startTutorialFromOnboarding = () => {
     dismissOnboardingGuide();
-    void startStoryPlay('tutorial-cartridge');
+    setManualConnectivityNotice(null);
+    setStoryListLoadError(null);
+    setShowPushPermissionPrompt(false);
+    setIsCreationDockOpen(false);
+    setIsAccountCenterOpen(false);
+    setErrorMsg(null);
+    setStoryLaunchOverlay(null);
+    applyStoryCartridgeForPlay('tutorial-cartridge', TUTORIAL_STORY_CARTRIDGE);
   };
 
   const dismissPushPermissionPrompt = () => {
@@ -8387,7 +8407,7 @@ export default function App() {
         enablePushNotifications,
         setIsHelpDrawerOpen,
         handleLogout,
-        startStoryPlay,
+        startTutorialFromOnboarding,
         setAdminFeatureDraft,
         handleSaveAdminSettings,
         isAccountCenterOpen,
@@ -8580,6 +8600,7 @@ export default function App() {
         resetToHome,
         tr,
         openPersonalCenter,
+        suppressBottomDock: showOnboardingGuide || showPushPermissionPrompt || isHelpDrawerOpen || isAccountCenterOpen,
       }}
     />
   );
@@ -9614,21 +9635,21 @@ export default function App() {
   const segmentError = (['archive', 'mine', 'public'] as StoryListSegment[])
     .map((segment) => storyListSyncState?.[segment])
     .find((segment) => segment?.status === 'error');
-  const computedConnectivityState: ConnectivityDrawerState | null = !isOnline
+  const offlineConnectivityState: ConnectivityDrawerState | null = !isOnline
     ? {
         tone: 'offline',
         title: isEnglish ? 'Offline mode' : '当前处于离线状态',
         detail: isEnglish ? 'Available cached stories can still be read. Cloud actions will resume after reconnecting.' : '仍可阅读本机缓存内容；需要云端的操作会在网络恢复后再继续。',
       }
-    : manualConnectivityNotice
-      ? manualConnectivityNotice
-      : segmentError
-        ? {
-            tone: 'error',
-            title: isEnglish ? 'Some content failed to sync' : '部分内容同步失败',
-            detail: segmentError.error || (isEnglish ? 'Cached content is kept on screen. Retry when the connection is stable.' : '页面会保留可用缓存；网络稳定后可重试同步。'),
-          }
-        : null;
+    : null;
+  const computedConnectivityState: ConnectivityDrawerState | null = shouldShowConnectivityDrawer({
+    isOnline,
+    manualNotice: manualConnectivityNotice,
+    hasListSegmentError: Boolean(segmentError),
+    activeView: gameState,
+  })
+    ? (offlineConnectivityState || manualConnectivityNotice)
+    : null;
   const connectivityDrawerState = computedConnectivityState && Date.now() - connectivityDismissedAt > 60000
     ? computedConnectivityState
     : null;

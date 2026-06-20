@@ -16,9 +16,10 @@ export function PrimaryBottomDock({ ctx }: { ctx: any }) {
     resetToHome,
     tr,
     openPersonalCenter,
+    suppressBottomDock,
   } = ctx;
 
-const shouldShowPrimaryBottomDock = Boolean(user && !['PLAYING', 'READONLY_STORY', 'GENERATING_BLUEPRINT', 'SUMMARY'].includes(gameState));
+const shouldShowPrimaryBottomDock = Boolean(user && !suppressBottomDock && !['PLAYING', 'READONLY_STORY', 'GENERATING_BLUEPRINT', 'SUMMARY'].includes(gameState));
 const primaryBottomDock = shouldShowPrimaryBottomDock && typeof document !== 'undefined'
   ? createPortal(
     <div className="primary-bottom-dock-wrap">
